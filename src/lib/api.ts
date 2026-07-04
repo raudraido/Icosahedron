@@ -1,4 +1,6 @@
-import { invoke } from "@tauri-apps/api/core";
+function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  return window.electronAPI.invoke(cmd, args);
+}
 
 export interface Artist {
   id: string;

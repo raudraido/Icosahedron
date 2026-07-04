@@ -3,18 +3,16 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "main": "out/main/index.js",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview",
-    "tauri": "tauri",
-    "start": "GDK_BACKEND=wayland WEBKIT_FORCE_COMPOSITING_MODE=1 npm run tauri dev"
+    "dev": "electron-vite dev",
+    "build": "tsc --noEmit && electron-vite build",
+    "preview": "electron-vite preview",
+    "dist": "npm run build && electron-builder"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.2",
     "@tanstack/react-virtual": "^3.14.5",
-    "@tauri-apps/api": "^2.11.1",
-    "@tauri-apps/plugin-opener": "^2",
     "lucide-react": "^1.23.0",
     "md5": "^2.3.0",
     "react": "^19.1.0",
@@ -25,15 +23,26 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.2",
-    "@tauri-apps/cli": "^2",
     "@types/md5": "^2.3.6",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@types/react-virtualized-auto-sizer": "^1.0.8",
     "@types/react-window": "^1.8.8",
     "@vitejs/plugin-react": "^4.6.0",
+    "electron": "^43.0.0",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
     "tailwindcss": "^4.3.2",
     "typescript": "~5.8.3",
     "vite": "^7.0.4"
+  },
+  "build": {
+    "appId": "cloud.raud.icosahedron",
+    "productName": "icosahedron",
+    "files": ["out/**/*"],
+    "linux": {
+      "target": ["AppImage"],
+      "icon": "build/icon.png"
+    }
   }
 }

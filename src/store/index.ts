@@ -38,6 +38,7 @@ interface AppStore {
 
   playTrack: (track: Track, queue?: Track[]) => void;
   playPause: () => void;
+  stop: () => void;
   next: () => void;
   prev: () => void;
   setCurrentTime: (secs: number) => void;
@@ -158,6 +159,14 @@ export const useStore = create<AppStore>((set, get) => ({
     if (!_audio) return;
     playing ? _audio.pause() : _audio.play();
     set({ playing: !playing });
+  },
+
+  stop: () => {
+    const { _audio } = get();
+    if (!_audio) return;
+    _audio.pause();
+    _audio.currentTime = 0;
+    set({ playing: false, currentTime: 0 });
   },
 
   next: () => {

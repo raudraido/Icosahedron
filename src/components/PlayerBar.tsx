@@ -70,7 +70,7 @@ export function PlayerBar() {
   const setVolume      = useStore((s) => s.setVolume);
   const toggleShuffle  = useStore((s) => s.toggleShuffle);
   const toggleRepeat   = useStore((s) => s.toggleRepeat);
-  const clearQueue     = useStore((s) => s.clearQueue);
+  const stop           = useStore((s) => s.stop);
 
   const track = queue[currentIndex] ?? null;
 
@@ -106,7 +106,7 @@ export function PlayerBar() {
 
         {/* Transport row — matches QML controlsRow heights (58px items) */}
         <div className="flex items-center" style={{ gap: 2 }}>
-          <TBtn icon="/img/stop.png"    iconSize={18} btnSize={36} radius={18} onClick={clearQueue}    title="Stop" />
+          <TBtn icon="/img/stop.png"    iconSize={18} btnSize={36} radius={18} onClick={stop}          title="Stop" />
           <TBtn icon="/img/shuffle.png" iconSize={20} btnSize={45} radius={22} onClick={toggleShuffle} active={shuffle} dot={shuffle} title="Shuffle" />
           <TBtn icon="/img/prev.png"    iconSize={20} btnSize={45} radius={22} onClick={prev}          title="Previous" />
 

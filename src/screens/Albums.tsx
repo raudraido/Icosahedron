@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FixedSizeList, ListChildComponentProps } from "react-window";
 import { api, Album } from "../lib/api";
@@ -10,7 +10,7 @@ import { Icon } from "../components/Icon";
 // Same separator regex as album_grid.qml
 const SEP_RE = /( \/\/\/ | • | \/ | feat\. | Feat\. | vs\. )/;
 
-function ArtistTokens({ name, artistId }: { name: string; artistId: string | null }) {
+const ArtistTokens = React.memo(function ArtistTokens({ name, artistId }: { name: string; artistId: string | null }) {
   const navigateTo = useStore((s) => s.navigateTo);
   const tokens = name.split(SEP_RE).filter(Boolean);
   // Single artist → use known artistId; multi-artist → look up each token via search
@@ -38,7 +38,7 @@ function ArtistTokens({ name, artistId }: { name: string; artistId: string | nul
       })}
     </div>
   );
-}
+});
 
 function ArtistToken({ text, onClick }: { text: string; onClick: ((e: React.MouseEvent) => void) | null }) {
   const [hov, setHov] = useState(false);
@@ -70,14 +70,25 @@ const SORT_OPTIONS = [
   { value: "compilations",       label: "Compilations" },
 ];
 
-const SORT_ICONS: Record<string, string> = {
-  random:             "/img/sort-random-a.png",
-  newest:             "/img/sort-latest-a.png",
-  alphabeticalByName: "/img/sort-alphabetical-a.png",
-  song_count:         "/img/sort-num-asc.png",
-  starred:            "/img/heart.png",
-  compilations:       "/img/comp.png",
+const SORT_ICON_KEY: Record<string, string> = {
+  random:             "random",
+  newest:             "latest",
+  alphabeticalByName: "alphabetical",
 };
+
+// Matches the old app's toggle_sort_state defaults: every sort starts
+// ascending except song_count, which starts at "most songs first".
+function defaultAscending(sortKey: string): boolean {
+  return sortKey !== "song_count";
+}
+
+function getSortIcon(sortKey: string, ascending: boolean): string {
+  if (sortKey === "starred") return "/img/heart.png";
+  if (sortKey === "compilations") return "/img/comp.png";
+  if (sortKey === "song_count") return `/img/sort-num-${ascending ? "asc" : "desc"}.png`;
+  const iconKey = SORT_ICON_KEY[sortKey] ?? sortKey;
+  return `/img/sort-${iconKey}-${ascending ? "a" : "d"}.png`;
+}
 
 function IconBtn({
   src, active, title, onClick,
@@ -110,20 +121,50 @@ const rowHover = {
   onMouseLeave: (e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.background = "transparent"),
 };
 
-function AlbumCard({ album, onClick }: { album: Album; onClick: () => void }) {
+const AlbumCard = React.memo(function AlbumCard({ album, onOpen }: { album: Album; onOpen: (a: Album) => void }) {
   const [hovered, setHovered] = useState(false);
+  const [playHovered, setPlayHovered] = useState(false);
   const qc = useQueryClient();
-  function prefetch() {
-    qc.prefetchQuery({ queryKey: ["album-tracks", album.id], queryFn: () => api.getAlbumTracks(album.id) });
+  const playTrack = useStore((s) => s.playTrack);
+
+  function fetchTracks() {
+    return qc.fetchQuery({ queryKey: ["album-tracks", album.id], queryFn: () => api.getAlbumTracks(album.id) });
   }
+
+  async function handlePlay(e: React.MouseEvent) {
+    e.stopPropagation();
+    const tracks = await fetchTracks();
+    if (tracks.length) playTrack(tracks[0], tracks);
+  }
+
   return (
     <button
-      onClick={onClick}
-      onMouseEnter={() => { setHovered(true); prefetch(); }}
+      onClick={() => onOpen(album)}
+      onMouseEnter={() => { setHovered(true); fetchTracks(); }}
       onMouseLeave={() => setHovered(false)}
       className="text-left group grid-card"
     >
-      <CoverArt coverId={album.cover_id} size={200} className="w-full aspect-square rounded-lg group-hover:brightness-75 transition-all" />
+      <div style={{ position: "relative" }}>
+        <CoverArt coverId={album.cover_id} size={200} className="w-full aspect-square rounded-lg group-hover:brightness-75 transition-all" />
+        <div
+          onClick={handlePlay}
+          onMouseEnter={() => setPlayHovered(true)}
+          onMouseLeave={() => setPlayHovered(false)}
+          style={{
+            position: "absolute", top: "50%", left: "50%",
+            width: "min(60px, 33%)", aspectRatio: "1",
+            transform: `translate(-50%, -50%) scale(${playHovered ? 1 : 0.8})`,
+            borderRadius: "50%",
+            background: "var(--accent)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            opacity: playHovered ? 1 : hovered ? 0.8 : 0,
+            transition: "opacity 150ms, transform 150ms",
+            cursor: "pointer",
+          }}
+        >
+          <Icon src="/img/play.png" size={20} style={{ color: "#111", marginLeft: 2 }} />
+        </div>
+      </div>
       <div className="flex flex-col" style={{ marginTop: 8, gap: 2 }}>
         <p className="truncate font-bold" style={{ color: hovered ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-primary)" }}>{album.name}</p>
         <ArtistTokens name={album.artist} artistId={album.artist_id} />
@@ -133,7 +174,7 @@ function AlbumCard({ album, onClick }: { album: Album; onClick: () => void }) {
       </div>
     </button>
   );
-}
+});
 
 const CARD_MIN = 200;
 const GAP = 12;
@@ -157,7 +198,7 @@ const GridRow = React.memo(({ index, style, data }: ListChildComponentProps<RowD
       {Array.from({ length: cols }, (_, c) => {
         const album = albums[index * cols + c];
         return album
-          ? <AlbumCard key={album.id} album={album} onClick={() => onOpen(album)} />
+          ? <AlbumCard key={album.id} album={album} onOpen={onOpen} />
           : <div key={c} />;
       })}
     </div>
@@ -195,7 +236,7 @@ function AlbumGrid({ albums, loading, onOpen }: { albums: Album[]; loading: bool
           itemCount={rowCount}
           itemSize={rowHeight}
           itemData={itemData}
-          overscanCount={3}
+          overscanCount={6}
           style={{ willChange: "transform" }}
         >
           {GridRow}
@@ -207,6 +248,7 @@ function AlbumGrid({ albums, loading, onOpen }: { albums: Album[]; loading: bool
 
 export function Albums() {
   const [sort, setSort] = useState("newest");
+  const [sortStates, setSortStates] = useState<Record<string, boolean>>({});
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
@@ -217,16 +259,37 @@ export function Albums() {
   const navBack    = useStore((s) => s.navBack);
   const selected = useStore((s) => s.navHistory[s.navPos]?.album ?? null);
 
-  const { data: albums = [], isLoading: loading } = useQuery({
+  const isAscending = (sortKey: string) => sortStates[sortKey] ?? defaultAscending(sortKey);
+
+  function selectSort(newSort: string) {
+    if (newSort === "starred" || newSort === "compilations") {
+      setSort(newSort);
+    } else if (sort === newSort) {
+      // Clicking the currently active sort flips its direction.
+      setSortStates((prev) => ({ ...prev, [newSort]: !isAscending(newSort) }));
+    } else {
+      // Switching to a new sort activates it at its remembered (or default) direction.
+      setSort(newSort);
+    }
+    setSortMenuOpen(false);
+  }
+
+  const { data: rawAlbums = [], isLoading: loading } = useQuery({
     queryKey: ["albums", sort],
-    queryFn: async () => {
-      const raw = sort === "compilations"
-        ? await api.getCompilations()
-        : await api.getAllAlbums(sort === "song_count" ? "alphabeticalByName" : sort);
-      if (sort === "song_count") raw.sort((x, y) => (y.song_count ?? 0) - (x.song_count ?? 0));
-      return raw;
-    },
+    queryFn: async () => sort === "compilations"
+      ? await api.getCompilations()
+      : await api.getAllAlbums(sort === "song_count" ? "alphabeticalByName" : sort),
   });
+
+  const albums = React.useMemo(() => {
+    if (sort === "starred" || sort === "compilations") return rawAlbums;
+    const ascending = isAscending(sort);
+    if (sort === "song_count") {
+      return [...rawAlbums].sort((x, y) =>
+        ascending ? (x.song_count ?? 0) - (y.song_count ?? 0) : (y.song_count ?? 0) - (x.song_count ?? 0));
+    }
+    return ascending ? rawAlbums : [...rawAlbums].reverse();
+  }, [rawAlbums, sort, sortStates[sort]]);
 
   const { data: tracks = [], isLoading: tracksLoading } = useQuery({
     queryKey: ["album-tracks", selected?.id],
@@ -256,9 +319,9 @@ export function Albums() {
       })
     : albums;
 
-  function openAlbum(album: Album) {
+  const openAlbum = useCallback((album: Album) => {
     pushNav({ album });
-  }
+  }, [pushNav]);
 
   if (selected) {
     return (
@@ -340,9 +403,9 @@ export function Albums() {
             padding: searchOpen ? "0 10px" : 0,
             height: 30,
             transition: "width 250ms cubic-bezier(0.77,0,0.175,1), opacity 200ms",
-            background: "var(--card-bg)",
+            background: "transparent",
             border: "1px solid var(--border)",
-            borderRadius: 6,
+            borderRadius: 4,
             color: "var(--text-primary)",
             fontSize: "var(--fs-secondary)",
             outline: "none",
@@ -361,7 +424,7 @@ export function Albums() {
         {/* Sort icon + dropdown */}
         <div ref={sortRef} style={{ position: "relative" }}>
           <IconBtn
-            src={SORT_ICONS[sort] ?? "/img/sort-latest-a.png"}
+            src={getSortIcon(sort, isAscending(sort))}
             active={sortMenuOpen}
             title="Sort"
             onClick={() => setSortMenuOpen((v) => !v)}
@@ -381,7 +444,7 @@ export function Albums() {
               {SORT_OPTIONS.map((o) => (
                 <button
                   key={o.value}
-                  onClick={() => { setSort(o.value); setSortMenuOpen(false); }}
+                  onClick={() => selectSort(o.value)}
                   style={{
                     display: "flex", alignItems: "center", gap: 8,
                     width: "100%", margin: 0, padding: "5px 12px", textAlign: "left",
@@ -394,7 +457,7 @@ export function Albums() {
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
-                  <Icon src={SORT_ICONS[o.value]} size={14} style={{ background: "var(--accent)" }} />
+                  <Icon src={getSortIcon(o.value, isAscending(o.value))} size={14} style={{ background: "var(--accent)" }} />
                   {o.label}
                 </button>
               ))}

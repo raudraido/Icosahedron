@@ -90,3 +90,5 @@ html.is-scrolling ::-webkit-scrollbar-thumb {
 
 /* Range inputs */
 input[type="range"] { accent-color: var(--accent); }
+
+input::placeholder { color: var(--text-secondary); opacity: 1; }

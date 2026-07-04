@@ -22,7 +22,6 @@ export function CoverArt({ coverId, size = 200, className = "" }: Props) {
     <img
       src={src}
       className={`object-cover ${className}`}
-      loading="lazy"
       decoding="async"
     />
   );

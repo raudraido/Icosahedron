@@ -26,6 +26,15 @@ function createWindow(): void {
   });
   applyWindowState(win, state);
 
+  // Removing the application menu also removes its default DevTools
+  // accelerator, so wire the shortcut up independently.
+  win.webContents.on("before-input-event", (_event, input) => {
+    const isToggle = (input.control || input.meta) && input.shift && input.key.toLowerCase() === "i";
+    if (isToggle || input.key === "F12") {
+      win.webContents.toggleDevTools();
+    }
+  });
+
   if (!app.isPackaged && process.env["ELECTRON_RENDERER_URL"]) {
     win.loadURL(process.env["ELECTRON_RENDERER_URL"]);
   } else {
@@ -54,6 +63,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle("get_album_list", (_e, { sortType, size, offset }) => requireClient().getAlbumList(sortType, size, offset));
   ipcMain.handle("get_all_albums", (_e, { sortType }) => requireClient().getAllAlbums(sortType));
   ipcMain.handle("get_album_tracks", (_e, { id }) => requireClient().getAlbumTracks(id));
+  ipcMain.handle("get_album", (_e, { id }) => requireClient().getAlbum(id));
   ipcMain.handle("get_compilations", () => requireClient().getCompilations());
 
   ipcMain.handle("get_random_songs", (_e, { count }) => requireClient().getRandomSongs(count));

@@ -76,6 +76,18 @@ html, body, #root {
 /* Scrollbars — gutter always reserved so layout doesn't jump on scroll */
 .scroll-overlay { overflow-y: auto; scrollbar-gutter: stable; }
 
+/*
+ * Any non-zero scrollbar width (real or gutter-reserved, one-sided or
+ * `both-edges`) throws off exact symmetric padding by that width — there's
+ * no `scrollbar-gutter` value that reserves *zero* extra space. So for
+ * views where padding must match exactly on both sides, skip gutter
+ * reservation entirely and make the scrollbar itself zero-width instead
+ * (it was already invisible except while actively scrolling, so there's
+ * nothing lost). Scrolling still works fine via wheel/trackpad.
+ */
+.scroll-smooth { overflow-y: auto; will-change: transform; }
+.scroll-smooth::-webkit-scrollbar { width: 0; }
+
 ::-webkit-scrollbar       { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {

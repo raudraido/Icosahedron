@@ -4,62 +4,11 @@ import { FixedSizeList, ListChildComponentProps } from "react-window";
 import { api, Album } from "../lib/api";
 import { CoverArt } from "../components/CoverArt";
 import { useStore } from "../store";
-import { fmtDuration } from "../lib/api";
 import { Icon } from "../components/Icon";
-
-// Same separator regex as album_grid.qml
-const SEP_RE = /( \/\/\/ | • | \/ | feat\. | Feat\. | vs\. )/;
-
-const ArtistTokens = React.memo(function ArtistTokens({ name, artistId }: { name: string; artistId: string | null }) {
-  const navigateTo = useStore((s) => s.navigateTo);
-  const tokens = name.split(SEP_RE).filter(Boolean);
-  // Single artist → use known artistId; multi-artist → look up each token via search
-  const isMulti = SEP_RE.test(name);
-
-  return (
-    <div className="flex flex-wrap" style={{ fontSize: "var(--fs-secondary)", lineHeight: 1.4 }}>
-      {tokens.map((token, i) => {
-        const isSep = SEP_RE.test(token);
-        if (isSep) {
-          return <span key={i} style={{ color: "var(--text-secondary)", opacity: 0.5, padding: "0 2px" }}>{token.trim()}</span>;
-        }
-        const handleClick = !isMulti && artistId
-          ? (e: React.MouseEvent) => { e.stopPropagation(); navigateTo({ tab: "artists", artistId: artistId! }); }
-          : async (e: React.MouseEvent) => {
-              e.stopPropagation();
-              const q = token.trim();
-              const result = await api.search(q, 5, 0, 0);
-              const match = result.artists.find((a) => a.name.toLowerCase() === q.toLowerCase());
-              navigateTo(match
-                ? { tab: "artists", artistId: match.id }
-                : { tab: "artists", artistQuery: q });
-            };
-        return <ArtistToken key={i} text={token} onClick={handleClick} />;
-      })}
-    </div>
-  );
-});
-
-function ArtistToken({ text, onClick }: { text: string; onClick: ((e: React.MouseEvent) => void) | null }) {
-  const [hov, setHov] = useState(false);
-  return (
-    <span
-      onClick={onClick ?? undefined}
-      onMouseEnter={() => onClick && setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        color: hov ? "var(--accent)" : "var(--text-secondary)",
-        cursor: onClick ? "pointer" : "default",
-        position: "relative",
-      }}
-    >
-      {text}
-      {hov && (
-        <span style={{ position: "absolute", bottom: -1, left: 0, right: 0, height: 1, background: "var(--accent)" }} />
-      )}
-    </span>
-  );
-}
+import { PlayRingButton } from "../components/PlayRingButton";
+import { CoverZoomOverlay } from "../components/CoverZoomOverlay";
+import { ArtistTokens } from "../components/ArtistTokens";
+import { TrackTable } from "../components/TrackTable";
 
 const SORT_OPTIONS = [
   { value: "random",             label: "Random"       },
@@ -115,11 +64,6 @@ function IconBtn({
     </button>
   );
 }
-
-const rowHover = {
-  onMouseEnter: (e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.background = "var(--hover-bg)"),
-  onMouseLeave: (e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.background = "transparent"),
-};
 
 const AlbumCard = React.memo(function AlbumCard({ album, onOpen }: { album: Album; onOpen: (a: Album) => void }) {
   const [hovered, setHovered] = useState(false);
@@ -246,6 +190,154 @@ function AlbumGrid({ albums, loading, onOpen }: { albums: Album[]; loading: bool
   );
 }
 
+// Matches the old app's compute_meta() time formatting.
+function fmtAlbumDuration(totalSecs: number): string {
+  const totalMin = Math.floor(totalSecs / 60);
+  const sec = totalSecs % 60;
+  if (totalMin >= 60) return `${Math.floor(totalMin / 60)} hr ${totalMin % 60} min`;
+  return `${totalMin} min ${sec} sec`;
+}
+
+function AlbumDetail({ album }: { album: Album }) {
+  const playTrack = useStore((s) => s.playTrack);
+  const coverUrl = useStore((s) => s.coverUrl);
+  const [starred, setStarred] = useState(album.starred);
+  const [coverHovered, setCoverHovered] = useState(false);
+  const [coverZoomOpen, setCoverZoomOpen] = useState(false);
+  const [shuffleHovered, setShuffleHovered] = useState(false);
+  const [likeHovered, setLikeHovered] = useState(false);
+
+  useEffect(() => setStarred(album.starred), [album.id, album.starred]);
+
+  const { data: tracks = [], isLoading: tracksLoading } = useQuery({
+    queryKey: ["album-tracks", album.id],
+    queryFn: () => api.getAlbumTracks(album.id),
+  });
+
+  const meta = [
+    album.year ? String(album.year) : "",
+    album.song_count ? `${album.song_count} songs` : "",
+    album.duration_secs ? fmtAlbumDuration(album.duration_secs) : "",
+  ].filter(Boolean).join(" • ");
+
+  function handlePlay() {
+    if (tracks[0]) playTrack(tracks[0], tracks);
+  }
+
+  function handleShuffle() {
+    if (!tracks.length) return;
+    const shuffled = [...tracks];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    playTrack(shuffled[0], shuffled);
+  }
+
+  async function handleFavorite() {
+    const next = !starred;
+    setStarred(next); // optimistic
+    try {
+      await api.setFavorite(album.id, next, "id");
+    } catch {
+      setStarred(!next);
+    }
+  }
+
+  return (
+    <>
+      {coverZoomOpen && album.cover_id && (
+        <CoverZoomOverlay coverId={album.cover_id} onClose={() => setCoverZoomOpen(false)} />
+      )}
+      <div className="flex flex-col h-full">
+      <div style={{ padding: 12 }}>
+        <div
+          style={{
+            display: "flex", gap: 28, padding: 28,
+            borderRadius: 10, background: "var(--card-bg)", border: "1px solid var(--border)",
+          }}
+        >
+          <div style={{ position: "relative", width: 264, height: 264, flexShrink: 0 }}>
+            {album.cover_id && (
+              <div
+                aria-hidden
+                style={{
+                  position: "absolute", inset: -1,
+                  backgroundImage: `url(${coverUrl(album.cover_id, 264)})`,
+                  backgroundSize: "cover", backgroundPosition: "center",
+                  filter: "blur(10px)",
+                  opacity: 0.9,
+                  borderRadius: 10,
+                }}
+              />
+            )}
+            <div
+              onClick={() => album.cover_id && setCoverZoomOpen(true)}
+              onMouseEnter={() => setCoverHovered(true)}
+              onMouseLeave={() => setCoverHovered(false)}
+              style={{
+                position: "relative",
+                width: 264, height: 264, borderRadius: 10, overflow: "hidden", cursor: "pointer",
+                transform: coverHovered ? "scale(1.08)" : "scale(1)",
+                transition: "transform 200ms",
+              }}
+            >
+              <CoverArt coverId={album.cover_id} size={264} className="w-full h-full" />
+            </div>
+          </div>
+
+          <div className="flex flex-col" style={{ flex: 1, minWidth: 0, justifyContent: "flex-start", paddingTop: 16, gap: 6 }}>
+            <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--text-primary)" }}>{album.name}</h1>
+            <ArtistTokens name={album.artist} artistId={album.artist_id} fontSize="var(--fs-primary)" alwaysAccent />
+            <p style={{ color: "var(--text-secondary)", fontWeight: 700, fontSize: "var(--fs-secondary)" }}>
+              {tracksLoading && !meta ? "Loading…" : meta}
+            </p>
+
+            <div className="flex items-center" style={{ gap: 10, marginTop: 16 }}>
+              <PlayRingButton icon="/img/play.png" onClick={handlePlay} title="Play Album" />
+
+              <button
+                onClick={handleShuffle}
+                onMouseEnter={() => setShuffleHovered(true)}
+                onMouseLeave={() => setShuffleHovered(false)}
+                title="Shuffle"
+                style={{
+                  width: 40, height: 40, borderRadius: 8, border: "none", cursor: "pointer",
+                  background: shuffleHovered ? "var(--hover-bg)" : "transparent",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  transition: "background 150ms",
+                }}
+              >
+                <Icon src="/img/shuffle.png" size={20} style={{ background: "var(--text-secondary)" }} />
+              </button>
+
+              <button
+                onClick={handleFavorite}
+                onMouseEnter={() => setLikeHovered(true)}
+                onMouseLeave={() => setLikeHovered(false)}
+                title="Add to Favorite Albums"
+                style={{
+                  width: 40, height: 40, borderRadius: 8, border: "none", cursor: "pointer",
+                  background: likeHovered ? "var(--hover-bg)" : "transparent",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  transition: "background 150ms",
+                }}
+              >
+                <Icon src={starred ? "/img/heart_filled.png" : "/img/heart.png"} size={22} style={{ background: starred ? "#E91E63" : "var(--text-secondary)" }} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1" style={{ minHeight: 0, padding: "0 12px 12px" }}>
+        <TrackTable tracks={tracks} loading={tracksLoading} />
+      </div>
+      </div>
+    </>
+  );
+}
+
 export function Albums() {
   const [sort, setSort] = useState("newest");
   const [sortStates, setSortStates] = useState<Record<string, boolean>>({});
@@ -254,9 +346,7 @@ export function Albums() {
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const sortRef   = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const playTrack  = useStore((s) => s.playTrack);
   const pushNav    = useStore((s) => s.pushNav);
-  const navBack    = useStore((s) => s.navBack);
   const selected = useStore((s) => s.navHistory[s.navPos]?.album ?? null);
 
   const isAscending = (sortKey: string) => sortStates[sortKey] ?? defaultAscending(sortKey);
@@ -291,12 +381,6 @@ export function Albums() {
     return ascending ? rawAlbums : [...rawAlbums].reverse();
   }, [rawAlbums, sort, sortStates[sort]]);
 
-  const { data: tracks = [], isLoading: tracksLoading } = useQuery({
-    queryKey: ["album-tracks", selected?.id],
-    queryFn: () => api.getAlbumTracks(selected!.id),
-    enabled: !!selected,
-  });
-
   useEffect(() => {
     function onDown(e: MouseEvent) {
       if (sortRef.current && !sortRef.current.contains(e.target as Node)) {
@@ -324,57 +408,7 @@ export function Albums() {
   }, [pushNav]);
 
   if (selected) {
-    return (
-      <div className="flex flex-col h-full overflow-y-auto scroll-overlay">
-        <div className="flex gap-6 p-6 shrink-0" style={{ background: "var(--card-bg)", borderBottom: "1px solid var(--border)" }}>
-          <CoverArt coverId={selected.cover_id} size={180} className="w-36 h-36 rounded-lg shrink-0" />
-          <div className="flex flex-col justify-end gap-1">
-            <p className="text-xs uppercase tracking-wider" style={{ color: "var(--text-primary)", opacity: 0.4 }}>Album</p>
-            <h1 className="text-2xl font-bold" style={{ color: "var(--accent)" }}>{selected.name}</h1>
-            <p style={{ color: "var(--text-secondary)" }}>{selected.artist}</p>
-            <p className="text-sm" style={{ color: "var(--text-primary)", opacity: 0.4 }}>{selected.year} · {selected.song_count} tracks</p>
-            <div className="flex gap-2 mt-3">
-              <button
-                onClick={() => tracks[0] && playTrack(tracks[0], tracks)}
-                className="px-4 py-1.5 rounded-full text-sm font-medium"
-                style={{ background: "color-mix(in srgb, var(--accent) 18%, transparent)", color: "var(--text-secondary)" }}
-              >
-                Play
-              </button>
-              <button
-                onClick={navBack}
-                className="px-4 py-1.5 rounded-full text-sm"
-                style={{ background: "var(--hover-bg)", color: "var(--text-primary)" }}
-              >
-                Back
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto scroll-overlay" style={{ borderColor: "var(--border)" }}>
-          {tracksLoading && <p className="p-6 text-sm" style={{ color: "var(--text-primary)", opacity: 0.4 }}>Loading…</p>}
-          {tracks.map((t, i) => (
-            <button
-              key={t.id}
-              onClick={() => playTrack(t, tracks)}
-              className="w-full flex items-center gap-4 px-6 py-3 text-left"
-              style={{ background: "transparent", borderBottom: "1px solid var(--border)" }}
-              {...rowHover}
-            >
-              <span className="w-6 text-center text-xs tabular-nums" style={{ color: "var(--text-primary)", opacity: 0.4 }}>{t.track_number || i + 1}</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm truncate" style={{ color: "var(--accent)" }}>{t.title}</p>
-                {t.artist !== selected.artist && (
-                  <p className="text-xs truncate" style={{ color: "var(--text-primary)", opacity: 0.4 }}>{t.artist}</p>
-                )}
-              </div>
-              <span className="text-xs tabular-nums shrink-0" style={{ color: "var(--text-primary)", opacity: 0.4 }}>{fmtDuration(t.duration_secs)}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-    );
+    return <AlbumDetail album={selected} />;
   }
 
   return (

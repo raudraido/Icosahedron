@@ -213,6 +213,12 @@ export class SubsonicClient {
     return asArray(root.album?.song).map((s) => this.parseTrack(s));
   }
 
+  async getAlbum(albumId: string): Promise<Album> {
+    const root = await this.get("getAlbum", { id: albumId });
+    if (!root.album) throw new Error("missing album");
+    return parseAlbum(root.album);
+  }
+
   async getAlbumList(sortType: string, size: number, offset: number): Promise<Album[]> {
     const root = await this.get("getAlbumList2", { type: sortType, size: String(size), offset: String(offset) });
     return asArray(root.albumList2?.album).map(parseAlbum);
@@ -281,6 +287,8 @@ export class SubsonicClient {
       year: s.year ?? null,
       play_count: s.playCount ?? 0,
       bitrate: s.bitRate ?? null,
+      bpm: s.bpm ?? null,
+      created: s.created ?? null,
     };
   }
 }

@@ -36,6 +36,8 @@ export interface Track {
   year: number | null;
   play_count: number;
   bitrate: number | null;
+  bpm: number | null;
+  created: string | null;
 }
 
 export interface Playlist {

@@ -1,6 +1,7 @@
 import { useStore } from "../store";
 import { CoverArt } from "./CoverArt";
 import { Icon } from "./Icon";
+import { PlayRingButton } from "./PlayRingButton";
 import { fmtDuration } from "../lib/api";
 
 /** Transport button — icon tinted via currentColor / Icon mask */
@@ -111,20 +112,11 @@ export function PlayerBar() {
           <TBtn icon="/img/prev.png"    iconSize={20} btnSize={45} radius={22} onClick={prev}          title="Previous" />
 
           {/* Play ring — 58×58, matches QML playBtn */}
-          <button
+          <PlayRingButton
+            icon={playing ? "/img/pause.png" : "/img/play.png"}
             onClick={playPause}
-            className="relative flex items-center justify-center shrink-0"
-            style={{
-              width: 58, height: 58, borderRadius: "50%",
-              border: "1.8px solid var(--accent)", background: "transparent",
-              color: "var(--accent)", cursor: "pointer",
-              boxShadow: "none", transition: "box-shadow 150ms",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.boxShadow = `0 0 14px 3px color-mix(in srgb, var(--accent) 35%, transparent)`)}
-            onMouseLeave={(e) => (e.currentTarget.style.boxShadow = "none")}
-          >
-            <Icon src={playing ? "/img/pause.png" : "/img/play.png"} size={16} />
-          </button>
+            title={playing ? "Pause" : "Play"}
+          />
 
           <TBtn icon="/img/next.png"   iconSize={20} btnSize={45} radius={22} onClick={next}          title="Next" />
           <TBtn icon="/img/repeat.png" iconSize={18} btnSize={36} radius={18} onClick={toggleRepeat}  active={repeat} dot={repeat} title="Repeat" />

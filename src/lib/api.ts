@@ -40,6 +40,8 @@ export interface Track {
   year: number | null;
   play_count: number;
   bitrate: number | null;
+  bpm: number | null;
+  created: string | null;
 }
 
 export interface Playlist {
@@ -86,6 +88,7 @@ export const api = {
   getAllAlbums: (sortType: string) => invoke<Album[]>("get_all_albums", { sortType }),
   getCompilations: () => invoke<Album[]>("get_compilations"),
   getAlbumTracks: (id: string) => invoke<Track[]>("get_album_tracks", { id }),
+  getAlbum: (id: string) => invoke<Album>("get_album", { id }),
 
   getTracks: (size: number, offset: number) =>
     invoke<Track[]>("get_tracks", { size, offset }),

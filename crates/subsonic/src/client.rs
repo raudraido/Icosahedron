@@ -7,7 +7,7 @@ use crate::error::SubsonicError;
 use crate::models::*;
 
 const API_VERSION: &str = "1.16.1";
-const CLIENT_NAME: &str = "Icoshahedron";
+const CLIENT_NAME: &str = "Icosahedron";
 
 pub struct SubsonicClient {
     base_url: String,

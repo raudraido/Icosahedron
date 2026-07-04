@@ -47,7 +47,7 @@ interface AppStore {
   clearQueue: () => void;
 }
 
-const STORAGE_KEY = "icoshahedron_creds";
+const STORAGE_KEY = "icosahedron_creds";
 
 function loadCreds(): { url: string; user: string; pass: string } | null {
   try {

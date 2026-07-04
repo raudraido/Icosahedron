@@ -1,7 +1,7 @@
 import md5 from "md5";
 
 const API_VERSION = "1.16.1";
-const CLIENT = "Icoshahedron";
+const CLIENT = "Icosahedron";
 
 export function buildCoverQs(username: string, password: string): string {
   const salt = Math.random().toString(36).slice(2, 10);

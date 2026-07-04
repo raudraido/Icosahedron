@@ -35,7 +35,7 @@ export function Login() {
         className="w-full max-w-sm space-y-4 rounded-xl p-8 shadow-2xl"
         style={{ background: "var(--panel-bg)", border: "1px solid var(--border)" }}
       >
-        <h1 className="text-2xl font-semibold" style={{ color: "var(--accent)" }}>Icoshahedron</h1>
+        <h1 className="text-2xl font-semibold" style={{ color: "var(--accent)" }}>Icosahedron</h1>
         <p className="text-sm" style={{ color: "var(--text-primary)", opacity: 0.6 }}>Connect to your Navidrome server</p>
 
         <div className="space-y-3">

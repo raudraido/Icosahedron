@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    icoshahedron_lib::run()
+    icosahedron_lib::run()
 }

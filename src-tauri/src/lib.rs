@@ -195,7 +195,7 @@ pub fn run() {
                 // Build cache path
                 let cache_dir = app.path().cache_dir()
                     .unwrap_or_else(|_| std::path::PathBuf::from("/tmp"))
-                    .join("icoshahedron")
+                    .join("icosahedron")
                     .join("covers");
                 let _ = tokio::fs::create_dir_all(&cache_dir).await;
                 let safe_id: String = cover_id.chars()

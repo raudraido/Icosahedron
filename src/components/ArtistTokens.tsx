@@ -45,13 +45,13 @@ function ArtistToken({ text, onClick, alwaysAccent = false }: { text: string; on
       style={{
         color: alwaysAccent || hov ? "var(--accent)" : "var(--text-secondary)",
         cursor: onClick ? "pointer" : "default",
-        position: "relative",
+        textDecorationLine: hov ? "underline" : "none",
+        textUnderlineOffset: "2px",
+        textDecorationThickness: "1px",
+        textDecorationColor: "var(--accent)",
       }}
     >
       {text}
-      {hov && (
-        <span style={{ position: "absolute", bottom: -1, left: 0, right: 0, height: 1, background: "var(--accent)" }} />
-      )}
     </span>
   );
 }

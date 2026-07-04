@@ -6,7 +6,11 @@ import { fmtDuration } from "../lib/api";
 import { useStore } from "../store";
 import { CoverArt } from "./CoverArt";
 import { Icon } from "./Icon";
+import { IconBtn } from "./IconBtn";
+import { SearchBox } from "./SearchBox";
+import { PlayingBars } from "./PlayingBars";
 import { ArtistTokens } from "./ArtistTokens";
+import { FAVORITE_PINK } from "../lib/theme";
 
 // Shared, reusable track table — used by both the main Tracks screen and the
 // album-detail tracklist (matches the old app's TrackListView.qml, reused
@@ -23,6 +27,10 @@ interface ColumnDef {
   sortable: boolean;
   descFirst?: boolean; // sorts descending on first click (e.g. plays, duration)
 }
+
+// Leading row-position column — always present, first, fixed width, non-reorderable,
+// non-sortable, non-toggleable, non-resizable. Change the width here.
+const NUM_COL_WIDTH = 20;
 
 const COLUMNS: Record<string, ColumnDef> = {
   track:   { id: "track",   label: "TRACK",       minWidth: 220, sortable: false },
@@ -42,6 +50,13 @@ const COLUMNS: Record<string, ColumnDef> = {
 // Table column order (default) vs. the picker menu's fixed listing order — these differ in the old app.
 const DEFAULT_COL_ORDER = ["track", "title", "artist", "album", "fav", "genre", "dur", "plays", "trackno", "year", "date", "bpm"];
 const MENU_ORDER = ["title", "artist", "fav", "genre", "dur", "plays", "album", "trackno", "year", "date", "bpm"];
+// The picker menu uses Title Case, not the table headers' ALL CAPS — matches
+// the old app's themed_shadow_menu labels exactly ("Track, Title, Artist,
+// Favorite, Genre, Duration, Plays, Album, No., Year, Date Added, BPM").
+const MENU_LABELS: Record<string, string> = {
+  title: "Title", artist: "Artist", fav: "Favorite", genre: "Genre", dur: "Duration",
+  plays: "Plays", album: "Album", trackno: "No.", year: "Year", date: "Date Added", bpm: "BPM",
+};
 
 const DEFAULT_COL_VISIBILITY: Record<string, boolean> = {
   title: false, artist: false, album: true, fav: true, genre: true,
@@ -50,7 +65,11 @@ const DEFAULT_COL_VISIBILITY: Record<string, boolean> = {
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
   title: 200, artist: 200, album: 205, fav: 68, genre: 120, dur: 75, plays: 70, trackno: 55, year: 70, date: 110, bpm: 56,
 };
-const DEFAULT_SORT = { col: "date", dir: "desc" as "asc" | "desc" };
+type SortState = { col: string; dir: "asc" | "desc" } | null;
+type DisplayRow =
+  | { kind: "track"; track: Track; trackIndex: number }
+  | { kind: "discHeader"; discNumber: number };
+const DEFAULT_SORT: SortState = { col: "date", dir: "desc" };
 
 const LS_ORDER = "tracks_col_order";
 const LS_WIDTHS = "tracks_col_widths";
@@ -158,7 +177,7 @@ function FavoriteHeart({ track }: { track: Track }) {
       <Icon
         src={starred ? "/img/heart_filled.png" : "/img/heart.png"}
         size={16}
-        style={{ background: starred ? "#E91E63" : hov ? "var(--accent)" : "var(--text-secondary)" }}
+        style={{ background: starred ? FAVORITE_PINK : hov ? "var(--accent)" : "var(--text-secondary)" }}
       />
     </button>
   );
@@ -166,17 +185,34 @@ function FavoriteHeart({ track }: { track: Track }) {
 
 // ── Main component ───────────────────────────────────────────────────────
 
-export function TrackTable({ tracks, loading = false }: { tracks: Track[]; loading?: boolean }) {
+export function TrackTable({
+  tracks, loading = false, defaultSort = DEFAULT_SORT, persistSort = true, showDiscHeaders = false,
+}: {
+  tracks: Track[];
+  loading?: boolean;
+  /** Initial/reset sort. Pass null for "no sort" (natural order) — e.g. an album's tracklist, which is
+   *  already in disc/track order from the server, vs. date-added-descending for the main library. */
+  defaultSort?: SortState;
+  /** Main Tracks screen remembers sort across sessions; a single album's tracklist shouldn't inherit that. */
+  persistSort?: boolean;
+  /** Album-detail only: insert "Disc N" separator rows between discs. Matches the old app's
+   *  TrackListView.qml, which only shows these in natural (unsorted, unfiltered) order — a search
+   *  or column sort flattens the list and the headers stop making sense. */
+  showDiscHeaders?: boolean;
+}) {
   const playTrack = useStore((s) => s.playTrack);
   const navigateTo = useStore((s) => s.navigateTo);
   const currentId = useStore((s) => s.queue[s.currentIndex]?.id);
   const qc = useQueryClient();
 
   const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const [colOrder, setColOrder] = useState<string[]>(() => loadJSON(LS_ORDER, DEFAULT_COL_ORDER));
   const [colVisibility, setColVisibility] = useState<Record<string, boolean>>(() => loadJSON(LS_VIS, DEFAULT_COL_VISIBILITY));
   const [colWidths, setColWidths] = useState<Record<string, number>>(() => loadJSON(LS_WIDTHS, DEFAULT_COL_WIDTHS));
-  const [sortState, setSortState] = useState<{ col: string; dir: "asc" | "desc" }>(() => loadJSON(LS_SORT, DEFAULT_SORT));
+  const [sortState, setSortState] = useState<SortState>(
+    () => persistSort ? loadJSON(LS_SORT, defaultSort) : defaultSort,
+  );
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
@@ -205,26 +241,52 @@ export function TrackTable({ tracks, loading = false }: { tracks: Track[]; loadi
       })
     : tracks;
 
-  const sorted = React.useMemo(() => sortTracks(filtered, sortState.col, sortState.dir), [filtered, sortState]);
+  const sorted = React.useMemo(
+    () => sortState ? sortTracks(filtered, sortState.col, sortState.dir) : filtered,
+    [filtered, sortState],
+  );
+
+  // Disc separators only make sense in natural (unsorted, unfiltered) order —
+  // a search or column sort flattens the list, matching the old app's rule.
+  const showHeadersNow = showDiscHeaders && !sortState && !query.trim();
+  const displayRows = React.useMemo(() => {
+    if (!showHeadersNow) {
+      return sorted.map((track, trackIndex): DisplayRow => ({ kind: "track", track, trackIndex }));
+    }
+    const hasMultipleDiscs = new Set(sorted.map((t) => t.disc_number)).size > 1;
+    if (!hasMultipleDiscs) {
+      return sorted.map((track, trackIndex): DisplayRow => ({ kind: "track", track, trackIndex }));
+    }
+    const rows: DisplayRow[] = [];
+    let lastDisc: number | null = null;
+    sorted.forEach((track, trackIndex) => {
+      if (track.disc_number !== lastDisc) {
+        rows.push({ kind: "discHeader", discNumber: track.disc_number });
+        lastDisc = track.disc_number;
+      }
+      rows.push({ kind: "track", track, trackIndex });
+    });
+    return rows;
+  }, [sorted, showHeadersNow]);
 
   const visibleCols = colOrder.filter((id) => id === "track" || colVisibility[id]);
 
   function handleSort(colId: string) {
     const def = COLUMNS[colId];
     if (!def.sortable) return;
-    let next: { col: string; dir: "asc" | "desc" };
-    if (sortState.col !== colId) {
+    let next: SortState;
+    if (!sortState || sortState.col !== colId) {
       next = { col: colId, dir: def.descFirst ? "desc" : "asc" };
       clickCountRef.current = 1;
     } else if (clickCountRef.current === 1) {
       next = { col: colId, dir: sortState.dir === "asc" ? "desc" : "asc" };
       clickCountRef.current = 2;
     } else {
-      next = DEFAULT_SORT;
-      clickCountRef.current = 1;
+      next = defaultSort;
+      clickCountRef.current = defaultSort ? 1 : 0;
     }
     setSortState(next);
-    saveJSON(LS_SORT, next);
+    if (persistSort) saveJSON(LS_SORT, next);
   }
 
   function toggleColumn(colId: string) {
@@ -328,10 +390,6 @@ export function TrackTable({ tracks, loading = false }: { tracks: Track[]; loadi
     if (t.album_id) qc.prefetchQuery({ queryKey: ["album", t.album_id], queryFn: () => api.getAlbum(t.album_id!) });
   }
 
-  function playAll() {
-    if (sorted.length) playTrack(sorted[0], sorted);
-  }
-
   function renderCell(colId: string, t: Track, isPlaying: boolean) {
     switch (colId) {
       case "track":
@@ -339,13 +397,13 @@ export function TrackTable({ tracks, loading = false }: { tracks: Track[]; loadi
           <div className="flex items-center min-w-0" style={{ gap: 12, flex: 1 }}>
             <CoverArt coverId={t.cover_id} size={52} className="shrink-0 w-[52px] h-[52px] rounded-[3px]" />
             <div className="min-w-0 flex-1">
-              <p className="truncate" style={{ color: isPlaying ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-secondary)" }}>{t.title}</p>
-              <ArtistTokens name={t.artist} artistId={t.artist_id} fontSize="var(--fs-small)" />
+              <p className="truncate" style={{ color: isPlaying ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-primary)", fontWeight: 700 }}>{t.title}</p>
+              <ArtistTokens name={t.artist} artistId={t.artist_id} fontSize="var(--fs-secondary)" />
             </div>
           </div>
         );
       case "title":
-        return <span className="truncate" style={{ color: isPlaying ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-secondary)" }}>{t.title}</span>;
+        return <span className="truncate" style={{ color: isPlaying ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-primary)", fontWeight: 700 }}>{t.title}</span>;
       case "artist":
         return <ArtistTokens name={t.artist} artistId={t.artist_id} />;
       case "album":
@@ -381,9 +439,9 @@ export function TrackTable({ tracks, loading = false }: { tracks: Track[]; loadi
   }
 
   const virtualizer = useVirtualizer({
-    count: sorted.length,
+    count: displayRows.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 58,
+    estimateSize: (i) => displayRows[i].kind === "discHeader" ? 36 : 58,
     overscan: 10,
   });
 
@@ -391,34 +449,17 @@ export function TrackTable({ tracks, loading = false }: { tracks: Track[]; loadi
     <div className="flex flex-col h-full" style={{ borderRadius: 10, background: "var(--card-bg)", border: "1px solid var(--border)", overflow: "hidden" }}>
       {/* Toolbar */}
       <div className="flex items-center shrink-0" style={{ height: 36, padding: "0 20px", gap: 8, marginTop: 12 }}>
-        <h2 className="font-semibold" style={{ flex: 1, color: "var(--text-secondary)", fontSize: "var(--fs-primary)" }}>
-          {loading ? "Tracks" : `${sorted.length.toLocaleString("fr-FR")} tracks`}
-        </h2>
-        <input
+        <div style={{ flex: 1 }} />
+
+        <SearchBox
+          open={searchOpen}
+          onToggle={() => setSearchOpen((v) => !v)}
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={setQuery}
           placeholder="Search tracks…"
-          style={{
-            width: 204, height: 28, padding: "0 10px", borderRadius: 4,
-            background: "transparent", border: "1px solid var(--border)",
-            color: "var(--text-primary)", fontSize: "var(--fs-secondary)", outline: "none",
-          }}
         />
-        <button
-          onClick={playAll}
-          title="Play all"
-          style={{ width: 32, height: 32, borderRadius: 4, border: "none", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--accent)" }}
-        >
-          <Icon src="/img/play.png" size={16} />
-        </button>
         <div ref={pickerRef} style={{ position: "relative" }}>
-          <button
-            onClick={() => setPickerOpen((v) => !v)}
-            title="Columns"
-            style={{ width: 32, height: 32, borderRadius: 4, border: "none", background: pickerOpen ? "var(--hover-bg)" : "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--accent)" }}
-          >
-            <Icon src="/img/burger.png" size={18} />
-          </button>
+          <IconBtn src="/img/burger.png" active={pickerOpen} title="Columns" onClick={() => setPickerOpen((v) => !v)} />
           {pickerOpen && (
             <div style={{
               position: "absolute", top: "calc(100% + 6px)", right: 0,
@@ -442,7 +483,7 @@ export function TrackTable({ tracks, loading = false }: { tracks: Track[]; loadi
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
                   <Icon src="/img/yes.png" size={12} style={{ background: "var(--accent)", opacity: colVisibility[id] ? 1 : 0 }} />
-                  {COLUMNS[id].label}
+                  {MENU_LABELS[id]}
                 </button>
               ))}
             </div>
@@ -452,6 +493,9 @@ export function TrackTable({ tracks, loading = false }: { tracks: Track[]; loadi
 
       {/* Column headers */}
       <div className="flex items-center shrink-0" style={{ height: 36, padding: "0 24px", gap: 12 }}>
+        <div style={{ flex: `0 0 ${NUM_COL_WIDTH}px` }}>
+          <span style={{ fontSize: "var(--fs-small)", fontWeight: 700, letterSpacing: 0.8, color: "var(--text-secondary)" }}>#</span>
+        </div>
         {visibleCols.map((id) => {
           const col = COLUMNS[id];
           const isTrack = id === "track";
@@ -472,11 +516,11 @@ export function TrackTable({ tracks, loading = false }: { tracks: Track[]; loadi
                 userSelect: "none",
               }}
             >
-              <span className="truncate" style={{ fontSize: "var(--fs-small)", fontWeight: 700, letterSpacing: 0.5, color: "var(--text-secondary)", opacity: 0.7 }}>
+              <span className="truncate" style={{ fontSize: "var(--fs-small)", fontWeight: 700, letterSpacing: 0.8, color: "var(--text-secondary)" }}>
                 {col.label}
               </span>
-              {sortState.col === id && (
-                <span style={{ color: "var(--accent)", fontSize: 10 }}>{sortState.dir === "asc" ? "▲" : "▼"}</span>
+              {sortState?.col === id && (
+                <span style={{ color: "var(--accent)", fontSize: "var(--fs-small)" }}>{sortState.dir === "asc" ? "▲" : "▼"}</span>
               )}
               {!isTrack && (
                 <div
@@ -495,7 +539,27 @@ export function TrackTable({ tracks, loading = false }: { tracks: Track[]; loadi
         {loading && <p className="p-6 text-sm" style={{ color: "var(--text-primary)", opacity: 0.4 }}>Loading…</p>}
         <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
           {virtualizer.getVirtualItems().map((row) => {
-            const t = sorted[row.index];
+            const displayRow = displayRows[row.index];
+
+            if (displayRow.kind === "discHeader") {
+              return (
+                <div
+                  key={`disc-${displayRow.discNumber}`}
+                  data-index={row.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: "absolute", top: row.start, left: 0, right: 0, height: 36,
+                    display: "flex", alignItems: "center", padding: "0 24px",
+                  }}
+                >
+                  <span style={{ marginLeft: NUM_COL_WIDTH, color: "var(--text-secondary)", fontWeight: 700, fontSize: "var(--fs-secondary)" }}>
+                    Disc {displayRow.discNumber}
+                  </span>
+                </div>
+              );
+            }
+
+            const { track: t, trackIndex } = displayRow;
             const isPlaying = t.id === currentId;
             const isSelected = selected.has(t.id);
             return (
@@ -503,7 +567,7 @@ export function TrackTable({ tracks, loading = false }: { tracks: Track[]; loadi
                 key={t.id}
                 data-index={row.index}
                 ref={virtualizer.measureElement}
-                onClick={(e) => handleRowClick(e, t, row.index)}
+                onClick={(e) => handleRowClick(e, t, trackIndex)}
                 onDoubleClick={() => handleRowDoubleClick(t)}
                 style={{
                   position: "absolute", top: row.start, left: 0, right: 0, height: 58,
@@ -518,6 +582,11 @@ export function TrackTable({ tracks, loading = false }: { tracks: Track[]; loadi
                 onMouseEnter={(e) => { if (!isPlaying && !isSelected) e.currentTarget.style.background = "var(--hover-bg)"; }}
                 onMouseLeave={(e) => { if (!isPlaying && !isSelected) e.currentTarget.style.background = "transparent"; }}
               >
+                <div style={{ flex: `0 0 ${NUM_COL_WIDTH}px`, display: "flex", alignItems: "center" }}>
+                  {isPlaying ? <PlayingBars /> : (
+                    <span className="tabular-nums" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>{t.track_number || ""}</span>
+                  )}
+                </div>
                 {visibleCols.map((id) => (
                   <div key={id} style={{ flex: id === "track" ? 1 : `0 0 ${colWidths[id] ?? COLUMNS[id].minWidth}px`, minWidth: 0, overflow: "hidden" }}>
                     {renderCell(id, t, isPlaying)}

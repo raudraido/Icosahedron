@@ -9,6 +9,9 @@ import { PlayRingButton } from "../components/PlayRingButton";
 import { CoverZoomOverlay } from "../components/CoverZoomOverlay";
 import { ArtistTokens } from "../components/ArtistTokens";
 import { TrackTable } from "../components/TrackTable";
+import { IconBtn } from "../components/IconBtn";
+import { SearchBox } from "../components/SearchBox";
+import { FAVORITE_PINK, PLAY_ICON_DARK } from "../lib/theme";
 
 const SORT_OPTIONS = [
   { value: "random",             label: "Random"       },
@@ -39,31 +42,6 @@ function getSortIcon(sortKey: string, ascending: boolean): string {
   return `/img/sort-${iconKey}-${ascending ? "a" : "d"}.png`;
 }
 
-function IconBtn({
-  src, active, title, onClick,
-}: { src: string; active?: boolean; title?: string; onClick: () => void }) {
-  const [hov, setHov] = useState(false);
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        width: 32, height: 32, borderRadius: 4, border: "none", cursor: "pointer",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        color: "var(--accent)",
-        background: active
-          ? "color-mix(in srgb, var(--accent) 15%, transparent)"
-          : hov ? "var(--hover-bg)" : "transparent",
-        transition: "background 150ms",
-        flexShrink: 0,
-      }}
-    >
-      <Icon src={src} size={18} />
-    </button>
-  );
-}
 
 const AlbumCard = React.memo(function AlbumCard({ album, onOpen }: { album: Album; onOpen: (a: Album) => void }) {
   const [hovered, setHovered] = useState(false);
@@ -106,7 +84,7 @@ const AlbumCard = React.memo(function AlbumCard({ album, onOpen }: { album: Albu
             cursor: "pointer",
           }}
         >
-          <Icon src="/img/play.png" size={20} style={{ color: "#111", marginLeft: 2 }} />
+          <Icon src="/img/play.png" size={20} style={{ background: PLAY_ICON_DARK, marginLeft: 2 }} />
         </div>
       </div>
       <div className="flex flex-col" style={{ marginTop: 8, gap: 2 }}>
@@ -287,7 +265,7 @@ function AlbumDetail({ album }: { album: Album }) {
           </div>
 
           <div className="flex flex-col" style={{ flex: 1, minWidth: 0, justifyContent: "flex-start", paddingTop: 16, gap: 6 }}>
-            <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--text-primary)" }}>{album.name}</h1>
+            <h1 style={{ fontSize: "var(--fs-hero)", fontWeight: 700, color: "var(--text-primary)" }}>{album.name}</h1>
             <ArtistTokens name={album.artist} artistId={album.artist_id} fontSize="var(--fs-primary)" alwaysAccent />
             <p style={{ color: "var(--text-secondary)", fontWeight: 700, fontSize: "var(--fs-secondary)" }}>
               {tracksLoading && !meta ? "Loading…" : meta}
@@ -323,7 +301,7 @@ function AlbumDetail({ album }: { album: Album }) {
                   transition: "background 150ms",
                 }}
               >
-                <Icon src={starred ? "/img/heart_filled.png" : "/img/heart.png"} size={22} style={{ background: starred ? "#E91E63" : "var(--text-secondary)" }} />
+                <Icon src={starred ? "/img/heart_filled.png" : "/img/heart.png"} size={22} style={{ background: starred ? FAVORITE_PINK : "var(--text-secondary)" }} />
               </button>
             </div>
           </div>
@@ -331,7 +309,14 @@ function AlbumDetail({ album }: { album: Album }) {
       </div>
 
       <div className="flex-1" style={{ minHeight: 0, padding: "0 12px 12px" }}>
-        <TrackTable tracks={tracks} loading={tracksLoading} />
+        <TrackTable
+          key={album.id}
+          tracks={tracks}
+          loading={tracksLoading}
+          defaultSort={null}
+          persistSort={false}
+          showDiscHeaders
+        />
       </div>
       </div>
     </>
@@ -345,7 +330,6 @@ export function Albums() {
   const [searchText, setSearchText] = useState("");
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const sortRef   = useRef<HTMLDivElement>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
   const pushNav    = useStore((s) => s.pushNav);
   const selected = useStore((s) => s.navHistory[s.navPos]?.album ?? null);
 
@@ -391,10 +375,6 @@ export function Albums() {
     return () => document.removeEventListener("mousedown", onDown);
   }, []);
 
-  useEffect(() => {
-    if (searchOpen) searchRef.current?.focus();
-    else setSearchText("");
-  }, [searchOpen]);
 
   const displayedAlbums = searchText.trim()
     ? albums.filter((a) => {
@@ -423,36 +403,12 @@ export function Albums() {
               : `${albums.length.toLocaleString("fr-FR")} albums`}
         </h2>
 
-        {/* Expanding search input */}
-        <input
-          ref={searchRef}
+        <SearchBox
+          open={searchOpen}
+          onToggle={() => setSearchOpen((v) => !v)}
           value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          onKeyDown={(e) => e.key === "Escape" && setSearchOpen(false)}
+          onChange={setSearchText}
           placeholder="Search albums…"
-          style={{
-            width: searchOpen ? 204 : 0,
-            opacity: searchOpen ? 1 : 0,
-            overflow: "hidden",
-            padding: searchOpen ? "0 10px" : 0,
-            height: 30,
-            transition: "width 250ms cubic-bezier(0.77,0,0.175,1), opacity 200ms",
-            background: "transparent",
-            border: "1px solid var(--border)",
-            borderRadius: 4,
-            color: "var(--text-primary)",
-            fontSize: "var(--fs-secondary)",
-            outline: "none",
-            flexShrink: 0,
-          }}
-        />
-
-        {/* Search toggle */}
-        <IconBtn
-          src="/img/search.png"
-          active={searchOpen}
-          title="Search"
-          onClick={() => setSearchOpen((v) => !v)}
         />
 
         {/* Sort icon + dropdown */}

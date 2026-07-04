@@ -61,6 +61,13 @@ export const CREAM: AppTheme = {
   fontFamily:        "'Inter Variable', system-ui, -apple-system, sans-serif",
 };
 
+// Fixed colors that intentionally do NOT vary with the theme — matches the
+// old app's own hardcoded choices (e.g. album_detail.qml's
+// "heart_filled_E91E63", album_grid.qml's Canvas play-triangle "#111").
+// Use these named constants instead of repeating the literal.
+export const FAVORITE_PINK = "#E91E63";
+export const PLAY_ICON_DARK = "#111";
+
 export function applyTheme(t: AppTheme) {
   const r = document.documentElement;
   r.style.setProperty("--accent",         t.accent);

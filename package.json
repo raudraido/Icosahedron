@@ -1,0 +1,39 @@
+{
+  "name": "icoshahedron",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "start": "GDK_BACKEND=wayland WEBKIT_FORCE_COMPOSITING_MODE=1 npm run tauri dev"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.101.2",
+    "@tanstack/react-virtual": "^3.14.5",
+    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-opener": "^2",
+    "lucide-react": "^1.23.0",
+    "md5": "^2.3.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-virtualized-auto-sizer": "^2.0.3",
+    "react-window": "^1.8.11",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.2",
+    "@tauri-apps/cli": "^2",
+    "@types/md5": "^2.3.6",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@types/react-virtualized-auto-sizer": "^1.0.8",
+    "@types/react-window": "^1.8.8",
+    "@vitejs/plugin-react": "^4.6.0",
+    "tailwindcss": "^4.3.2",
+    "typescript": "~5.8.3",
+    "vite": "^7.0.4"
+  }
+}

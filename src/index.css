@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: 'Inter Variable';
+  src: url('/fonts/InterVariable.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Inter Variable';
+  src: url('/fonts/InterVariable-Italic.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* Default fallback values — overridden at runtime by applyTheme() */
+:root {
+  --accent:         #44cfcf;
+  --panel-bg:       rgb(21, 23, 29);
+  --main-bg:        rgb(28, 30, 39);
+  --card-bg:        #232631;
+  --text-primary:   #72a1cd;
+  --text-secondary: #d8f0ee;
+  --border:         #232631;
+  --hover-bg:       #2c2f3c;
+  --skeleton:       #354b5f;
+  --error:          #e06c75;
+  --font-family:    'Inter Variable', system-ui, -apple-system, sans-serif;
+  --fs-small:       11px;
+  --fs-secondary:   13px;
+  --fs-primary:     15px;
+  --fs-heading:     18px;
+  --fs-title:       24px;
+  --fs-hero:        28px;
+}
+
+/* Tailwind text-* utilities wired to the live theme scale */
+@theme {
+  --text-xs:   11px;
+  --text-sm:   13px;
+  --text-base: 15px;
+  --text-lg:   18px;
+  --text-xl:   18px;
+  --text-2xl:  24px;
+  --text-3xl:  28px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-family);
+  font-weight: 500;
+  -webkit-font-smoothing: antialiased;
+  background: var(--panel-bg);
+  color: var(--text-primary);
+  font-size: var(--fs-primary);
+}
+
+.grid-card {}
+
+/* Promote scroll containers to their own GPU compositor layer for smooth 144Hz scrolling */
+.scroll-overlay { will-change: transform; }
+
+/* Playing-bars animation in queue */
+@keyframes queueBar {
+  from { height: 4px; }
+  to   { height: 16px; }
+}
+
+/* Scrollbars — gutter always reserved so layout doesn't jump on scroll */
+.scroll-overlay { overflow-y: auto; scrollbar-gutter: stable; }
+
+::-webkit-scrollbar       { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+  transition: background 200ms;
+}
+html.is-scrolling ::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+/* Range inputs */
+input[type="range"] { accent-color: var(--accent); }

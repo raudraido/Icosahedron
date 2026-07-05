@@ -1,0 +1,64 @@
+name: Build
+
+# Builds the Linux AppImage and Windows installer on their native runners
+# (the native/audio-engine Rust addon links against a platform audio API —
+# ALSA/PipeWire on Linux, WASAPI on Windows — so each is built on a real
+# host of that OS rather than cross-compiled). Push a `v*` tag to also
+# publish a GitHub Release with both artifacts attached.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact-glob: dist/*.AppImage
+          - os: windows-latest
+            artifact-glob: dist/*.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Runs the postinstall hook, which builds native/audio-engine for this
+      # runner's platform (napi build --platform --release).
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build distributable
+        run: npm run dist
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: icosahedron-${{ matrix.os }}
+          path: ${{ matrix.artifact-glob }}
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true

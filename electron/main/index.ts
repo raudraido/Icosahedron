@@ -25,6 +25,11 @@ function createWindow(): void {
     width: state.width,
     height: state.height,
     title: "icosahedron",
+    // Packaged AppImage/.exe already get their icon baked in via
+    // electron-builder's build.linux/build.win config — this just covers
+    // `npm run dev`/`npm run preview`, where no .desktop entry exists yet to
+    // supply one.
+    icon: join(__dirname, "../../build/icon.png"),
     webPreferences: {
       preload: join(__dirname, "../preload/index.cjs"),
       contextIsolation: true,

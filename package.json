@@ -56,6 +56,12 @@
         "AppImage"
       ],
       "icon": "build/icon.png"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.ico"
     }
   }
 }

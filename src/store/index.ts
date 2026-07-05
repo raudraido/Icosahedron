@@ -1,7 +1,9 @@
 import { create } from "zustand";
 import { api, Track, Album } from "../lib/api";
 
-export type Tab = "albums" | "artists" | "tracks" | "playlists" | "starred";
+export type Tab =
+  | "home" | "nowPlaying" | "albums" | "artists" | "tracks" | "playlists" | "starred"
+  | "mixBuilder" | "visualizer";
 
 export type NavEntry = { tab: Tab; album?: Album; artistId?: string; artistQuery?: string };
 
@@ -25,6 +27,12 @@ interface AppStore {
   navBack: () => void;
   navFwd: () => void;
 
+  // left-panel art expand/collapse — mirrors the footer's small thumbnail
+  // shrinking to 0 in lockstep (both driven by this one flag), matching the
+  // old app's window._toggle_sidebar_art
+  sidebarArtExpanded: boolean;
+  toggleSidebarArt: () => void;
+
   // player
   queue: Track[];
   currentIndex: number;
@@ -46,9 +54,37 @@ interface AppStore {
   toggleShuffle: () => void;
   toggleRepeat: () => void;
   clearQueue: () => void;
+
+  // context-menu queue actions
+  addTrackNext: (track: Track) => void;
+  addTrackToQueue: (track: Track) => void;
+  appendToQueue: (tracks: Track[]) => void;
+  startRadio: (track: Track) => Promise<void>;
+  /** Drag-reorder in the queue panel — moves the track with id `fromId` to
+   *  land at `toIndex` (an insertion index into the *original*, pre-removal
+   *  array — 0..queue.length, where queue.length means "at the very end").
+   *  Re-syncs currentIndex by identity (finds the currently-playing track's
+   *  new position) rather than index arithmetic, so it's correct regardless
+   *  of drag direction. */
+  reorderQueue: (fromId: string, toIndex: number) => void;
+  /** True while startRadio's background similar/top-songs fetch is in flight — drives the
+   *  queue panel's loading spinner (matches the old app's QueuePanel.set_radio_loading). */
+  radioLoading: boolean;
+  /** "Remove from Queue" — matches window.py's _queue_remove_at: re-syncs
+   *  currentIndex by identity after the removal (correct even if tracks
+   *  before the current one get removed), and if the removed track *was* the
+   *  currently-playing one, stops playback entirely rather than picking
+   *  a new current index. */
+  removeFromQueue: (id: string) => void;
+
+  // session persistence (queue/current track/position survive a restart) —
+  // matches the old app's save_playlist/load_playlist (closeEvent-triggered)
+  persistSession: () => void;
+  restoreSession: () => void;
 }
 
 const STORAGE_KEY = "icosahedron_creds";
+const SESSION_KEY = "icosahedron_session";
 
 function loadCreds(): { url: string; user: string; pass: string } | null {
   try {
@@ -115,6 +151,9 @@ export const useStore = create<AppStore>((set, get) => ({
     const newPos = navPos + 1;
     set({ navPos: newPos, activeTab: navHistory[newPos].tab });
   },
+
+  sidebarArtExpanded: false,
+  toggleSidebarArt: () => set((s) => ({ sidebarArtExpanded: !s.sidebarArtExpanded })),
 
   queue: [],
   currentIndex: -1,
@@ -214,7 +253,132 @@ export const useStore = create<AppStore>((set, get) => ({
     get()._audio?.pause();
     set({ queue: [], currentIndex: -1, playing: false, _audio: null, currentTime: 0, duration: 0 });
   },
+
+  // Matches the old app's play_track_next: inserts right after the currently
+  // playing track without interrupting playback; if nothing's queued yet,
+  // falls back to just playing it (there's no "current" to insert after).
+  addTrackNext: (track) => {
+    const { queue, currentIndex, playTrack } = get();
+    if (!queue.length) { playTrack(track, [track]); return; }
+    const newQueue = [...queue];
+    newQueue.splice(currentIndex + 1, 0, track);
+    set({ queue: newQueue });
+  },
+
+  // Matches the old app's add_track_to_queue: always just appends, never
+  // auto-plays even if the queue was empty.
+  addTrackToQueue: (track) => {
+    set((s) => ({ queue: [...s.queue, track] }));
+  },
+
+  appendToQueue: (tracks) => {
+    if (!tracks.length) return;
+    set((s) => ({ queue: [...s.queue, ...tracks] }));
+  },
+
+  reorderQueue: (fromId, toIndex) => {
+    const { queue, currentIndex } = get();
+    const currentTrackId = queue[currentIndex]?.id;
+    const from = queue.findIndex((t) => t.id === fromId);
+    if (from === -1) return;
+    const next = [...queue];
+    const [moved] = next.splice(from, 1);
+    // toIndex was computed against the pre-removal array — once the source
+    // item is spliced out, every index after it shifts down by one.
+    const insertAt = Math.max(0, Math.min(next.length, from < toIndex ? toIndex - 1 : toIndex));
+    next.splice(insertAt, 0, moved);
+    const newCurrentIndex = currentTrackId ? next.findIndex((t) => t.id === currentTrackId) : currentIndex;
+    set({ queue: next, currentIndex: newCurrentIndex });
+  },
+
+  removeFromQueue: (id) => {
+    const { queue, currentIndex, _audio } = get();
+    const currentTrackId = queue[currentIndex]?.id;
+    const next = queue.filter((t) => t.id !== id);
+    if (id === currentTrackId) {
+      // The removed track was the one playing — stop rather than adopt a new one.
+      _audio?.pause();
+      set({ queue: next, currentIndex: -1, playing: false, _audio: null, currentTime: 0, duration: 0 });
+    } else {
+      const newCurrentIndex = currentTrackId ? next.findIndex((t) => t.id === currentTrackId) : -1;
+      set({ queue: next, currentIndex: newCurrentIndex });
+    }
+  },
+
+  radioLoading: false,
+
+  // Matches the old app's start_radio: clear queue, play the seed track alone,
+  // then fill the queue with similar-artist songs + top songs in the
+  // background (silently gives up on either if the server can't provide them).
+  // set_radio_loading(True/False) around the worker becomes radioLoading here.
+  startRadio: async (track) => {
+    const { playTrack, appendToQueue } = get();
+    playTrack(track, [track]);
+    set({ radioLoading: true });
+
+    try {
+      const [similar, top] = await Promise.all([
+        track.artist_id ? api.getSimilarSongs(track.artist_id, 50).catch(() => []) : Promise.resolve([]),
+        track.artist ? api.getTopSongs(track.artist, 10).catch(() => []) : Promise.resolve([]),
+      ]);
+
+      const seen = new Set([track.id]);
+      const pool = [...similar, ...top].filter((t) => {
+        if (seen.has(t.id)) return false;
+        seen.add(t.id);
+        return true;
+      });
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+      }
+      if (pool.length) appendToQueue(pool);
+    } finally {
+      set({ radioLoading: false });
+    }
+  },
+
+  // Matches the old app's save_playlist/load_playlist (persistence.py): full
+  // queue + current index + position, saved once on close and restored eagerly
+  // on next launch — paused, not auto-played. Track stream_urls stay valid
+  // indefinitely (Subsonic's salt/token auth isn't time-limited), so restored
+  // tracks are usable as-is with no server round-trip. Unlike the old app,
+  // shuffle/repeat/volume were never persisted there either — matching that,
+  // not extending scope.
+  persistSession: () => {
+    const { queue, currentIndex, currentTime } = get();
+    try {
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ queue, currentIndex, positionSecs: currentTime }));
+    } catch { /* ignore quota/serialization errors — losing the session is non-fatal */ }
+  },
+
+  restoreSession: () => {
+    let saved: { queue: Track[]; currentIndex: number; positionSecs: number } | null = null;
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      saved = raw ? JSON.parse(raw) : null;
+    } catch { saved = null; }
+    if (!saved || !saved.queue.length || saved.currentIndex < 0 || saved.currentIndex >= saved.queue.length) return;
+
+    const track = saved.queue[saved.currentIndex];
+    const audio = new Audio(track.stream_url);
+    audio.addEventListener("timeupdate", () => set({ currentTime: Math.floor(audio.currentTime) }));
+    audio.addEventListener("loadedmetadata", () => {
+      set({ duration: Math.floor(audio.duration) });
+      audio.currentTime = saved!.positionSecs;
+    });
+    audio.addEventListener("ended", () => get().next());
+
+    set({
+      queue: saved.queue, currentIndex: saved.currentIndex, playing: false,
+      _audio: audio, currentTime: saved.positionSecs, duration: 0,
+    });
+  },
 }));
+
+// Save the session once on the way out, matching the old app's single
+// closeEvent()-triggered save rather than continuously autosaving.
+window.addEventListener("beforeunload", () => useStore.getState().persistSession());
 
 // Auto-reconnect on startup if creds saved
 export async function tryAutoConnect() {
@@ -224,6 +388,10 @@ export async function tryAutoConnect() {
       await useStore.getState().connect(creds.url, creds.user, creds.pass);
     } catch {
       localStorage.removeItem(STORAGE_KEY);
+      return;
     }
+    try {
+      useStore.getState().restoreSession();
+    } catch { /* a failed session restore shouldn't be treated as a bad-credentials error */ }
   }
 }

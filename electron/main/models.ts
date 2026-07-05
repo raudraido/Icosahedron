@@ -2,8 +2,10 @@ export interface Artist {
   id: string;
   name: string;
   album_count: number;
+  song_count: number;
   cover_id: string | null;
   starred: boolean;
+  play_count: number;
 }
 
 export interface Album {
@@ -38,6 +40,7 @@ export interface Track {
   bitrate: number | null;
   bpm: number | null;
   created: string | null;
+  format: string | null;
 }
 
 export interface Playlist {
@@ -57,6 +60,7 @@ export interface ArtistDetail {
   music_brainz_id: string | null;
   last_fm_url: string | null;
   similar_artists: Artist[];
+  image_url: string | null;
 }
 
 export interface SearchResult {
@@ -76,4 +80,20 @@ export interface ScanStatus {
   count: number;
   folder_count: number | null;
   last_scan: string | null;
+}
+
+/** Extra fields for the "Get Info" dialog — deliberately not part of `Track` since
+ *  no list endpoint reliably returns all of these; fetched on demand per-track by
+ *  merging Navidrome's native `/api/song/{id}` (has the real filesystem path) with
+ *  the standard Subsonic `getSong` (has extra audio fields) — same two-call
+ *  approach the old app's TrackInfoDialog used. */
+export interface TrackFullInfo {
+  path: string | null;
+  album_artist: string | null;
+  is_compilation: boolean;
+  codec: string | null;
+  sample_rate: number | null;
+  bit_depth: number | null;
+  channel_count: number | null;
+  size_bytes: number | null;
 }

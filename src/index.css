@@ -73,6 +73,28 @@ html, body, #root {
   to   { height: 16px; }
 }
 
+/* Radio-loading spinner ring — see SpinnerRing.tsx */
+@keyframes spinner-rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Skeleton loading placeholders — same "light sweep" shimmer language as the
+ * old app's ShimmerSweep.qml: a translucent band slides left→right, pauses
+ * briefly, then repeats. 1550ms total = 1100ms sweep + 450ms pause. */
+@keyframes shimmer-sweep {
+  0%   { transform: translateX(-120%); }
+  71%  { transform: translateX(120%); }
+  100% { transform: translateX(120%); }
+}
+.shimmer-sweep { position: relative; overflow: hidden; background: var(--skeleton); }
+.shimmer-sweep::after {
+  content: "";
+  position: absolute; inset: 0; width: 60%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+  animation: shimmer-sweep 1550ms ease-in-out infinite;
+}
+
 /* Scrollbars — gutter always reserved so layout doesn't jump on scroll */
 .scroll-overlay { overflow-y: auto; scrollbar-gutter: stable; }
 
@@ -85,8 +107,8 @@ html, body, #root {
  * (it was already invisible except while actively scrolling, so there's
  * nothing lost). Scrolling still works fine via wheel/trackpad.
  */
-.scroll-smooth { overflow-y: auto; will-change: transform; }
-.scroll-smooth::-webkit-scrollbar { width: 0; }
+.scroll-clean { overflow-y: auto; will-change: transform; }
+.scroll-clean::-webkit-scrollbar { width: 0; }
 
 ::-webkit-scrollbar       { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

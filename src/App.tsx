@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useStore, tryAutoConnect, Tab } from "./store";
 import { applyTheme, CREAM } from "./lib/theme";
+import { loadJSON, saveJSON } from "./components/TrackTable";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -19,57 +20,95 @@ import { Artists } from "./screens/Artists";
 import { Tracks } from "./screens/Tracks";
 import { Playlists } from "./screens/Playlists";
 import { Starred } from "./screens/Starred";
+import { Placeholder } from "./screens/Placeholder";
 import { PlayerBar } from "./components/PlayerBar";
 import { LeftPanel } from "./components/LeftPanel";
 import { QueuePanel } from "./components/QueuePanel";
+import { Icon } from "./components/Icon";
 
+// Full old-app nav order (window.py's addTab sequence) — Home, Now Playing,
+// Mix Builder, and Visualizer aren't built out yet, so they render Placeholder
+// for now rather than being left out of the nav bar entirely.
 const NAV: { id: Tab; label: string; icon: string }[] = [
-  { id: "albums",    label: "Albums",    icon: "/img/albums.png" },
-  { id: "artists",   label: "Artists",   icon: "/img/artists.png" },
-  { id: "tracks",    label: "Tracks",    icon: "/img/tracks.png" },
-  { id: "playlists", label: "Playlists", icon: "/img/playlists.png" },
-  { id: "starred",   label: "Favorites", icon: "/img/heart.png" },
+  { id: "home",       label: "Home",        icon: "/img/home.png" },
+  { id: "nowPlaying", label: "Now Playing", icon: "/img/now_playing.png" },
+  { id: "albums",     label: "Albums",      icon: "/img/albums.png" },
+  { id: "artists",    label: "Artists",     icon: "/img/artists.png" },
+  { id: "tracks",     label: "Tracks",      icon: "/img/tracks.png" },
+  { id: "playlists",  label: "Playlists",   icon: "/img/playlists.png" },
+  { id: "starred",    label: "Favorites",   icon: "/img/heart.png" },
+  { id: "mixBuilder", label: "Mix Builder", icon: "/img/mix.png" },
+  { id: "visualizer", label: "Visualizer",  icon: "/img/visualizer.png" },
 ];
 
-function NavTab({ n, active, onClick }: { n: typeof NAV[0]; active: boolean; onClick: () => void }) {
+// Matches the old app's drag-reorderable tab bar (persisted QSettings key
+// "tab_order") — same idea, localStorage instead. Guarded against a saved
+// order that's stale relative to NAV (missing ids from a newly-added tab, or
+// containing ids that no longer exist) rather than assuming it's always valid.
+const LS_NAV_ORDER = "nav_tab_order";
+const DEFAULT_NAV_ORDER: Tab[] = NAV.map((n) => n.id);
+
+function loadNavOrder(): Tab[] {
+  const saved = loadJSON<Tab[]>(LS_NAV_ORDER, DEFAULT_NAV_ORDER);
+  const valid = new Set(DEFAULT_NAV_ORDER);
+  const filtered = saved.filter((id) => valid.has(id));
+  const missing = DEFAULT_NAV_ORDER.filter((id) => !filtered.includes(id));
+  return [...filtered, ...missing];
+}
+
+// Sizing/color ported from the old app's _TabBar QSS (mixins/visuals.py:748-756)
+// + its custom paintEvent halo (window.py:143-169), not guessed: 16px icons,
+// fontSizePrimary (--fs-primary), BOLD for every tab (not just active — only
+// the *label* color differs, the icon is always accent), 10px/5px padding, no
+// opacity fade on inactive tabs (a plain color difference, full opacity both
+// ways), and the active-tab highlight is a hand-painted rounded rect filled
+// with accent at alpha 45/255 (~17.6%), radius 6px, no border stroke — not
+// the app's general var(--hover-bg) token. minWidth gives every tab the same
+// footprint regardless of label length (matches QTabBar's native equal-width
+// tab sizing) — only visible on whichever tab is active (its background pill
+// reveals the reserved space), which is why a short label like "Home" shows
+// noticeably more padding around its icon+text than a long one like
+// "Mix Builder" once it's the active tab.
+// Full-label tab width (used both for layout and for computing the icon-only
+// breakpoint below) and the icon-only mode's tighter width.
+const FULL_TAB_WIDTH = 110;
+const COMPACT_TAB_WIDTH = 44;
+const TAB_GAP = 4;
+
+function NavTab({
+  n, active, dragging, compact, onClick, onDragStart, onDragOver, onDragEnd,
+}: {
+  n: typeof NAV[0]; active: boolean; dragging: boolean; compact: boolean; onClick: () => void;
+  onDragStart: () => void; onDragOver: () => void; onDragEnd: () => void;
+}) {
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all shrink-0"
+      draggable
+      onDragStart={onDragStart}
+      onDragOver={(e) => { e.preventDefault(); onDragOver(); }}
+      onDragEnd={onDragEnd}
+      title={compact ? n.label : undefined}
+      className="flex items-center justify-center gap-1.5 shrink-0 transition-colors"
       style={{
-        fontSize:   "var(--fs-secondary)",
-        color:      active ? "var(--accent)" : "var(--text-primary)",
-        background: active ? "var(--hover-bg)" : "transparent",
-        opacity:    active ? 1 : 0.65,
-        boxShadow:  "none",
+        padding: "10px 5px",
+        minWidth: compact ? COMPACT_TAB_WIDTH : FULL_TAB_WIDTH,
+        borderRadius: 6,
+        fontSize:   "var(--fs-primary)",
+        fontWeight: 700,
+        background: active ? "color-mix(in srgb, var(--accent) 17.6%, transparent)" : "transparent",
+        opacity: dragging ? 0.4 : 1,
+        cursor: "pointer",
       }}
       onMouseEnter={(e) => {
-        if (!active) {
-          e.currentTarget.style.background = "var(--hover-bg)";
-          e.currentTarget.style.opacity = "0.9";
-        }
-        e.currentTarget.style.boxShadow = `0 0 8px 1px color-mix(in srgb, var(--accent) 25%, transparent)`;
+        if (!active) e.currentTarget.style.background = "var(--hover-bg)";
       }}
       onMouseLeave={(e) => {
-        if (!active) {
-          e.currentTarget.style.background = "transparent";
-          e.currentTarget.style.opacity = "0.65";
-        }
-        e.currentTarget.style.boxShadow = "none";
+        if (!active) e.currentTarget.style.background = "transparent";
       }}
     >
-      <img
-        src={n.icon}
-        alt=""
-        style={{
-          width: 14, height: 14, objectFit: "contain",
-          opacity: active ? 1 : 0.7,
-          filter: active
-            ? "sepia(1) saturate(5) hue-rotate(-10deg) brightness(0.6)"
-            : "saturate(0) brightness(0.4)",
-        }}
-      />
-      {n.label}
+      <Icon src={n.icon} size={compact ? 20 : 16} style={{ background: "var(--accent)" }} />
+      {!compact && <span style={{ color: active ? "var(--accent)" : "var(--text-primary)" }}>{n.label}</span>}
     </button>
   );
 }
@@ -83,6 +122,42 @@ function MainApp() {
   useEffect(() => {
     setMounted((prev) => prev.has(activeTab) ? prev : new Set([...prev, activeTab]));
   }, [activeTab]);
+
+  const [navOrder, setNavOrder] = useState<Tab[]>(loadNavOrder);
+  const [dragTab, setDragTab] = useState<Tab | null>(null);
+  useEffect(() => { saveJSON(LS_NAV_ORDER, navOrder); }, [navOrder]);
+
+  // Icon-only compact mode — matches the old app's _update_tab_mode: switches
+  // when the tab bar's full-label width no longer fits the header, using the
+  // *same* threshold for entering and leaving (no hysteresis gap there either,
+  // so a resize sitting right at the boundary can flicker in both apps).
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    function check() {
+      const needed = navOrder.length * FULL_TAB_WIDTH + (navOrder.length - 1) * TAB_GAP;
+      setCompact(needed > el!.clientWidth - 24); // -24 = the row's own px-3 padding
+    }
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [navOrder.length]);
+
+  function handleDragOver(overId: Tab) {
+    if (!dragTab || dragTab === overId) return;
+    setNavOrder((prev) => {
+      const from = prev.indexOf(dragTab);
+      const to = prev.indexOf(overId);
+      if (from === -1 || to === -1) return prev;
+      const next = [...prev];
+      next.splice(from, 1);
+      next.splice(to, 0, dragTab);
+      return next;
+    });
+  }
 
   function handleTabClick(tab: Tab) {
     const inDetail = !!(currentEntry?.album || currentEntry?.artistId);
@@ -99,22 +174,45 @@ function MainApp() {
         <LeftPanel />
 
         <div className="flex flex-col flex-1 overflow-hidden" style={{ background: "var(--main-bg)" }}>
-          {/* Tab bar */}
+          {/* Tab bar — centered in the header (matches the old app's main_header,
+              which puts an addStretch() on both sides of the QTabBar) */}
           <div
-            className="flex items-center gap-0.5 px-3 shrink-0"
-            style={{ height: 62, borderBottom: "1px solid var(--border)" }}
+            ref={headerRef}
+            className="flex items-center justify-center px-3 shrink-0"
+            style={{ height: 62, gap: 4, borderBottom: "1px solid var(--border)" }}
           >
-            {NAV.map((n) => (
-              <NavTab key={n.id} n={n} active={activeTab === n.id} onClick={() => handleTabClick(n.id)} />
-            ))}
+            {navOrder.map((id) => {
+              const n = NAV.find((entry) => entry.id === id);
+              if (!n) return null;
+              return (
+                <NavTab
+                  key={n.id}
+                  n={n}
+                  compact={compact}
+                  active={activeTab === n.id}
+                  dragging={dragTab === n.id}
+                  onClick={() => handleTabClick(n.id)}
+                  onDragStart={() => setDragTab(n.id)}
+                  onDragOver={() => handleDragOver(n.id)}
+                  onDragEnd={() => setDragTab(null)}
+                />
+              );
+            })}
           </div>
 
           <div className="flex-1 overflow-hidden relative">
-            <div className="absolute inset-0 flex flex-col" style={{ visibility: activeTab === "albums"    ? "visible" : "hidden" }}>{mounted.has("albums")    && <Albums />}</div>
-            <div className="absolute inset-0 flex flex-col" style={{ visibility: activeTab === "artists"   ? "visible" : "hidden" }}>{mounted.has("artists")   && <Artists />}</div>
-            <div className="absolute inset-0 flex flex-col" style={{ visibility: activeTab === "tracks"    ? "visible" : "hidden" }}>{mounted.has("tracks")    && <Tracks />}</div>
-            <div className="absolute inset-0 flex flex-col" style={{ visibility: activeTab === "playlists" ? "visible" : "hidden" }}>{mounted.has("playlists") && <Playlists />}</div>
-            <div className="absolute inset-0 flex flex-col" style={{ visibility: activeTab === "starred"   ? "visible" : "hidden" }}>{mounted.has("starred")   && <Starred />}</div>
+            {/* display:none (not visibility:hidden) — a hidden visibility:hidden panel still
+                gets laid out/painted every frame, so a heavy virtualized grid (hundreds of
+                <img> covers) can visibly lag behind the tab switch for a frame or two. */}
+            <div className="absolute inset-0 flex flex-col" style={{ display: activeTab === "home"       ? "flex" : "none" }}>{mounted.has("home")       && <Placeholder label="Home" />}</div>
+            <div className="absolute inset-0 flex flex-col" style={{ display: activeTab === "nowPlaying" ? "flex" : "none" }}>{mounted.has("nowPlaying") && <Placeholder label="Now Playing" />}</div>
+            <div className="absolute inset-0 flex flex-col" style={{ display: activeTab === "albums"     ? "flex" : "none" }}>{mounted.has("albums")     && <Albums />}</div>
+            <div className="absolute inset-0 flex flex-col" style={{ display: activeTab === "artists"    ? "flex" : "none" }}>{mounted.has("artists")    && <Artists />}</div>
+            <div className="absolute inset-0 flex flex-col" style={{ display: activeTab === "tracks"     ? "flex" : "none" }}>{mounted.has("tracks")     && <Tracks />}</div>
+            <div className="absolute inset-0 flex flex-col" style={{ display: activeTab === "playlists"  ? "flex" : "none" }}>{mounted.has("playlists")  && <Playlists />}</div>
+            <div className="absolute inset-0 flex flex-col" style={{ display: activeTab === "starred"    ? "flex" : "none" }}>{mounted.has("starred")    && <Starred />}</div>
+            <div className="absolute inset-0 flex flex-col" style={{ display: activeTab === "mixBuilder" ? "flex" : "none" }}>{mounted.has("mixBuilder") && <Placeholder label="Mix Builder" />}</div>
+            <div className="absolute inset-0 flex flex-col" style={{ display: activeTab === "visualizer" ? "flex" : "none" }}>{mounted.has("visualizer") && <Placeholder label="Visualizer" />}</div>
           </div>
         </div>
 

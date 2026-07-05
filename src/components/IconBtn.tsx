@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { Icon } from "./Icon";
 
-/** Toolbar icon button — accent-tinted when active, subtle hover background otherwise. */
+/** Toolbar icon button — accent-tinted when active, subtle hover background otherwise.
+ *  `spinning` continuously rotates the icon (matches the old app's SpinRefreshButton:
+ *  linear, ~1.28s/rev, no fixed count — reuses the same keyframe as the radio-loading
+ *  SpinnerRing). */
 export function IconBtn({
-  src, active, title, onClick,
-}: { src: string; active?: boolean; title?: string; onClick: () => void }) {
+  src, active, title, onClick, spinning = false,
+}: { src: string; active?: boolean; title?: string; onClick: () => void; spinning?: boolean }) {
   const [hov, setHov] = useState(false);
   return (
     <button
@@ -23,7 +26,7 @@ export function IconBtn({
         flexShrink: 0,
       }}
     >
-      <Icon src={src} size={18} />
+      <Icon src={src} size={18} style={spinning ? { animation: "spinner-rotate 1280ms linear infinite" } : undefined} />
     </button>
   );
 }

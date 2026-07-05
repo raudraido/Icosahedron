@@ -11,6 +11,7 @@ import { ArtistTokens } from "../components/ArtistTokens";
 import { TrackTable } from "../components/TrackTable";
 import { IconBtn } from "../components/IconBtn";
 import { SearchBox } from "../components/SearchBox";
+import { SkeletonCard } from "../components/Skeleton";
 import { FAVORITE_PINK, PLAY_ICON_DARK } from "../lib/theme";
 
 const SORT_OPTIONS = [
@@ -147,11 +148,23 @@ function AlbumGrid({ albums, loading, onOpen }: { albums: Album[]; loading: bool
   const rowHeight = cardWidth + META_HEIGHT + GAP;
   const rowCount = Math.ceil(albums.length / cols);
   const itemData: RowData = { albums, cols, cardWidth, onOpen };
+  const showSkeleton = loading && albums.length === 0;
+  const skeletonRows = height > 0 ? Math.ceil(height / rowHeight) + 1 : 0;
 
   return (
     <div ref={containerRef} className="flex-1 overflow-hidden" style={{ position: "relative" }}>
-      {loading && <p className="text-sm" style={{ color: "var(--text-primary)", opacity: 0.4, padding: 10 }}>Loading…</p>}
-      {height > 0 && width > 0 && (
+      {showSkeleton && width > 0 && height > 0 && Array.from({ length: skeletonRows }, (_, r) => (
+        <div
+          key={r}
+          style={{
+            position: "absolute", top: r * rowHeight, left: 0, right: 0,
+            display: "grid", gridTemplateColumns: `repeat(${cols}, ${cardWidth}px)`, gap: GAP, padding: "0 10px",
+          }}
+        >
+          {Array.from({ length: cols }, (_, c) => <SkeletonCard key={c} />)}
+        </div>
+      ))}
+      {!showSkeleton && height > 0 && width > 0 && (
         <FixedSizeList
           height={height}
           width={width}
@@ -313,6 +326,7 @@ function AlbumDetail({ album }: { album: Album }) {
           key={album.id}
           tracks={tracks}
           loading={tracksLoading}
+          viewKey="album_detail"
           defaultSort={null}
           persistSort={false}
           showDiscHeaders
@@ -353,6 +367,7 @@ export function Albums() {
     queryFn: async () => sort === "compilations"
       ? await api.getCompilations()
       : await api.getAllAlbums(sort === "song_count" ? "alphabeticalByName" : sort),
+    placeholderData: (prev) => prev,
   });
 
   const albums = React.useMemo(() => {
@@ -397,7 +412,7 @@ export function Albums() {
       <div className="flex items-center shrink-0 px-6" style={{ height: 58, gap: 6, borderBottom: "1px solid var(--border)" }}>
         <h2 className="font-semibold" style={{ flex: 1, color: "var(--text-secondary)", fontSize: "var(--fs-primary)" }}>
           {loading
-            ? "Albums"
+            ? "Loading albums…"
             : searchText
               ? `${displayedAlbums.length} / ${albums.length.toLocaleString("fr-FR")} albums`
               : `${albums.length.toLocaleString("fr-FR")} albums`}
@@ -437,10 +452,10 @@ export function Albums() {
                   onClick={() => selectSort(o.value)}
                   style={{
                     display: "flex", alignItems: "center", gap: 8,
-                    width: "100%", margin: 0, padding: "5px 12px", textAlign: "left",
+                    width: "100%", margin: 0, padding: "5px 20px 5px 12px", textAlign: "left",
                     background: "transparent", border: "none", cursor: "pointer",
                     color: "var(--text-secondary)",
-                    fontSize: "var(--fs-primary)",
+                    fontSize: "var(--fs-primary)", fontWeight: 400,
                     borderRadius: 4,
                     boxSizing: "border-box",
                   }}

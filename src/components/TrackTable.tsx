@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { api, Track } from "../lib/api";
 import { fmtDuration } from "../lib/api";
@@ -10,13 +10,20 @@ import { IconBtn } from "./IconBtn";
 import { SearchBox } from "./SearchBox";
 import { PlayingBars } from "./PlayingBars";
 import { ArtistTokens } from "./ArtistTokens";
+import { SkeletonTrackRow } from "./Skeleton";
+import { ContextMenu, MenuEntry } from "./ContextMenu";
+import { PromptDialog } from "./PromptDialog";
+import { TrackInfoDialog } from "./TrackInfoDialog";
 import { FAVORITE_PINK } from "../lib/theme";
 
 // Shared, reusable track table — used by both the main Tracks screen and the
 // album-detail tracklist (matches the old app's TrackListView.qml, reused
 // verbatim by tracks_list.qml and album_detail.qml). Column layout/sort/
-// visibility state is intentionally shared (not scoped per host) via
-// localStorage, matching the old app's single QSettings namespace.
+// visibility state is scoped per host via a `viewKey` prop, matching the old
+// app's own per-view QSettings namespaces (`tracks/col_visibility`,
+// `album_detail/col_visibility`, etc. — tracks_browser.py:1976,
+// albums_browser.py:637 — each screen keeps its own independent settings,
+// they were never a single shared namespace).
 
 // ── Column model ─────────────────────────────────────────────────────────
 
@@ -65,18 +72,18 @@ const DEFAULT_COL_VISIBILITY: Record<string, boolean> = {
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
   title: 200, artist: 200, album: 205, fav: 68, genre: 120, dur: 75, plays: 70, trackno: 55, year: 70, date: 110, bpm: 56,
 };
-type SortState = { col: string; dir: "asc" | "desc" } | null;
+export type SortState = { col: string; dir: "asc" | "desc" } | null;
 type DisplayRow =
   | { kind: "track"; track: Track; trackIndex: number }
   | { kind: "discHeader"; discNumber: number };
-const DEFAULT_SORT: SortState = { col: "date", dir: "desc" };
+export const DEFAULT_SORT: SortState = { col: "date", dir: "desc" };
 
-const LS_ORDER = "tracks_col_order";
-const LS_WIDTHS = "tracks_col_widths";
-const LS_VIS = "tracks_col_visibility";
-const LS_SORT = "tracks_sort_state";
+const LS_ORDER = (viewKey: string) => `${viewKey}_col_order`;
+const LS_WIDTHS = (viewKey: string) => `${viewKey}_col_widths`;
+export const LS_SORT = (viewKey: string) => `${viewKey}_sort_state`;
+const LS_VIS = (viewKey: string) => `${viewKey}_col_visibility`;
 
-function loadJSON<T>(key: string, fallback: T): T {
+export function loadJSON<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return fallback;
@@ -95,7 +102,7 @@ function loadJSON<T>(key: string, fallback: T): T {
     return fallback;
   }
 }
-function saveJSON(key: string, value: unknown) {
+export function saveJSON(key: string, value: unknown) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {
@@ -187,32 +194,80 @@ function FavoriteHeart({ track }: { track: Track }) {
 
 export function TrackTable({
   tracks, loading = false, defaultSort = DEFAULT_SORT, persistSort = true, showDiscHeaders = false,
+  serverDriven = false, sortState: controlledSortState, onSortChange, query: controlledQuery, onQueryChange,
+  pagination, toolbarLeft, toolbarRight, numColSource = "trackNumber", numColOffset = 0, viewKey,
 }: {
   tracks: Track[];
   loading?: boolean;
+  /** Namespaces column order/widths/visibility/sort in localStorage (e.g. "tracks",
+   *  "album_detail") so the two hosts don't share settings — matches the old app's
+   *  own per-view QSettings groups. */
+  viewKey: string;
   /** Initial/reset sort. Pass null for "no sort" (natural order) — e.g. an album's tracklist, which is
    *  already in disc/track order from the server, vs. date-added-descending for the main library. */
   defaultSort?: SortState;
   /** Main Tracks screen remembers sort across sessions; a single album's tracklist shouldn't inherit that. */
   persistSort?: boolean;
+  /** What the leading "#" column shows: the track's own `track_number` metadata field (resets per
+   *  disc for free — the album detail tracklist) or a running position within the given `tracks`
+   *  array plus `numColOffset` (the main Tracks screen — each page is its own array, so without an
+   *  offset this would wrongly reset to 1 on every page instead of continuing 201, 202...). */
+  numColSource?: "trackNumber" | "position";
+  /** Added to the position number when `numColSource="position"` — pass the current page's starting
+   *  index (e.g. `(page - 1) * pageSize`) so numbering runs continuously across pages. */
+  numColOffset?: number;
   /** Album-detail only: insert "Disc N" separator rows between discs. Matches the old app's
    *  TrackListView.qml, which only shows these in natural (unsorted, unfiltered) order — a search
    *  or column sort flattens the list and the headers stop making sense. */
   showDiscHeaders?: boolean;
+  /** Server already returned `tracks` pre-sorted/pre-filtered/paginated — skip all client-side
+   *  sort/filter and trust the prop as-is. Requires `sortState`/`onSortChange` and
+   *  `query`/`onQueryChange` (controlled), since the parent needs to know sort/search *before*
+   *  the first fetch. Used by the main Tracks screen; album detail doesn't need this. */
+  serverDriven?: boolean;
+  sortState?: SortState;
+  onSortChange?: (s: SortState) => void;
+  query?: string;
+  onQueryChange?: (q: string) => void;
+  pagination?: { page: number; totalPages: number; onPageChange: (page: number) => void };
+  /** Extra content (e.g. track count) rendered at the toolbar's left edge. */
+  toolbarLeft?: React.ReactNode;
+  /** Extra content (e.g. the refresh button) rendered between the search box and the
+   *  column picker — matches the old app's header order: search box, then refresh,
+   *  then the rightmost burger/column menu. */
+  toolbarRight?: React.ReactNode;
 }) {
   const playTrack = useStore((s) => s.playTrack);
   const navigateTo = useStore((s) => s.navigateTo);
+  const addTrackNext = useStore((s) => s.addTrackNext);
+  const addTrackToQueue = useStore((s) => s.addTrackToQueue);
+  const startRadio = useStore((s) => s.startRadio);
   const currentId = useStore((s) => s.queue[s.currentIndex]?.id);
+  const playing = useStore((s) => s.playing);
   const qc = useQueryClient();
 
-  const [query, setQuery] = useState("");
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; track: Track } | null>(null);
+  const [infoTrack, setInfoTrack] = useState<Track | null>(null);
+  const [newPlaylistFor, setNewPlaylistFor] = useState<Track | null>(null);
+  const { data: playlists = [] } = useQuery({ queryKey: ["playlists"], queryFn: api.getPlaylists });
+
+  const [internalQuery, setInternalQuery] = useState("");
+  const query = serverDriven ? (controlledQuery ?? "") : internalQuery;
+  const setQuery = serverDriven ? (onQueryChange ?? (() => {})) : setInternalQuery;
+
   const [searchOpen, setSearchOpen] = useState(false);
-  const [colOrder, setColOrder] = useState<string[]>(() => loadJSON(LS_ORDER, DEFAULT_COL_ORDER));
-  const [colVisibility, setColVisibility] = useState<Record<string, boolean>>(() => loadJSON(LS_VIS, DEFAULT_COL_VISIBILITY));
-  const [colWidths, setColWidths] = useState<Record<string, number>>(() => loadJSON(LS_WIDTHS, DEFAULT_COL_WIDTHS));
-  const [sortState, setSortState] = useState<SortState>(
-    () => persistSort ? loadJSON(LS_SORT, defaultSort) : defaultSort,
+  const [colOrder, setColOrder] = useState<string[]>(() => loadJSON(LS_ORDER(viewKey), DEFAULT_COL_ORDER));
+  const [colVisibility, setColVisibility] = useState<Record<string, boolean>>(() => loadJSON(LS_VIS(viewKey), DEFAULT_COL_VISIBILITY));
+  const [colWidths, setColWidths] = useState<Record<string, number>>(() => loadJSON(LS_WIDTHS(viewKey), DEFAULT_COL_WIDTHS));
+  const [internalSortState, setInternalSortState] = useState<SortState>(
+    () => persistSort ? loadJSON(LS_SORT(viewKey), defaultSort) : defaultSort,
   );
+  const sortState = serverDriven ? (controlledSortState ?? null) : internalSortState;
+  function applySortState(next: SortState) {
+    if (persistSort) saveJSON(LS_SORT(viewKey), next);
+    if (serverDriven) onSortChange?.(next);
+    else setInternalSortState(next);
+  }
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
@@ -227,6 +282,10 @@ export function TrackTable({
   const parentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (parentRef.current) parentRef.current.scrollTop = 0;
+  }, [pagination?.page]);
+
+  useEffect(() => {
     function onDown(e: MouseEvent) {
       if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPickerOpen(false);
     }
@@ -234,16 +293,16 @@ export function TrackTable({
     return () => document.removeEventListener("mousedown", onDown);
   }, []);
 
-  const filtered = query.trim()
-    ? tracks.filter((t) => {
+  const filtered = serverDriven || !query.trim()
+    ? tracks
+    : tracks.filter((t) => {
         const q = query.toLowerCase();
         return t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q) || (t.album ?? "").toLowerCase().includes(q);
-      })
-    : tracks;
+      });
 
   const sorted = React.useMemo(
-    () => sortState ? sortTracks(filtered, sortState.col, sortState.dir) : filtered,
-    [filtered, sortState],
+    () => serverDriven || !sortState ? filtered : sortTracks(filtered, sortState.col, sortState.dir),
+    [filtered, sortState, serverDriven],
   );
 
   // Disc separators only make sense in natural (unsorted, unfiltered) order —
@@ -285,14 +344,13 @@ export function TrackTable({
       next = defaultSort;
       clickCountRef.current = defaultSort ? 1 : 0;
     }
-    setSortState(next);
-    if (persistSort) saveJSON(LS_SORT, next);
+    applySortState(next);
   }
 
   function toggleColumn(colId: string) {
     setColVisibility((prev) => {
       const next = { ...prev, [colId]: !prev[colId] };
-      saveJSON(LS_VIS, next);
+      saveJSON(LS_VIS(viewKey), next);
       return next;
     });
   }
@@ -310,7 +368,7 @@ export function TrackTable({
     function onUp() {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
-      saveJSON(LS_WIDTHS, colWidthsRef.current);
+      saveJSON(LS_WIDTHS(viewKey), colWidthsRef.current);
     }
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -338,7 +396,7 @@ export function TrackTable({
   }
   function onHeaderDragEnd() {
     dragColRef.current = null;
-    saveJSON(LS_ORDER, colOrderRef.current);
+    saveJSON(LS_ORDER(viewKey), colOrderRef.current);
   }
 
   // ── Row selection / playback ──
@@ -368,6 +426,66 @@ export function TrackTable({
 
   function handleRowDoubleClick(track: Track) {
     insertAfterCurrentAndPlay(track);
+  }
+
+  // ── Right-click context menu ── (matches the old app's ShadowContextMenu on
+  // TrackListView.qml — Play Now / Play Next / Add to Queue / Go to Artist /
+  // Start Radio / Add to Playlist / Get Info / Add to Favorites)
+  function handleRowContextMenu(e: React.MouseEvent, track: Track) {
+    e.preventDefault();
+    if (!selected.has(track.id)) setSelected(new Set([track.id]));
+    setCtxMenu({ x: e.clientX, y: e.clientY, track });
+  }
+
+  async function toggleFavoriteFromMenu(track: Track) {
+    try {
+      await api.setFavorite(track.id, !track.starred, "id");
+      qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === "album-tracks" || q.queryKey[0] === "tracks-native" });
+    } catch { /* best-effort — row will just show the stale state until next fetch */ }
+  }
+
+  async function addToExistingPlaylist(playlistId: string, track: Track) {
+    await api.addTracksToPlaylist(playlistId, [track.id]);
+    qc.invalidateQueries({ queryKey: ["playlists"] });
+  }
+
+  async function createPlaylistAndAdd(name: string) {
+    const track = newPlaylistFor;
+    setNewPlaylistFor(null);
+    if (!track) return;
+    const playlist = await api.createPlaylist(name);
+    await api.addTracksToPlaylist(playlist.id, [track.id]);
+    qc.invalidateQueries({ queryKey: ["playlists"] });
+  }
+
+  function buildTrackMenu(track: Track): MenuEntry[] {
+    return [
+      { label: "Play Now", icon: "/img/sub_play.png", onClick: () => playTrack(track, [track]) },
+      { label: "Play Next", icon: "/img/sub_next.png", onClick: () => addTrackNext(track) },
+      { label: "Add to Queue", icon: "/img/queue.png", onClick: () => addTrackToQueue(track) },
+      { label: "Go to Artist", icon: "/img/sub_artist.png", disabled: !track.artist_id, onClick: () => track.artist_id && navigateTo({ tab: "artists", artistId: track.artist_id }) },
+      { label: "Start Radio", icon: "/img/radio.png", onClick: () => startRadio(track) },
+      "separator",
+      {
+        label: "Add to Playlist", icon: "/img/playlist.png",
+        submenu: [
+          { label: "New Playlist…", icon: "/img/add.png", onClick: () => setNewPlaylistFor(track) },
+          ...playlists.map((p) => ({
+            label: `${p.name}  (${p.song_count})`,
+            icon: "/img/playlist.png",
+            onClick: () => addToExistingPlaylist(p.id, track),
+          })),
+        ],
+      },
+      "separator",
+      { label: "Get Info", icon: "/img/info.png", onClick: () => setInfoTrack(track) },
+      {
+        label: track.starred ? "Remove from Favorites" : "Add to Favorites",
+        icon: track.starred ? "/img/heart_filled.png" : "/img/heart.png",
+        color: FAVORITE_PINK,
+        onClick: () => toggleFavoriteFromMenu(track),
+      },
+    ];
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -446,10 +564,11 @@ export function TrackTable({
   });
 
   return (
+    <>
     <div className="flex flex-col h-full" style={{ borderRadius: 10, background: "var(--card-bg)", border: "1px solid var(--border)", overflow: "hidden" }}>
       {/* Toolbar */}
       <div className="flex items-center shrink-0" style={{ height: 36, padding: "0 20px", gap: 8, marginTop: 12 }}>
-        <div style={{ flex: 1 }} />
+        <div style={{ flex: 1, display: "flex", alignItems: "center" }}>{toolbarLeft}</div>
 
         <SearchBox
           open={searchOpen}
@@ -458,6 +577,7 @@ export function TrackTable({
           onChange={setQuery}
           placeholder="Search tracks…"
         />
+        {toolbarRight}
         <div ref={pickerRef} style={{ position: "relative" }}>
           <IconBtn src="/img/burger.png" active={pickerOpen} title="Columns" onClick={() => setPickerOpen((v) => !v)} />
           {pickerOpen && (
@@ -474,9 +594,9 @@ export function TrackTable({
                   onClick={() => toggleColumn(id)}
                   style={{
                     display: "flex", alignItems: "center", gap: 8,
-                    width: "100%", margin: 0, padding: "5px 12px", textAlign: "left",
+                    width: "100%", margin: 0, padding: "5px 20px 5px 12px", textAlign: "left",
                     background: "transparent", border: "none", cursor: "pointer",
-                    color: "var(--text-secondary)", fontSize: "var(--fs-primary)",
+                    color: "var(--text-secondary)", fontSize: "var(--fs-primary)", fontWeight: 400,
                     borderRadius: 4, boxSizing: "border-box",
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
@@ -535,8 +655,10 @@ export function TrackTable({
       </div>
 
       {/* Rows */}
-      <div ref={parentRef} className="flex-1 scroll-smooth" tabIndex={0} onKeyDown={handleKeyDown} style={{ borderTop: "1px solid var(--border)" }}>
-        {loading && <p className="p-6 text-sm" style={{ color: "var(--text-primary)", opacity: 0.4 }}>Loading…</p>}
+      <div ref={parentRef} className="flex-1 scroll-clean" tabIndex={0} onKeyDown={handleKeyDown} style={{ borderTop: "1px solid var(--border)" }}>
+        {loading && displayRows.length === 0 && Array.from({ length: 12 }, (_, i) => (
+          <SkeletonTrackRow key={i} numColWidth={NUM_COL_WIDTH} />
+        ))}
         <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
           {virtualizer.getVirtualItems().map((row) => {
             const displayRow = displayRows[row.index];
@@ -569,6 +691,7 @@ export function TrackTable({
                 ref={virtualizer.measureElement}
                 onClick={(e) => handleRowClick(e, t, trackIndex)}
                 onDoubleClick={() => handleRowDoubleClick(t)}
+                onContextMenu={(e) => handleRowContextMenu(e, t)}
                 style={{
                   position: "absolute", top: row.start, left: 0, right: 0, height: 58,
                   display: "flex", alignItems: "center", gap: 12,
@@ -583,8 +706,10 @@ export function TrackTable({
                 onMouseLeave={(e) => { if (!isPlaying && !isSelected) e.currentTarget.style.background = "transparent"; }}
               >
                 <div style={{ flex: `0 0 ${NUM_COL_WIDTH}px`, display: "flex", alignItems: "center" }}>
-                  {isPlaying ? <PlayingBars /> : (
-                    <span className="tabular-nums" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>{t.track_number || ""}</span>
+                  {isPlaying && playing ? <PlayingBars /> : (
+                    <span className="tabular-nums" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>
+                      {numColSource === "position" ? numColOffset + trackIndex + 1 : (t.track_number || "")}
+                    </span>
                   )}
                 </div>
                 {visibleCols.map((id) => (
@@ -597,6 +722,102 @@ export function TrackTable({
           })}
         </div>
       </div>
+
+      {pagination && (
+        <div className="flex items-center shrink-0" style={{ height: 44, gap: 5, paddingLeft: 15, borderTop: "1px solid var(--border)" }}>
+          <PageBtn arrow onClick={() => pagination.onPageChange(pagination.page - 1)} disabled={pagination.page <= 1}>‹</PageBtn>
+          {pageNumbers(pagination.page, pagination.totalPages).map((p, i) =>
+            p === null ? (
+              <div key={`pad-${i}`} style={{ width: 32, height: 32 }} />
+            ) : p === "..." ? (
+              <div key={`ellipsis-${i}`} className="flex items-center justify-center" style={{ width: 32, height: 32, color: "var(--text-secondary)", fontSize: "var(--fs-primary)", opacity: 0.6 }}>…</div>
+            ) : (
+              <PageBtn key={p} onClick={() => pagination.onPageChange(p)} active={p === pagination.page}>{p}</PageBtn>
+            ),
+          )}
+          <PageBtn arrow onClick={() => pagination.onPageChange(pagination.page + 1)} disabled={pagination.page >= pagination.totalPages}>›</PageBtn>
+        </div>
+      )}
     </div>
+
+    {ctxMenu && (
+      <ContextMenu
+        x={ctxMenu.x}
+        y={ctxMenu.y}
+        items={buildTrackMenu(ctxMenu.track)}
+        onClose={() => setCtxMenu(null)}
+      />
+    )}
+    {infoTrack && <TrackInfoDialog track={infoTrack} onClose={() => setInfoTrack(null)} />}
+    {newPlaylistFor && (
+      <PromptDialog
+        title="New Playlist"
+        placeholder="Playlist name"
+        confirmLabel="Create"
+        onSubmit={createPlaylistAndAdd}
+        onCancel={() => setNewPlaylistFor(null)}
+      />
+    )}
+    </>
+  );
+}
+
+// Always returns exactly SLOTS (7) items (padding with null only for the
+// total<=7 edge case) — matching the old app's TrackListView.qml, whose
+// pagination row is always exactly 7 fixed-size boxes. Standard adaptive
+// 3-mode scheme so it stays at exactly 7 in every case, including the
+// middle of a large range (a naive fixed window there can need up to 9:
+// leading "1 …" + a window around current + trailing "… total"):
+//   near start:  1 2 3 4 5 … total
+//   near end:    1 … total-4 total-3 total-2 total-1 total
+//   middle:      1 … current-1 current current+1 … total
+const PAGE_SLOTS = 7;
+
+function pageNumbers(current: number, total: number): (number | "..." | null)[] {
+  let items: (number | "...")[];
+  if (total <= PAGE_SLOTS) {
+    items = Array.from({ length: total }, (_, i) => i + 1);
+  } else if (current <= 4) {
+    items = [1, 2, 3, 4, 5, "...", total];
+  } else if (current >= total - 3) {
+    items = [1, "...", total - 4, total - 3, total - 2, total - 1, total];
+  } else {
+    items = [1, "...", current - 1, current, current + 1, "...", total];
+  }
+  const padded: (number | "..." | null)[] = [...items];
+  while (padded.length < PAGE_SLOTS) padded.push(null);
+  return padded.slice(0, PAGE_SLOTS);
+}
+
+// Fixed 32×32 box regardless of content (a page number's digit count never
+// changes the button's size) — see the pageNumbers() comment for why this
+// matters. Page numbers are full-strength --text-primary at --fs-primary size
+// (only the active page gets --accent + bold; only the ellipsis is dimmed/
+// --text-secondary) — matches TrackListView.qml's Repeater delegate exactly:
+// `color: isActive ? accentColor : (isEllipsis ? textSecondary : textPrimary)`,
+// `font.pixelSize: fontSizePrimary` for every slot. Arrows are a size up
+// (fontSizePrimary + 2 in the QML — derived via calc() from the same token
+// rather than a new hardcoded size).
+function PageBtn({ children, onClick, active, disabled, arrow = false }: { children: React.ReactNode; onClick: () => void; active?: boolean; disabled?: boolean; arrow?: boolean }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      className="flex items-center justify-center"
+      style={{
+        width: 32, height: 32, borderRadius: 4, border: "none",
+        background: hov && !disabled && !active ? "var(--hover-bg)" : "transparent",
+        color: disabled ? "var(--text-secondary)" : active ? "var(--accent)" : "var(--text-primary)",
+        opacity: disabled ? 0.4 : 1,
+        fontWeight: active ? 700 : 400,
+        fontSize: arrow ? "calc(var(--fs-primary) + 2px)" : "var(--fs-primary)",
+        cursor: disabled ? "default" : "pointer",
+      }}
+    >
+      {children}
+    </button>
   );
 }

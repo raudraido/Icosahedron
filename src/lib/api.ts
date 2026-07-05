@@ -6,8 +6,10 @@ export interface Artist {
   id: string;
   name: string;
   album_count: number;
+  song_count: number;
   cover_id: string | null;
   starred: boolean;
+  play_count: number;
 }
 
 export interface Album {
@@ -42,6 +44,27 @@ export interface Track {
   bitrate: number | null;
   bpm: number | null;
   created: string | null;
+  format: string | null;
+}
+
+export interface ScanStatus {
+  scanning: boolean;
+  count: number;
+  folder_count: number | null;
+  last_scan: string | null;
+}
+
+/** Extra "Get Info" dialog fields — see electron/main/models.ts for why these
+ *  aren't just part of Track (no list endpoint reliably returns all of them). */
+export interface TrackFullInfo {
+  path: string | null;
+  album_artist: string | null;
+  is_compilation: boolean;
+  codec: string | null;
+  sample_rate: number | null;
+  bit_depth: number | null;
+  channel_count: number | null;
+  size_bytes: number | null;
 }
 
 export interface Playlist {
@@ -61,6 +84,21 @@ export interface ArtistDetail {
   music_brainz_id: string | null;
   last_fm_url: string | null;
   similar_artists: Artist[];
+  image_url: string | null;
+}
+
+export interface LyricsSearchResult {
+  id: string;
+  title: string;
+  artist: string;
+  source: "LRCLib" | "NetEase" | "SimpMusic";
+  synced: boolean | null;
+}
+
+export interface TourEvent {
+  datetime: string;
+  url: string;
+  venue: { name: string; city: string; region: string; country: string };
 }
 
 export interface SearchResult {
@@ -81,6 +119,7 @@ export const api = {
 
   getArtists: () => invoke<Artist[]>("get_artists"),
   getAllArtists: () => invoke<Artist[]>("get_all_artists"),
+  getAllArtistsSorted: (sortType: string) => invoke<Artist[]>("get_all_artists_sorted", { sortType }),
   getArtist: (id: string) => invoke<ArtistDetail>("get_artist", { id }),
 
   getAlbumList: (sortType: string, size: number, offset: number) =>
@@ -92,12 +131,25 @@ export const api = {
 
   getTracks: (size: number, offset: number) =>
     invoke<Track[]>("get_tracks", { size, offset }),
+  getTracksNativePage: (sortBy: string, order: "ASC" | "DESC", start: number, end: number, query?: string) =>
+    invoke<{ tracks: Track[]; total: number }>("get_tracks_native_page", { sortBy, order, start, end, query }),
+  startScan: () => invoke<void>("start_scan"),
+  getScanStatus: () => invoke<ScanStatus>("get_scan_status"),
+  getTrackInfo: (id: string) => invoke<TrackFullInfo>("get_track_info", { id }),
   getRandomSongs: (count: number) =>
     invoke<Track[]>("get_random_songs", { count }),
 
   getPlaylists: () => invoke<Playlist[]>("get_playlists"),
   getPlaylistTracks: (id: string) =>
     invoke<Track[]>("get_playlist_tracks", { id }),
+  createPlaylist: (name: string) => invoke<Playlist>("create_playlist", { name }),
+  addTracksToPlaylist: (playlistId: string, trackIds: string[]) =>
+    invoke<void>("add_tracks_to_playlist", { playlistId, trackIds }),
+
+  getSimilarSongs: (artistId: string, count = 50) =>
+    invoke<Track[]>("get_similar_songs", { artistId, count }),
+  getTopSongs: (artistName: string, count = 10) =>
+    invoke<Track[]>("get_top_songs", { artistName, count }),
 
   search: (query: string, artistCount = 5, albumCount = 5, songCount = 20) =>
     invoke<SearchResult>("search", { query, artistCount, albumCount, songCount }),
@@ -112,10 +164,25 @@ export const api = {
   coverArtUrl: (coverId: string, size?: number) =>
     invoke<string>("cover_art_url", { coverId, size: size ?? null }),
   streamUrl: (songId: string) => invoke<string>("stream_url", { songId }),
+
+  // ── Lyrics (queue panel's Lyrics tab) ──────────────────────────────────
+  lyricsServer: (artist: string, title: string) => invoke<string | null>("lyrics_server", { artist, title }),
+  lyricsDirect: (artist: string, title: string, album: string, duration: number) =>
+    invoke<string | null>("lyrics_direct", { artist, title, album, duration }),
+  lyricsSearch: (artist: string, title: string, sources: string[]) =>
+    invoke<LyricsSearchResult[]>("lyrics_search", { artist, title, sources }),
+  lyricsFetch: (source: string, id: string) => invoke<string | null>("lyrics_fetch", { source, id }),
+  lyricsLocalLoad: (key: string) => invoke<string | null>("lyrics_local_load", { key }),
+  lyricsLocalSave: (key: string, raw: string) => invoke<void>("lyrics_local_save", { key, raw }),
+  lyricsLocalRemove: (key: string) => invoke<void>("lyrics_local_remove", { key }),
+
+  // ── Artist info tab: Bandsintown tour dates ────────────────────────────
+  bandsintownEvents: (artistName: string) => invoke<TourEvent[]>("bandsintown_events", { artistName }),
 };
 
 export function fmtDuration(secs: number): string {
-  const m = Math.floor(secs / 60);
-  const s = secs % 60;
+  const total = Math.floor(secs);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
 }

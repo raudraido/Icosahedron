@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type {
-  Artist, Album, Track, Playlist, ArtistDetail, SearchResult, Starred, ScanStatus,
+  Artist, Album, Track, Playlist, ArtistDetail, SearchResult, Starred, ScanStatus, TrackFullInfo,
 } from "./models";
 
 const API_VERSION = "1.16.1";
@@ -69,9 +69,9 @@ export class SubsonicClient {
     return `${this.baseUrl}/rest/stream?${qs}`;
   }
 
-  async fetchCoverArt(coverId: string, size?: number): Promise<{ bytes: Buffer; contentType: string }> {
+  async fetchCoverArt(coverId: string, size?: number, signal?: AbortSignal): Promise<{ bytes: Buffer; contentType: string }> {
     const url = this.coverArtUrl(coverId, size);
-    const resp = await fetch(url);
+    const resp = await fetch(url, { signal });
     const contentType = resp.headers.get("content-type") ?? "image/jpeg";
     const bytes = Buffer.from(await resp.arrayBuffer());
     return { bytes, contentType };
@@ -150,9 +150,58 @@ export class SubsonicClient {
     return asArray(root.playlist?.entry).map((s) => this.parseTrack(s));
   }
 
+  async createPlaylist(name: string): Promise<Playlist> {
+    const root = await this.get("createPlaylist", { name });
+    if (!root.playlist) throw new Error("missing playlist in createPlaylist response");
+    return parsePlaylist(root.playlist);
+  }
+
+  /** Appends tracks to an existing playlist — uses songIdToAdd only, doesn't touch existing entries.
+   *  Needs a real POST with repeated songIdToAdd params, which the flat-Record `get()` helper can't express. */
+  async addTracksToPlaylist(playlistId: string, trackIds: string[]): Promise<void> {
+    if (!trackIds.length) return;
+    const params = new URLSearchParams(this.authParams());
+    params.set("playlistId", playlistId);
+    for (const id of trackIds) params.append("songIdToAdd", id);
+    const resp = await fetch(`${this.baseUrl}/rest/updatePlaylist`, { method: "POST", body: params });
+    const body = await resp.json();
+    const root = body?.["subsonic-response"];
+    if (!root || root.status !== "ok") {
+      throw new SubsonicApiError(root?.error?.code ?? 0, root?.error?.message ?? "updatePlaylist failed");
+    }
+  }
+
+  /** Similar-artist songs for "Start Radio" — requires a Last.fm/AudioMuse-backed Navidrome server;
+   *  callers should treat failure as "no similar songs available" rather than a hard error. */
+  async getSimilarSongs(artistId: string, count = 50): Promise<Track[]> {
+    const root = await this.get("getSimilarSongs2", { id: artistId, count: String(count) });
+    return asArray(root.similarSongs2?.song).map((s) => this.parseTrack(s));
+  }
+
+  async getTopSongs(artistName: string, count = 10): Promise<Track[]> {
+    const root = await this.get("getTopSongs", { artist: artistName, count: String(count) });
+    return asArray(root.topSongs?.song).map((s) => this.parseTrack(s));
+  }
+
   async getAllArtists(): Promise<Artist[]> {
     const root = await this.get("search3", { query: "", artistCount: "100000", albumCount: "0", songCount: "0" });
     return asArray(root.searchResult3?.artist).map(parseArtist);
+  }
+
+  /** Navidrome's native /api/artist — sorted by name/albumCount/playCount, unlike the
+   *  standard Subsonic API which has no server-side sort for a flat artist list. */
+  async getAllArtistsSorted(sortType: string): Promise<Artist[]> {
+    const nativeSort = sortType === "albums_count" ? "albumCount" : sortType === "most_played" ? "playCount" : "name";
+    await this.authenticateNative();
+    const resp = await fetch(
+      `${this.baseUrl}/api/artist?${new URLSearchParams({
+        _start: "0", _end: "100000", _sort: nativeSort, _order: "ASC",
+      })}`,
+      { headers: { "x-nd-authorization": `Bearer ${this.nativeJwt}` } },
+    );
+    const data = await resp.json();
+    if (!Array.isArray(data)) throw new Error("expected array");
+    return data.map(parseNativeArtist);
   }
 
   async getAllAlbums(sortType: string): Promise<Album[]> {
@@ -205,7 +254,17 @@ export class SubsonicClient {
       music_brainz_id: info2?.musicBrainzId ?? null,
       last_fm_url: info2?.lastFmUrl ?? null,
       similar_artists: asArray(info2?.similarArtist).map(parseArtist),
+      image_url: info2?.largeImageUrl || info2?.mediumImageUrl || info2?.smallImageUrl || null,
     };
+  }
+
+  /** Standard Subsonic getLyrics — tried first (old app's LyricsPanel source
+   *  priority: server, then LRCLib/NetEase/SimpMusic) since Navidrome/Subsonic
+   *  servers can surface embedded or provider-configured lyrics directly. */
+  async getServerLyrics(artist: string, title: string): Promise<string | null> {
+    const root = await this.get("getLyrics", { artist, title }).catch(() => null);
+    const value = root?.lyrics?.value;
+    return typeof value === "string" && value ? value : null;
   }
 
   async getAlbumTracks(albumId: string): Promise<Track[]> {
@@ -229,6 +288,61 @@ export class SubsonicClient {
       query: "", artistCount: "0", albumCount: "0", songCount: String(size), songOffset: String(offset),
     });
     return asArray(root.searchResult3?.song).map((s) => this.parseTrack(s));
+  }
+
+  /** Navidrome's native /api/song — true server-side sort + pagination + exact total (X-Total-Count),
+   *  unlike the standard Subsonic API which has no arbitrary-sort-field pagination for a flat track list. */
+  async getTracksNativePage(
+    sortBy: string, order: "ASC" | "DESC", start: number, end: number, query?: string,
+  ): Promise<{ tracks: Track[]; total: number }> {
+    await this.authenticateNative();
+    const params: Record<string, string> = { _start: String(start), _end: String(end), _sort: sortBy, _order: order };
+    if (query) params.title = query;
+    const resp = await fetch(`${this.baseUrl}/api/song?${new URLSearchParams(params)}`, {
+      headers: { "x-nd-authorization": `Bearer ${this.nativeJwt}` },
+    });
+    const data = await resp.json();
+    if (!Array.isArray(data)) throw new Error("expected array");
+    const total = Number(resp.headers.get("x-total-count") ?? data.length);
+    return { tracks: data.map((s) => this.parseNativeTrack(s)), total };
+  }
+
+  /** For the "Get Info" dialog: no single endpoint has everything — the standard Subsonic
+   *  `getSong` has extra audio fields, Navidrome's native `/api/song/{id}` has the real
+   *  filesystem path, so both are fetched and merged (native wins on overlap when it has a
+   *  non-empty value), matching the old app's TrackInfoDialog._fetch_full_data exactly. */
+  async getTrackInfo(songId: string): Promise<TrackFullInfo> {
+    const [subsonic, native] = await Promise.all([
+      this.get("getSong", { id: songId }).then((r) => r.song ?? {}).catch(() => ({} as any)),
+      this.getSongNative(songId).catch(() => ({} as any)),
+    ]);
+    const merged: any = { ...subsonic };
+    for (const [k, v] of Object.entries(native)) {
+      if (v !== null && v !== undefined && v !== "") merged[k] = v;
+    }
+    return {
+      path: merged.path ?? null,
+      album_artist: merged.albumArtist ?? null,
+      is_compilation: !!(merged.isCompilation ?? merged.compilation ?? false),
+      codec: merged.suffix ?? merged.codec ?? null,
+      sample_rate: merged.samplingRate ?? null,
+      bit_depth: merged.bitDepth ?? null,
+      channel_count: merged.channelCount ?? null,
+      size_bytes: merged.size ? Number(merged.size) : null,
+    };
+  }
+
+  private async getSongNative(songId: string): Promise<any> {
+    await this.authenticateNative();
+    const resp = await fetch(`${this.baseUrl}/api/song/${songId}`, {
+      headers: { "x-nd-authorization": `Bearer ${this.nativeJwt}` },
+    });
+    if (!resp.ok) return {};
+    return resp.json();
+  }
+
+  async startScan(): Promise<void> {
+    await this.get("startScan");
   }
 
   async search3(query: string, artistCount: number, albumCount: number, songCount: number): Promise<SearchResult> {
@@ -281,7 +395,7 @@ export class SubsonicClient {
       album_id: s.albumId ?? null,
       track_number: s.track ?? 0,
       disc_number: s.discNumber ?? 1,
-      duration_secs: s.duration ?? 0,
+      duration_secs: Math.floor(s.duration ?? 0),
       starred: s.starred !== undefined,
       genre: s.genre ?? null,
       year: s.year ?? null,
@@ -289,6 +403,43 @@ export class SubsonicClient {
       bitrate: s.bitRate ?? null,
       bpm: s.bpm ?? null,
       created: s.created ?? null,
+      format: s.suffix ? String(s.suffix).toUpperCase() : null,
+    };
+  }
+
+  // Navidrome's native /api/song shape differs from the standard Subsonic song
+  // element: genres is an array of {name} objects (or absent), the timestamp
+  // field is createdAt (not created), and cover art id is coverArtId.
+  private parseNativeTrack(s: any): Track {
+    const id = strField(s, "id");
+    const genres: any[] = Array.isArray(s.genres) ? s.genres : [];
+    const genre = genres.length
+      ? genres.map((g) => (typeof g === "object" ? g?.name : g)).filter(Boolean).join(" • ")
+      : (s.genre ?? null);
+    return {
+      stream_url: this.streamUrl(id),
+      // Navidrome's native /api/song response doesn't reliably include a cover
+      // art reference — fall back to the song's own id, which Navidrome's
+      // getCoverArt endpoint also accepts and resolves to that track's
+      // embedded/album art (same fix the old Python app and Feishin both use).
+      cover_id: s.coverArtId ?? s.coverArt ?? id ?? null,
+      id,
+      title: strField(s, "title"),
+      artist: strField(s, "artist"),
+      artist_id: s.artistId ?? null,
+      album: s.album ?? null,
+      album_id: s.albumId ?? null,
+      track_number: s.trackNumber ?? s.track ?? 0,
+      disc_number: s.discNumber ?? 1,
+      duration_secs: Math.floor(s.duration ?? 0),
+      starred: !!s.starred,
+      genre,
+      year: s.year ?? null,
+      play_count: s.playCount ?? 0,
+      bitrate: s.bitRate ?? null,
+      bpm: s.bpm ?? null,
+      created: s.createdAt ?? s.created ?? null,
+      format: s.suffix ? String(s.suffix).toUpperCase() : null,
     };
   }
 }
@@ -298,8 +449,29 @@ function parseArtist(a: any): Artist {
     id: strField(a, "id"),
     name: strField(a, "name"),
     album_count: a.albumCount ?? 0,
+    song_count: a.songCount ?? 0,
     cover_id: a.coverArt ?? null,
     starred: a.starred !== undefined,
+    play_count: a.playCount ?? 0,
+  };
+}
+
+function parseNativeArtist(a: any): Artist {
+  const id = strField(a, "id");
+  const stats = a.stats ?? {};
+  const songCount = Math.max(
+    stats.albumartist?.songCount ?? 0,
+    stats.artist?.songCount ?? 0,
+    a.songCount ?? 0,
+  );
+  return {
+    id,
+    name: strField(a, "name"),
+    album_count: a.albumCount ?? 0,
+    song_count: songCount,
+    cover_id: a.coverArtId ?? a.coverArt ?? id,
+    starred: !!(a.starredAt || a.starred),
+    play_count: a.playCount ?? 0,
   };
 }
 

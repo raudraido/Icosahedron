@@ -1,14 +1,22 @@
+import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
 import { CoverArt } from "./CoverArt";
 import { Icon } from "./Icon";
 import { PlayRingButton } from "./PlayRingButton";
+import { Waveform } from "./Waveform";
+import { ArtistTokens } from "./ArtistTokens";
+import { AlbumLink } from "./AlbumLink";
+import { loadJSON, saveJSON } from "./TrackTable";
 import { fmtDuration } from "../lib/api";
 
-/** Transport button — icon tinted via currentColor / Icon mask */
+const LS_SHOW_REMAINING = "footer_show_remaining_time";
+
+// Matches the old app's footer_bar.qml: every transport icon is unconditionally
+// accent-tinted (tintedIcon(name, accentColor)) — shuffle/repeat's on/off state
+// is shown by the little dot indicator, not by dimming the icon itself.
 function TBtn({
   icon,
-  active = false,
-  iconSize = 20,
+  iconSize = 16,
   btnSize = 40,
   radius = 20,
   onClick,
@@ -16,7 +24,6 @@ function TBtn({
   title,
 }: {
   icon: string;
-  active?: boolean;
   iconSize?: number;
   btnSize?: number;
   radius?: number;
@@ -31,18 +38,11 @@ function TBtn({
       className="relative flex items-center justify-center shrink-0 transition-colors"
       style={{
         width: btnSize, height: btnSize, borderRadius: radius,
-        color: active ? "var(--accent)" : "var(--text-primary)",
-        opacity: active ? 1 : 0.5,
+        color: "var(--accent)",
         background: "transparent", border: "none", cursor: "pointer",
       }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = "var(--hover-bg)";
-        e.currentTarget.style.opacity = "1";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = "transparent";
-        e.currentTarget.style.opacity = active ? "1" : "0.5";
-      }}
+      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
+      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
     >
       <Icon src={icon} size={iconSize} />
       {dot && (
@@ -72,11 +72,63 @@ export function PlayerBar() {
   const toggleShuffle  = useStore((s) => s.toggleShuffle);
   const toggleRepeat   = useStore((s) => s.toggleRepeat);
   const stop           = useStore((s) => s.stop);
+  const sidebarArtExpanded = useStore((s) => s.sidebarArtExpanded);
+  const toggleSidebarArt   = useStore((s) => s.toggleSidebarArt);
+  const [artHov, setArtHov] = useState(false);
+  const [expandBtnHov, setExpandBtnHov] = useState(false);
 
   const track = queue[currentIndex] ?? null;
 
+  // Matches the old app's bpmLbl: "{bpm:.1f} BPM · {format}" — no on-device BPM
+  // detection here (see TrackInfoDialog's "BPM Detected" note), so this is
+  // always the ID3-tag BPM, same as the old app falls back to when detection
+  // is unavailable/disabled.
+  const metaLine = track
+    ? [track.bpm != null ? `${track.bpm.toFixed(1)} BPM` : null, track.format]
+        .filter(Boolean).join(" · ")
+    : "";
+  const remaining = duration > currentTime ? duration - currentTime : 0;
+
+  // Click totalTimeLbl to toggle total-duration vs. remaining-time countdown —
+  // matches footer_bar.qml's totalTimeLbl (footerBridge.remainingToggled),
+  // persisted the same way ("show_remaining_time" setting) so it survives a restart.
+  const [showRemaining, setShowRemaining] = useState(() => loadJSON(LS_SHOW_REMAINING, true));
+  function toggleShowRemaining() {
+    setShowRemaining((v) => {
+      const next = !v;
+      saveJSON(LS_SHOW_REMAINING, next);
+      return next;
+    });
+  }
+
+  // Lets a long title spill rightward past the narrow left column into the
+  // transport row's otherwise-empty space, instead of eliding immediately at
+  // the column's edge — matches footer_bar.qml's titleLbl, which computes its
+  // max width from controlsRow's actual left edge so it can never overlap the
+  // Stop button regardless of window width. Re-measured on resize/track change.
+  const barRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLParagraphElement>(null);
+  const controlsRowRef = useRef<HTMLDivElement>(null);
+  const [titleMaxWidth, setTitleMaxWidth] = useState<number | null>(null);
+
+  function recomputeTitleWidth() {
+    if (!titleRef.current || !controlsRowRef.current) return;
+    const titleLeft = titleRef.current.getBoundingClientRect().left;
+    const controlsLeft = controlsRowRef.current.getBoundingClientRect().left;
+    setTitleMaxWidth(Math.max(0, controlsLeft - titleLeft - 16));
+  }
+
+  useEffect(() => {
+    recomputeTitleWidth();
+    const ro = new ResizeObserver(recomputeTitleWidth);
+    if (barRef.current) ro.observe(barRef.current);
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [track?.id, sidebarArtExpanded]);
+
   return (
     <div
+      ref={barRef}
       className="flex items-center shrink-0"
       style={{
         height: 132, background: "var(--panel-bg)",
@@ -84,32 +136,90 @@ export function PlayerBar() {
         paddingLeft: 8, paddingRight: 12,
       }}
     >
-      {/* ── LEFT: art + track info (330px = left panel width) ── */}
-      <div className="flex items-center shrink-0 gap-3" style={{ width: 297 }}>
-        <CoverArt coverId={track?.cover_id ?? null} size={84} className="w-[84px] h-[84px] rounded shrink-0" />
-        <div className="min-w-0 flex flex-col justify-center gap-0.5">
-          <p className="truncate font-semibold leading-snug" style={{ fontSize: "var(--fs-primary)", color: "var(--accent)" }}>
+      {/* ── LEFT: art + track info — matches footer_bar.qml's leftBlock: 19% of the
+          footer's own width, floored at 160px, so it shrinks/grows with window size
+          instead of a fixed pixel column (leaves more room for the waveform on wide
+          windows, same trade-off the old app makes) ── */}
+      <div className="flex items-center shrink-0 gap-3" style={{ width: "max(160px, 19%)", overflow: "visible" }}>
+        {/* Art thumbnail — shrinks to width 0 in lockstep with the left panel's art
+            section expanding (both driven by the same sidebarArtExpanded toggle),
+            matching footer_bar.qml's artWrap (250ms InOutCubic on width). Expand
+            button reveals on hovering the whole thumbnail (or the button itself),
+            matching artHoverArea.containsMouse || expandClick.containsMouse. */}
+        <div
+          onMouseEnter={() => setArtHov(true)}
+          onMouseLeave={() => setArtHov(false)}
+          onTransitionEnd={recomputeTitleWidth}
+          style={{
+            position: "relative", height: 84,
+            width: sidebarArtExpanded ? 0 : 84,
+            overflow: "hidden", borderRadius: 4, flexShrink: 0,
+            transition: "width 250ms cubic-bezier(0.65, 0, 0.35, 1)",
+          }}
+        >
+          <CoverArt coverId={track?.cover_id ?? null} size={84} className="w-[84px] h-[84px] rounded shrink-0" />
+          {!sidebarArtExpanded && (
+            <button
+              onClick={() => { setExpandBtnHov(false); setArtHov(false); toggleSidebarArt(); }}
+              onMouseEnter={() => setExpandBtnHov(true)}
+              onMouseLeave={() => setExpandBtnHov(false)}
+              title="Expand"
+              style={{
+                position: "absolute", top: 2, right: 2, width: 24, height: 24, borderRadius: 12,
+                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+                border: `2px solid color-mix(in srgb, var(--accent) ${expandBtnHov ? 100 : 30}%, transparent)`,
+                background: `color-mix(in srgb, var(--accent) ${expandBtnHov ? 40 : 10}%, transparent)`,
+                opacity: artHov || expandBtnHov ? 1 : 0,
+                transition: "opacity 180ms",
+              }}
+            >
+              <Icon src="/img/expand.png" size={16} style={{ background: expandBtnHov ? "#ffffff" : "#515151" }} />
+            </button>
+          )}
+        </div>
+        <div className="min-w-0 flex flex-col justify-center gap-0.5" style={{ overflow: "visible" }}>
+          <p
+            ref={titleRef}
+            className="font-semibold leading-snug whitespace-nowrap overflow-hidden text-ellipsis"
+            style={{
+              fontSize: "var(--fs-primary)", color: "var(--accent)",
+              width: titleMaxWidth != null ? Math.max(titleMaxWidth, 0) : undefined,
+              maxWidth: titleMaxWidth == null ? "100%" : undefined,
+            }}
+          >
             {track?.title ?? "—"}
           </p>
-          <p className="truncate leading-snug" style={{ fontSize: "var(--fs-secondary)", color: "var(--text-primary)", opacity: 0.75 }}>
-            {track?.artist ?? ""}
-          </p>
+          {track && (
+            <ArtistTokens name={track.artist} artistId={track.artist_id} fontSize="var(--fs-secondary)" clip={false} />
+          )}
           {track?.album && (
-            <p className="truncate leading-snug" style={{ fontSize: "var(--fs-small)", color: "var(--text-primary)", opacity: 0.45 }}>
-              {track.album}
+            <div className="truncate leading-snug" style={{ fontSize: "var(--fs-secondary)" }}>
+              <AlbumLink name={track.album} albumId={track.album_id} />
+            </div>
+          )}
+          {metaLine && (
+            <p className="truncate leading-snug" style={{ fontSize: "var(--fs-secondary)", color: "var(--text-secondary)" }}>
+              {metaLine}
             </p>
           )}
         </div>
       </div>
 
-      {/* ── CENTER: transport controls + scrubber ── */}
-      <div className="flex-1 flex flex-col items-center justify-center" style={{ gap: 4 }}>
+      {/* ── CENTER: transport controls + waveform ── */}
+      {/* pointerEvents:none on the wrapper + "auto" on the two actual content
+          rows below: this box spans the footer's full height, and since it's
+          a later DOM sibling of leftBlock it paints (and hit-tests) on top of
+          any artist text spilling in from the left column's clip:false case
+          above — without this, clicks on that spilled text landed on this
+          empty, transparent div instead of the artist token underneath it. */}
+      <div className="flex-1 flex flex-col items-center justify-center" style={{ gap: 4, pointerEvents: "none" }}>
 
-        {/* Transport row — matches QML controlsRow heights (58px items) */}
-        <div className="flex items-center" style={{ gap: 2 }}>
-          <TBtn icon="/img/stop.png"    iconSize={18} btnSize={36} radius={18} onClick={stop}          title="Stop" />
-          <TBtn icon="/img/shuffle.png" iconSize={20} btnSize={45} radius={22} onClick={toggleShuffle} active={shuffle} dot={shuffle} title="Shuffle" />
-          <TBtn icon="/img/prev.png"    iconSize={20} btnSize={45} radius={22} onClick={prev}          title="Previous" />
+        {/* Transport row — matches QML controlsRow: 40×40 buttons (36×36 for
+            stop/repeat), 58×58 play ring, 20px gaps */}
+        <div ref={controlsRowRef} className="flex items-center" style={{ gap: 20, pointerEvents: "auto" }}>
+          <TBtn icon="/img/stop.png"    iconSize={16} btnSize={36} radius={18} onClick={stop}          title="Stop" />
+          <TBtn icon="/img/shuffle.png" iconSize={18} btnSize={40} radius={20} onClick={toggleShuffle} dot={shuffle} title="Shuffle" />
+          <TBtn icon="/img/prev.png"    iconSize={16} btnSize={40} radius={20} onClick={prev}          title="Previous" />
 
           {/* Play ring — 58×58, matches QML playBtn */}
           <PlayRingButton
@@ -118,48 +228,68 @@ export function PlayerBar() {
             title={playing ? "Pause" : "Play"}
           />
 
-          <TBtn icon="/img/next.png"   iconSize={20} btnSize={45} radius={22} onClick={next}          title="Next" />
-          <TBtn icon="/img/repeat.png" iconSize={18} btnSize={36} radius={18} onClick={toggleRepeat}  active={repeat} dot={repeat} title="Repeat" />
+          <TBtn icon="/img/next.png"   iconSize={16} btnSize={40} radius={20} onClick={next}          title="Next" />
+          <TBtn icon="/img/repeat.png" iconSize={16} btnSize={36} radius={18} onClick={toggleRepeat}  dot={repeat} title="Repeat" />
         </div>
 
-        {/* Scrubber row */}
-        <div className="flex items-center w-full" style={{ gap: 8, maxWidth: 580 }}>
-          <span className="tabular-nums text-right shrink-0" style={{ minWidth: 44, fontSize: "var(--fs-secondary)", fontWeight: 700, color: "var(--accent)" }}>
+        {/* Waveform row — real per-track amplitude data, matches the old app's
+            Canvas bar waveform (footer_bar.qml displayMode:2) rather than a
+            plain slider. Right label shows remaining time as a countdown.
+            Fills the full row width (matches the QML Row's `width: parent.width`
+            + waveformWrap's `parent.width - both label widths - 30`) — no
+            artificial cap; a leftover 580px max from the pre-waveform plain
+            slider was making the bars render much shorter than they should. */}
+        <div className="flex items-center w-full" style={{ gap: 15, pointerEvents: "auto" }}>
+          <span className="tabular-nums text-right shrink-0" style={{ minWidth: 56, fontSize: "var(--fs-secondary)", fontWeight: 700, color: "var(--accent)" }}>
             {fmtDuration(currentTime)}
           </span>
-          <input
-            type="range" min={0} max={duration || 1} value={currentTime}
-            onChange={(e) => setCurrentTime(Number(e.target.value))}
-            className="flex-1 cursor-pointer"
-            style={{ height: 5, accentColor: "var(--accent)" }}
-          />
-          <span className="tabular-nums shrink-0" style={{ minWidth: 44, fontSize: "var(--fs-secondary)", fontWeight: 700, color: "var(--accent)" }}>
-            {fmtDuration(duration)}
+          {track ? (
+            <Waveform
+              streamUrl={track.stream_url}
+              trackId={track.id}
+              currentTime={currentTime}
+              duration={duration}
+              onSeek={setCurrentTime}
+            />
+          ) : (
+            <div className="flex-1" style={{ height: 60 }} />
+          )}
+          <span
+            onClick={toggleShowRemaining}
+            title={showRemaining ? "Show total duration" : "Show remaining time"}
+            className="tabular-nums shrink-0"
+            style={{ minWidth: 56, fontSize: "var(--fs-secondary)", fontWeight: 700, color: "var(--accent)", cursor: "pointer" }}
+          >
+            {showRemaining
+              ? (duration > 0 ? `-${fmtDuration(remaining)}` : fmtDuration(0))
+              : fmtDuration(duration)}
           </span>
         </div>
       </div>
 
-      {/* ── RIGHT: settings + volume + cast (400px = queue panel width) ── */}
-      <div className="flex items-center shrink-0 justify-end" style={{ width: 360, gap: 6 }}>
+      {/* ── RIGHT: settings + volume + cast — matches footer_bar.qml's rightBlock:
+          same 19% proportion as leftBlock, floored higher (260px) since this row's
+          icon/slider cluster needs more room than leftBlock's compact art+text ── */}
+      <div className="flex items-center shrink-0 justify-end" style={{ width: "max(260px, 19%)", gap: 6 }}>
         {/* Settings */}
         <button
           className="flex items-center justify-center shrink-0"
-          style={{ width: 40, height: 40, borderRadius: 20, background: "transparent", border: "none", cursor: "pointer", color: "var(--text-primary)", opacity: 0.45 }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--hover-bg)"; e.currentTarget.style.opacity = "1"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.opacity = "0.45"; }}
+          style={{ width: 40, height: 40, borderRadius: 20, background: "transparent", border: "none", cursor: "pointer", color: "var(--accent)" }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
         >
           <Icon src="/img/settings.png" size={20} />
         </button>
 
-        {/* Mute */}
+        {/* Mute — muted uses a distinct muted-gray tint (not a dimmed accent), matching the old app */}
         <button
           onClick={() => setVolume(volume === 0 ? 80 : 0)}
           className="flex items-center justify-center shrink-0"
-          style={{ width: 40, height: 40, borderRadius: 20, background: "transparent", border: "none", cursor: "pointer", color: volume === 0 ? "var(--text-primary)" : "var(--accent)", opacity: volume === 0 ? 0.45 : 1 }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--hover-bg)"; e.currentTarget.style.opacity = "1"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.opacity = volume === 0 ? "0.45" : "1"; }}
+          style={{ width: 40, height: 40, borderRadius: 20, background: "transparent", border: "none", cursor: "pointer", color: volume === 0 ? "var(--text-secondary)" : "var(--accent)" }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
         >
-          <Icon src={volume === 0 ? "/img/volume_mute.png" : "/img/volume.png"} size={28} />
+          <Icon src={volume === 0 ? "/img/volume_mute.png" : "/img/volume.png"} size={29} />
         </button>
 
         {/* Volume slider — 100px groove matching QML */}
@@ -170,12 +300,13 @@ export function PlayerBar() {
           style={{ width: 100, height: 5, accentColor: "var(--accent)" }}
         />
 
-        {/* Cast */}
+        {/* Cast — no casting feature implemented, so always shows the disconnected
+            muted-gray tint (the old app's connected state uses accent instead) */}
         <button
           className="flex items-center justify-center shrink-0"
-          style={{ width: 40, height: 40, borderRadius: 20, background: "transparent", border: "none", cursor: "pointer", color: "var(--text-primary)", opacity: 0.35 }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--hover-bg)"; e.currentTarget.style.opacity = "1"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.opacity = "0.35"; }}
+          style={{ width: 40, height: 40, borderRadius: 20, background: "transparent", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
         >
           <Icon src="/img/cast.png" size={22} />
         </button>

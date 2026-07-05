@@ -27,14 +27,16 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - uses: dtolnay/rust-toolchain@stable
 
-      # Runs the postinstall hook, which builds native/audio-engine for this
-      # runner's platform (napi build --platform --release).
+      # `npm install`, not `ci` — the file: dependency on native/audio-engine
+      # is rebuilt per-platform by postinstall anyway, so lockfile-exact
+      # reproducibility doesn't apply here, and npm ci's stricter file:
+      # resolution check has proven version-sensitive across npm releases.
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build distributable
         run: npm run dist

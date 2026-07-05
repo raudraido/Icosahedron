@@ -31,6 +31,13 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      # cpal (rodio's output backend) links against ALSA on Linux via
+      # alsa-sys, whose build script needs the dev headers — not present on
+      # the runner by default.
+      - name: Install ALSA dev headers
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+
       # `npm install`, not `ci` — the file: dependency on native/audio-engine
       # is rebuilt per-platform by postinstall anyway, so lockfile-exact
       # reproducibility doesn't apply here, and npm ci's stricter file:

@@ -11,9 +11,11 @@ import { SearchBox } from "./SearchBox";
 import { PlayingBars } from "./PlayingBars";
 import { ArtistTokens } from "./ArtistTokens";
 import { SkeletonTrackRow } from "./Skeleton";
-import { ContextMenu, MenuEntry } from "./ContextMenu";
+import { ContextMenu, MenuEntry, MenuItem } from "./ContextMenu";
 import { PromptDialog } from "./PromptDialog";
 import { TrackInfoDialog } from "./TrackInfoDialog";
+import { ColumnFilterPopup } from "./ColumnFilterPopup";
+import { ARTIST_SEP_RE } from "./ArtistTokens";
 import { FAVORITE_PINK } from "../lib/theme";
 
 // Shared, reusable track table — used by both the main Tracks screen and the
@@ -53,6 +55,12 @@ const COLUMNS: Record<string, ColumnDef> = {
   date:    { id: "date",    label: "DATE ADDED",  minWidth: 100, sortable: true, descFirst: true },
   bpm:     { id: "bpm",     label: "BPM",         minWidth: 56,  sortable: true, descFirst: true },
 };
+
+// Header label + sort arrow + filter icon, and the cell content below it,
+// are centered rather than left-aligned for these columns — matches
+// TrackListView.qml's header Row `_mid` flag and the AlignHCenter set on
+// each of these columns' own data-cell Text elements.
+const MID_COLS = new Set(["fav", "dur", "plays", "trackno", "year", "bpm"]);
 
 // Table column order (default) vs. the picker menu's fixed listing order — these differ in the old app.
 const DEFAULT_COL_ORDER = ["track", "title", "artist", "album", "fav", "genre", "dur", "plays", "trackno", "year", "date", "bpm"];
@@ -112,10 +120,6 @@ export function saveJSON(key: string, value: unknown) {
 
 // ── Formatters ───────────────────────────────────────────────────────────
 
-function fmtGenre(genre: string | null): string {
-  if (!genre) return "";
-  return genre.split(/[;/|,]+/).map((s) => s.trim()).filter(Boolean).join(" • ");
-}
 function fmtPlays(n: number): string {
   return n > 0 ? String(n) : "";
 }
@@ -127,6 +131,49 @@ function fmtDate(iso: string | null): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso.slice(0, 10);
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+// Genre token separator — handles both shapes t.genre can arrive in:
+// Navidrome's native /api/song joins a track's multiple genres with " • "
+// itself (subsonic.ts's parseNativeTrack, matching the old app's own
+// genreStr.split(/( • )/)), while the standard Subsonic API's plain `genre`
+// string field can still carry raw ID3-style multi-value delimiters
+// (semicolon/slash/pipe/comma) for album-detail tracks. Splitting on only
+// the semicolon/slash/pipe/comma set (as originally written) silently
+// never split native-path tracks at all — "Rock • Pop" has none of those
+// characters, so it rendered as one single clickable blob instead of two.
+const GENRE_SEP_RE = /[;/|,•]+/;
+
+// Cascading filter values — when another column already has an active
+// filter, the popup derives its own value list from the currently-loaded
+// (already-filtered) tracks instead of the full global list, matching
+// tracks_browser.py's _values_from_tree: only show values that actually
+// occur in the current result set. Artist splits multi-artist cells the
+// same way ArtistTokens does everywhere else in this app (the old app used
+// a separately-defined, slightly different separator list just for this
+// one cascading case — standardizing on one separator set is more
+// consistent than reproducing that discrepancy, same call made for
+// ArtistInfoPanel's paging split).
+function deriveFilterValues(tracks: Track[], col: string): string[] {
+  const vals = new Set<string>();
+  for (const t of tracks) {
+    if (col === "artist") {
+      for (const part of t.artist.split(ARTIST_SEP_RE)) {
+        const trimmed = part.trim();
+        if (trimmed && !ARTIST_SEP_RE.test(part)) vals.add(trimmed);
+      }
+    } else if (col === "album") {
+      if (t.album) vals.add(t.album);
+    } else if (col === "genre") {
+      for (const part of (t.genre ?? "").split(GENRE_SEP_RE)) {
+        const trimmed = part.trim();
+        if (trimmed) vals.add(trimmed);
+      }
+    } else if (col === "year") {
+      if (t.year) vals.add(String(t.year));
+    }
+  }
+  return [...vals].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
 }
 
 function sortKey(t: Track, col: string): string | number {
@@ -154,6 +201,50 @@ function sortTracks(tracks: Track[], col: string, dir: "asc" | "desc"): Track[] 
     if (ka > kb) return 1 * factor;
     return 0;
   });
+}
+
+// ── Column filter funnel icon — matches TrackListView.qml's filter icon:
+// textSecondary normally, accentColor on hover *or* whenever this column
+// has an active filter (not just while hovering). ──────────────────────────
+
+function FilterIcon({ active, onClick }: { active: boolean; onClick: (e: React.MouseEvent<HTMLDivElement>) => void }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{ width: 14, height: 14, flexShrink: 0, cursor: "pointer" }}
+    >
+      <Icon src="/img/filter.png" size={14} style={{ background: hov || active ? "var(--accent)" : "var(--text-secondary)" }} />
+    </div>
+  );
+}
+
+// Hover-accent + underline clickable text — matches the QML's album/genre/
+// year cells (albText/genre-token/yearStr) exactly: textSecondary normally,
+// accentColor + underline only while hovered, cursor default when disabled
+// (album with no id, genre with no value, year blank).
+function HoverToken({ text, clickable, onClick, onHover, className }: {
+  text: string; clickable: boolean; onClick?: () => void; onHover?: () => void; className?: string;
+}) {
+  const [hov, setHov] = useState(false);
+  return (
+    <span
+      onClick={clickable ? (e) => { e.stopPropagation(); onClick?.(); } : undefined}
+      onMouseEnter={() => { if (clickable) setHov(true); onHover?.(); }}
+      onMouseLeave={() => setHov(false)}
+      className={className}
+      style={{
+        color: hov ? "var(--accent)" : "var(--text-secondary)", fontSize: "var(--fs-secondary)",
+        cursor: clickable ? "pointer" : "default",
+        textDecorationLine: hov ? "underline" : "none",
+        textUnderlineOffset: "2px", textDecorationThickness: "1px", textDecorationColor: "var(--accent)",
+      }}
+    >
+      {text}
+    </span>
+  );
 }
 
 // ── Favorite toggle ──────────────────────────────────────────────────────
@@ -196,6 +287,7 @@ export function TrackTable({
   tracks, loading = false, defaultSort = DEFAULT_SORT, persistSort = true, showDiscHeaders = false,
   serverDriven = false, sortState: controlledSortState, onSortChange, query: controlledQuery, onQueryChange,
   pagination, toolbarLeft, toolbarRight, numColSource = "trackNumber", numColOffset = 0, viewKey,
+  filterableCols = [], colFilters, onFilterChange, colValues,
 }: {
   tracks: Track[];
   loading?: boolean;
@@ -236,6 +328,18 @@ export function TrackTable({
    *  column picker — matches the old app's header order: search box, then refresh,
    *  then the rightmost burger/column menu. */
   toolbarRight?: React.ReactNode;
+  /** Column ids that get an Excel-style filter funnel icon in their header (matches the
+   *  old app's `filterableCols` — Tracks screen sets `["artist","album","genre","year"]`,
+   *  album detail leaves this empty). Requires `colFilters`/`onFilterChange`/`colValues`. */
+  filterableCols?: string[];
+  /** Active filter values per column id (empty/absent = no filter on that column) — owned
+   *  by the parent since applying one means refetching server-side (see Tracks.tsx). */
+  colFilters?: Record<string, Set<string>>;
+  onFilterChange?: (col: string, values: Set<string>) => void;
+  /** Global distinct-value list per filterable column (e.g. every artist name library-wide,
+   *  not just this page) — used unless another column already has an active filter, in
+   *  which case values are instead derived from the currently-loaded `tracks` (cascading). */
+  colValues?: Record<string, string[]>;
 }) {
   const playTrack = useStore((s) => s.playTrack);
   const navigateTo = useStore((s) => s.navigateTo);
@@ -249,6 +353,7 @@ export function TrackTable({
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; track: Track } | null>(null);
   const [infoTrack, setInfoTrack] = useState<Track | null>(null);
   const [newPlaylistFor, setNewPlaylistFor] = useState<Track | null>(null);
+  const [filterPopup, setFilterPopup] = useState<{ col: string; x: number; y: number } | null>(null);
   const { data: playlists = [] } = useQuery({ queryKey: ["playlists"], queryFn: api.getPlaylists });
 
   const [internalQuery, setInternalQuery] = useState("");
@@ -430,7 +535,7 @@ export function TrackTable({
 
   // ── Right-click context menu ── (matches the old app's ShadowContextMenu on
   // TrackListView.qml — Play Now / Play Next / Add to Queue / Go to Artist /
-  // Start Radio / Add to Playlist / Get Info / Add to Favorites)
+  // Start Radio / Add to Playlist / Filter by / Get Info / Add to Favorites)
   function handleRowContextMenu(e: React.MouseEvent, track: Track) {
     e.preventDefault();
     if (!selected.has(track.id)) setSelected(new Set([track.id]));
@@ -458,14 +563,34 @@ export function TrackTable({
     qc.invalidateQueries({ queryKey: ["playlists"] });
   }
 
+  // ── Unique: Filter by album/artist ── (matches the old app's
+  // tracks_browser.py:2796-2815 "Filter by" submenu — only shown where
+  // Excel-style column filters actually exist, i.e. filterableCols/
+  // onFilterChange are wired up (the Tracks screen, not album detail).
+  function buildFilterByItems(track: Track): MenuItem[] {
+    const items: MenuItem[] = [];
+    if (filterableCols.includes("album") && onFilterChange && track.album) {
+      items.push({ label: `Album: ${track.album}`, icon: "/img/album.png", onClick: () => onFilterChange("album", new Set([track.album!])) });
+    }
+    if (filterableCols.includes("artist") && onFilterChange && track.artist) {
+      const names = track.artist.split(ARTIST_SEP_RE)
+        .filter((part) => part.trim() && !ARTIST_SEP_RE.test(part))
+        .map((part) => part.trim());
+      for (const name of names) {
+        items.push({ label: `Artist: ${name}`, icon: "/img/sub_artist.png", onClick: () => onFilterChange("artist", new Set([name])) });
+      }
+    }
+    return items;
+  }
+
   function buildTrackMenu(track: Track): MenuEntry[] {
+    const filterByItems = buildFilterByItems(track);
     return [
       { label: "Play Now", icon: "/img/sub_play.png", onClick: () => playTrack(track, [track]) },
       { label: "Play Next", icon: "/img/sub_next.png", onClick: () => addTrackNext(track) },
       { label: "Add to Queue", icon: "/img/queue.png", onClick: () => addTrackToQueue(track) },
       { label: "Go to Artist", icon: "/img/sub_artist.png", disabled: !track.artist_id, onClick: () => track.artist_id && navigateTo({ tab: "artists", artistId: track.artist_id }) },
       { label: "Start Radio", icon: "/img/radio.png", onClick: () => startRadio(track) },
-      "separator",
       {
         label: "Add to Playlist", icon: "/img/playlist.png",
         submenu: [
@@ -477,7 +602,7 @@ export function TrackTable({
           })),
         ],
       },
-      "separator",
+      ...(filterByItems.length ? [{ label: "Filter by", icon: "/img/filter.png", submenu: filterByItems }] : []),
       { label: "Get Info", icon: "/img/info.png", onClick: () => setInfoTrack(track) },
       {
         label: track.starred ? "Remove from Favorites" : "Add to Favorites",
@@ -526,27 +651,55 @@ export function TrackTable({
         return <ArtistTokens name={t.artist} artistId={t.artist_id} />;
       case "album":
         return t.album ? (
-          <span
-            onClick={(e) => { e.stopPropagation(); openAlbum(t); }}
-            onMouseEnter={() => prefetchAlbum(t)}
+          <HoverToken
+            text={t.album}
+            clickable
+            onClick={() => openAlbum(t)}
+            onHover={() => prefetchAlbum(t)}
             className="truncate"
-            style={{ color: "var(--text-secondary)", cursor: "pointer", fontSize: "var(--fs-secondary)" }}
-          >
-            {t.album}
-          </span>
+          />
         ) : null;
       case "fav":
         return <FavoriteHeart track={t} />;
-      case "genre":
-        return <span className="truncate" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>{fmtGenre(t.genre)}</span>;
+      case "genre": {
+        // Each genre token is independently clickable — matches
+        // trackGenreClicked(genre) applying a genre column filter for just
+        // that one value (_apply_col_filter(6, {genre})), only wired up
+        // where the Excel-style filters actually exist (the Tracks screen;
+        // album detail doesn't pass filterableCols/onFilterChange).
+        const canFilter = filterableCols.includes("genre") && Boolean(onFilterChange);
+        const parts = (t.genre ?? "").split(GENRE_SEP_RE).map((s) => s.trim()).filter(Boolean);
+        if (!parts.length) return null;
+        return (
+          <span className="truncate">
+            {parts.map((g, i) => (
+              <React.Fragment key={i}>
+                {i > 0 && <span style={{ color: "var(--text-secondary)", opacity: 0.4, fontSize: "var(--fs-secondary)" }}> • </span>}
+                <HoverToken text={g} clickable={canFilter} onClick={() => onFilterChange?.("genre", new Set([g]))} />
+              </React.Fragment>
+            ))}
+          </span>
+        );
+      }
       case "dur":
         return <span className="tabular-nums" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>{fmtDuration(t.duration_secs)}</span>;
       case "plays":
         return <span className="tabular-nums" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>{fmtPlays(t.play_count)}</span>;
       case "trackno":
         return <span className="tabular-nums" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>{t.track_number || ""}</span>;
-      case "year":
-        return <span className="tabular-nums" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>{t.year || ""}</span>;
+      case "year": {
+        // Matches trackYearClicked(year) → _apply_col_filter(5, {year}) —
+        // same Tracks-screen-only gating as genre above.
+        const canFilterYear = filterableCols.includes("year") && Boolean(onFilterChange) && Boolean(t.year);
+        return t.year ? (
+          <HoverToken
+            text={String(t.year)}
+            clickable={canFilterYear}
+            onClick={() => onFilterChange?.("year", new Set([String(t.year)]))}
+            className="tabular-nums"
+          />
+        ) : null;
+      }
       case "date":
         return <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>{fmtDate(t.created)}</span>;
       case "bpm":
@@ -622,6 +775,7 @@ export function TrackTable({
           return (
             <div
               key={id}
+              data-col-header
               draggable
               onDragStart={(e) => onHeaderDragStart(e, id)}
               onDragOver={(e) => onHeaderDragOver(e, id)}
@@ -631,7 +785,7 @@ export function TrackTable({
                 position: "relative",
                 flex: isTrack ? 1 : `0 0 ${colWidths[id] ?? col.minWidth}px`,
                 minWidth: 0,
-                display: "flex", alignItems: "center", gap: 4,
+                display: "flex", alignItems: "center", justifyContent: MID_COLS.has(id) ? "center" : "flex-start", gap: 4,
                 cursor: col.sortable ? "pointer" : "default",
                 userSelect: "none",
               }}
@@ -641,6 +795,16 @@ export function TrackTable({
               </span>
               {sortState?.col === id && (
                 <span style={{ color: "var(--accent)", fontSize: "var(--fs-small)" }}>{sortState.dir === "asc" ? "▲" : "▼"}</span>
+              )}
+              {filterableCols.includes(id) && (
+                <FilterIcon
+                  active={Boolean(colFilters?.[id]?.size)}
+                  onClick={(e) => {
+                    e.stopPropagation(); // don't also trigger handleSort(id)
+                    const rect = e.currentTarget.closest<HTMLElement>("[data-col-header]")!.getBoundingClientRect();
+                    setFilterPopup({ col: id, x: rect.left, y: rect.bottom });
+                  }}
+                />
               )}
               {!isTrack && (
                 <div
@@ -713,7 +877,14 @@ export function TrackTable({
                   )}
                 </div>
                 {visibleCols.map((id) => (
-                  <div key={id} style={{ flex: id === "track" ? 1 : `0 0 ${colWidths[id] ?? COLUMNS[id].minWidth}px`, minWidth: 0, overflow: "hidden" }}>
+                  <div
+                    key={id}
+                    style={{
+                      flex: id === "track" ? 1 : `0 0 ${colWidths[id] ?? COLUMNS[id].minWidth}px`,
+                      minWidth: 0, overflow: "hidden",
+                      ...(MID_COLS.has(id) ? { display: "flex", justifyContent: "center" } : {}),
+                    }}
+                  >
                     {renderCell(id, t, isPlaying)}
                   </div>
                 ))}
@@ -748,6 +919,27 @@ export function TrackTable({
         onClose={() => setCtxMenu(null)}
       />
     )}
+    {filterPopup && (() => {
+      // Cascading: once some *other* column already has an active filter,
+      // this popup's own value list narrows to whatever actually occurs in
+      // the currently-loaded (already server-filtered) tracks instead of
+      // the full library-wide list — matches _open_filter_popup's
+      // other_filters_active check.
+      const otherActive = Object.entries(colFilters ?? {}).some(([c, v]) => c !== filterPopup.col && v.size > 0);
+      const values = otherActive ? deriveFilterValues(tracks, filterPopup.col) : (colValues?.[filterPopup.col] ?? []);
+      return (
+        <ColumnFilterPopup
+          x={filterPopup.x}
+          y={filterPopup.y}
+          allValues={values}
+          activeValues={colFilters?.[filterPopup.col] ?? new Set()}
+          isIdBased={filterPopup.col !== "year"}
+          onApply={(values) => onFilterChange?.(filterPopup.col, values)}
+          onSort={(dir) => { clickCountRef.current = 1; applySortState({ col: filterPopup.col, dir }); }}
+          onClose={() => setFilterPopup(null)}
+        />
+      );
+    })()}
     {infoTrack && <TrackInfoDialog track={infoTrack} onClose={() => setInfoTrack(null)} />}
     {newPlaylistFor && (
       <PromptDialog

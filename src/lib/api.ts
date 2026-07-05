@@ -87,6 +87,15 @@ export interface ArtistDetail {
   image_url: string | null;
 }
 
+/** Server-side params for the Tracks tab's Excel-style column filters
+ *  (see ColumnFilterPopup.tsx / TrackTable.tsx's filterableCols). */
+export interface TrackFilters {
+  artistIds?: string[];
+  albumIds?: string[];
+  genreIds?: string[];
+  year?: string;
+}
+
 export interface LyricsSearchResult {
   id: string;
   title: string;
@@ -113,9 +122,29 @@ export interface Starred {
   tracks: Track[];
 }
 
+/** Pushed from the native gapless audio engine (electron/main/audioEngine.ts)
+ *  via the `onAudioEvent` preload channel — see src/store/index.ts's
+ *  `handleAudioEvent` for how each kind is handled. */
+export interface AudioEventPayload {
+  kind: "progress" | "playing" | "track_switched" | "ended" | "error";
+  currentTime?: number;
+  duration?: number;
+  buffering?: boolean;
+  message?: string;
+}
+
 export const api = {
   connect: (url: string, username: string, password: string) =>
     invoke<boolean>("connect", { url, username, password }),
+
+  // ── Saved credentials — password is OS-keystore-encrypted in the main
+  // process (Electron safeStorage: libsecret/DPAPI/Keychain); tryAutoConnect
+  // never returns the plaintext password to the renderer, only whether the
+  // reconnect succeeded and who/where it connected to. ──
+  saveCredentials: (url: string, username: string, password: string) =>
+    invoke<void>("save_credentials", { url, username, password }),
+  clearCredentials: () => invoke<void>("clear_credentials"),
+  tryAutoConnectSaved: () => invoke<{ url: string; username: string } | null>("try_auto_connect"),
 
   getArtists: () => invoke<Artist[]>("get_artists"),
   getAllArtists: () => invoke<Artist[]>("get_all_artists"),
@@ -131,8 +160,17 @@ export const api = {
 
   getTracks: (size: number, offset: number) =>
     invoke<Track[]>("get_tracks", { size, offset }),
-  getTracksNativePage: (sortBy: string, order: "ASC" | "DESC", start: number, end: number, query?: string) =>
-    invoke<{ tracks: Track[]; total: number }>("get_tracks_native_page", { sortBy, order, start, end, query }),
+  getTracksNativePage: (
+    sortBy: string, order: "ASC" | "DESC", start: number, end: number, query?: string,
+    filters?: TrackFilters,
+  ) =>
+    invoke<{ tracks: Track[]; total: number }>("get_tracks_native_page", { sortBy, order, start, end, query, filters }),
+
+  // ── Tracks tab's Excel-style column filters (Artist/Album/Genre/Year) ──
+  getArtistIdMap: () => invoke<Record<string, string>>("get_artist_id_map"),
+  getAlbumIdMap: () => invoke<Record<string, string>>("get_album_id_map"),
+  getGenreIdMap: () => invoke<Record<string, string>>("get_genre_id_map"),
+
   startScan: () => invoke<void>("start_scan"),
   getScanStatus: () => invoke<ScanStatus>("get_scan_status"),
   getTrackInfo: (id: string) => invoke<TrackFullInfo>("get_track_info", { id }),
@@ -178,6 +216,21 @@ export const api = {
 
   // ── Artist info tab: Bandsintown tour dates ────────────────────────────
   bandsintownEvents: (artistName: string) => invoke<TourEvent[]>("bandsintown_events", { artistName }),
+
+  getAppVersion: () => invoke<string>("app_version"),
+
+  // ── Native gapless audio engine (electron/main/audioEngine.ts) ──────────
+  // `volume` here is 0-1 (the store keeps its own volume as a 0-100 int for
+  // the UI/localStorage and divides by 100 at these call sites).
+  audioPlay: (url: string, volume: number, durationHint: number, manual = true, startPaused = false) =>
+    invoke<void>("audio_play", { url, volume, durationHint, manual, startPaused }),
+  audioChainPreload: (url: string, durationHint: number) =>
+    invoke<void>("audio_chain_preload", { url, durationHint }),
+  audioPause: () => invoke<void>("audio_pause"),
+  audioResume: () => invoke<void>("audio_resume"),
+  audioStop: () => invoke<void>("audio_stop"),
+  audioSeek: (seconds: number) => invoke<void>("audio_seek", { seconds }),
+  audioSetVolume: (volume: number) => invoke<void>("audio_set_volume", { volume }),
 };
 
 export function fmtDuration(secs: number): string {

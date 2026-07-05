@@ -1617,3 +1617,210 @@ instead of a constant). Tracks screen passes `viewKey="tracks"`, album
 detail passes `viewKey="album_detail"` — matching the old app's own
 grouping. `Tracks.tsx`'s own `sortState` (kept outside `TrackTable` since
 that screen is `serverDriven`) uses the same `LS_SORT("tracks")` key.
+
+## Saved login credentials now use OS-backed secret storage
+
+Server URL/username/password were persisted in the renderer's
+`localStorage` (`icosahedron_creds`) as **plain JSON** — readable by
+anything with filesystem access to the user's profile. The old app never
+did this: `login_dialog.py`/`main.py` store url/username in plain
+`QSettings` (non-secret), but the password specifically goes through
+Python's `keyring` library under service name `"Icosahedron"` — libsecret/
+GNOME-Keyring/KWallet on Linux, Windows Credential Manager on Windows,
+Keychain on macOS — and only at all if the "Remember my credentials"
+checkbox is checked; unchecking it explicitly deletes any previously
+saved password (`keyring.delete_password`).
+
+Ported using Electron's `safeStorage` (`electron/main/credentials.ts`,
+new) — the built-in equivalent of `keyring`: libsecret on Linux, DPAPI on
+Windows, Keychain on macOS, no extra dependency needed. One difference
+from `keyring`: `safeStorage` only encrypts/decrypts bytes, it doesn't
+persist anything itself, so the ciphertext (base64) lives next to the
+plaintext url/username in one JSON file under `app.getPath('userData')/
+credentials.json`, rather than two separate stores. `saveCredentials`
+refuses to write anything if `safeStorage.isEncryptionAvailable()` is
+false (e.g. no secret-service daemon reachable) rather than silently
+falling back to plaintext.
+
+`Login.tsx` gained the matching "Remember my credentials" checkbox
+(unchecked by default, same as the old app's fresh-install `QCheckBox`
+default) — `connect(url, user, pass, remember)` now takes that as a 4th
+arg, saving via IPC if checked, explicitly clearing any previously-saved
+credentials if not. Auto-connect on launch (`tryAutoConnect` in
+`store/index.ts`) changed from reading `localStorage` and re-sending the
+plaintext password through the existing `connect` IPC call, to a single
+new `try_auto_connect` IPC handler that does the whole thing — decrypt,
+construct `SubsonicClient`, ping — entirely inside the main process; the
+plaintext password now never crosses back over IPC to the renderer at all
+on auto-connect, only a `{url, username}` success result.
+
+One-time migration in `store/index.ts`: earlier builds' plaintext
+`localStorage["icosahedron_creds"]` is read once, forwarded into
+`saveCredentials` (so an existing "remembered" login keeps working without
+forcing a re-login), then deleted — either way, whether or not anything
+was there to migrate.
+
+## Tracks tab: Excel-style column filters (Artist/Album/Genre/Year)
+
+Ports `tracks_browser.py`'s `ColumnFilterPopup` + `FilterValuesWorker` +
+`_build_server_filters` system — the only four columns that get a funnel
+icon are Artist, Album, Genre, Year (`tracks_list.qml`'s
+`filterableCols: ["artist","album","year","genre"]`; every other column
+sorts via its header but has no value-filter). Full parity, chosen over
+simpler alternatives after confirming scope: the popup includes sort-
+ascending/descending rows, a clear-filter row, a search box, a "(Select
+All)" checklist, cascading values, and the "(Add current selection to
+filter)" incremental-merge trick.
+
+**`ColumnFilterPopup.tsx`** (new) — reproduces the old app's slightly
+unusual but deliberate search semantics faithfully:
+- No active filter → every value starts checked (nothing filtered yet).
+- Reopening with an active filter → only the previously-selected values
+  start checked *and visible*; unchecked ones stay hidden until searched
+  for (classic Excel "here's what's currently selected").
+- Typing a search auto-checks every match — narrowing *is* selecting, not
+  just hiding. Clicking OK with live search text replaces the filter with
+  exactly what's visible, ignoring any manual per-item unchecks made
+  while a search is active — this reproduces the old app's `_apply()`
+  `elif q:` branch, which doesn't consult individual checkbox state at
+  all once there's search text (a real, slightly surprising quirk of the
+  original, kept for parity rather than "fixed").
+- "(Add current selection to filter)" appears only once there's an
+  active filter, live search text, and at least one visible match not
+  already in that filter; checking it merges into the existing filter
+  instead of replacing it on Apply.
+- ">10 selected" warning only for the three ID-based columns (Navidrome's
+  native id-list filters have a practical limit the old app warns about);
+  Year never shows it.
+
+Implemented declaratively rather than the old app's imperative
+show/hide-per-QListWidgetItem approach: `visible` (which values are
+shown) and the auto-check-on-search effect are both derived straight from
+`search`/`checked`/`hasActiveFilter` on every render, instead of mutating
+each list item's hidden/checked flags by hand.
+
+**Cascading values** (`TrackTable.tsx`'s `deriveFilterValues`): once some
+*other* column already has an active filter, opening a column's popup
+derives its value list from the currently-loaded (already server-
+filtered) `tracks` prop instead of the full library-wide list — matches
+`_values_from_tree`. Artist splitting reuses `ArtistTokens`' `ARTIST_SEP_RE`
+rather than the old app's own separately-defined (and slightly different)
+separator list used just for this one case — standardizing on one
+separator set beat reproducing that inconsistency, same call made for
+`ArtistInfoPanel`'s multi-artist paging split earlier. Genre splitting
+reuses this file's own `fmtGenre` separator (`/[;/|,]+/`) rather than
+importing yet another separator list for one cascading edge case.
+
+**Server-side filtering** (`electron/main/subsonic.ts`): `getArtistIdMap`/
+`getAlbumIdMap`/`getGenreIdMap` (new — `/api/artist`, `/api/album`,
+`/api/genre`, matching `get_all_artists_native`/`get_all_albums_native`/
+`get_genres_native`) resolve checked display names back to Navidrome's
+internal ids; `getTracksNativePage` gained a `filters` param appending
+`artist_id`/`album_id`/`genre_id` as repeated query params (Navidrome
+treats these as IN-lists) plus a single `year` value. Deliberately did
+**not** "fix" year to support multiple values server-side even though the
+UI lets you check several — the old app's `_build_server_filters` also
+only ever sends one arbitrary year (`next(iter(allowed))`), and unlike
+artist/album/genre (confirmed many-valued relations, already sent as
+repeated params elsewhere in the old app), there's no evidence Navidrome's
+REST filter treats the plain scalar `year` column as an IN-list; guessing
+wrong there means silently-broken filtering instead of an honest
+limitation.
+
+**`Tracks.tsx`** owns all the state the popup needs but doesn't have
+itself (matches the old app keeping filtering server-side-driven, owned by
+the *browser*, with the popup as a dumb view): `colFilters` (plain
+component state, not persisted — the old app doesn't persist
+`_col_filters` across restarts either), the three id-map queries (fetched
+eagerly on mount with a long `staleTime`, matching
+`_start_filter_values_worker` firing right after the first page loads
+rather than lazily on first click), a year-value sample query (up to 500
+tracks matching the current search, re-sampled only when the query
+changes — matches `invalidate_filter_cache`'s query-only trigger, not
+firing on every filter apply), and `serverFilters`/`filterKey` (a
+JSON-serialized, sorted representation of `colFilters` for the
+`tracks-native` query key — a `Set`-valued object would otherwise just
+stringify to `"{}"` and never bust React Query's cache on change). The
+refresh button now also invalidates the id-map/year-sample queries
+alongside the track list itself.
+
+**Toolbar-level filter controls** (`Tracks.tsx`, added as a follow-up after
+initially scoping them out of the popup work): matches `TrackListView.qml`'s
+`playFilteredBtn`/`clearFiltersBtn`, visible only while `filtersActive`
+(any column filter set) — leftmost, before the track-count text.
+- **Play/Shuffle filtered** (`PlayFilteredButton`) is one button with two
+  gestures, matching the QML `MouseArea` exactly: click plays the filtered
+  set in its current sort order; press-and-hold 600ms shuffles it instead.
+  Both fetch the *entire* filtered result set in one request
+  (`fetchAllFiltered`, `getTracksNativePage` with `end=total`) — not just
+  the current page — matching `_fetch_all_filtered_tracks`, then replace
+  the queue and start playing via the store's existing `playTrack(track,
+  queue)`, the same mechanism `play_whole_album` uses for a plain list
+  (`playlist_data.clear()` + play index 0).
+- **Clear filters** (`ToolbarIconButton`) resets `colFilters` to `{}` in
+  one click, separate from each popup's own per-column "Clear filter" row.
+
+Both icons are unconditionally accent-tinted (not gray-until-hover like
+the popup's own action rows) — matches the QML's
+`"image://albumicons/play-button_" + accentColor` /
+`"filter_off-2_" + accentColor`, just a 4px hover-highlight background,
+no icon color change.
+
+## Favorite/Duration/Plays/No./Year/BPM: centered, not left-aligned
+
+Header label+sort-arrow+filter-icon and the cell content below it were
+both left-aligned for every column. `TrackListView.qml`'s header Row has
+a `_mid` flag (`dur`/`plays`/`fav`/`trackno`/`year`/`bpm`) that centers
+the header group instead, and each of those columns' data-cell `Text`
+elements sets `horizontalAlignment: Text.AlignHCenter` — every other
+column (Track/Title/Artist/Album/Genre/Date Added) stays left-aligned.
+Fixed via a `MID_COLS` set in `TrackTable.tsx`: the header cell's
+`justifyContent` switches to `"center"` for these columns, and the body
+cell wrapper gets `display:"flex", justifyContent:"center"` added
+conditionally (left as a plain block div otherwise, so truncation on the
+long text columns isn't affected by turning them into flex containers).
+
+## Album/Genre/Year track-cell values are clickable
+
+Album's cell was already click-to-navigate (`openAlbum`), but had no
+hover feedback at all (no color/underline change) unlike every other
+clickable text in this app — `TrackListView.qml`'s `albText` does
+`color: parent.hov ? accentColor : textSecondary` + an underline
+`Rectangle` on hover. Genre and Year weren't clickable at all: the QML's
+per-genre-token `MouseArea` calls `trackGenreClicked(genre)` →
+`_apply_col_filter(6, {genre})`, and the year cell's `MouseArea` calls
+`trackYearClicked(year)` → `_apply_col_filter(5, {year})` — clicking
+either applies (replaces) that column's Excel-style filter to just the
+clicked value.
+
+Added a shared `HoverToken` (`TrackTable.tsx`) — textSecondary normally,
+accent + underline on hover, matching `ArtistToken`/`AlbumLink`'s existing
+hover styling — used for all three:
+- **Album**: same `openAlbum`/`prefetchAlbum` behavior as before, now with
+  the missing hover feedback.
+- **Genre**: split into independent tokens, each its own `HoverToken`;
+  non-clickable ` • ` separators between them.
+- **Year**: the whole cell is one `HoverToken`.
+
+Both genre and year's click-to-filter are gated on `filterableCols`/
+`onFilterChange` actually being provided — true only for the Tracks
+screen's own `TrackTable`, not the album-detail one, since that host has
+no Excel-filter system wired up (matches the old app: `albums_browser.py`'s
+bridge implements these same click slots completely differently — they
+emit `genre_clicked`/`year_clicked` signals rather than applying a column
+filter — a distinct, unrelated behavior this change doesn't attempt to
+replicate).
+
+**Follow-up fix**: multi-genre tracks still rendered as one single
+clickable blob instead of separate tokens. Root cause — the split regex
+(inherited from the now-removed `fmtGenre` formatter) only matched
+semicolon/slash/pipe/comma, but Navidrome's native `/api/song` path (what
+the Tracks screen actually uses) joins a track's multiple genres with
+`" • "` itself (`subsonic.ts`'s `parseNativeTrack`, matching the old app's
+own `genreStr.split(/( • )/)`) — a bullet the regex's character class
+never included, so "Rock • Pop" never actually split. Standard-API tracks
+(album detail) can still carry raw ID3-style delimited genre strings
+though, so both shapes need handling. Fixed via one shared `GENRE_SEP_RE`
+(`/[;/|,•]+/`, surrounding whitespace stripped by the existing
+`.trim()` per part) used by both the render-cell split and
+`deriveFilterValues`'s cascading split.

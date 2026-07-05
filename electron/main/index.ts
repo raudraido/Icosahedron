@@ -1,18 +1,21 @@
 import { app, BrowserWindow, ipcMain, Menu, protocol, shell } from "electron";
 import { join } from "node:path";
 import { SubsonicClient } from "./subsonic";
+import { AudioEngineClient } from "./audioEngine";
 import { registerCoverProtocol } from "./coverProtocol";
 import { applyWindowState, loadWindowState } from "./windowState";
 import {
   searchLyrics, fetchLyrics, lrclibDirect, loadLocalLyrics, saveLocalLyrics,
   removeLocalLyrics, getBandsintownEvents,
 } from "./lyrics";
+import { saveCredentials, loadCredentials, clearCredentials } from "./credentials";
 
 protocol.registerSchemesAsPrivileged([
   { scheme: "cover", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
 ]);
 
 let client: SubsonicClient | null = null;
+let audioEngine: AudioEngineClient | null = null;
 
 function createWindow(): void {
   const state = loadWindowState();
@@ -29,6 +32,7 @@ function createWindow(): void {
     },
   });
   applyWindowState(win, state);
+  audioEngine = new AudioEngineClient(win);
 
   // Tour-date links (Info tab) and any other window.open() call should go to
   // the OS's default browser — matches the old app's webbrowser.open(url) —
@@ -59,6 +63,11 @@ function requireClient(): SubsonicClient {
   return client;
 }
 
+function requireAudio(): AudioEngineClient {
+  if (!audioEngine) throw new Error("audio engine not ready");
+  return audioEngine;
+}
+
 function registerIpcHandlers(): void {
   ipcMain.handle("connect", async (_e, { url, username, password }) => {
     const c = new SubsonicClient(url, username, password);
@@ -67,6 +76,25 @@ function registerIpcHandlers(): void {
     return true;
   });
   ipcMain.handle("ping", () => requireClient().ping());
+
+  // ── Saved-credentials (see credentials.ts) ──────────────────────────────
+  // The password never travels back over IPC on auto-connect — it's read,
+  // decrypted, and handed straight to a new SubsonicClient entirely inside
+  // this process; the renderer only ever learns whether it worked.
+  ipcMain.handle("save_credentials", (_e, { url, username, password }) => saveCredentials(url, username, password));
+  ipcMain.handle("clear_credentials", () => clearCredentials());
+  ipcMain.handle("try_auto_connect", async () => {
+    const creds = await loadCredentials();
+    if (!creds) return null;
+    try {
+      const c = new SubsonicClient(creds.url, creds.username, creds.password);
+      await c.ping();
+      client = c;
+      return { url: creds.url, username: creds.username };
+    } catch {
+      return null;
+    }
+  });
 
   ipcMain.handle("get_artists", () => requireClient().getArtists());
   ipcMain.handle("get_all_artists", () => requireClient().getAllArtists());
@@ -81,8 +109,13 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle("get_random_songs", (_e, { count }) => requireClient().getRandomSongs(count));
   ipcMain.handle("get_tracks", (_e, { size, offset }) => requireClient().getTracks(size, offset));
-  ipcMain.handle("get_tracks_native_page", (_e, { sortBy, order, start, end, query }) =>
-    requireClient().getTracksNativePage(sortBy, order, start, end, query));
+  ipcMain.handle("get_tracks_native_page", (_e, { sortBy, order, start, end, query, filters }) =>
+    requireClient().getTracksNativePage(sortBy, order, start, end, query, filters));
+
+  // ── Column-filter id maps (Tracks tab's Excel-style filters) ────────────
+  ipcMain.handle("get_artist_id_map", () => requireClient().getArtistIdMap());
+  ipcMain.handle("get_album_id_map", () => requireClient().getAlbumIdMap());
+  ipcMain.handle("get_genre_id_map", () => requireClient().getGenreIdMap());
   ipcMain.handle("start_scan", () => requireClient().startScan());
   ipcMain.handle("get_track_info", (_e, { id }) => requireClient().getTrackInfo(id));
 
@@ -116,6 +149,18 @@ function registerIpcHandlers(): void {
   ipcMain.handle("lyrics_local_save", (_e, { key, raw }) => saveLocalLyrics(key, raw));
   ipcMain.handle("lyrics_local_remove", (_e, { key }) => removeLocalLyrics(key));
   ipcMain.handle("bandsintown_events", (_e, { artistName }) => getBandsintownEvents(artistName));
+
+  ipcMain.handle("app_version", () => app.getVersion());
+
+  // ── Native gapless audio engine (see audioEngine.ts) ────────────────────
+  ipcMain.handle("audio_play", (_e, { url, volume, durationHint, manual, startPaused }) =>
+    requireAudio().play(url, volume, durationHint, manual ?? true, startPaused ?? false));
+  ipcMain.handle("audio_chain_preload", (_e, { url, durationHint }) => requireAudio().chainPreload(url, durationHint));
+  ipcMain.handle("audio_pause", () => requireAudio().pause());
+  ipcMain.handle("audio_resume", () => requireAudio().resume());
+  ipcMain.handle("audio_stop", () => requireAudio().stop());
+  ipcMain.handle("audio_seek", (_e, { seconds }) => requireAudio().seek(seconds));
+  ipcMain.handle("audio_set_volume", (_e, { volume }) => requireAudio().setVolume(volume));
 }
 
 app.whenReady().then(() => {
@@ -132,4 +177,8 @@ app.whenReady().then(() => {
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
+});
+
+app.on("before-quit", () => {
+  audioEngine?.stop();
 });

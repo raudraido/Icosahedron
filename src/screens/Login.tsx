@@ -6,6 +6,7 @@ export function Login() {
   const [url, setUrl] = useState("http://");
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
+  const [remember, setRemember] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -14,7 +15,7 @@ export function Login() {
     setError("");
     setLoading(true);
     try {
-      await connect(url.trim(), user.trim(), pass);
+      await connect(url.trim(), user.trim(), pass, remember);
     } catch (err) {
       setError(String(err));
     } finally {
@@ -66,6 +67,16 @@ export function Login() {
             required
           />
         </div>
+
+        <label className="flex items-center gap-2 text-sm" style={{ color: "var(--text-primary)", opacity: 0.8, cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(e) => setRemember(e.target.checked)}
+            style={{ accentColor: "var(--accent)" }}
+          />
+          Remember my credentials
+        </label>
 
         {error && <p className="text-sm" style={{ color: "var(--error)" }}>{error}</p>}
 

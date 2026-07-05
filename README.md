@@ -1,7 +1,26 @@
-# Tauri + React + Typescript
+# Icosahedron
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+A desktop client for Subsonic/Navidrome music servers, built with Electron,
+React, and TypeScript. A rewrite of the original Python/Qt "Sonar" app.
 
-## Recommended IDE Setup
+Playback runs through a native Rust audio engine (`native/audio-engine`, a
+napi-rs port of [psysonic](https://github.com/Psychotoxical/psysonic)'s
+rodio/Symphonia engine) for true sample-accurate gapless transitions between
+tracks — not a browser `<audio>` element.
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+## Development
+
+```bash
+npm install     # also builds native/audio-engine (postinstall)
+npm run dev     # electron-vite dev server
+```
+
+## Building
+
+```bash
+npm run build   # typecheck + electron-vite build
+npm run dist    # + electron-builder (AppImage on Linux)
+```
+
+The native audio engine can be rebuilt on its own with `npm run build:native`
+— requires a Rust toolchain (`cargo`/`rustc`).

@@ -2,17 +2,21 @@
   "name": "icosahedron",
   "private": true,
   "version": "0.1.0",
+  "description": "Electron + React desktop client for Subsonic/Navidrome music servers, with a native Rust gapless audio engine.",
   "type": "module",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "tsc --noEmit && electron-vite build",
     "preview": "electron-vite preview",
-    "dist": "npm run build && electron-builder"
+    "dist": "npm run build && electron-builder",
+    "build:native": "cd native/audio-engine && napi build --platform --release",
+    "postinstall": "npm run build:native"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.2",
     "@tanstack/react-virtual": "^3.14.5",
+    "icosahedron-audio-engine": "file:./native/audio-engine",
     "lucide-react": "^1.23.0",
     "md5": "^2.3.0",
     "react": "^19.1.0",
@@ -22,6 +26,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@napi-rs/cli": "^2.18.4",
     "@tailwindcss/vite": "^4.3.2",
     "@types/md5": "^2.3.6",
     "@types/react": "^19.1.8",
@@ -39,9 +44,17 @@
   "build": {
     "appId": "cloud.raud.icosahedron",
     "productName": "icosahedron",
-    "files": ["out/**/*"],
+    "files": [
+      "out/**/*",
+      "node_modules/icosahedron-audio-engine/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/icosahedron-audio-engine/**/*.node"
+    ],
     "linux": {
-      "target": ["AppImage"],
+      "target": [
+        "AppImage"
+      ],
       "icon": "build/icon.png"
     }
   }

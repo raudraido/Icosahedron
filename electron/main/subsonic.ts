@@ -291,14 +291,27 @@ export class SubsonicClient {
   }
 
   /** Navidrome's native /api/song — true server-side sort + pagination + exact total (X-Total-Count),
-   *  unlike the standard Subsonic API which has no arbitrary-sort-field pagination for a flat track list. */
+   *  unlike the standard Subsonic API which has no arbitrary-sort-field pagination for a flat track list.
+   *  `filters` backs the Tracks tab's Excel-style column filters (tracks_browser.py's
+   *  _build_server_filters): artist_id/album_id/genre_id are Navidrome's native ID-list filters
+   *  (repeated query params, ANDed as an IN-list) — `year` is a plain scalar column, not a
+   *  many-valued relation, so unlike the ID filters it only ever takes one value server-side
+   *  (matches the old app's `next(iter(allowed))` — deliberately not "fixing" this to multi-value,
+   *  since there's no evidence Navidrome's REST filter treats `year` as an IN-list the way it does
+   *  for the ID-based fields, and guessing wrong here means silently broken filtering). */
   async getTracksNativePage(
     sortBy: string, order: "ASC" | "DESC", start: number, end: number, query?: string,
+    filters?: { artistIds?: string[]; albumIds?: string[]; genreIds?: string[]; year?: string; starred?: boolean },
   ): Promise<{ tracks: Track[]; total: number }> {
     await this.authenticateNative();
-    const params: Record<string, string> = { _start: String(start), _end: String(end), _sort: sortBy, _order: order };
-    if (query) params.title = query;
-    const resp = await fetch(`${this.baseUrl}/api/song?${new URLSearchParams(params)}`, {
+    const params = new URLSearchParams({ _start: String(start), _end: String(end), _sort: sortBy, _order: order });
+    if (query) params.set("title", query);
+    if (filters?.artistIds) for (const id of filters.artistIds) params.append("artist_id", id);
+    if (filters?.albumIds) for (const id of filters.albumIds) params.append("album_id", id);
+    if (filters?.genreIds) for (const id of filters.genreIds) params.append("genre_id", id);
+    if (filters?.year) params.set("year", filters.year);
+    if (filters?.starred !== undefined) params.set("starred", filters.starred ? "true" : "false");
+    const resp = await fetch(`${this.baseUrl}/api/song?${params}`, {
       headers: { "x-nd-authorization": `Bearer ${this.nativeJwt}` },
     });
     const data = await resp.json();
@@ -306,6 +319,28 @@ export class SubsonicClient {
     const total = Number(resp.headers.get("x-total-count") ?? data.length);
     return { tracks: data.map((s) => this.parseNativeTrack(s)), total };
   }
+
+  /** name→id maps backing the filter popup's checklist for Artist/Album/Genre columns
+   *  (tracks_browser.py's get_all_artists_native/get_all_albums_native/get_genres_native) —
+   *  display values come from the track list itself, but applying the filter server-side
+   *  needs each checked name resolved back to Navidrome's internal id. */
+  private async nativeIdMap(endpoint: "artist" | "album" | "genre"): Promise<Record<string, string>> {
+    await this.authenticateNative();
+    const params = new URLSearchParams({ _start: "0", _end: "100000", _sort: "name", _order: "ASC" });
+    const resp = await fetch(`${this.baseUrl}/api/${endpoint}?${params}`, {
+      headers: { "x-nd-authorization": `Bearer ${this.nativeJwt}` },
+    });
+    const data = await resp.json();
+    if (!Array.isArray(data)) return {};
+    const out: Record<string, string> = {};
+    for (const item of data) {
+      if (item && typeof item.name === "string" && typeof item.id === "string") out[item.name] = item.id;
+    }
+    return out;
+  }
+  getArtistIdMap(): Promise<Record<string, string>> { return this.nativeIdMap("artist"); }
+  getAlbumIdMap(): Promise<Record<string, string>> { return this.nativeIdMap("album"); }
+  getGenreIdMap(): Promise<Record<string, string>> { return this.nativeIdMap("genre"); }
 
   /** For the "Get Info" dialog: no single endpoint has everything — the standard Subsonic
    *  `getSong` has extra audio fields, Navidrome's native `/api/song/{id}` has the real

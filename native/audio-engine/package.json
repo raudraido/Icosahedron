@@ -1,0 +1,19 @@
+{
+  "name": "icosahedron-audio-engine",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.js",
+  "types": "index.d.ts",
+  "napi": {
+    "binaryName": "icosahedron-audio-engine",
+    "targets": ["x86_64-unknown-linux-gnu"]
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "*.node"
+  ],
+  "scripts": {
+    "build": "napi build --platform --release"
+  }
+}

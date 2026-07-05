@@ -2,6 +2,8 @@
 name = "icosahedron_audio_engine"
 version = "0.1.0"
 edition = "2021"
+license = "GPL-3.0-or-later"
+description = "Port of psysonic's rodio/Symphonia gapless audio engine — see ../../NOTICE.md"
 publish = false
 
 [lib]

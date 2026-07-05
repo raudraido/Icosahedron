@@ -2,6 +2,8 @@
   "name": "icosahedron-audio-engine",
   "version": "0.1.0",
   "private": true,
+  "license": "GPL-3.0-or-later",
+  "description": "Port of psysonic's rodio/Symphonia gapless audio engine (https://github.com/Psychotoxical/psysonic) — see ../../NOTICE.md.",
   "main": "index.js",
   "types": "index.d.ts",
   "napi": {

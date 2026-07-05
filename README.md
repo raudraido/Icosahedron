@@ -24,3 +24,11 @@ npm run dist    # + electron-builder (AppImage on Linux)
 
 The native audio engine can be rebuilt on its own with `npm run build:native`
 — requires a Rust toolchain (`cargo`/`rustc`).
+
+## License
+
+GPLv3 — see [LICENSE](LICENSE). `native/audio-engine` is a port of actual
+code from [psysonic](https://github.com/Psychotoxical/psysonic) (also
+GPLv3), not an independent implementation that merely uses the same
+libraries — see [NOTICE.md](NOTICE.md) for the attribution terms that
+carry forward from that project.

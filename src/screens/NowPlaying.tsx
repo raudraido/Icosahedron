@@ -420,7 +420,7 @@ function TopSongRow({ track, index, isCurrent, onClick }: { track: Track; index:
 
 function ArtistCard({ pages, pageIdx, onNav, imageUrl, bio, similar, loading }: {
   pages: ArtistPage[]; pageIdx: number; onNav: (i: number) => void;
-  imageUrl: string | null; bio: string; similar: string[]; loading: boolean;
+  imageUrl: string | null; bio: string; similar: { id: string; name: string }[]; loading: boolean;
 }) {
   const navigateTo = useStore((s) => s.navigateTo);
   const [bioExpanded, setBioExpanded] = useState(false);
@@ -428,8 +428,12 @@ function ArtistCard({ pages, pageIdx, onNav, imageUrl, bio, similar, loading }: 
 
   const name = pages[pageIdx]?.name ?? "";
 
-  function goToSimilar(n: string) {
-    navigateTo({ tab: "artists", artistQuery: n });
+  // Similar-artist ids come straight from getArtist's similar_artists (same
+  // source ArtistDetail.tsx's own related-artists strip uses), so this can
+  // jump straight to ArtistDetail like "Go to Artist ↗" above does, instead
+  // of landing on the Artists grid pre-filtered to a name search.
+  function goToSimilar(a: { id: string; name: string }) {
+    navigateTo({ tab: "artists", artistId: a.id, artistQuery: a.name });
   }
 
   return (
@@ -465,8 +469,8 @@ function ArtistCard({ pages, pageIdx, onNav, imageUrl, bio, similar, loading }: 
           )}
           {similar.length > 0 && (
             <div className="flex flex-wrap" style={{ gap: 5, marginTop: 6 }}>
-              {similar.map((n, i) => (
-                <SimilarChip key={i} name={n} onClick={() => goToSimilar(n)} />
+              {similar.map((a, i) => (
+                <SimilarChip key={i} name={a.name} onClick={() => goToSimilar(a)} />
               ))}
             </div>
           )}
@@ -588,7 +592,7 @@ export function NowPlaying({ active }: { active: boolean }) {
   const [artistLoading, setArtistLoading] = useState(false);
   const [artistImage, setArtistImage] = useState<string | null>(null);
   const [artistBio, setArtistBio] = useState("");
-  const [similar, setSimilar] = useState<string[]>([]);
+  const [similar, setSimilar] = useState<{ id: string; name: string }[]>([]);
 
   const [tourLoading, setTourLoading] = useState(false);
   const [tourEvents, setTourEvents] = useState<TourEvent[] | null>(null);
@@ -620,7 +624,7 @@ export function NowPlaying({ active }: { active: boolean }) {
         setArtistImage(d.image_url);
         const bio = d.biography ? d.biography.replace(/<a [^>]*>.*?<\/a>\.?/gs, "").trim() : "";
         setArtistBio(bio);
-        setSimilar(d.similar_artists.slice(0, 6).map((a) => a.name));
+        setSimilar(d.similar_artists.slice(0, 6).map((a) => ({ id: a.id, name: a.name })));
       }
     }
     setArtistLoading(false);

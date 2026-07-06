@@ -244,7 +244,7 @@ function PlaylistDetail({ playlist }: { playlist: Playlist }) {
       {coverZoomOpen && playlist.cover_id && (
         <CoverZoomOverlay coverId={playlist.cover_id} onClose={() => setCoverZoomOpen(false)} />
       )}
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-full page-fade-in">
         <div style={{ padding: 12 }}>
           <div className="flex" style={{ gap: 28, padding: 28, borderRadius: 10, background: "var(--card-bg)", border: "1px solid var(--border)" }}>
             <div style={{ position: "relative", width: 264, height: 264, flexShrink: 0 }}>
@@ -375,7 +375,7 @@ export function Playlists() {
 
   return (
     <div
-      className="flex flex-col h-full"
+      className="flex flex-col h-full page-fade-in"
       onContextMenu={(e) => { e.preventDefault(); setBgMenu({ x: e.clientX, y: e.clientY }); }}
     >
       <div className="flex items-center px-6" style={{ height: 58, borderBottom: "1px solid var(--border)", gap: 6 }}>

@@ -139,4 +139,23 @@ html.is-scrolling ::-webkit-scrollbar-thumb {
 /* Range inputs */
 input[type="range"] { accent-color: var(--accent); }
 
+/* Page fade-in — ported from Feishin's AnimatedPage (opacity 0→1, Motion's
+ * 'anticipate' easing; cubic-bezier(0.65,0,0.35,1) is the closest plain-CSS
+ * approximation, already used elsewhere in this app for carousel slide
+ * transitions). Two uses:
+ *  - App.tsx's tab panes, which stay mounted and toggle display:none/flex —
+ *    browsers restart a CSS `animation` from scratch whenever an element
+ *    goes from display:none back to displayed, so this replays on every tab
+ *    switch for free, with no JS needed to retrigger it.
+ *  - grid↔detail views (AlbumDetail/ArtistDetail/PlaylistDetail), which
+ *    genuinely mount/unmount on navigation — a plain CSS `animation` on the
+ *    root element already plays once on every mount by default. */
+@keyframes page-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.tab-pane, .page-fade-in {
+  animation: page-fade-in 250ms cubic-bezier(0.65, 0, 0.35, 1);
+}
+
 input::placeholder { color: var(--text-secondary); opacity: 1; }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useStore, tryAutoConnect, Tab } from "./store";
-import { applyTheme, CREAM } from "./lib/theme";
+import { applyTheme, loadSavedTheme } from "./lib/theme";
 import { loadJSON, saveJSON } from "./components/TrackTable";
 
 const queryClient = new QueryClient({
@@ -23,6 +23,7 @@ import { Starred } from "./screens/Starred";
 import { Placeholder } from "./screens/Placeholder";
 import { NowPlaying } from "./screens/NowPlaying";
 import { Home } from "./screens/Home";
+import { Settings } from "./screens/Settings";
 import { PlayerBar } from "./components/PlayerBar";
 import { LeftPanel } from "./components/LeftPanel";
 import { QueuePanel } from "./components/QueuePanel";
@@ -206,15 +207,16 @@ function MainApp() {
             {/* display:none (not visibility:hidden) — a hidden visibility:hidden panel still
                 gets laid out/painted every frame, so a heavy virtualized grid (hundreds of
                 <img> covers) can visibly lag behind the tab switch for a frame or two. */}
-            <div className="absolute inset-0 flex flex-col" style={{ display: activeTab === "home"       ? "flex" : "none" }}>{mounted.has("home")       && <Home />}</div>
-            <div className="absolute inset-0 flex flex-col" style={{ display: activeTab === "nowPlaying" ? "flex" : "none" }}>{mounted.has("nowPlaying") && <NowPlaying active={activeTab === "nowPlaying"} />}</div>
-            <div className="absolute inset-0 flex flex-col" style={{ display: activeTab === "albums"     ? "flex" : "none" }}>{mounted.has("albums")     && <Albums />}</div>
-            <div className="absolute inset-0 flex flex-col" style={{ display: activeTab === "artists"    ? "flex" : "none" }}>{mounted.has("artists")    && <Artists />}</div>
-            <div className="absolute inset-0 flex flex-col" style={{ display: activeTab === "tracks"     ? "flex" : "none" }}>{mounted.has("tracks")     && <Tracks />}</div>
-            <div className="absolute inset-0 flex flex-col" style={{ display: activeTab === "playlists"  ? "flex" : "none" }}>{mounted.has("playlists")  && <Playlists />}</div>
-            <div className="absolute inset-0 flex flex-col" style={{ display: activeTab === "starred"    ? "flex" : "none" }}>{mounted.has("starred")    && <Starred />}</div>
-            <div className="absolute inset-0 flex flex-col" style={{ display: activeTab === "mixBuilder" ? "flex" : "none" }}>{mounted.has("mixBuilder") && <Placeholder label="Mix Builder" />}</div>
-            <div className="absolute inset-0 flex flex-col" style={{ display: activeTab === "visualizer" ? "flex" : "none" }}>{mounted.has("visualizer") && <Placeholder label="Visualizer" />}</div>
+            <div className="absolute inset-0 flex flex-col tab-pane" style={{ display: activeTab === "home"       ? "flex" : "none" }}>{mounted.has("home")       && <Home />}</div>
+            <div className="absolute inset-0 flex flex-col tab-pane" style={{ display: activeTab === "nowPlaying" ? "flex" : "none" }}>{mounted.has("nowPlaying") && <NowPlaying active={activeTab === "nowPlaying"} />}</div>
+            <div className="absolute inset-0 flex flex-col tab-pane" style={{ display: activeTab === "albums"     ? "flex" : "none" }}>{mounted.has("albums")     && <Albums />}</div>
+            <div className="absolute inset-0 flex flex-col tab-pane" style={{ display: activeTab === "artists"    ? "flex" : "none" }}>{mounted.has("artists")    && <Artists />}</div>
+            <div className="absolute inset-0 flex flex-col tab-pane" style={{ display: activeTab === "tracks"     ? "flex" : "none" }}>{mounted.has("tracks")     && <Tracks />}</div>
+            <div className="absolute inset-0 flex flex-col tab-pane" style={{ display: activeTab === "playlists"  ? "flex" : "none" }}>{mounted.has("playlists")  && <Playlists />}</div>
+            <div className="absolute inset-0 flex flex-col tab-pane" style={{ display: activeTab === "starred"    ? "flex" : "none" }}>{mounted.has("starred")    && <Starred />}</div>
+            <div className="absolute inset-0 flex flex-col tab-pane" style={{ display: activeTab === "mixBuilder" ? "flex" : "none" }}>{mounted.has("mixBuilder") && <Placeholder label="Mix Builder" />}</div>
+            <div className="absolute inset-0 flex flex-col tab-pane" style={{ display: activeTab === "visualizer" ? "flex" : "none" }}>{mounted.has("visualizer") && <Placeholder label="Visualizer" />}</div>
+            <div className="absolute inset-0 flex flex-col tab-pane" style={{ display: activeTab === "settings"   ? "flex" : "none" }}>{mounted.has("settings")   && <Settings />}</div>
           </div>
         </div>
 
@@ -235,7 +237,7 @@ function AppInner() {
   const [booting, setBooting] = useState(true);
 
   useEffect(() => {
-    applyTheme(CREAM);
+    applyTheme(loadSavedTheme());
     tryAutoConnect().finally(() => setBooting(false));
 
     // Show scrollbar thumb while scrolling — mirrors old app's isScrollActive / scrollHideTimer(600ms)

@@ -509,7 +509,7 @@ export function ArtistDetail({ artistId }: Props) {
       {photoZoomOpen && data.artist.cover_id && (
         <CoverZoomOverlay coverId={data.artist.cover_id} onClose={() => setPhotoZoomOpen(false)} />
       )}
-      <div className="h-full overflow-y-auto scroll-clean" style={{ padding: 12 }}>
+      <div className="h-full overflow-y-auto scroll-clean page-fade-in" style={{ padding: 12 }}>
       <div className="flex flex-col" style={{ gap: 10 }}>
         {/* ── Header ── */}
         <Card>

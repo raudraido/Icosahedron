@@ -1,3 +1,5 @@
+import { api } from "./api";
+
 export interface AppTheme {
   name: string;
   accent: string;
@@ -17,6 +19,13 @@ export interface AppTheme {
   fontSizeTitle: number;
   fontSizeHero: number;
   fontFamily: string;
+  /** Native OS window-frame/titlebar dark mode — ports the old app's
+   *  enable_dark_title_bar, which independently toggled the *system*
+   *  titlebar (Qt's own chrome had no theme awareness) based on whether
+   *  the panel background was dark or light. Explicit per-theme rather
+   *  than derived from mainBg's luminance, so a custom Theme Builder
+   *  preset can pick either regardless of its background color. */
+  titleBarDark: boolean;
 }
 
 export const DARK: AppTheme = {
@@ -38,6 +47,7 @@ export const DARK: AppTheme = {
   fontSizeTitle:     24,
   fontSizeHero:      28,
   fontFamily:        "'Inter Variable', system-ui, -apple-system, sans-serif",
+  titleBarDark:      true,
 };
 
 export const CREAM: AppTheme = {
@@ -59,7 +69,52 @@ export const CREAM: AppTheme = {
   fontSizeTitle:     22,
   fontSizeHero:      26,
   fontFamily:        "'Inter Variable', system-ui, -apple-system, sans-serif",
+  titleBarDark:      false,
 };
+
+// All selectable built-in presets, and the persisted "which one is active"
+// choice — used by both App.tsx's boot-time applyTheme call and
+// Settings.tsx's Themes tab, so a chosen theme survives a relaunch instead
+// of always resetting to CREAM.
+export const THEMES: AppTheme[] = [CREAM, DARK];
+const LS_THEME_KEY = "icosahedron_theme";
+const LS_CUSTOM_THEMES_KEY = "icosahedron_custom_themes";
+
+// User-created presets from the Theme Builder tab (ports the old app's
+// theme_builder.py's "Save as Preset", which wrote a themes/<name>.json
+// file — this app has no per-file theme store, so they're kept as a single
+// localStorage array instead) — layered on top of the two built-ins.
+export function loadCustomThemes(): AppTheme[] {
+  try {
+    const raw = localStorage.getItem(LS_CUSTOM_THEMES_KEY);
+    return raw ? (JSON.parse(raw) as AppTheme[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveCustomTheme(t: AppTheme) {
+  const next = [...loadCustomThemes().filter((c) => c.name !== t.name), t];
+  localStorage.setItem(LS_CUSTOM_THEMES_KEY, JSON.stringify(next));
+}
+
+export function deleteCustomTheme(name: string) {
+  const next = loadCustomThemes().filter((c) => c.name !== name);
+  localStorage.setItem(LS_CUSTOM_THEMES_KEY, JSON.stringify(next));
+}
+
+export function allThemes(): AppTheme[] {
+  return [...THEMES, ...loadCustomThemes()];
+}
+
+export function loadSavedTheme(): AppTheme {
+  const saved = localStorage.getItem(LS_THEME_KEY);
+  return allThemes().find((t) => t.name === saved) ?? CREAM;
+}
+
+export function saveTheme(t: AppTheme) {
+  localStorage.setItem(LS_THEME_KEY, t.name);
+}
 
 // Fixed colors that intentionally do NOT vary with the theme — matches the
 // old app's own hardcoded choices (e.g. album_detail.qml's
@@ -96,4 +151,13 @@ export function applyTheme(t: AppTheme) {
   r.style.setProperty("--text-xl",        t.fontSizeHeading   + "px");
   r.style.setProperty("--text-2xl",       t.fontSizeTitle     + "px");
   r.style.setProperty("--text-3xl",       t.fontSizeHero      + "px");
+
+  // Guarded like the old app's _last_title_bar_dark — applyTheme() can fire
+  // on every single Theme Builder dial tweak, but the native titlebar only
+  // needs touching when the dark/light flag itself actually changes.
+  if (lastTitleBarDark !== t.titleBarDark) {
+    lastTitleBarDark = t.titleBarDark;
+    api.setWindowTheme(t.titleBarDark);
+  }
 }
+let lastTitleBarDark: boolean | null = null;

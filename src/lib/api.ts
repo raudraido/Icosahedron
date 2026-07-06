@@ -231,6 +231,7 @@ export const api = {
   bandsintownEvents: (artistName: string) => invoke<TourEvent[]>("bandsintown_events", { artistName }),
 
   getAppVersion: () => invoke<string>("app_version"),
+  setWindowTheme: (dark: boolean) => invoke<void>("set_window_theme", { dark }),
 
   // ── Native gapless audio engine (electron/main/audioEngine.ts) ──────────
   // `volume` here is 0-1 (the store keeps its own volume as a 0-100 int for

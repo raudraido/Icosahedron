@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useStore } from "../store";
 import { CoverArt } from "./CoverArt";
 import { Icon } from "./Icon";
+import { TetrisWidget } from "./TetrisWidget";
 
 // Matches left_panel.qml's artTargetSize = leftPanel.width() - 16 (8px margin
 // each side) — our left panel is a fixed 297px, so this is a constant rather
@@ -55,6 +56,23 @@ export function LeftPanel() {
   const toggleSidebarArt = useStore((s) => s.toggleSidebarArt);
   const [closeHov, setCloseHov] = useState(false);
 
+  // Easter egg — ported from the old app's 7-rapid-clicks-on-Home-tab
+  // Tetris trigger (window.py:1066-1082), retargeted to 3 clicks on the
+  // logo instead. Same 600ms "must be rapid" reset window.
+  const [tetrisOpen, setTetrisOpen] = useState(false);
+  const logoClickCountRef = useRef(0);
+  const logoClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function handleLogoClick() {
+    logoClickCountRef.current += 1;
+    if (logoClickTimerRef.current) clearTimeout(logoClickTimerRef.current);
+    logoClickTimerRef.current = setTimeout(() => { logoClickCountRef.current = 0; }, 600);
+    if (logoClickCountRef.current >= 3) {
+      logoClickCountRef.current = 0;
+      clearTimeout(logoClickTimerRef.current);
+      setTetrisOpen(true);
+    }
+  }
+
   return (
     <div
       className="flex flex-col shrink-0"
@@ -67,7 +85,7 @@ export function LeftPanel() {
         style={{ height: 62, gap: 4, borderBottom: "1px solid var(--border)", paddingRight: 8 }}
       >
         {/* Logo: shahedron2 base + shahedron1 alpha-masked with accent */}
-        <div style={{ position: "relative", width: 46, height: 46, marginLeft: 8, flexShrink: 0 }}>
+        <div onClick={handleLogoClick} style={{ position: "relative", width: 46, height: 46, marginLeft: 8, flexShrink: 0 }}>
           <img
             src="img/shahedron2.png"
             alt=""
@@ -93,49 +111,53 @@ export function LeftPanel() {
         <NavArrow direction="right" disabled={!canFwd}  onClick={navFwd} />
       </div>
 
-      <div className="flex-1" />
+      <div className="flex flex-col flex-1" style={{ position: "relative" }}>
+        <div className="flex-1" />
 
-      {/* Art section — collapsed (height 0) by default, expands upward when the
-          footer thumbnail's expand button is clicked. Matches left_panel.qml's
-          artSection: same 250ms InOutCubic on height, driven by the same shared
-          toggle as the footer thumbnail's width animation, so they move in lockstep
-          as a handoff (no cross-fade between the two). */}
-      <div style={{ padding: 8, flexShrink: 0 }}>
-        <div
-          style={{
-            position: "relative", width: ART_SIZE,
-            height: expanded ? ART_SIZE : 0,
-            overflow: "hidden", borderRadius: 5, background: "#121212",
-            transition: "height 250ms cubic-bezier(0.65, 0, 0.35, 1)",
-          }}
-        >
-          {track?.cover_id ? (
-            <CoverArt coverId={track.cover_id} size={ART_SIZE} className="w-full h-full" />
-          ) : (
-            <div className="flex items-center justify-center w-full h-full" style={{ fontSize: Math.max(20, ART_SIZE * 0.3), color: "#333333" }}>
-              💿
-            </div>
-          )}
+        {/* Art section — collapsed (height 0) by default, expands upward when the
+            footer thumbnail's expand button is clicked. Matches left_panel.qml's
+            artSection: same 250ms InOutCubic on height, driven by the same shared
+            toggle as the footer thumbnail's width animation, so they move in lockstep
+            as a handoff (no cross-fade between the two). */}
+        <div style={{ padding: 8, flexShrink: 0 }}>
+          <div
+            style={{
+              position: "relative", width: ART_SIZE,
+              height: expanded ? ART_SIZE : 0,
+              overflow: "hidden", borderRadius: 5, background: "#121212",
+              transition: "height 250ms cubic-bezier(0.65, 0, 0.35, 1)",
+            }}
+          >
+            {track?.cover_id ? (
+              <CoverArt coverId={track.cover_id} size={ART_SIZE} className="w-full h-full" />
+            ) : (
+              <div className="flex items-center justify-center w-full h-full" style={{ fontSize: Math.max(20, ART_SIZE * 0.3), color: "#333333" }}>
+                💿
+              </div>
+            )}
 
-          {expanded && (
-            <button
-              onClick={() => { setCloseHov(false); toggleSidebarArt(); }}
-              onMouseEnter={() => setCloseHov(true)}
-              onMouseLeave={() => setCloseHov(false)}
-              title="Collapse"
-              style={{
-                position: "absolute", top: 4, right: 4, width: 24, height: 24, borderRadius: 12,
-                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-                border: `2px solid color-mix(in srgb, var(--accent) ${closeHov ? 100 : 30}%, transparent)`,
-                background: `color-mix(in srgb, var(--accent) ${closeHov ? 40 : 10}%, transparent)`,
-                opacity: closeHov ? 1 : 0,
-                transition: "opacity 180ms",
-              }}
-            >
-              <Icon src="img/expand.png" size={16} style={{ background: closeHov ? "#ffffff" : "#515151" }} />
-            </button>
-          )}
+            {expanded && (
+              <button
+                onClick={() => { setCloseHov(false); toggleSidebarArt(); }}
+                onMouseEnter={() => setCloseHov(true)}
+                onMouseLeave={() => setCloseHov(false)}
+                title="Collapse"
+                style={{
+                  position: "absolute", top: 4, right: 4, width: 24, height: 24, borderRadius: 12,
+                  display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+                  border: `2px solid color-mix(in srgb, var(--accent) ${closeHov ? 100 : 30}%, transparent)`,
+                  background: `color-mix(in srgb, var(--accent) ${closeHov ? 40 : 10}%, transparent)`,
+                  opacity: closeHov ? 1 : 0,
+                  transition: "opacity 180ms",
+                }}
+              >
+                <Icon src="img/expand.png" size={16} style={{ background: closeHov ? "#ffffff" : "#515151" }} />
+              </button>
+            )}
+          </div>
         </div>
+
+        {tetrisOpen && <TetrisWidget onClose={() => setTetrisOpen(false)} />}
       </div>
     </div>
   );

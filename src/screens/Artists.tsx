@@ -236,14 +236,14 @@ export function Artists() {
 
   if (selectedId) {
     return (
-      <div className="h-full overflow-hidden">
+      <div className="h-full overflow-hidden page-fade-in">
         <ArtistDetail artistId={selectedId} onBack={navBack} />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full page-fade-in">
       {/* ── Toolbar ── */}
       <div className="flex items-center shrink-0 px-6" style={{ height: 58, gap: 6, borderBottom: "1px solid var(--border)" }}>
         <h2 className="font-semibold" style={{ flex: 1, color: "var(--text-secondary)", fontSize: "var(--fs-primary)" }}>

@@ -397,6 +397,8 @@ export function PlayerBar() {
       <div className="flex items-center shrink-0 justify-end" style={{ width: "max(260px, 19%)", gap: 6 }}>
         {/* Settings */}
         <button
+          onClick={() => navigateTo({ tab: "settings" })}
+          title="Settings"
           className="flex items-center justify-center shrink-0"
           style={{ width: 40, height: 40, borderRadius: 20, background: "transparent", border: "none", cursor: "pointer", color: "var(--accent)" }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}

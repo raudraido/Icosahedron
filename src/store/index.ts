@@ -4,7 +4,7 @@ import type { QueueTab } from "../components/QueueBottomTabs";
 
 export type Tab =
   | "home" | "nowPlaying" | "albums" | "artists" | "tracks" | "playlists" | "starred"
-  | "mixBuilder" | "visualizer";
+  | "mixBuilder" | "visualizer" | "settings";
 
 export type NavEntry = {
   tab: Tab; album?: Album; artistId?: string; artistQuery?: string; playlist?: Playlist;

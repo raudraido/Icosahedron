@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, protocol, shell } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, nativeTheme, protocol, shell } from "electron";
 import { join } from "node:path";
 import { SubsonicClient } from "./subsonic";
 import { AudioEngineClient } from "./audioEngine";
@@ -163,6 +163,17 @@ function registerIpcHandlers(): void {
   ipcMain.handle("bandsintown_events", (_e, { artistName }) => getBandsintownEvents(artistName));
 
   ipcMain.handle("app_version", () => app.getVersion());
+
+  // Native OS window-frame/titlebar dark-vs-light mode — ports the old app's
+  // enable_dark_title_bar (DwmSetWindowAttribute 20/19 on Windows), which
+  // toggled the native titlebar independent of the in-app theme since Qt's
+  // own chrome didn't know about it. Electron's nativeTheme.themeSource
+  // does the same job cross-platform (Windows titlebar/controls, GTK theme
+  // on Linux) without needing raw DWM calls — set once per theme change from
+  // applyTheme() in the renderer, driven by the theme's own titleBarDark flag.
+  ipcMain.handle("set_window_theme", (_e, { dark }: { dark: boolean }) => {
+    nativeTheme.themeSource = dark ? "dark" : "light";
+  });
 
   // ── Native gapless audio engine (see audioEngine.ts) ────────────────────
   ipcMain.handle("audio_play", (_e, { url, volume, durationHint, manual, startPaused }) =>

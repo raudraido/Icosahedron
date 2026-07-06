@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, Track } from "../lib/api";
 import { AlbumCard, CARD_MIN, GAP, getColsFromWidth } from "./Albums";
@@ -82,19 +82,40 @@ function SectionLabel({ text, count }: { text: string; count: number }) {
   );
 }
 
-function AlbumCarousel({ albums }: { albums: import("../lib/api").Album[] }) {
-  const navigateTo = useStore((s) => s.navigateTo);
+// This tab stays mounted (display:none while hidden — see App.tsx), so a
+// carousel's viewport collapses to 0 width whenever the tab isn't visible.
+// Coming back only re-triggers ResizeObserver's callback *after* the browser
+// has already painted the stale/0-width layout, visible as the row snapping
+// to the right size a frame late (same bug fixed in Home.tsx's album rows).
+// Re-measuring synchronously the instant `active` flips true (before paint)
+// closes that gap.
+function useCarouselViewportWidth(active: boolean) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [viewportWidth, setViewportWidth] = useState(0);
-  const [pageIndex, setPageIndex] = useState(0);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = viewportRef.current;
     if (!el) return;
+    setViewportWidth(el.getBoundingClientRect().width);
     const ro = new ResizeObserver(([entry]) => setViewportWidth(entry.contentRect.width));
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  useLayoutEffect(() => {
+    if (!active) return;
+    const el = viewportRef.current;
+    if (!el) return;
+    setViewportWidth(el.getBoundingClientRect().width);
+  }, [active]);
+
+  return { viewportRef, viewportWidth };
+}
+
+function AlbumCarousel({ albums, active }: { albums: import("../lib/api").Album[]; active: boolean }) {
+  const navigateTo = useStore((s) => s.navigateTo);
+  const { viewportRef, viewportWidth } = useCarouselViewportWidth(active);
+  const [pageIndex, setPageIndex] = useState(0);
 
   const cols = viewportWidth > 0 ? getColsFromWidth(viewportWidth) : 4;
   const cardWidth = viewportWidth > 0 ? (viewportWidth - GAP * (cols - 1)) / cols : CARD_MIN;
@@ -133,19 +154,10 @@ function AlbumCarousel({ albums }: { albums: import("../lib/api").Album[] }) {
   );
 }
 
-function ArtistCarousel({ artists }: { artists: import("../lib/api").Artist[] }) {
+function ArtistCarousel({ artists, active }: { artists: import("../lib/api").Artist[]; active: boolean }) {
   const navigateTo = useStore((s) => s.navigateTo);
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const [viewportWidth, setViewportWidth] = useState(0);
+  const { viewportRef, viewportWidth } = useCarouselViewportWidth(active);
   const [pageIndex, setPageIndex] = useState(0);
-
-  useEffect(() => {
-    const el = viewportRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([entry]) => setViewportWidth(entry.contentRect.width));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
 
   const cols = viewportWidth > 0 ? getColsFromWidth(viewportWidth) : 4;
   const cardWidth = viewportWidth > 0 ? (viewportWidth - GAP * (cols - 1)) / cols : CARD_MIN;
@@ -241,18 +253,9 @@ function TopArtistCard({ entry, selected, onClick }: { entry: TopArtistEntry; se
   );
 }
 
-function TopArtistCarousel({ entries, selectedName, onSelect }: { entries: TopArtistEntry[]; selectedName: string | null; onSelect: (name: string) => void }) {
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const [viewportWidth, setViewportWidth] = useState(0);
+function TopArtistCarousel({ entries, selectedName, onSelect, active }: { entries: TopArtistEntry[]; selectedName: string | null; onSelect: (name: string) => void; active: boolean }) {
+  const { viewportRef, viewportWidth } = useCarouselViewportWidth(active);
   const [pageIndex, setPageIndex] = useState(0);
-
-  useEffect(() => {
-    const el = viewportRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([e]) => setViewportWidth(e.contentRect.width));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
 
   const cols = viewportWidth > 0 ? getColsFromWidth(viewportWidth) : 4;
   const cardWidth = viewportWidth > 0 ? (viewportWidth - GAP * (cols - 1)) / cols : CARD_MIN;
@@ -288,6 +291,7 @@ function TopArtistCarousel({ entries, selectedName, onSelect }: { entries: TopAr
 }
 
 export function Starred() {
+  const active = useStore((s) => s.activeTab === "starred");
   const playTrack = useStore((s) => s.playTrack);
   const navigateTo = useStore((s) => s.navigateTo);
   const [genreFilter, setGenreFilter] = useState<Set<string>>(new Set());
@@ -363,9 +367,9 @@ export function Starred() {
             <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>Loading…</p>
           )}
 
-          {data && <ArtistCarousel artists={data.artists} />}
-          {data && <AlbumCarousel albums={data.albums} />}
-          <TopArtistCarousel entries={topArtists} selectedName={artistFilter} onSelect={selectTopArtist} />
+          {data && <ArtistCarousel artists={data.artists} active={active} />}
+          {data && <AlbumCarousel albums={data.albums} active={active} />}
+          <TopArtistCarousel entries={topArtists} selectedName={artistFilter} onSelect={selectTopArtist} active={active} />
 
           {data && (
             <div className="flex flex-col" style={{ gap: 10 }}>

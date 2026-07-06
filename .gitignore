@@ -23,6 +23,11 @@ native/**/*.node
 native/audio-engine/index.js
 native/audio-engine/index.d.ts
 
+# Old PyQt app (kept in the editor workspace for reference during the port,
+# lives as a sibling directory — not actually nested in this repo, but
+# ignored defensively in case it ever ends up copied/symlinked in).
+sonar/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

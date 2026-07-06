@@ -68,6 +68,13 @@ interface AppStore {
   repeat: boolean;
   volume: number;
   currentTime: number;
+  /** Unfloored `currentTime`, plus the `performance.now()` it was received
+   *  at — lets high-frequency consumers (lyric sync) interpolate a smooth
+   *  position between the native engine's throttled (~1.5s) progress ticks,
+   *  instead of visibly lagging behind the audio. Mirrors the old app's QML
+   *  positionClock, which extrapolated between its own decoder polls. */
+  currentTimeRaw: number;
+  currentTimeAnchorMs: number;
   duration: number;
   /** Gapless bookkeeping — the track (and its queue index at commit time)
    *  chosen when chain-preload fired ~30s before the current track's end.
@@ -145,6 +152,13 @@ function computeNextTrack(
   const index = currentIndex + 1;
   const track = queue[index];
   return track ? { track, index } : null;
+}
+
+/** `currentTime` (+ its unfloored/anchored companions) patch for every place
+ *  playback position is set, so lyric sync's interpolation always has a
+ *  fresh, accurate anchor — see `currentTimeRaw` above. */
+function positionPatch(secs: number) {
+  return { currentTime: Math.floor(secs), currentTimeRaw: secs, currentTimeAnchorMs: performance.now() };
 }
 
 export const useStore = create<AppStore>((set, get) => ({
@@ -237,6 +251,8 @@ export const useStore = create<AppStore>((set, get) => ({
   repeat: false,
   volume: 100,
   currentTime: 0,
+  currentTimeRaw: 0,
+  currentTimeAnchorMs: 0,
   duration: 0,
   _committedNext: null,
   _committedNextIndex: null,
@@ -257,7 +273,7 @@ export const useStore = create<AppStore>((set, get) => ({
       queue: resolvedQueue,
       currentIndex: idx,
       playing: true,
-      currentTime: 0,
+      ...positionPatch(0),
       duration: track.duration_secs || 0,
       _committedNext: null,
       _committedNextIndex: null,
@@ -273,7 +289,7 @@ export const useStore = create<AppStore>((set, get) => ({
 
   stop: () => {
     api.audioStop();
-    set({ playing: false, currentTime: 0 });
+    set({ playing: false, ...positionPatch(0) });
   },
 
   next: () => {
@@ -286,7 +302,7 @@ export const useStore = create<AppStore>((set, get) => ({
     const { queue, currentIndex, currentTime, playTrack } = get();
     if (currentTime > 3) {
       api.audioSeek(0);
-      set({ currentTime: 0 });
+      set(positionPatch(0));
       return;
     }
     const prevTrack = queue[currentIndex - 1];
@@ -295,7 +311,7 @@ export const useStore = create<AppStore>((set, get) => ({
 
   setCurrentTime: (secs) => {
     api.audioSeek(secs);
-    set({ currentTime: secs });
+    set(positionPatch(secs));
   },
 
   setVolume: (v) => {
@@ -310,7 +326,7 @@ export const useStore = create<AppStore>((set, get) => ({
   clearQueue: () => {
     api.audioStop();
     set({
-      queue: [], currentIndex: -1, playing: false, currentTime: 0, duration: 0,
+      queue: [], currentIndex: -1, playing: false, ...positionPatch(0), duration: 0,
       _committedNext: null, _committedNextIndex: null, _chainedForTrackId: null,
     });
   },
@@ -360,7 +376,7 @@ export const useStore = create<AppStore>((set, get) => ({
       // The removed track was the one playing — stop rather than adopt a new one.
       api.audioStop();
       set({
-        queue: next, currentIndex: -1, playing: false, currentTime: 0, duration: 0,
+        queue: next, currentIndex: -1, playing: false, ...positionPatch(0), duration: 0,
         _committedNext: null, _committedNextIndex: null, _chainedForTrackId: null,
       });
     } else {
@@ -429,7 +445,7 @@ export const useStore = create<AppStore>((set, get) => ({
 
     set({
       queue: saved.queue, currentIndex: saved.currentIndex, playing: false,
-      currentTime: saved.positionSecs, duration: track.duration_secs || 0,
+      ...positionPatch(saved.positionSecs), duration: track.duration_secs || 0,
       _committedNext: null, _committedNextIndex: null, _chainedForTrackId: null,
     });
 
@@ -451,9 +467,10 @@ function handleAudioEvent(payload: AudioEventPayload) {
   const s = useStore.getState();
   switch (payload.kind) {
     case "progress": {
-      const currentTime = Math.floor(payload.currentTime ?? 0);
+      const rawTime = payload.currentTime ?? 0;
       const duration = Math.floor(payload.duration ?? 0);
-      useStore.setState({ currentTime, duration });
+      const currentTime = Math.floor(rawTime);
+      useStore.setState({ ...positionPatch(rawTime), duration });
 
       // ~30s-before-end gapless chain trigger (mirrors the old native
       // engine's own preload-at-track-start, just window-based instead of
@@ -494,7 +511,7 @@ function handleAudioEvent(payload: AudioEventPayload) {
       }
       useStore.setState({
         currentIndex: newIndex,
-        currentTime: 0,
+        ...positionPatch(0),
         duration,
         playing: true,
         _committedNext: null,

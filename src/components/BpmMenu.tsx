@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 // Footer BPM correction menu — ratio shortcuts (Half/2:3/3:4/4:3/3:2/Double,
 // close the menu on click) plus an embedded stepper row (ported from the old
@@ -56,7 +57,11 @@ export function BpmMenu({ x, y, bpm, onApply, onClose }: {
     onApply(next);
   }
 
-  return (
+  // Portal straight onto <body> — see ContextMenu.tsx's comment: a scrolled
+  // ancestor with `will-change: transform` (.scroll-clean) otherwise becomes
+  // the containing block for this `position: fixed` popup instead of the
+  // viewport.
+  return createPortal(
     <div
       ref={ref}
       onContextMenu={(e) => e.preventDefault()}
@@ -85,7 +90,8 @@ export function BpmMenu({ x, y, bpm, onApply, onClose }: {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

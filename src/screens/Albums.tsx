@@ -8,7 +8,7 @@ import { Icon } from "../components/Icon";
 import { PlayRingButton } from "../components/PlayRingButton";
 import { CoverZoomOverlay } from "../components/CoverZoomOverlay";
 import { ArtistTokens } from "../components/ArtistTokens";
-import { TrackTable } from "../components/TrackTable";
+import { TrackTable, loadJSON, saveJSON } from "../components/TrackTable";
 import { IconBtn } from "../components/IconBtn";
 import { SearchBox } from "../components/SearchBox";
 import { SkeletonCard } from "../components/Skeleton";
@@ -343,9 +343,12 @@ function AlbumDetail({ album }: { album: Album }) {
   );
 }
 
+const LS_ALBUMS_SORT = "albums_sort";
+const LS_ALBUMS_SORT_STATES = "albums_sort_states";
+
 export function Albums() {
-  const [sort, setSort] = useState("newest");
-  const [sortStates, setSortStates] = useState<Record<string, boolean>>({});
+  const [sort, setSort] = useState(() => loadJSON(LS_ALBUMS_SORT, "newest"));
+  const [sortStates, setSortStates] = useState<Record<string, boolean>>(() => loadJSON(LS_ALBUMS_SORT_STATES, {}));
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
@@ -354,6 +357,9 @@ export function Albums() {
   const selected = useStore((s) => s.navHistory[s.navPos]?.album ?? null);
 
   const isAscending = (sortKey: string) => sortStates[sortKey] ?? defaultAscending(sortKey);
+
+  useEffect(() => saveJSON(LS_ALBUMS_SORT, sort), [sort]);
+  useEffect(() => saveJSON(LS_ALBUMS_SORT_STATES, sortStates), [sortStates]);
 
   function selectSort(newSort: string) {
     if (newSort === "starred" || newSort === "compilations") {

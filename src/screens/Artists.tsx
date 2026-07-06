@@ -10,6 +10,7 @@ import { SearchBox } from "../components/SearchBox";
 import { SkeletonCard } from "../components/Skeleton";
 import { ArtistDetail, fetchArtistPlaybackTracks } from "./ArtistDetail";
 import { PLAY_ICON_DARK } from "../lib/theme";
+import { loadJSON, saveJSON } from "../components/TrackTable";
 
 const SORT_OPTIONS = [
   { value: "random",       label: "Random"       },
@@ -180,9 +181,12 @@ function ArtistGrid({ artists, loading, onOpen }: { artists: Artist[]; loading: 
   );
 }
 
+const LS_ARTISTS_SORT = "artists_sort";
+const LS_ARTISTS_SORT_STATES = "artists_sort_states";
+
 export function Artists() {
-  const [sort, setSort] = useState("most_played");
-  const [sortStates, setSortStates] = useState<Record<string, boolean>>({});
+  const [sort, setSort] = useState(() => loadJSON(LS_ARTISTS_SORT, "most_played"));
+  const [sortStates, setSortStates] = useState<Record<string, boolean>>(() => loadJSON(LS_ARTISTS_SORT_STATES, {}));
   const [randomNonce, setRandomNonce] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
@@ -194,6 +198,9 @@ export function Artists() {
   const [searchText, setSearchText] = useState(navQuery);
 
   const isAscending = (sortKey: string) => sortStates[sortKey] ?? defaultAscending(sortKey);
+
+  useEffect(() => saveJSON(LS_ARTISTS_SORT, sort), [sort]);
+  useEffect(() => saveJSON(LS_ARTISTS_SORT_STATES, sortStates), [sortStates]);
 
   function selectSort(newSort: string) {
     if (sort === newSort) {

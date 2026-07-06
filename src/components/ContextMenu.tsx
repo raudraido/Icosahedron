@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "./Icon";
 
 // Shared right-click context menu primitive — mirrors the old app's
@@ -61,7 +62,13 @@ export function ContextMenu({ x, y, items, onClose }: Props) {
     onClose();
   }
 
-  return (
+  // Rendered via portal straight onto <body> — any scrollable ancestor with
+  // `will-change: transform` (see .scroll-clean in index.css) becomes a
+  // containing block for `position: fixed` descendants, which put this menu
+  // at a wild offset (anchored to the scrolled container instead of the
+  // viewport) whenever it opened from inside a scrolled page, e.g. the
+  // Favorites tab's tracklist. A portal sidesteps the ancestor chain entirely.
+  return createPortal(
     <div
       ref={ref}
       onContextMenu={(e) => e.preventDefault()}
@@ -79,7 +86,8 @@ export function ContextMenu({ x, y, items, onClose }: Props) {
           ? <div key={i} style={{ height: 1, background: "var(--border)", margin: "4px 0" }} />
           : <MenuRow key={i} item={entry} onSelect={select} />
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }
 

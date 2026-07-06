@@ -35,7 +35,7 @@ const SHAPE_NAMES = Object.keys(SHAPES) as ShapeName[];
 function rotate(shape: Shape): Shape {
   const rows = shape.length, cols = shape[0].length;
   const out: Shape = Array.from({ length: cols }, () => Array(rows).fill(0));
-  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) out[cols - 1 - c][r] = shape[r][c];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) out[c][rows - 1 - r] = shape[r][c];
   return out;
 }
 
@@ -68,7 +68,7 @@ function speedForLevel(level: number): number {
   return Math.max(80, 500 - (level - 1) * 40);
 }
 
-function FlatButton({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
+export function FlatButton({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
   return (
     <button
       onClick={onClick}

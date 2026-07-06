@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "./Icon";
 
 // Excel-style column filter popup for the Tracks tab's Artist/Album/Genre/
@@ -120,7 +121,11 @@ export function ColumnFilterPopup({ x, y, allValues, activeValues, isIdBased, on
     onClose();
   }
 
-  return (
+  // Portal straight onto <body> — see ContextMenu.tsx's comment: a scrolled
+  // ancestor with `will-change: transform` (.scroll-clean) otherwise becomes
+  // the containing block for this `position: fixed` popup instead of the
+  // viewport, e.g. when opened from the Favorites tab's whole-page scroll.
+  return createPortal(
     <div
       ref={ref}
       style={{
@@ -192,7 +197,8 @@ export function ColumnFilterPopup({ x, y, allValues, activeValues, isIdBased, on
           OK
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -58,7 +58,6 @@ function ToolbarButton({ children, onClick, title }: { children: React.ReactNode
 export function LyricsPanel({ active }: { active: boolean }) {
   const queue = useStore((s) => s.queue);
   const currentIndex = useStore((s) => s.currentIndex);
-  const currentTime = useStore((s) => s.currentTime);
   const setCurrentTime = useStore((s) => s.setCurrentTime);
   const track = queue[currentIndex] ?? null;
 
@@ -139,22 +138,40 @@ export function LyricsPanel({ active }: { active: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
-  // Synced-lyrics highlight, driven by the same currentTime the footer's
-  // waveform/position already tracks — matches update_lyrics_position, just
-  // sourced from the store instead of a dedicated Qt signal.
+  // Synced-lyrics highlight. The native engine only pushes a progress tick
+  // every ~1.5s (see progress_task.rs's PROGRESS_EMIT_MIN_MS) — driving this
+  // off that raw store value made lyrics visibly lag behind the audio, since
+  // the highlighted line wouldn't advance until the next throttled tick
+  // arrived. Instead, run our own rAF clock that extrapolates from the last
+  // known position (currentTimeRaw) using wall-clock time elapsed since it
+  // was received (currentTimeAnchorMs) — matches the old app's QML
+  // positionClock, which smoothed/extrapolated between decoder polls the
+  // same way. Reads the store directly rather than via the `useStore` hook
+  // so this doesn't force a re-render on every store update, just once per
+  // animation frame.
   useEffect(() => {
     if (!parsed || parsed.kind !== "synced") return;
-    const idx = findActiveIndex(parsed.lines, currentTime * 1000 + offsetMs);
-    if (idx === activeIdx) return;
-    setActiveIdx(idx);
-    const el = idx >= 0 ? lineRefs.current.get(idx) : null;
-    const container = scrollRef.current;
-    if (el && container) {
-      const target = el.offsetTop - container.clientHeight * 0.5;
-      container.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
+    const lines = parsed.lines;
+    let raf = 0;
+    function tick() {
+      const s = useStore.getState();
+      const posSecs = s.playing ? s.currentTimeRaw + (performance.now() - s.currentTimeAnchorMs) / 1000 : s.currentTimeRaw;
+      const idx = findActiveIndex(lines, posSecs * 1000 + offsetMs);
+      setActiveIdx((prev) => {
+        if (idx === prev) return prev;
+        const el = idx >= 0 ? lineRefs.current.get(idx) : null;
+        const container = scrollRef.current;
+        if (el && container) {
+          const target = el.offsetTop - container.clientHeight * 0.5;
+          container.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
+        }
+        return idx;
+      });
+      raf = requestAnimationFrame(tick);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentTime, offsetMs, parsed]);
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [offsetMs, parsed]);
 
   async function toggleSave() {
     if (!track) return;

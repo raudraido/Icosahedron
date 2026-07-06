@@ -3,6 +3,13 @@ import { useStore } from "../store";
 import { CoverArt } from "./CoverArt";
 import { Icon } from "./Icon";
 import { TetrisWidget } from "./TetrisWidget";
+import { PongWidget } from "./PongWidget";
+import { SpaceInvadersWidget } from "./SpaceInvadersWidget";
+import { BreakoutWidget } from "./BreakoutWidget";
+import { XonixWidget } from "./XonixWidget";
+import { ContextMenu } from "./ContextMenu";
+
+type GameId = "tetris" | "pong" | "spaceInvaders" | "breakout" | "xonix";
 
 // Matches left_panel.qml's artTargetSize = leftPanel.width() - 16 (8px margin
 // each side) — our left panel is a fixed 297px, so this is a constant rather
@@ -58,18 +65,22 @@ export function LeftPanel() {
 
   // Easter egg — ported from the old app's 7-rapid-clicks-on-Home-tab
   // Tetris trigger (window.py:1066-1082), retargeted to 3 clicks on the
-  // logo instead. Same 600ms "must be rapid" reset window.
-  const [tetrisOpen, setTetrisOpen] = useState(false);
+  // logo instead. Same 600ms "must be rapid" reset window. Now opens a game
+  // picker next to the logo rather than jumping straight to Tetris, since
+  // there's more than one game to choose from.
+  const [activeGame, setActiveGame] = useState<GameId | null>(null);
+  const [gameMenuPos, setGameMenuPos] = useState<{ x: number; y: number } | null>(null);
   const logoClickCountRef = useRef(0);
   const logoClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  function handleLogoClick() {
+  function handleLogoClick(e: React.MouseEvent<HTMLDivElement>) {
     logoClickCountRef.current += 1;
     if (logoClickTimerRef.current) clearTimeout(logoClickTimerRef.current);
     logoClickTimerRef.current = setTimeout(() => { logoClickCountRef.current = 0; }, 600);
     if (logoClickCountRef.current >= 3) {
       logoClickCountRef.current = 0;
       clearTimeout(logoClickTimerRef.current);
-      setTetrisOpen(true);
+      const rect = e.currentTarget.getBoundingClientRect();
+      setGameMenuPos({ x: rect.right + 8, y: rect.top });
     }
   }
 
@@ -157,8 +168,27 @@ export function LeftPanel() {
           </div>
         </div>
 
-        {tetrisOpen && <TetrisWidget onClose={() => setTetrisOpen(false)} />}
+        {activeGame === "tetris" && <TetrisWidget onClose={() => setActiveGame(null)} />}
+        {activeGame === "pong" && <PongWidget onClose={() => setActiveGame(null)} />}
+        {activeGame === "spaceInvaders" && <SpaceInvadersWidget onClose={() => setActiveGame(null)} />}
+        {activeGame === "breakout" && <BreakoutWidget onClose={() => setActiveGame(null)} />}
+        {activeGame === "xonix" && <XonixWidget onClose={() => setActiveGame(null)} />}
       </div>
+
+      {gameMenuPos && (
+        <ContextMenu
+          x={gameMenuPos.x}
+          y={gameMenuPos.y}
+          items={[
+            { label: "Tetris", onClick: () => setActiveGame("tetris") },
+            { label: "Pong", onClick: () => setActiveGame("pong") },
+            { label: "Space Invaders", onClick: () => setActiveGame("spaceInvaders") },
+            { label: "Breakout", onClick: () => setActiveGame("breakout") },
+            { label: "Xonix", onClick: () => setActiveGame("xonix") },
+          ]}
+          onClose={() => setGameMenuPos(null)}
+        />
+      )}
     </div>
   );
 }

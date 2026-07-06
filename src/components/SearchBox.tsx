@@ -53,11 +53,11 @@ export function SearchBox({
               display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
             }}
           >
-            <Icon src="/img/sub_close.png" size={10} style={{ background: "var(--text-secondary)" }} />
+            <Icon src="img/sub_close.png" size={10} style={{ background: "var(--text-secondary)" }} />
           </button>
         )}
       </div>
-      <IconBtn src="/img/search.png" active={open} title="Search" onClick={onToggle} />
+      <IconBtn src="img/search.png" active={open} title="Search" onClick={onToggle} />
     </>
   );
 }

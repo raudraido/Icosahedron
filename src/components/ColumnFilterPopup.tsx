@@ -132,10 +132,10 @@ export function ColumnFilterPopup({ x, y, allValues, activeValues, isIdBased, on
         fontSize: "var(--fs-secondary)",
       }}
     >
-      <ActionRow icon="/img/filter_up.png" label="Sort ascending" onClick={() => sort("asc")} />
-      <ActionRow icon="/img/filter_down.png" label="Sort descending" onClick={() => sort("desc")} />
+      <ActionRow icon="img/filter_up.png" label="Sort ascending" onClick={() => sort("asc")} />
+      <ActionRow icon="img/filter_down.png" label="Sort descending" onClick={() => sort("desc")} />
       <ActionRow
-        icon="/img/filter_off-2.png"
+        icon="img/filter_off-2.png"
         label="Clear filter"
         onClick={clearFilter}
         enabled={hasActiveFilter}

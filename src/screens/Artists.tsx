@@ -25,8 +25,8 @@ function defaultAscending(sortKey: string): boolean {
 
 // Matches the old app's _sort_icon_path — albums_count has no directional icon variant.
 function getSortIcon(sortKey: string, ascending: boolean): string {
-  if (sortKey === "albums_count") return "/img/album.png";
-  return `/img/sort-${sortKey}-${ascending ? "a" : "d"}.png`;
+  if (sortKey === "albums_count") return "img/album.png";
+  return `img/sort-${sortKey}-${ascending ? "a" : "d"}.png`;
 }
 
 function shuffleArray<T>(arr: T[]): T[] {
@@ -86,7 +86,7 @@ const ArtistCard = React.memo(function ArtistCard({ artist, onOpen }: { artist: 
             cursor: "pointer",
           }}
         >
-          <Icon src="/img/play.png" size={20} style={{ background: PLAY_ICON_DARK, marginLeft: 2 }} />
+          <Icon src="img/play.png" size={20} style={{ background: PLAY_ICON_DARK, marginLeft: 2 }} />
         </div>
       </div>
       <div className="flex flex-col" style={{ marginTop: 8, gap: 2 }}>

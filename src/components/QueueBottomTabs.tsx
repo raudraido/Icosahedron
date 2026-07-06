@@ -4,9 +4,9 @@ import { Icon } from "./Icon";
 export type QueueTab = "queue" | "lyrics" | "info";
 
 const TABS: { id: QueueTab; icon: string; label: string }[] = [
-  { id: "queue", icon: "/img/queue.png", label: "Queue" },
-  { id: "lyrics", icon: "/img/lyrics.png", label: "Lyrics" },
-  { id: "info", icon: "/img/info.png", label: "Info" },
+  { id: "queue", icon: "img/queue.png", label: "Queue" },
+  { id: "lyrics", icon: "img/lyrics.png", label: "Lyrics" },
+  { id: "info", icon: "img/info.png", label: "Info" },
 ];
 
 // Matches queue_panel.py's _TabButton + bottom_bar exactly: 52px bar, 3 equal-

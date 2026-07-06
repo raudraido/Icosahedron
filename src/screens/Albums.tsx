@@ -36,11 +36,11 @@ function defaultAscending(sortKey: string): boolean {
 }
 
 function getSortIcon(sortKey: string, ascending: boolean): string {
-  if (sortKey === "starred") return "/img/heart.png";
-  if (sortKey === "compilations") return "/img/comp.png";
-  if (sortKey === "song_count") return `/img/sort-num-${ascending ? "asc" : "desc"}.png`;
+  if (sortKey === "starred") return "img/heart.png";
+  if (sortKey === "compilations") return "img/comp.png";
+  if (sortKey === "song_count") return `img/sort-num-${ascending ? "asc" : "desc"}.png`;
   const iconKey = SORT_ICON_KEY[sortKey] ?? sortKey;
-  return `/img/sort-${iconKey}-${ascending ? "a" : "d"}.png`;
+  return `img/sort-${iconKey}-${ascending ? "a" : "d"}.png`;
 }
 
 
@@ -85,7 +85,7 @@ const AlbumCard = React.memo(function AlbumCard({ album, onOpen }: { album: Albu
             cursor: "pointer",
           }}
         >
-          <Icon src="/img/play.png" size={20} style={{ background: PLAY_ICON_DARK, marginLeft: 2 }} />
+          <Icon src="img/play.png" size={20} style={{ background: PLAY_ICON_DARK, marginLeft: 2 }} />
         </div>
       </div>
       <div className="flex flex-col" style={{ marginTop: 8, gap: 2 }}>
@@ -285,7 +285,7 @@ function AlbumDetail({ album }: { album: Album }) {
             </p>
 
             <div className="flex items-center" style={{ gap: 10, marginTop: 16 }}>
-              <PlayRingButton icon="/img/play.png" onClick={handlePlay} title="Play Album" />
+              <PlayRingButton icon="img/play.png" onClick={handlePlay} title="Play Album" />
 
               <button
                 onClick={handleShuffle}
@@ -299,7 +299,7 @@ function AlbumDetail({ album }: { album: Album }) {
                   transition: "background 150ms",
                 }}
               >
-                <Icon src="/img/shuffle.png" size={20} style={{ background: "var(--text-secondary)" }} />
+                <Icon src="img/shuffle.png" size={20} style={{ background: "var(--text-secondary)" }} />
               </button>
 
               <button
@@ -314,7 +314,7 @@ function AlbumDetail({ album }: { album: Album }) {
                   transition: "background 150ms",
                 }}
               >
-                <Icon src={starred ? "/img/heart_filled.png" : "/img/heart.png"} size={22} style={{ background: starred ? FAVORITE_PINK : "var(--text-secondary)" }} />
+                <Icon src={starred ? "img/heart_filled.png" : "img/heart.png"} size={22} style={{ background: starred ? FAVORITE_PINK : "var(--text-secondary)" }} />
               </button>
             </div>
           </div>

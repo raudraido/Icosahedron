@@ -204,7 +204,7 @@ export function Tracks() {
             {filtersActive && (
               <>
                 <PlayFilteredButton onPlay={handlePlayFiltered} onShuffle={handleShuffleFiltered} />
-                <ToolbarIconButton src="/img/filter_off-2.png" title="Clear filters" onClick={handleClearAllFilters} />
+                <ToolbarIconButton src="img/filter_off-2.png" title="Clear filters" onClick={handleClearAllFilters} />
               </>
             )}
             <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-primary)", fontWeight: 600, marginLeft: filtersActive ? 4 : 0 }}>
@@ -214,7 +214,7 @@ export function Tracks() {
         }
         toolbarRight={
           <IconBtn
-            src="/img/refresh.png"
+            src="img/refresh.png"
             title="Refresh server library"
             onClick={handleRefresh}
             spinning={refreshing}
@@ -292,7 +292,7 @@ function PlayFilteredButton({ onPlay, onShuffle }: { onPlay: () => void; onShuff
       className="flex items-center justify-center"
       style={{ width: 32, height: 32, borderRadius: 4, background: hov ? "var(--hover-bg)" : "transparent", border: "none", cursor: "pointer" }}
     >
-      <Icon src="/img/play-button.png" size={18} style={{ background: "var(--accent)" }} />
+      <Icon src="img/play-button.png" size={18} style={{ background: "var(--accent)" }} />
     </button>
   );
 }

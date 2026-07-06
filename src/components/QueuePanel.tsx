@@ -59,7 +59,7 @@ function QueueFavoriteHeart({ track }: { track: Track }) {
       style={{ width: 28, background: "none", border: "none", cursor: "pointer", display: "flex", justifyContent: "center", padding: 0, flexShrink: 0 }}
     >
       <Icon
-        src={starred ? "/img/heart_filled.png" : "/img/heart.png"}
+        src={starred ? "img/heart_filled.png" : "img/heart.png"}
         size={16}
         style={{
           background: starred ? FAVORITE_PINK : "var(--text-secondary)",
@@ -277,30 +277,30 @@ export function QueuePanel() {
 
   function buildQueueMenu(track: Track): MenuEntry[] {
     return [
-      { label: "Play Now", icon: "/img/sub_play.png", onClick: () => playTrack(track, queue) },
-      { label: "Play Next", icon: "/img/sub_next.png", onClick: () => addTrackNext(track) },
-      { label: "Go to Artist", icon: "/img/sub_artist.png", disabled: !track.artist_id, onClick: () => track.artist_id && navigateTo({ tab: "artists", artistId: track.artist_id }) },
-      { label: "Open Album", icon: "/img/album.png", disabled: !track.album_id, onClick: () => openAlbum(track) },
-      { label: "Start Radio", icon: "/img/radio.png", onClick: () => startRadio(track) },
+      { label: "Play Now", icon: "img/sub_play.png", onClick: () => playTrack(track, queue) },
+      { label: "Play Next", icon: "img/sub_next.png", onClick: () => addTrackNext(track) },
+      { label: "Go to Artist", icon: "img/sub_artist.png", disabled: !track.artist_id, onClick: () => track.artist_id && navigateTo({ tab: "artists", artistId: track.artist_id }) },
+      { label: "Open Album", icon: "img/album.png", disabled: !track.album_id, onClick: () => openAlbum(track) },
+      { label: "Start Radio", icon: "img/radio.png", onClick: () => startRadio(track) },
       {
-        label: "Add to Playlist", icon: "/img/playlist.png",
+        label: "Add to Playlist", icon: "img/playlist.png",
         submenu: [
-          { label: "New Playlist…", icon: "/img/add.png", onClick: () => setNewPlaylistFor(track) },
+          { label: "New Playlist…", icon: "img/add.png", onClick: () => setNewPlaylistFor(track) },
           ...playlists.map((p) => ({
             label: `${p.name}  (${p.song_count})`,
-            icon: "/img/playlist.png",
+            icon: "img/playlist.png",
             onClick: () => addToExistingPlaylist(p.id, track),
           })),
         ],
       },
-      { label: "Get Info", icon: "/img/info.png", onClick: () => setInfoTrack(track) },
+      { label: "Get Info", icon: "img/info.png", onClick: () => setInfoTrack(track) },
       {
         label: track.starred ? "Remove from Favorites" : "Add to Favorites",
-        icon: track.starred ? "/img/heart_filled.png" : "/img/heart.png",
+        icon: track.starred ? "img/heart_filled.png" : "img/heart.png",
         color: FAVORITE_PINK,
         onClick: () => toggleFavoriteFromMenu(track),
       },
-      { label: "Remove from Queue", icon: "/img/remove.png", onClick: () => removeFromQueue(track.id) },
+      { label: "Remove from Queue", icon: "img/remove.png", onClick: () => removeFromQueue(track.id) },
     ];
   }
 
@@ -394,7 +394,7 @@ export function QueuePanel() {
             onMouseEnter={(e) => (e.currentTarget.style.color = "#aaaaaa")}
             onMouseLeave={(e) => (e.currentTarget.style.color = "#555555")}
           >
-            <Icon src="/img/trash.png" size={18} />
+            <Icon src="img/trash.png" size={18} />
           </button>
         )}
       </div>

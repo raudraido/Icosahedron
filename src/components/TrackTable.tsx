@@ -216,7 +216,7 @@ function FilterIcon({ active, onClick }: { active: boolean; onClick: (e: React.M
       onMouseLeave={() => setHov(false)}
       style={{ width: 14, height: 14, flexShrink: 0, cursor: "pointer" }}
     >
-      <Icon src="/img/filter.png" size={14} style={{ background: hov || active ? "var(--accent)" : "var(--text-secondary)" }} />
+      <Icon src="img/filter.png" size={14} style={{ background: hov || active ? "var(--accent)" : "var(--text-secondary)" }} />
     </div>
   );
 }
@@ -273,7 +273,7 @@ function FavoriteHeart({ track }: { track: Track }) {
       style={{ background: "none", border: "none", cursor: "pointer", display: "flex", padding: 0 }}
     >
       <Icon
-        src={starred ? "/img/heart_filled.png" : "/img/heart.png"}
+        src={starred ? "img/heart_filled.png" : "img/heart.png"}
         size={16}
         style={{ background: starred ? FAVORITE_PINK : hov ? "var(--accent)" : "var(--text-secondary)" }}
       />
@@ -570,14 +570,14 @@ export function TrackTable({
   function buildFilterByItems(track: Track): MenuItem[] {
     const items: MenuItem[] = [];
     if (filterableCols.includes("album") && onFilterChange && track.album) {
-      items.push({ label: `Album: ${track.album}`, icon: "/img/album.png", onClick: () => onFilterChange("album", new Set([track.album!])) });
+      items.push({ label: `Album: ${track.album}`, icon: "img/album.png", onClick: () => onFilterChange("album", new Set([track.album!])) });
     }
     if (filterableCols.includes("artist") && onFilterChange && track.artist) {
       const names = track.artist.split(ARTIST_SEP_RE)
         .filter((part) => part.trim() && !ARTIST_SEP_RE.test(part))
         .map((part) => part.trim());
       for (const name of names) {
-        items.push({ label: `Artist: ${name}`, icon: "/img/sub_artist.png", onClick: () => onFilterChange("artist", new Set([name])) });
+        items.push({ label: `Artist: ${name}`, icon: "img/sub_artist.png", onClick: () => onFilterChange("artist", new Set([name])) });
       }
     }
     return items;
@@ -586,27 +586,27 @@ export function TrackTable({
   function buildTrackMenu(track: Track): MenuEntry[] {
     const filterByItems = buildFilterByItems(track);
     return [
-      { label: "Play Now", icon: "/img/sub_play.png", onClick: () => playTrack(track, [track]) },
-      { label: "Play Next", icon: "/img/sub_next.png", onClick: () => addTrackNext(track) },
-      { label: "Add to Queue", icon: "/img/queue.png", onClick: () => addTrackToQueue(track) },
-      { label: "Go to Artist", icon: "/img/sub_artist.png", disabled: !track.artist_id, onClick: () => track.artist_id && navigateTo({ tab: "artists", artistId: track.artist_id }) },
-      { label: "Start Radio", icon: "/img/radio.png", onClick: () => startRadio(track) },
+      { label: "Play Now", icon: "img/sub_play.png", onClick: () => playTrack(track, [track]) },
+      { label: "Play Next", icon: "img/sub_next.png", onClick: () => addTrackNext(track) },
+      { label: "Add to Queue", icon: "img/queue.png", onClick: () => addTrackToQueue(track) },
+      { label: "Go to Artist", icon: "img/sub_artist.png", disabled: !track.artist_id, onClick: () => track.artist_id && navigateTo({ tab: "artists", artistId: track.artist_id }) },
+      { label: "Start Radio", icon: "img/radio.png", onClick: () => startRadio(track) },
       {
-        label: "Add to Playlist", icon: "/img/playlist.png",
+        label: "Add to Playlist", icon: "img/playlist.png",
         submenu: [
-          { label: "New Playlist…", icon: "/img/add.png", onClick: () => setNewPlaylistFor(track) },
+          { label: "New Playlist…", icon: "img/add.png", onClick: () => setNewPlaylistFor(track) },
           ...playlists.map((p) => ({
             label: `${p.name}  (${p.song_count})`,
-            icon: "/img/playlist.png",
+            icon: "img/playlist.png",
             onClick: () => addToExistingPlaylist(p.id, track),
           })),
         ],
       },
-      ...(filterByItems.length ? [{ label: "Filter by", icon: "/img/filter.png", submenu: filterByItems }] : []),
-      { label: "Get Info", icon: "/img/info.png", onClick: () => setInfoTrack(track) },
+      ...(filterByItems.length ? [{ label: "Filter by", icon: "img/filter.png", submenu: filterByItems }] : []),
+      { label: "Get Info", icon: "img/info.png", onClick: () => setInfoTrack(track) },
       {
         label: track.starred ? "Remove from Favorites" : "Add to Favorites",
-        icon: track.starred ? "/img/heart_filled.png" : "/img/heart.png",
+        icon: track.starred ? "img/heart_filled.png" : "img/heart.png",
         color: FAVORITE_PINK,
         onClick: () => toggleFavoriteFromMenu(track),
       },
@@ -732,7 +732,7 @@ export function TrackTable({
         />
         {toolbarRight}
         <div ref={pickerRef} style={{ position: "relative" }}>
-          <IconBtn src="/img/burger.png" active={pickerOpen} title="Columns" onClick={() => setPickerOpen((v) => !v)} />
+          <IconBtn src="img/burger.png" active={pickerOpen} title="Columns" onClick={() => setPickerOpen((v) => !v)} />
           {pickerOpen && (
             <div style={{
               position: "absolute", top: "calc(100% + 6px)", right: 0,
@@ -755,7 +755,7 @@ export function TrackTable({
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
-                  <Icon src="/img/yes.png" size={12} style={{ background: "var(--accent)", opacity: colVisibility[id] ? 1 : 0 }} />
+                  <Icon src="img/yes.png" size={12} style={{ background: "var(--accent)", opacity: colVisibility[id] ? 1 : 0 }} />
                   {MENU_LABELS[id]}
                 </button>
               ))}

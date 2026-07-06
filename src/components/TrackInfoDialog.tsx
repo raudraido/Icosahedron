@@ -54,7 +54,7 @@ function BoolRow({ label, value }: { label: string; value: boolean | undefined }
   return (
     <div className="flex items-center" style={{ padding: "6px 0", borderBottom: "1px solid var(--border)" }}>
       <span style={{ width: 110, flexShrink: 0, color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>{label}</span>
-      <Icon src={value ? "/img/yes.png" : "/img/no.png"} size={14} style={{ background: value ? "#4caf50" : "#f44336" }} />
+      <Icon src={value ? "img/yes.png" : "img/no.png"} size={14} style={{ background: value ? "#4caf50" : "#f44336" }} />
     </div>
   );
 }
@@ -79,7 +79,7 @@ function PathRow({ path }: { path: string | null | undefined }) {
           title={copied ? "Copied!" : "Copy path"}
           style={{ background: "none", border: "none", cursor: "pointer", padding: 2, display: "flex", flexShrink: 0 }}
         >
-          <Icon src={copied ? "/img/yes.png" : "/img/copy-path.png"} size={14} style={{ background: copied ? "#4caf50" : "var(--accent)" }} />
+          <Icon src={copied ? "img/yes.png" : "img/copy-path.png"} size={14} style={{ background: copied ? "#4caf50" : "var(--accent)" }} />
         </button>
       </div>
     </div>
@@ -120,7 +120,7 @@ export function TrackInfoDialog({ track, onClose }: Props) {
             onClick={onClose}
             style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}
           >
-            <Icon src="/img/sub_close.png" size={16} style={{ background: "var(--text-secondary)" }} />
+            <Icon src="img/sub_close.png" size={16} style={{ background: "var(--text-secondary)" }} />
           </button>
         </div>
 

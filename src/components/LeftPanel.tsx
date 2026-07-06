@@ -69,7 +69,7 @@ export function LeftPanel() {
         {/* Logo: shahedron2 base + shahedron1 alpha-masked with accent */}
         <div style={{ position: "relative", width: 46, height: 46, marginLeft: 8, flexShrink: 0 }}>
           <img
-            src="/img/shahedron2.png"
+            src="img/shahedron2.png"
             alt=""
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }}
           />
@@ -132,7 +132,7 @@ export function LeftPanel() {
                 transition: "opacity 180ms",
               }}
             >
-              <Icon src="/img/expand.png" size={16} style={{ background: closeHov ? "#ffffff" : "#515151" }} />
+              <Icon src="img/expand.png" size={16} style={{ background: closeHov ? "#ffffff" : "#515151" }} />
             </button>
           )}
         </div>

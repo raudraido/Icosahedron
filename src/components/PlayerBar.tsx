@@ -173,7 +173,7 @@ export function PlayerBar() {
                 transition: "opacity 180ms",
               }}
             >
-              <Icon src="/img/expand.png" size={16} style={{ background: expandBtnHov ? "#ffffff" : "#515151" }} />
+              <Icon src="img/expand.png" size={16} style={{ background: expandBtnHov ? "#ffffff" : "#515151" }} />
             </button>
           )}
         </div>
@@ -217,19 +217,19 @@ export function PlayerBar() {
         {/* Transport row — matches QML controlsRow: 40×40 buttons (36×36 for
             stop/repeat), 58×58 play ring, 20px gaps */}
         <div ref={controlsRowRef} className="flex items-center" style={{ gap: 20, pointerEvents: "auto" }}>
-          <TBtn icon="/img/stop.png"    iconSize={16} btnSize={36} radius={18} onClick={stop}          title="Stop" />
-          <TBtn icon="/img/shuffle.png" iconSize={18} btnSize={40} radius={20} onClick={toggleShuffle} dot={shuffle} title="Shuffle" />
-          <TBtn icon="/img/prev.png"    iconSize={16} btnSize={40} radius={20} onClick={prev}          title="Previous" />
+          <TBtn icon="img/stop.png"    iconSize={16} btnSize={36} radius={18} onClick={stop}          title="Stop" />
+          <TBtn icon="img/shuffle.png" iconSize={18} btnSize={40} radius={20} onClick={toggleShuffle} dot={shuffle} title="Shuffle" />
+          <TBtn icon="img/prev.png"    iconSize={16} btnSize={40} radius={20} onClick={prev}          title="Previous" />
 
           {/* Play ring — 58×58, matches QML playBtn */}
           <PlayRingButton
-            icon={playing ? "/img/pause.png" : "/img/play.png"}
+            icon={playing ? "img/pause.png" : "img/play.png"}
             onClick={playPause}
             title={playing ? "Pause" : "Play"}
           />
 
-          <TBtn icon="/img/next.png"   iconSize={16} btnSize={40} radius={20} onClick={next}          title="Next" />
-          <TBtn icon="/img/repeat.png" iconSize={16} btnSize={36} radius={18} onClick={toggleRepeat}  dot={repeat} title="Repeat" />
+          <TBtn icon="img/next.png"   iconSize={16} btnSize={40} radius={20} onClick={next}          title="Next" />
+          <TBtn icon="img/repeat.png" iconSize={16} btnSize={36} radius={18} onClick={toggleRepeat}  dot={repeat} title="Repeat" />
         </div>
 
         {/* Waveform row — real per-track amplitude data, matches the old app's
@@ -278,7 +278,7 @@ export function PlayerBar() {
           onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
         >
-          <Icon src="/img/settings.png" size={20} />
+          <Icon src="img/settings.png" size={20} />
         </button>
 
         {/* Mute — muted uses a distinct muted-gray tint (not a dimmed accent), matching the old app */}
@@ -289,7 +289,7 @@ export function PlayerBar() {
           onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
         >
-          <Icon src={volume === 0 ? "/img/volume_mute.png" : "/img/volume.png"} size={29} />
+          <Icon src={volume === 0 ? "img/volume_mute.png" : "img/volume.png"} size={29} />
         </button>
 
         {/* Volume slider — 100px groove matching QML */}
@@ -308,7 +308,7 @@ export function PlayerBar() {
           onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
         >
-          <Icon src="/img/cast.png" size={22} />
+          <Icon src="img/cast.png" size={22} />
         </button>
       </div>
     </div>

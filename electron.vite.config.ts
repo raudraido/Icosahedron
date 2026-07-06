@@ -26,6 +26,7 @@ export default defineConfig({
   },
   renderer: {
     root: ".",
+    base: "./",
     plugins: [tailwindcss(), react()],
     build: {
       rollupOptions: {

@@ -30,15 +30,15 @@ import { Icon } from "./components/Icon";
 // Mix Builder, and Visualizer aren't built out yet, so they render Placeholder
 // for now rather than being left out of the nav bar entirely.
 const NAV: { id: Tab; label: string; icon: string }[] = [
-  { id: "home",       label: "Home",        icon: "/img/home.png" },
-  { id: "nowPlaying", label: "Now Playing", icon: "/img/now_playing.png" },
-  { id: "albums",     label: "Albums",      icon: "/img/albums.png" },
-  { id: "artists",    label: "Artists",     icon: "/img/artists.png" },
-  { id: "tracks",     label: "Tracks",      icon: "/img/tracks.png" },
-  { id: "playlists",  label: "Playlists",   icon: "/img/playlists.png" },
-  { id: "starred",    label: "Favorites",   icon: "/img/heart.png" },
-  { id: "mixBuilder", label: "Mix Builder", icon: "/img/mix.png" },
-  { id: "visualizer", label: "Visualizer",  icon: "/img/visualizer.png" },
+  { id: "home",       label: "Home",        icon: "img/home.png" },
+  { id: "nowPlaying", label: "Now Playing", icon: "img/now_playing.png" },
+  { id: "albums",     label: "Albums",      icon: "img/albums.png" },
+  { id: "artists",    label: "Artists",     icon: "img/artists.png" },
+  { id: "tracks",     label: "Tracks",      icon: "img/tracks.png" },
+  { id: "playlists",  label: "Playlists",   icon: "img/playlists.png" },
+  { id: "starred",    label: "Favorites",   icon: "img/heart.png" },
+  { id: "mixBuilder", label: "Mix Builder", icon: "img/mix.png" },
+  { id: "visualizer", label: "Visualizer",  icon: "img/visualizer.png" },
 ];
 
 // Matches the old app's drag-reorderable tab bar (persisted QSettings key

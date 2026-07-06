@@ -24,3 +24,4 @@ libc = "0.2"
 
 [build-dependencies]
 napi-build = "2"
+cc = "1"

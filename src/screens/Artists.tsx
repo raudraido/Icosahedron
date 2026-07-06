@@ -8,7 +8,7 @@ import { Icon } from "../components/Icon";
 import { IconBtn } from "../components/IconBtn";
 import { SearchBox } from "../components/SearchBox";
 import { SkeletonCard } from "../components/Skeleton";
-import { ArtistDetail } from "./ArtistDetail";
+import { ArtistDetail, fetchArtistPlaybackTracks } from "./ArtistDetail";
 import { PLAY_ICON_DARK } from "../lib/theme";
 
 const SORT_OPTIONS = [
@@ -38,7 +38,7 @@ function shuffleArray<T>(arr: T[]): T[] {
   return a;
 }
 
-const ArtistCard = React.memo(function ArtistCard({ artist, onOpen }: { artist: Artist; onOpen: (a: Artist) => void }) {
+export const ArtistCard = React.memo(function ArtistCard({ artist, onOpen }: { artist: Artist; onOpen: (a: Artist) => void }) {
   const [hovered, setHovered] = useState(false);
   const [playHovered, setPlayHovered] = useState(false);
   const qc = useQueryClient();
@@ -46,12 +46,8 @@ const ArtistCard = React.memo(function ArtistCard({ artist, onOpen }: { artist: 
 
   function fetchTracks() {
     return qc.fetchQuery({
-      queryKey: ["artist-play-tracks", artist.id],
-      queryFn: async () => {
-        const detail = await api.getArtist(artist.id);
-        const firstAlbum = detail.albums[0];
-        return firstAlbum ? api.getAlbumTracks(firstAlbum.id) : [];
-      },
+      queryKey: ["artist-play-all", artist.id],
+      queryFn: () => fetchArtistPlaybackTracks(artist.id, artist.name),
     });
   }
 

@@ -475,6 +475,7 @@ dependencies = [
 name = "icosahedron_audio_engine"
 version = "0.1.0"
 dependencies = [
+ "cc",
  "futures-util",
  "libc",
  "napi",

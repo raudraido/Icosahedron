@@ -197,15 +197,15 @@ export function ArtistInfoPanel({ active }: { active: boolean }) {
                 <button
                   onClick={() => goToPage(pageIdx - 1)}
                   disabled={pageIdx === 0}
-                  style={{ width: 26, height: 20, background: "transparent", border: "none", cursor: pageIdx === 0 ? "default" : "pointer", color: pageIdx === 0 ? "#333333" : "var(--accent)", fontSize: 16 }}
+                  style={{ width: 26, height: 20, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "none", cursor: pageIdx === 0 ? "default" : "pointer", color: pageIdx === 0 ? "#333333" : "var(--accent)", fontSize: 16, lineHeight: 1 }}
                 >
                   ‹
                 </button>
-                <span style={{ color: "var(--text-secondary)", fontSize: 12, fontWeight: 700 }}>{pageIdx + 1}/{pages.length}</span>
+                <span style={{ color: "var(--text-secondary)", fontSize: 12, fontWeight: 700, lineHeight: 1 }}>{pageIdx + 1}/{pages.length}</span>
                 <button
                   onClick={() => goToPage(pageIdx + 1)}
                   disabled={pageIdx === pages.length - 1}
-                  style={{ width: 26, height: 20, background: "transparent", border: "none", cursor: pageIdx === pages.length - 1 ? "default" : "pointer", color: pageIdx === pages.length - 1 ? "#333333" : "var(--accent)", fontSize: 16 }}
+                  style={{ width: 26, height: 20, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "none", cursor: pageIdx === pages.length - 1 ? "default" : "pointer", color: pageIdx === pages.length - 1 ? "#333333" : "var(--accent)", fontSize: 16, lineHeight: 1 }}
                 >
                   ›
                 </button>

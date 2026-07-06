@@ -54,4 +54,8 @@ export class AudioEngineClient {
   setVolume(volume: number): void {
     this.engine.setVolume(volume);
   }
+
+  analyzeBpm(url: string): Promise<number> {
+    return this.engine.analyzeBpm(url);
+  }
 }

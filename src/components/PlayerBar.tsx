@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useStore } from "../store";
 import { CoverArt } from "./CoverArt";
 import { Icon } from "./Icon";
@@ -7,7 +8,12 @@ import { Waveform } from "./Waveform";
 import { ArtistTokens } from "./ArtistTokens";
 import { AlbumLink } from "./AlbumLink";
 import { loadJSON, saveJSON } from "./TrackTable";
-import { fmtDuration } from "../lib/api";
+import { api, fmtDuration, Track } from "../lib/api";
+import { ContextMenu, MenuEntry } from "./ContextMenu";
+import { PromptDialog } from "./PromptDialog";
+import { TrackInfoDialog } from "./TrackInfoDialog";
+import { BpmMenu } from "./BpmMenu";
+import { FAVORITE_PINK } from "../lib/theme";
 
 const LS_SHOW_REMAINING = "footer_show_remaining_time";
 
@@ -74,19 +80,60 @@ export function PlayerBar() {
   const stop           = useStore((s) => s.stop);
   const sidebarArtExpanded = useStore((s) => s.sidebarArtExpanded);
   const toggleSidebarArt   = useStore((s) => s.toggleSidebarArt);
+  const setTab             = useStore((s) => s.setTab);
+  const navigateTo         = useStore((s) => s.navigateTo);
+  const playTrack          = useStore((s) => s.playTrack);
+  const addTrackNext       = useStore((s) => s.addTrackNext);
+  const startRadio         = useStore((s) => s.startRadio);
   const [artHov, setArtHov] = useState(false);
   const [expandBtnHov, setExpandBtnHov] = useState(false);
 
+  const qc = useQueryClient();
+  const { data: playlists = [] } = useQuery({ queryKey: ["playlists"], queryFn: api.getPlaylists });
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+  const [infoTrack, setInfoTrack] = useState<Track | null>(null);
+  const [newPlaylistFor, setNewPlaylistFor] = useState<Track | null>(null);
+
   const track = queue[currentIndex] ?? null;
 
-  // Matches the old app's bpmLbl: "{bpm:.1f} BPM · {format}" — no on-device BPM
-  // detection here (see TrackInfoDialog's "BPM Detected" note), so this is
-  // always the ID3-tag BPM, same as the old app falls back to when detection
-  // is unavailable/disabled.
-  const metaLine = track
-    ? [track.bpm != null ? `${track.bpm.toFixed(1)} BPM` : null, track.format]
-        .filter(Boolean).join(" · ")
-    : "";
+  // On-device BPM detection (native QM-DSP, native/audio-engine/src/bpm.rs) —
+  // ported from the old app's BPMWorker/bpm_cache.json. Results live in the
+  // global store's bpmCache (keyed by track id), not local state, so once a
+  // track's been detected here, TrackTable/TrackInfoDialog show the same
+  // value everywhere else too. Debounced 350ms after the track settles
+  // (matches the old app's visual_update_timer) so rapid track-skipping
+  // never piles up analysis calls; a `gen` counter discards any
+  // still-in-flight result once a newer track has taken over, same as the
+  // old app's _safe_discard_worker. Skipped entirely if already cached
+  // (preloaded at connect, or detected earlier this session).
+  const bpmCache = useStore((s) => s.bpmCache);
+  const setBpmCache = useStore((s) => s.setBpm);
+  const [bpmLoading, setBpmLoading] = useState(false);
+  const bpmGenRef = useRef(0);
+
+  useEffect(() => {
+    setBpmLoading(false);
+    if (!track || useStore.getState().bpmCache[track.id] != null) return;
+    const gen = ++bpmGenRef.current;
+    const timer = setTimeout(() => {
+      setBpmLoading(true);
+      api.getBpm(track.id, track.stream_url)
+        .then((bpm) => { if (gen === bpmGenRef.current) { setBpmCache(track.id, bpm); setBpmLoading(false); } })
+        .catch(() => { if (gen === bpmGenRef.current) setBpmLoading(false); });
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [track?.id]);
+
+  const effectiveBpm = (track ? bpmCache[track.id] : undefined) ?? track?.bpm ?? null;
+
+  const [bpmMenu, setBpmMenu] = useState<{ x: number; y: number } | null>(null);
+
+  async function applyBpm(bpm: number) {
+    if (!track) return;
+    const rounded = Math.round(bpm * 10) / 10;
+    setBpmCache(track.id, rounded);
+    try { await api.setBpmOverride(track.id, rounded); } catch { /* best-effort */ }
+  }
   const remaining = duration > currentTime ? duration - currentTime : 0;
 
   // Click totalTimeLbl to toggle total-duration vs. remaining-time countdown —
@@ -110,6 +157,7 @@ export function PlayerBar() {
   const titleRef = useRef<HTMLParagraphElement>(null);
   const controlsRowRef = useRef<HTMLDivElement>(null);
   const [titleMaxWidth, setTitleMaxWidth] = useState<number | null>(null);
+  const [titleHov, setTitleHov] = useState(false);
 
   function recomputeTitleWidth() {
     if (!titleRef.current || !controlsRowRef.current) return;
@@ -125,6 +173,63 @@ export function PlayerBar() {
     return () => ro.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [track?.id, sidebarArtExpanded]);
+
+  // Right-click menu on the footer title — same shared ContextMenu/
+  // PromptDialog/TrackInfoDialog components and item list as QueuePanel's
+  // buildQueueMenu, minus "Remove from Queue" (doesn't apply to the
+  // currently-playing track) and plus "Add to Queue" — matches the old app's
+  // _show_footer_track_context_menu (mixins/navigation.py:671-731).
+  async function openAlbum(t: Track) {
+    if (!t.album_id) return;
+    const album = await api.getAlbum(t.album_id);
+    navigateTo({ tab: "albums", album });
+  }
+
+  async function toggleFavoriteFromMenu(t: Track) {
+    try { await api.setFavorite(t.id, !t.starred, "id"); } catch { /* best-effort */ }
+  }
+
+  async function addToExistingPlaylist(playlistId: string, t: Track) {
+    await api.addTracksToPlaylist(playlistId, [t.id]);
+    qc.invalidateQueries({ queryKey: ["playlists"] });
+  }
+
+  async function createPlaylistAndAdd(name: string) {
+    const t = newPlaylistFor;
+    setNewPlaylistFor(null);
+    if (!t) return;
+    const playlist = await api.createPlaylist(name);
+    await api.addTracksToPlaylist(playlist.id, [t.id]);
+    qc.invalidateQueries({ queryKey: ["playlists"] });
+  }
+
+  function buildFooterMenu(t: Track): MenuEntry[] {
+    return [
+      { label: "Play Now", icon: "img/sub_play.png", onClick: () => playTrack(t, queue) },
+      { label: "Play Next", icon: "img/sub_next.png", onClick: () => addTrackNext(t) },
+      { label: "Go to Artist", icon: "img/sub_artist.png", disabled: !t.artist_id, onClick: () => t.artist_id && navigateTo({ tab: "artists", artistId: t.artist_id }) },
+      { label: "Open Album", icon: "img/album.png", disabled: !t.album_id, onClick: () => openAlbum(t) },
+      { label: "Start Radio", icon: "img/radio.png", onClick: () => startRadio(t) },
+      {
+        label: "Add to Playlist", icon: "img/playlist.png",
+        submenu: [
+          { label: "New Playlist…", icon: "img/add.png", onClick: () => setNewPlaylistFor(t) },
+          ...playlists.map((p) => ({
+            label: `${p.name}  (${p.song_count})`,
+            icon: "img/playlist.png",
+            onClick: () => addToExistingPlaylist(p.id, t),
+          })),
+        ],
+      },
+      { label: "Get Info", icon: "img/info.png", onClick: () => setInfoTrack(t) },
+      {
+        label: t.starred ? "Remove from Favorites" : "Add to Favorites",
+        icon: t.starred ? "img/heart_filled.png" : "img/heart.png",
+        color: FAVORITE_PINK,
+        onClick: () => toggleFavoriteFromMenu(t),
+      },
+    ];
+  }
 
   return (
     <div
@@ -150,6 +255,7 @@ export function PlayerBar() {
           onMouseEnter={() => setArtHov(true)}
           onMouseLeave={() => setArtHov(false)}
           onTransitionEnd={recomputeTitleWidth}
+          onContextMenu={(e) => { if (track) { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }); } }}
           style={{
             position: "relative", height: 84,
             width: sidebarArtExpanded ? 0 : 84,
@@ -180,11 +286,18 @@ export function PlayerBar() {
         <div className="min-w-0 flex flex-col justify-center gap-0.5" style={{ overflow: "visible" }}>
           <p
             ref={titleRef}
+            onClick={() => track && setTab("nowPlaying")}
+            onContextMenu={(e) => { if (track) { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }); } }}
+            onMouseEnter={() => track && setTitleHov(true)}
+            onMouseLeave={() => setTitleHov(false)}
             className="font-semibold leading-snug whitespace-nowrap overflow-hidden text-ellipsis"
             style={{
               fontSize: "var(--fs-primary)", color: "var(--accent)",
               width: titleMaxWidth != null ? Math.max(titleMaxWidth, 0) : undefined,
               maxWidth: titleMaxWidth == null ? "100%" : undefined,
+              cursor: track ? "pointer" : "default",
+              textDecorationLine: titleHov ? "underline" : "none",
+              textUnderlineOffset: "2px", textDecorationThickness: "1px", textDecorationColor: "var(--accent)",
             }}
           >
             {track?.title ?? "—"}
@@ -197,9 +310,20 @@ export function PlayerBar() {
               <AlbumLink name={track.album} albumId={track.album_id} />
             </div>
           )}
-          {metaLine && (
+          {(effectiveBpm != null || bpmLoading || track?.format) && (
             <p className="truncate leading-snug" style={{ fontSize: "var(--fs-secondary)", color: "var(--text-secondary)" }}>
-              {metaLine}
+              {(effectiveBpm != null || bpmLoading) && (
+                <span
+                  onClick={(e) => { if (track && effectiveBpm != null) setBpmMenu({ x: e.clientX, y: e.clientY }); }}
+                  onMouseEnter={(e) => (e.currentTarget.style.textDecorationLine = "underline")}
+                  onMouseLeave={(e) => (e.currentTarget.style.textDecorationLine = "none")}
+                  style={{ cursor: effectiveBpm != null ? "pointer" : "default", textUnderlineOffset: 2, textDecorationThickness: 1, textDecorationColor: "var(--accent)" }}
+                >
+                  {effectiveBpm != null ? `${effectiveBpm.toFixed(1)} BPM` : "···BPM"}
+                </span>
+              )}
+              {(effectiveBpm != null || bpmLoading) && track?.format && "  ·  "}
+              {track?.format}
             </p>
           )}
         </div>
@@ -311,6 +435,23 @@ export function PlayerBar() {
           <Icon src="img/cast.png" size={22} />
         </button>
       </div>
+
+      {ctxMenu && track && (
+        <ContextMenu x={ctxMenu.x} y={ctxMenu.y} items={buildFooterMenu(track)} onClose={() => setCtxMenu(null)} />
+      )}
+      {infoTrack && <TrackInfoDialog track={infoTrack} onClose={() => setInfoTrack(null)} />}
+      {newPlaylistFor && (
+        <PromptDialog
+          title="New Playlist"
+          placeholder="Playlist name"
+          confirmLabel="Create"
+          onSubmit={createPlaylistAndAdd}
+          onCancel={() => setNewPlaylistFor(null)}
+        />
+      )}
+      {bpmMenu && effectiveBpm != null && (
+        <BpmMenu x={bpmMenu.x} y={bpmMenu.y} bpm={effectiveBpm} onApply={applyBpm} onClose={() => setBpmMenu(null)} />
+      )}
     </div>
   );
 }

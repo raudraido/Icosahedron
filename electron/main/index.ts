@@ -9,6 +9,7 @@ import {
   removeLocalLyrics, getBandsintownEvents,
 } from "./lyrics";
 import { saveCredentials, loadCredentials, clearCredentials } from "./credentials";
+import { getCachedBpm, setCachedBpm, getAllCachedBpm } from "./bpmCache";
 
 protocol.registerSchemesAsPrivileged([
   { scheme: "cover", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
@@ -126,8 +127,14 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle("get_playlists", () => requireClient().getPlaylists());
   ipcMain.handle("get_playlist_tracks", (_e, { id }) => requireClient().getPlaylistTracks(id));
-  ipcMain.handle("create_playlist", (_e, { name }) => requireClient().createPlaylist(name));
+  ipcMain.handle("create_playlist", (_e, { name, isPublic }) => requireClient().createPlaylist(name, isPublic ?? false));
   ipcMain.handle("add_tracks_to_playlist", (_e, { playlistId, trackIds }) => requireClient().addTracksToPlaylist(playlistId, trackIds));
+  ipcMain.handle("rename_playlist", (_e, { playlistId, name }) => requireClient().renamePlaylist(playlistId, name));
+  ipcMain.handle("set_playlist_public", (_e, { playlistId, isPublic }) => requireClient().setPlaylistPublic(playlistId, isPublic));
+  ipcMain.handle("delete_playlist", (_e, { playlistId }) => requireClient().deletePlaylist(playlistId));
+  ipcMain.handle("remove_track_from_playlist", (_e, { playlistId, songIndex }) => requireClient().removeTrackFromPlaylist(playlistId, songIndex));
+  ipcMain.handle("reorder_playlist_tracks", (_e, { playlistId, currentLength, newTrackIds }) =>
+    requireClient().reorderPlaylistTracks(playlistId, currentLength, newTrackIds));
 
   ipcMain.handle("get_similar_songs", (_e, { artistId, count }) => requireClient().getSimilarSongs(artistId, count));
   ipcMain.handle("get_top_songs", (_e, { artistName, count }) => requireClient().getTopSongs(artistName, count));
@@ -166,6 +173,20 @@ function registerIpcHandlers(): void {
   ipcMain.handle("audio_stop", () => requireAudio().stop());
   ipcMain.handle("audio_seek", (_e, { seconds }) => requireAudio().seek(seconds));
   ipcMain.handle("audio_set_volume", (_e, { volume }) => requireAudio().setVolume(volume));
+
+  // ── BPM detection (footer bar) — cache-first, falls back to the native
+  // QM-DSP analyzer (audio_engine.rs's analyze_bpm) on a cache miss. ────────
+  ipcMain.handle("get_bpm", async (_e, { trackId, streamUrl }) => {
+    const cached = await getCachedBpm(trackId);
+    if (cached != null) return cached;
+    const bpm = await requireAudio().analyzeBpm(streamUrl);
+    await setCachedBpm(trackId, bpm);
+    return bpm;
+  });
+  ipcMain.handle("set_bpm_override", async (_e, { trackId, bpm }) => {
+    await setCachedBpm(trackId, bpm);
+  });
+  ipcMain.handle("get_bpm_cache_all", () => getAllCachedBpm());
 }
 
 app.whenReady().then(() => {

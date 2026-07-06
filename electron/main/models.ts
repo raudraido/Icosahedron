@@ -19,6 +19,7 @@ export interface Album {
   duration_secs: number;
   starred: boolean;
   genre: string | null;
+  release_types: string[] | null;
 }
 
 export interface Track {
@@ -51,6 +52,7 @@ export interface Playlist {
   duration_secs: number;
   cover_id: string | null;
   public: boolean;
+  owner: string | null;
 }
 
 export interface ArtistDetail {

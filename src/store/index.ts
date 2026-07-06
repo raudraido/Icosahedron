@@ -1,11 +1,19 @@
 import { create } from "zustand";
-import { api, AudioEventPayload, Track, Album } from "../lib/api";
+import { api, AudioEventPayload, Track, Album, Playlist } from "../lib/api";
+import type { QueueTab } from "../components/QueueBottomTabs";
 
 export type Tab =
   | "home" | "nowPlaying" | "albums" | "artists" | "tracks" | "playlists" | "starred"
   | "mixBuilder" | "visualizer";
 
-export type NavEntry = { tab: Tab; album?: Album; artistId?: string; artistQuery?: string };
+export type NavEntry = {
+  tab: Tab; album?: Album; artistId?: string; artistQuery?: string; playlist?: Playlist;
+  /** Cross-tab "open Tracks pre-filtered to this value" intent — set by a
+   *  genre/year cell click elsewhere (e.g. a playlist's tracklist) and
+   *  consumed once by Tracks.tsx on mount, the same way artistQuery is
+   *  consumed once by Artists.tsx. */
+  trackFilter?: { col: string; value: string };
+};
 
 interface AppStore {
   // connection
@@ -17,6 +25,17 @@ interface AppStore {
   // cover URL — synchronous, no IPC, computed once at connect
   coverUrl: (coverId: string | null, size?: number) => string;
 
+  // On-device BPM detection results (native/audio-engine's QM-DSP analyzer),
+  // keyed by track id — shared across the whole app (footer, TrackTable,
+  // TrackInfoDialog) so a track detected once from the footer immediately
+  // shows its real BPM everywhere else too, instead of just the ID3 tag.
+  // Preloaded in full from disk at connect time; detection itself only ever
+  // runs for the currently-playing track (see PlayerBar.tsx) — browsing a
+  // list never triggers new analysis.
+  bpmCache: Record<string, number>;
+  setBpm: (trackId: string, bpm: number) => void;
+  loadBpmCache: () => Promise<void>;
+
   // navigation + back/forward history
   activeTab: Tab;
   navHistory: NavEntry[];
@@ -26,6 +45,12 @@ interface AppStore {
   navigateTo: (entry: NavEntry) => void;
   navBack: () => void;
   navFwd: () => void;
+
+  // queue panel's bottom tab (Queue/Lyrics/Info) — promoted from local
+  // component state so the Now Playing tab's "Lyrics" button can switch to
+  // it, matching the old app's lyricsRequested signal (now_playing_info.py)
+  queuePanelTab: QueueTab;
+  setQueuePanelTab: (tab: QueueTab) => void;
 
   // left-panel art expand/collapse — mirrors the footer's small thumbnail
   // shrinking to 0 in lockstep (both driven by this one flag), matching the
@@ -128,6 +153,18 @@ export const useStore = create<AppStore>((set, get) => ({
   username: "",
   coverUrl: () => "",
 
+  bpmCache: {},
+  setBpm: (trackId, bpm) => set((s) => ({ bpmCache: { ...s.bpmCache, [trackId]: bpm } })),
+  loadBpmCache: async () => {
+    try {
+      const cache = await api.getBpmCacheAll();
+      set({ bpmCache: cache });
+    } catch { /* best-effort — tracklists just fall back to the ID3 tag */ }
+  },
+
+  queuePanelTab: "queue",
+  setQueuePanelTab: (tab) => set({ queuePanelTab: tab }),
+
   // `remember` matches the old app's "Remember my credentials" checkbox
   // (login_dialog.py/main.py): url+username are non-secret, but the
   // password is only ever persisted through the OS-backed secret store
@@ -148,10 +185,11 @@ export const useStore = create<AppStore>((set, get) => ({
       coverUrl: (coverId, size = 200) =>
         coverId ? `cover://localhost/${encodeURIComponent(coverId)}?size=${size}` : "",
     });
+    get().loadBpmCache();
   },
 
-  activeTab: "albums",
-  navHistory: [{ tab: "albums" }],
+  activeTab: "home",
+  navHistory: [{ tab: "home" }],
   navPos: 0,
 
   setTab: (tab) => {
@@ -164,7 +202,7 @@ export const useStore = create<AppStore>((set, get) => ({
 
   pushNav: (extra) => {
     const { activeTab, navHistory, navPos } = get();
-    const entry: NavEntry = { tab: activeTab, album: extra?.album, artistId: extra?.artistId, artistQuery: extra?.artistQuery };
+    const entry: NavEntry = { tab: activeTab, album: extra?.album, artistId: extra?.artistId, artistQuery: extra?.artistQuery, playlist: extra?.playlist };
     const newHistory = [...navHistory.slice(0, navPos + 1), entry];
     set({ navHistory: newHistory, navPos: newHistory.length - 1 });
   },

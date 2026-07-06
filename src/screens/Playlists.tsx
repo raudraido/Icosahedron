@@ -1,100 +1,450 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { api, Playlist } from "../lib/api";
+import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, Playlist, Track, fmtDuration } from "../lib/api";
 import { CoverArt } from "../components/CoverArt";
+import { CoverZoomOverlay } from "../components/CoverZoomOverlay";
+import { PlayRingButton } from "../components/PlayRingButton";
+import { Icon } from "../components/Icon";
+import { IconBtn } from "../components/IconBtn";
+import { SearchBox } from "../components/SearchBox";
+import { ContextMenu } from "../components/ContextMenu";
+import { PromptDialog } from "../components/PromptDialog";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { TrackTable } from "../components/TrackTable";
 import { useStore } from "../store";
-import { fmtDuration } from "../lib/api";
+import { PLAY_ICON_DARK } from "../lib/theme";
 
-const rowHover = {
-  onMouseEnter: (e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.background = "var(--hover-bg)"),
-  onMouseLeave: (e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.background = "transparent"),
-};
+// Ported from playlist_grid.qml + playlist_detail.qml / playlists_browser.py.
+// Reuses established patterns/components rather than reinventing them:
+//  - Grid card: same hover-play-button/cover-art pattern as Albums.tsx's
+//    AlbumCard / Artists.tsx's ArtistCard.
+//  - Detail header: same blurred-glow-behind-cover + click-to-zoom technique
+//    as Albums.tsx's AlbumDetail / ArtistDetail.tsx.
+//  - Tracklist: the *actual* shared TrackTable component (same one Tracks.tsx
+//    and Albums.tsx's AlbumDetail use) — not a bespoke row list. This gets
+//    the whole search/sort/column-picker/context-menu toolbar for free, and
+//    already renders as its own card, matching the old app's TrackListView.qml
+//    reuse instead of a bespoke tracklist widget.
+//  - Drag-to-reorder: TrackTable's `reorderable`/`onReorder` props (added
+//    for this), which reuse the Queue panel's own grip/drag mechanics
+//    (GripDots/InsertionIndicator/GhostRow) — NOT the old app's own
+//    TrackListView.qml DragHandler, which doesn't have an equivalent here.
+// Reorder persistence matches the old app's update_playlist_tracks exactly:
+// Subsonic has no "move" verb, so a drop remove-and-re-adds the whole
+// playlist content in the new order (reorderPlaylistTracks in api.ts).
+
+const GAP = 12;
+
+function PlaylistCard({ playlist, onOpen, onContextMenu }: { playlist: Playlist; onOpen: () => void; onContextMenu: (e: React.MouseEvent) => void }) {
+  const [hovered, setHovered] = useState(false);
+  const [playHovered, setPlayHovered] = useState(false);
+  const qc = useQueryClient();
+  const playTrack = useStore((s) => s.playTrack);
+
+  function fetchTracks() {
+    return qc.fetchQuery({ queryKey: ["playlist-tracks", playlist.id], queryFn: () => api.getPlaylistTracks(playlist.id) });
+  }
+
+  async function handlePlay(e: React.MouseEvent) {
+    e.stopPropagation();
+    const tracks = await fetchTracks();
+    if (tracks.length) playTrack(tracks[0], tracks);
+  }
+
+  return (
+    <button
+      onClick={onOpen}
+      onContextMenu={onContextMenu}
+      onMouseEnter={() => { setHovered(true); fetchTracks(); }}
+      onMouseLeave={() => setHovered(false)}
+      className="text-left group grid-card"
+    >
+      <div style={{ position: "relative" }}>
+        <CoverArt coverId={playlist.cover_id} size={200} className="w-full aspect-square rounded-lg group-hover:brightness-75 transition-all" />
+        <div
+          onClick={handlePlay}
+          onMouseEnter={() => setPlayHovered(true)}
+          onMouseLeave={() => setPlayHovered(false)}
+          style={{
+            position: "absolute", top: "50%", left: "50%",
+            width: "min(60px, 33%)", aspectRatio: "1",
+            transform: `translate(-50%, -50%) scale(${playHovered ? 1 : 0.8})`,
+            borderRadius: "50%",
+            background: "var(--accent)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            opacity: playHovered ? 1 : hovered ? 0.8 : 0,
+            transition: "opacity 150ms, transform 150ms",
+            cursor: "pointer",
+          }}
+        >
+          <Icon src="img/play.png" size={20} style={{ background: PLAY_ICON_DARK, marginLeft: 2 }} />
+        </div>
+      </div>
+      <div className="flex flex-col" style={{ marginTop: 8, gap: 2 }}>
+        <p className="truncate font-bold" style={{ color: hovered ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-primary)" }}>{playlist.name}</p>
+        <p className="truncate" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>
+          {playlist.song_count} track{playlist.song_count === 1 ? "" : "s"}
+        </p>
+      </div>
+    </button>
+  );
+}
+
+function NewPlaylistDialog({ onCreate, onCancel }: { onCreate: (name: string, isPublic: boolean) => void; onCancel: () => void }) {
+  const [name, setName] = useState("");
+  const [isPublic, setIsPublic] = useState(false);
+
+  return (
+    <div
+      onClick={onCancel}
+      style={{ position: "fixed", inset: 0, zIndex: 2000, background: "color-mix(in srgb, black 40%, transparent)", display: "flex", alignItems: "center", justifyContent: "center" }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ background: "var(--main-bg)", border: "1px solid var(--border)", borderRadius: 10, padding: 20, width: 320, boxShadow: "0 12px 32px color-mix(in srgb, black 30%, transparent)" }}
+      >
+        <h3 style={{ color: "var(--text-primary)", fontSize: "var(--fs-heading)", fontWeight: 700, marginBottom: 12 }}>New Playlist</h3>
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) onCreate(name.trim(), isPublic); if (e.key === "Escape") onCancel(); }}
+          placeholder="Playlist name"
+          className="w-full outline-none"
+          style={{ background: "var(--card-bg)", color: "var(--text-primary)", fontSize: "var(--fs-primary)", border: "1px solid var(--border)", borderRadius: 6, padding: "8px 10px" }}
+        />
+        <label className="flex items-center" style={{ gap: 8, marginTop: 12, cursor: "pointer" }}>
+          <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} />
+          <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>Public playlist</span>
+        </label>
+        <div className="flex justify-end" style={{ gap: 8, marginTop: 16 }}>
+          <button onClick={onCancel} style={{ padding: "6px 14px", borderRadius: 6, border: "none", cursor: "pointer", background: "var(--hover-bg)", color: "var(--text-primary)", fontSize: "var(--fs-secondary)" }}>Cancel</button>
+          <button
+            onClick={() => name.trim() && onCreate(name.trim(), isPublic)}
+            disabled={!name.trim()}
+            style={{ padding: "6px 14px", borderRadius: 6, border: "none", cursor: name.trim() ? "pointer" : "default", background: "var(--accent)", color: PLAY_ICON_DARK, fontSize: "var(--fs-secondary)", fontWeight: 600, opacity: name.trim() ? 1 : 0.5 }}
+          >
+            Create
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ActionIconButton({ icon, onClick, title }: { icon: string; onClick: () => void; title: string }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        width: 40, height: 40, borderRadius: "50%", border: "1px solid var(--border)", cursor: "pointer",
+        background: hov ? "var(--hover-bg)" : "transparent",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}
+    >
+      <Icon src={icon} size={18} style={{ background: "var(--text-secondary)" }} />
+    </button>
+  );
+}
+
+// Small pill switch — matches playlist_detail.qml's public/private toggle
+// (a compact animated switch, not a text button).
+function Toggle({ checked, onChange, title }: { checked: boolean; onChange: () => void; title: string }) {
+  return (
+    <button
+      onClick={onChange}
+      title={title}
+      style={{
+        width: 36, height: 20, borderRadius: 10, border: "none", cursor: "pointer", padding: 2,
+        background: checked ? "var(--accent)" : "var(--hover-bg)",
+        display: "flex", alignItems: "center", justifyContent: checked ? "flex-end" : "flex-start",
+        transition: "background 150ms",
+      }}
+    >
+      <div style={{ width: 16, height: 16, borderRadius: "50%", background: checked ? PLAY_ICON_DARK : "var(--text-secondary)", transition: "transform 150ms" }} />
+    </button>
+  );
+}
+
+function PlaylistDetail({ playlist }: { playlist: Playlist }) {
+  const playTrack = useStore((s) => s.playTrack);
+  const navigateTo = useStore((s) => s.navigateTo);
+  const coverUrl = useStore((s) => s.coverUrl);
+
+  const [tracks, setTracks] = useState<Track[]>([]);
+  const [coverHov, setCoverHov] = useState(false);
+  const [coverZoomOpen, setCoverZoomOpen] = useState(false);
+  // Local override for the mutable Public/Private bit — same pattern as
+  // Albums.tsx's AlbumDetail favorite toggle: `playlist` itself comes from
+  // nav history (immutable per entry), so a live toggle needs its own state
+  // rather than mutating the prop.
+  const [isPublic, setIsPublic] = useState(playlist.public);
+  useEffect(() => setIsPublic(playlist.public), [playlist.id, playlist.public]);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["playlist-tracks", playlist.id],
+    queryFn: () => api.getPlaylistTracks(playlist.id),
+  });
+  useEffect(() => { if (data) setTracks(data); }, [data]);
+
+  function handlePlay() {
+    if (tracks[0]) playTrack(tracks[0], tracks);
+  }
+  function handleShuffle() {
+    if (!tracks.length) return;
+    const shuffled = [...tracks];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    playTrack(shuffled[0], shuffled);
+  }
+  async function togglePublic() {
+    const next = !isPublic;
+    setIsPublic(next);
+    try { await api.setPlaylistPublic(playlist.id, next); } catch { setIsPublic(!next); }
+  }
+
+  // Reorder — TrackTable calls this with the moved track's id and the
+  // insertion index it was dropped at; we own persisting the new order
+  // (Subsonic has no "move" verb, see reorderPlaylistTracks) and updating
+  // local state so the table reflects it immediately.
+  function handleReorder(trackId: string, toIndex: number) {
+    setTracks((prev) => {
+      const from = prev.findIndex((t) => t.id === trackId);
+      if (from === -1) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      const adjusted = from < toIndex ? toIndex - 1 : toIndex;
+      next.splice(adjusted, 0, moved);
+      api.reorderPlaylistTracks(playlist.id, next.length, next.map((t) => t.id)).catch(() => {
+        /* best-effort — a refetch on next visit will reflect the server's real order if this failed */
+      });
+      return next;
+    });
+  }
+
+  async function removeFromPlaylist(track: Track) {
+    const index = tracks.findIndex((t) => t.id === track.id);
+    if (index === -1) return;
+    setTracks((prev) => prev.filter((_, i) => i !== index));
+    try { await api.removeTrackFromPlaylist(playlist.id, index); } catch { /* best-effort */ }
+  }
+
+  return (
+    <>
+      {/* Rendered as a sibling of TrackTable's own scroll container, not a
+          descendant — will-change:transform on a scroll container creates a
+          new containing block for position:fixed descendants (see
+          NowPlaying.tsx/ArtistDetail.tsx for the same fix). */}
+      {coverZoomOpen && playlist.cover_id && (
+        <CoverZoomOverlay coverId={playlist.cover_id} onClose={() => setCoverZoomOpen(false)} />
+      )}
+      <div className="flex flex-col h-full">
+        <div style={{ padding: 12 }}>
+          <div className="flex" style={{ gap: 28, padding: 28, borderRadius: 10, background: "var(--card-bg)", border: "1px solid var(--border)" }}>
+            <div style={{ position: "relative", width: 264, height: 264, flexShrink: 0 }}>
+              {playlist.cover_id && (
+                <div
+                  aria-hidden
+                  style={{
+                    position: "absolute", inset: -1,
+                    backgroundImage: `url(${coverUrl(playlist.cover_id, 264)})`,
+                    backgroundSize: "cover", backgroundPosition: "center",
+                    filter: "blur(10px)", opacity: 0.9, borderRadius: 10,
+                  }}
+                />
+              )}
+              <div
+                onClick={() => playlist.cover_id && setCoverZoomOpen(true)}
+                onMouseEnter={() => setCoverHov(true)}
+                onMouseLeave={() => setCoverHov(false)}
+                style={{
+                  position: "relative", width: 264, height: 264, borderRadius: 10, overflow: "hidden",
+                  cursor: playlist.cover_id ? "pointer" : "default",
+                  transform: coverHov ? "scale(1.08)" : "scale(1)", transition: "transform 200ms",
+                }}
+              >
+                <CoverArt coverId={playlist.cover_id} size={264} className="w-full h-full" />
+              </div>
+            </div>
+
+            <div className="flex flex-col" style={{ flex: 1, minWidth: 0, justifyContent: "flex-start", paddingTop: 16, gap: 6 }}>
+              <p style={{ color: "var(--text-secondary)", fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Playlist</p>
+              <h1 className="truncate" style={{ fontSize: "var(--fs-hero)", fontWeight: 700, color: "var(--text-primary)" }}>{playlist.name}</h1>
+              {playlist.owner && <p style={{ color: "var(--accent)", fontSize: "var(--fs-secondary)", fontWeight: 600 }}>By {playlist.owner}</p>}
+              {playlist.comment && <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>{playlist.comment}</p>}
+              <p style={{ color: "var(--text-secondary)", fontWeight: 700, fontSize: "var(--fs-secondary)" }}>
+                {isLoading ? "Loading…" : `${playlist.song_count} songs  ·  ${fmtDuration(playlist.duration_secs)}`}
+              </p>
+
+              <div className="flex items-center" style={{ gap: 14, marginTop: 16 }}>
+                <PlayRingButton icon="img/play.png" onClick={handlePlay} title="Play All" />
+                <ActionIconButton icon="img/shuffle.png" onClick={handleShuffle} title="Shuffle" />
+                <div className="flex items-center" style={{ gap: 8 }}>
+                  <Toggle checked={isPublic} onChange={togglePublic} title={isPublic ? "Public — click to make private" : "Private — click to make public"} />
+                  <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)", fontWeight: 600 }}>
+                    {isPublic ? "Public" : "Private"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1" style={{ minHeight: 0, padding: "0 12px 12px" }}>
+          <TrackTable
+            key={playlist.id}
+            tracks={tracks}
+            loading={isLoading}
+            viewKey="playlist_detail"
+            defaultSort={null}
+            persistSort={false}
+            numColSource="position"
+            reorderable
+            onReorder={handleReorder}
+            filterableCols={["genre", "year"]}
+            onFilterChange={(col, values) => {
+              const value = [...values][0];
+              if (value) navigateTo({ tab: "tracks", trackFilter: { col, value } });
+            }}
+            extraMenuItems={(track) => [
+              { label: "Remove from Playlist", icon: "img/remove.png", onClick: () => removeFromPlaylist(track) },
+            ]}
+          />
+        </div>
+      </div>
+    </>
+  );
+}
 
 export function Playlists() {
-  const [selected, setSelected] = useState<Playlist | null>(null);
-  const playTrack = useStore((s) => s.playTrack);
+  const qc = useQueryClient();
+  // Matches Albums.tsx/Artists.tsx: selection lives in the shared nav
+  // history, not local state — so switching to a different tab and back
+  // (setTab always pushes a bare {tab} entry) or re-clicking the already-
+  // active Playlists tab (App.tsx's handleTabClick → pushNav()) both land
+  // back on the grid for free, instead of a stale detail view sticking
+  // around because this component never unmounts.
+  const pushNav = useStore((s) => s.pushNav);
+  const selected = useStore((s) => s.navHistory[s.navPos]?.playlist ?? null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchText, setSearchText] = useState("");
+  const [bgMenu, setBgMenu] = useState<{ x: number; y: number } | null>(null);
+  const [itemMenu, setItemMenu] = useState<{ x: number; y: number; playlist: Playlist } | null>(null);
+  const [renameTarget, setRenameTarget] = useState<Playlist | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Playlist | null>(null);
 
   const { data: playlists = [], isLoading } = useQuery({
     queryKey: ["playlists"],
     queryFn: () => api.getPlaylists(),
   });
 
-  const { data: tracks = [], isLoading: tracksLoading } = useQuery({
-    queryKey: ["playlist-tracks", selected?.id],
-    queryFn: () => api.getPlaylistTracks(selected!.id),
-    enabled: !!selected,
-  });
+  const displayedPlaylists = searchText.trim()
+    ? playlists.filter((p) => p.name.toLowerCase().includes(searchText.toLowerCase()))
+    : playlists;
+
+  async function handleCreate(name: string, isPublic: boolean) {
+    setCreateOpen(false);
+    await api.createPlaylist(name, isPublic);
+    qc.invalidateQueries({ queryKey: ["playlists"] });
+  }
+  async function handleRename(name: string) {
+    const target = renameTarget;
+    setRenameTarget(null);
+    if (!target) return;
+    await api.renamePlaylist(target.id, name);
+    qc.invalidateQueries({ queryKey: ["playlists"] });
+  }
+  async function handleDelete() {
+    const target = deleteTarget;
+    setDeleteTarget(null);
+    if (!target) return;
+    await api.deletePlaylist(target.id);
+    qc.invalidateQueries({ queryKey: ["playlists"] });
+  }
 
   if (selected) {
-    return (
-      <div className="flex flex-col h-full">
-        <div className="flex gap-6 p-6 shrink-0" style={{ background: "var(--card-bg)", borderBottom: "1px solid var(--border)" }}>
-          <CoverArt coverId={selected.cover_id} size={160} className="w-32 h-32 rounded-lg shrink-0" />
-          <div className="flex flex-col justify-end gap-1">
-            <p className="text-xs uppercase tracking-wider" style={{ color: "var(--text-primary)", opacity: 0.4 }}>Playlist</p>
-            <h1 className="text-2xl font-bold" style={{ color: "var(--accent)" }}>{selected.name}</h1>
-            {selected.comment && <p className="text-sm" style={{ color: "var(--text-secondary)", opacity: 0.7 }}>{selected.comment}</p>}
-            <p className="text-sm" style={{ color: "var(--text-primary)", opacity: 0.4 }}>{selected.song_count} tracks · {fmtDuration(selected.duration_secs)}</p>
-            <div className="flex gap-2 mt-3">
-              <button
-                onClick={() => tracks[0] && playTrack(tracks[0], tracks)}
-                className="px-4 py-1.5 rounded-full text-sm font-medium"
-                style={{ background: "color-mix(in srgb, var(--accent) 18%, transparent)", color: "var(--text-secondary)" }}
-              >
-                Play
-              </button>
-              <button
-                onClick={() => setSelected(null)}
-                className="px-4 py-1.5 rounded-full text-sm"
-                style={{ background: "var(--hover-bg)", color: "var(--text-primary)" }}
-              >
-                Back
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto scroll-overlay">
-          {tracksLoading && <p className="p-6 text-sm" style={{ color: "var(--text-primary)", opacity: 0.4 }}>Loading…</p>}
-          {tracks.map((t, i) => (
-            <button
-              key={`${t.id}-${i}`}
-              onClick={() => playTrack(t, tracks)}
-              className="w-full flex items-center gap-3 px-6 py-3 text-left"
-              style={{ background: "transparent", borderBottom: "1px solid var(--border)" }}
-              {...rowHover}
-            >
-              <span className="w-6 text-center text-xs shrink-0" style={{ color: "var(--text-primary)", opacity: 0.4 }}>{i + 1}</span>
-              <CoverArt coverId={t.cover_id} size={36} className="w-9 h-9 rounded shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm truncate" style={{ color: "var(--accent)" }}>{t.title}</p>
-                <p className="text-xs truncate" style={{ color: "var(--text-primary)", opacity: 0.4 }}>{t.artist}</p>
-              </div>
-              <span className="text-xs tabular-nums shrink-0" style={{ color: "var(--text-primary)", opacity: 0.4 }}>{fmtDuration(t.duration_secs)}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-    );
+    return <PlaylistDetail playlist={selected} />;
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-6 py-4 shrink-0" style={{ borderBottom: "1px solid var(--border)" }}>
-        <h2 className="text-lg font-semibold" style={{ color: "var(--accent)" }}>Playlists</h2>
+    <div
+      className="flex flex-col h-full"
+      onContextMenu={(e) => { e.preventDefault(); setBgMenu({ x: e.clientX, y: e.clientY }); }}
+    >
+      <div className="flex items-center px-6" style={{ height: 58, borderBottom: "1px solid var(--border)", gap: 6 }}>
+        <h2 className="font-semibold" style={{ flex: 1, color: "var(--text-secondary)", fontSize: "var(--fs-primary)" }}>
+          {isLoading
+            ? "Loading playlists…"
+            : searchText
+              ? `${displayedPlaylists.length} / ${playlists.length} playlists`
+              : `${playlists.length} playlist${playlists.length === 1 ? "" : "s"}`}
+        </h2>
+        <SearchBox
+          open={searchOpen}
+          onToggle={() => setSearchOpen((v) => !v)}
+          value={searchText}
+          onChange={setSearchText}
+          placeholder="Search playlists…"
+        />
+        <IconBtn src="img/add.png" title="New Playlist" onClick={() => setCreateOpen(true)} />
       </div>
       <div className="flex-1 overflow-y-auto scroll-overlay p-6">
-        {isLoading && <p className="text-sm" style={{ color: "var(--text-primary)", opacity: 0.4 }}>Loading…</p>}
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
-          {playlists.map((p) => (
-            <button key={p.id} onClick={() => setSelected(p)} className="text-left group grid-card">
-              <CoverArt coverId={p.cover_id} size={200} className="w-full aspect-square rounded-lg mb-2 group-hover:brightness-75 transition-all" />
-              <p className="text-sm font-medium truncate" style={{ color: "var(--accent)" }}>{p.name}</p>
-              <p className="text-xs" style={{ color: "var(--text-primary)", opacity: 0.4 }}>{p.song_count} tracks</p>
-            </button>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))]" style={{ gap: GAP }}>
+          {displayedPlaylists.map((p) => (
+            <PlaylistCard
+              key={p.id}
+              playlist={p}
+              onOpen={() => pushNav({ playlist: p })}
+              onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setItemMenu({ x: e.clientX, y: e.clientY, playlist: p }); }}
+            />
           ))}
         </div>
       </div>
+
+      {bgMenu && (
+        <ContextMenu
+          x={bgMenu.x} y={bgMenu.y}
+          items={[{ label: "New Playlist…", icon: "img/add.png", onClick: () => setCreateOpen(true) }]}
+          onClose={() => setBgMenu(null)}
+        />
+      )}
+      {itemMenu && (
+        <ContextMenu
+          x={itemMenu.x} y={itemMenu.y}
+          items={[
+            { label: "Rename Playlist", icon: "img/info.png", onClick: () => setRenameTarget(itemMenu.playlist) },
+            { label: "Delete Playlist", icon: "img/remove.png", color: "#E53935", onClick: () => setDeleteTarget(itemMenu.playlist) },
+          ]}
+          onClose={() => setItemMenu(null)}
+        />
+      )}
+      {createOpen && <NewPlaylistDialog onCreate={handleCreate} onCancel={() => setCreateOpen(false)} />}
+      {renameTarget && (
+        <PromptDialog
+          title="Rename Playlist"
+          placeholder={renameTarget.name}
+          confirmLabel="Rename"
+          onSubmit={handleRename}
+          onCancel={() => setRenameTarget(null)}
+        />
+      )}
+      {deleteTarget && (
+        <ConfirmDialog
+          title="Delete Playlist"
+          message={`Delete "${deleteTarget.name}"? This cannot be undone.`}
+          confirmLabel="Delete"
+          danger
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 }

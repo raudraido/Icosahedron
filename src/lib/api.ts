@@ -23,6 +23,11 @@ export interface Album {
   duration_secs: number;
   starred: boolean;
   genre: string | null;
+  /** MusicBrainz-style release type tags (e.g. ["album"], ["single"], ["ep"],
+   *  ["compilation"]) — used by the artist detail page to split "Albums"
+   *  from "Singles & EPs", matching the old app's releaseTypes/albumType
+   *  substring check. */
+  release_types: string[] | null;
 }
 
 export interface Track {
@@ -75,6 +80,7 @@ export interface Playlist {
   duration_secs: number;
   cover_id: string | null;
   public: boolean;
+  owner: string | null;
 }
 
 export interface ArtistDetail {
@@ -180,9 +186,16 @@ export const api = {
   getPlaylists: () => invoke<Playlist[]>("get_playlists"),
   getPlaylistTracks: (id: string) =>
     invoke<Track[]>("get_playlist_tracks", { id }),
-  createPlaylist: (name: string) => invoke<Playlist>("create_playlist", { name }),
+  createPlaylist: (name: string, isPublic = false) => invoke<Playlist>("create_playlist", { name, isPublic }),
   addTracksToPlaylist: (playlistId: string, trackIds: string[]) =>
     invoke<void>("add_tracks_to_playlist", { playlistId, trackIds }),
+  renamePlaylist: (playlistId: string, name: string) => invoke<void>("rename_playlist", { playlistId, name }),
+  setPlaylistPublic: (playlistId: string, isPublic: boolean) => invoke<void>("set_playlist_public", { playlistId, isPublic }),
+  deletePlaylist: (playlistId: string) => invoke<void>("delete_playlist", { playlistId }),
+  removeTrackFromPlaylist: (playlistId: string, songIndex: number) =>
+    invoke<void>("remove_track_from_playlist", { playlistId, songIndex }),
+  reorderPlaylistTracks: (playlistId: string, currentLength: number, newTrackIds: string[]) =>
+    invoke<void>("reorder_playlist_tracks", { playlistId, currentLength, newTrackIds }),
 
   getSimilarSongs: (artistId: string, count = 50) =>
     invoke<Track[]>("get_similar_songs", { artistId, count }),
@@ -231,6 +244,13 @@ export const api = {
   audioStop: () => invoke<void>("audio_stop"),
   audioSeek: (seconds: number) => invoke<void>("audio_seek", { seconds }),
   audioSetVolume: (volume: number) => invoke<void>("audio_set_volume", { volume }),
+
+  // ── BPM detection (footer bar) — cache-first; get_bpm runs the native
+  // QM-DSP analyzer on a cache miss (can take a few seconds), so callers
+  // should treat this as a slow call, not fire-and-forget it per track. ────
+  getBpm: (trackId: string, streamUrl: string) => invoke<number>("get_bpm", { trackId, streamUrl }),
+  setBpmOverride: (trackId: string, bpm: number) => invoke<void>("set_bpm_override", { trackId, bpm }),
+  getBpmCacheAll: () => invoke<Record<string, number>>("get_bpm_cache_all"),
 };
 
 export function fmtDuration(secs: number): string {

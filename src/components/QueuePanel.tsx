@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useStore } from "../store";
 import { api, Track, fmtDuration } from "../lib/api";
 import { PlayingBars } from "./PlayingBars";
@@ -10,15 +11,15 @@ import { ContextMenu, MenuEntry } from "./ContextMenu";
 import { PromptDialog } from "./PromptDialog";
 import { TrackInfoDialog } from "./TrackInfoDialog";
 import { FAVORITE_PINK } from "../lib/theme";
-import { QueueBottomTabs, QueueTab } from "./QueueBottomTabs";
+import { QueueBottomTabs } from "./QueueBottomTabs";
 import { LyricsPanel } from "./LyricsPanel";
 import { ArtistInfoPanel } from "./ArtistInfoPanel";
 
-const ROW_HEIGHT = 53;
+export const ROW_HEIGHT = 53;
 
 // 2×3 dot grip — matches queue_list.qml's drag handle, shown in the #/index
 // column in place of the track number, on row hover (or while dragging).
-function GripDots() {
+export function GripDots() {
   return (
     <div className="grid grid-cols-2 gap-[2px]" style={{ width: 8 }}>
       {Array.from({ length: 6 }, (_, i) => (
@@ -35,7 +36,7 @@ function GripDots() {
 // FavoriteHeart (which does hover-to-accent instead), so this is its own
 // small component rather than reusing that one and changing its established
 // behavior.
-function QueueFavoriteHeart({ track }: { track: Track }) {
+export function QueueFavoriteHeart({ track }: { track: Track }) {
   const [starred, setStarred] = useState(track.starred);
   const [hov, setHov] = useState(false);
   useEffect(() => setStarred(track.starred), [track.id, track.starred]);
@@ -74,7 +75,7 @@ function QueueFavoriteHeart({ track }: { track: Track }) {
 // Insertion-point indicator — an 8px accent dot + a 2px accent line spanning
 // the row, shown at whichever boundary the dragged row would land on.
 // Matches queue_list.qml's separate dot+line indicator (lines 343-360).
-function InsertionIndicator() {
+export function InsertionIndicator() {
   return (
     <div className="flex items-center" style={{ height: 0, position: "relative", pointerEvents: "none" }}>
       <div style={{ position: "absolute", left: 12, top: -4, width: 8, height: 8, borderRadius: "50%", background: "var(--accent)" }} />
@@ -86,7 +87,7 @@ function InsertionIndicator() {
 // Floating "ghost" row that follows the cursor's Y position while dragging —
 // matches queue_list.qml's ghost overlay (lines 322-341): lighter panel
 // background, accent border, radius 6, 0.80 opacity.
-function GhostRow({ track, y }: { track: Track; y: number }) {
+export function GhostRow({ track, y }: { track: Track; y: number }) {
   return (
     <div
       style={{
@@ -233,7 +234,8 @@ export function QueuePanel() {
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
   const [ghostY, setGhostY] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<QueueTab>("queue");
+  const activeTab    = useStore((s) => s.queuePanelTab);
+  const setActiveTab = useStore((s) => s.setQueuePanelTab);
 
   // Right-click menu — same shared ContextMenu/PromptDialog/TrackInfoDialog
   // components as TrackTable.tsx, but a queue-specific item list/order (no
@@ -304,13 +306,28 @@ export function QueuePanel() {
     ];
   }
 
-  const totalSecs = queue.reduce((acc, t) => acc + t.duration_secs, 0);
-  const h = Math.floor(totalSecs / 3600);
-  const m = Math.floor((totalSecs % 3600) / 60);
-  const s = totalSecs % 60;
-  const totalFmt = h > 0
-    ? `${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`
-    : `${m}:${String(s).padStart(2,"0")}`;
+  // Memoized — without this, the reduce over the whole queue re-runs on every
+  // store update (e.g. tab navigation), not just when the queue itself
+  // changes, since this panel is always mounted alongside the player bar.
+  const totalFmt = useMemo(() => {
+    const totalSecs = queue.reduce((acc, t) => acc + t.duration_secs, 0);
+    const h = Math.floor(totalSecs / 3600);
+    const m = Math.floor((totalSecs % 3600) / 60);
+    const s = totalSecs % 60;
+    return h > 0
+      ? `${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`
+      : `${m}:${String(s).padStart(2,"0")}`;
+  }, [queue]);
+
+  // Virtualized — the queue can hold thousands of tracks; rendering every
+  // row as a real DOM node made this always-mounted panel re-reconcile all
+  // of them on every unrelated store update (e.g. simply switching tabs).
+  const virtualizer = useVirtualizer({
+    count: queue.length,
+    getScrollElement: () => listRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 8,
+  });
 
   // Manual mousedown/mousemove/mouseup drag instead of native HTML5
   // draggable — native `dragover` only fires at a throttled, low frequency
@@ -430,23 +447,32 @@ export function QueuePanel() {
           </p>
         )}
 
-        {queue.map((t, i) => (
-          <div key={`${t.id}-${i}`}>
-            {dragId && dropIndex === i && <InsertionIndicator />}
-            <QueueRow
-              track={t}
-              index={i}
-              isCurrent={i === currentIndex}
-              isPast={currentIndex >= 0 && i < currentIndex}
-              playing={playing}
-              dragging={dragId === t.id}
-              onPlay={() => playTrack(t, queue)}
-              onGripMouseDown={handleGripMouseDown(t.id)}
-              onContextMenu={(e) => handleRowContextMenu(e, t)}
-            />
+        <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+          {virtualizer.getVirtualItems().map((vRow) => {
+            const i = vRow.index;
+            const t = queue[i];
+            return (
+              <div key={`${t.id}-${i}`} style={{ position: "absolute", top: vRow.start, left: 0, right: 0 }}>
+                <QueueRow
+                  track={t}
+                  index={i}
+                  isCurrent={i === currentIndex}
+                  isPast={currentIndex >= 0 && i < currentIndex}
+                  playing={playing}
+                  dragging={dragId === t.id}
+                  onPlay={() => playTrack(t, queue)}
+                  onGripMouseDown={handleGripMouseDown(t.id)}
+                  onContextMenu={(e) => handleRowContextMenu(e, t)}
+                />
+              </div>
+            );
+          })}
+        </div>
+        {dragId && dropIndex !== null && (
+          <div style={{ position: "absolute", top: dropIndex * ROW_HEIGHT, left: 0, right: 0 }}>
+            <InsertionIndicator />
           </div>
-        ))}
-        {dragId && dropIndex === queue.length && <InsertionIndicator />}
+        )}
 
         {draggedTrack && ghostY !== null && <GhostRow track={draggedTrack} y={ghostY} />}
       </div>

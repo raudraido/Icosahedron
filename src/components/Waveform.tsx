@@ -122,9 +122,33 @@ export function Waveform({ streamUrl, trackId, currentTime, duration, onSeek }: 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, HEIGHT);
 
+    // Waveform not decoded yet — a plain seekbar (matches the old app's
+    // pre-analysis fallback) instead of a flat inert line, so playback is
+    // still scrubbable and legible while the real waveform decodes.
     if (!rawPeaks) {
+      const accentFallback = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#44cfcf";
+      const trackH = 6;
+      const trackY = (HEIGHT - trackH) / 2;
+      const playedX = duration > 0 ? (currentTime / duration) * width : 0;
+
       ctx.fillStyle = "rgba(128,128,128,0.3)";
-      ctx.fillRect(0, HEIGHT / 2 - 1, width, 2);
+      ctx.beginPath();
+      ctx.roundRect(0, trackY, width, trackH, trackH / 2);
+      ctx.fill();
+
+      if (playedX > 0) {
+        ctx.fillStyle = accentFallback;
+        ctx.beginPath();
+        ctx.roundRect(0, trackY, playedX, trackH, trackH / 2);
+        ctx.fill();
+      }
+
+      const thumbR = 6;
+      const thumbX = Math.max(thumbR, Math.min(width - thumbR, playedX));
+      ctx.beginPath();
+      ctx.arc(thumbX, HEIGHT / 2, thumbR, 0, Math.PI * 2);
+      ctx.fillStyle = accentFallback;
+      ctx.fill();
       return;
     }
 

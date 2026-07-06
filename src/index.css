@@ -62,7 +62,21 @@ html, body, #root {
   font-size: var(--fs-primary);
 }
 
-.grid-card {}
+/* AlbumCard's root <button> — buttons are inline-block by default, so
+ * without this they size to their own content instead of filling whatever
+ * container places them (a CSS Grid track stretches items automatically,
+ * which is why this was invisible in Albums.tsx's own grid; Home.tsx's
+ * horizontal rows don't get that for free, so this needs to hold for both). */
+.grid-card { display: block; width: 100%; }
+
+/* TrackTable's reorderable "#" column — track number/playing-bars by
+ * default, drag grip only on row hover (matches QueuePanel's grip-on-hover
+ * convention). CSS-only (no per-row React state) to avoid re-rendering the
+ * whole virtualized row list on every hover change. */
+.track-num-grip { opacity: 0; transition: opacity 120ms; }
+.track-num-plain { transition: opacity 120ms; }
+.reorder-row:hover .track-num-grip { opacity: 1; }
+.reorder-row:hover .track-num-plain { opacity: 0; }
 
 /* Promote scroll containers to their own GPU compositor layer for smooth 144Hz scrolling */
 .scroll-overlay { will-change: transform; }
@@ -110,7 +124,7 @@ html, body, #root {
 .scroll-clean { overflow-y: auto; will-change: transform; }
 .scroll-clean::-webkit-scrollbar { width: 0; }
 
-::-webkit-scrollbar       { width: 6px; }
+::-webkit-scrollbar       { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
   background: transparent;

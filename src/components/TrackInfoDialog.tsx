@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Track, fmtDuration, api } from "../lib/api";
+import { useStore } from "../store";
 import { Icon } from "./Icon";
 import { ArtistTokens } from "./ArtistTokens";
 import { AlbumLink } from "./AlbumLink";
@@ -96,6 +97,7 @@ export function TrackInfoDialog({ track, onClose }: Props) {
     queryKey: ["track-info", track.id],
     queryFn: () => api.getTrackInfo(track.id),
   });
+  const detectedBpm = useStore((s) => s.bpmCache[track.id]);
 
   return (
     <div
@@ -138,9 +140,7 @@ export function TrackInfoDialog({ track, onClose }: Props) {
           <BoolRow label="Is compilation" value={full?.is_compilation} />
           <Row label="Codec" value={full?.codec} />
           <Row label="BPM ID3Tag" value={track.bpm} />
-          {/* No on-device BPM analysis in this build (the old app's "BPM Detected" comes
-              from a live audio-engine DSP pass during playback, not server data) — always "—". */}
-          <Row label="BPM Detected" value="—" />
+          <Row label="BPM Detected" value={detectedBpm != null ? detectedBpm.toFixed(1) : "—"} />
           <Row label="Bitrate" value={track.bitrate ? `${track.bitrate} kbps` : null} />
           <Row label="Sample rate" value={full?.sample_rate} />
           <Row label="Bit depth" value={full?.bit_depth} />

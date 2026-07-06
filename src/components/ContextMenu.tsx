@@ -144,14 +144,14 @@ function MenuRow({ item, onSelect }: { item: MenuItem; onSelect: (item: MenuItem
       {item.submenu && submenuOpen && (
         <div
           ref={submenuRef}
-          className="scroll-clean"
+          className="scroll-overlay"
           style={{
             position: "absolute",
             [submenuPos.anchor]: "100%",
             top: submenuPos.top,
             visibility: submenuPos.ready ? "visible" : "hidden",
-            background: MENU_BG, border: "1px solid var(--border)", borderRadius: 8, padding: 4,
-            minWidth: 200, maxHeight: 320, overflowY: "auto",
+            background: MENU_BG, border: "1px solid var(--border)", borderRadius: 8, padding: "8px 4px",
+            minWidth: 200, maxHeight: "min(480px, calc(100vh - 16px))", overflowY: "auto",
             boxShadow: MENU_SHADOW, whiteSpace: "nowrap",
             display: "flex", flexDirection: "column", gap: 1,
           }}

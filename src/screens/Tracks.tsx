@@ -29,6 +29,21 @@ export function Tracks() {
   // never persists these across restarts either).
   const [colFilters, setColFilters] = useState<Record<string, Set<string>>>({});
 
+  // Cross-tab "open Tracks pre-filtered" intent (e.g. clicking a genre/year
+  // cell in a playlist's tracklist, Playlists.tsx) — applied whenever the
+  // current nav entry carries one. Tracks stays mounted across tab switches
+  // (App.tsx's `mounted` set), so this can't just be a useState initializer
+  // like Artists.tsx's one-time navQuery capture; it needs to reapply on
+  // every *new* navigateTo call, which is exactly what depending on the
+  // entry's object identity gives for free (a fresh navigateTo always
+  // creates a new object, even for the same col/value).
+  const trackFilter = useStore((s) => s.navHistory[s.navPos]?.trackFilter);
+  useEffect(() => {
+    if (!trackFilter) return;
+    setColFilters({ [trackFilter.col]: new Set([trackFilter.value]) });
+    setPage(1);
+  }, [trackFilter]);
+
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(query), 400);
     return () => clearTimeout(t);

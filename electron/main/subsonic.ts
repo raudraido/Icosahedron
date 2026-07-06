@@ -73,7 +73,21 @@ export class SubsonicClient {
     const url = this.coverArtUrl(coverId, size);
     const resp = await fetch(url, { signal });
     const contentType = resp.headers.get("content-type") ?? "image/jpeg";
+    // A missing/invalid cover id doesn't necessarily 404 — some Subsonic
+    // servers respond 200 with a JSON error body instead. Either way, that's
+    // not image bytes: throwing here (instead of returning it as if it were
+    // a valid cover) matters because coverProtocol.ts's disk cache only ever
+    // writes on the success path — if this returned "successfully" with junk
+    // bytes, that junk would get cached to disk *permanently*, and every
+    // future load would keep re-serving the same poisoned file forever
+    // without ever hitting the network (or this validation) again.
+    if (!resp.ok || !contentType.startsWith("image/")) {
+      throw new Error(`cover art fetch failed: HTTP ${resp.status}, content-type ${contentType}`);
+    }
     const bytes = Buffer.from(await resp.arrayBuffer());
+    if (bytes.length === 0) {
+      throw new Error("cover art fetch returned empty body");
+    }
     return { bytes, contentType };
   }
 
@@ -150,10 +164,32 @@ export class SubsonicClient {
     return asArray(root.playlist?.entry).map((s) => this.parseTrack(s));
   }
 
-  async createPlaylist(name: string): Promise<Playlist> {
+  async createPlaylist(name: string, isPublic = false): Promise<Playlist> {
     const root = await this.get("createPlaylist", { name });
     if (!root.playlist) throw new Error("missing playlist in createPlaylist response");
-    return parsePlaylist(root.playlist);
+    const created = parsePlaylist(root.playlist);
+    if (isPublic) {
+      await this.get("updatePlaylist", { playlistId: created.id, public: "true" });
+      created.public = true;
+    }
+    return created;
+  }
+
+  async renamePlaylist(playlistId: string, name: string): Promise<void> {
+    await this.get("updatePlaylist", { playlistId, name });
+  }
+
+  async setPlaylistPublic(playlistId: string, isPublic: boolean): Promise<void> {
+    await this.get("updatePlaylist", { playlistId, public: String(isPublic) });
+  }
+
+  async deletePlaylist(playlistId: string): Promise<void> {
+    await this.get("deletePlaylist", { id: playlistId });
+  }
+
+  /** Removes a single track by its 0-based playlist position. */
+  async removeTrackFromPlaylist(playlistId: string, songIndex: number): Promise<void> {
+    await this.get("updatePlaylist", { playlistId, songIndexToRemove: String(songIndex) });
   }
 
   /** Appends tracks to an existing playlist — uses songIdToAdd only, doesn't touch existing entries.
@@ -163,6 +199,23 @@ export class SubsonicClient {
     const params = new URLSearchParams(this.authParams());
     params.set("playlistId", playlistId);
     for (const id of trackIds) params.append("songIdToAdd", id);
+    const resp = await fetch(`${this.baseUrl}/rest/updatePlaylist`, { method: "POST", body: params });
+    const body = await resp.json();
+    const root = body?.["subsonic-response"];
+    if (!root || root.status !== "ok") {
+      throw new SubsonicApiError(root?.error?.code ?? 0, root?.error?.message ?? "updatePlaylist failed");
+    }
+  }
+
+  /** Replaces the entire playlist content with a new track order — Subsonic has no
+   *  "move" verb, so this removes every existing index (highest-first, to avoid
+   *  index-shift bugs on older servers) then re-adds the full id list in the new
+   *  order, all in one POST. Matches the old app's update_playlist_tracks exactly. */
+  async reorderPlaylistTracks(playlistId: string, currentLength: number, newTrackIds: string[]): Promise<void> {
+    const params = new URLSearchParams(this.authParams());
+    params.set("playlistId", playlistId);
+    for (let i = currentLength - 1; i >= 0; i--) params.append("songIndexToRemove", String(i));
+    for (const id of newTrackIds) params.append("songIdToAdd", id);
     const resp = await fetch(`${this.baseUrl}/rest/updatePlaylist`, { method: "POST", body: params });
     const body = await resp.json();
     const root = body?.["subsonic-response"];
@@ -522,6 +575,7 @@ function parseAlbum(a: any): Album {
     duration_secs: a.duration ?? 0,
     starred: a.starred !== undefined,
     genre: a.genre ?? null,
+    release_types: a.releaseTypes ? asArray(a.releaseTypes).map(String) : null,
   };
 }
 
@@ -538,6 +592,7 @@ function parseNativeAlbum(a: any): Album {
     duration_secs: a.duration ?? (a.durationMs !== undefined ? Math.floor(a.durationMs / 1000) : 0),
     starred: !!a.starred,
     genre: a.genre ?? null,
+    release_types: a.releaseTypes ? asArray(a.releaseTypes).map(String) : null,
   };
 }
 
@@ -550,5 +605,6 @@ function parsePlaylist(p: any): Playlist {
     duration_secs: p.duration ?? 0,
     cover_id: p.coverArt ?? null,
     public: !!p.public,
+    owner: p.owner ?? null,
   };
 }

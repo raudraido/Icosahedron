@@ -9,6 +9,8 @@ use std::sync::Arc;
 use napi::JsFunction;
 use napi_derive::napi;
 
+mod bpm;
+mod bpm_analyze;
 mod commands;
 mod decode;
 mod engine;
@@ -98,5 +100,13 @@ impl AudioEngine {
     pub fn set_volume(&self, volume: f64) -> napi::Result<()> {
         transport::set_volume(&self.inner, volume as f32);
         Ok(())
+    }
+
+    /// Downloads `url` in full and runs QM-DSP beat detection over it,
+    /// returning the snapped constant-tempo BPM. Independent of playback
+    /// state — safe to call for a track that isn't (or isn't yet) playing.
+    #[napi]
+    pub async fn analyze_bpm(&self, url: String) -> napi::Result<f64> {
+        bpm_analyze::analyze_bpm(&self.inner, url).await.map_err(napi::Error::from_reason)
     }
 }

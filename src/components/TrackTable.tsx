@@ -17,6 +17,13 @@ import { TrackInfoDialog } from "./TrackInfoDialog";
 import { ColumnFilterPopup } from "./ColumnFilterPopup";
 import { ARTIST_SEP_RE } from "./ArtistTokens";
 import { FAVORITE_PINK } from "../lib/theme";
+import { GripDots, InsertionIndicator, GhostRow } from "./QueuePanel";
+
+// Fixed track-row height — used both by react-virtual's estimateSize and by
+// the reorder drag math below (Math.floor(relY / TRACK_ROW_HEIGHT)). Only
+// valid while every row is a plain track row, which is why reorderable is
+// gated on !showDiscHeaders (disc-header rows are a different, 36px height).
+const TRACK_ROW_HEIGHT = 58;
 
 // Shared, reusable track table — used by both the main Tracks screen and the
 // album-detail tracklist (matches the old app's TrackListView.qml, reused
@@ -40,6 +47,10 @@ interface ColumnDef {
 // Leading row-position column — always present, first, fixed width, non-reorderable,
 // non-sortable, non-toggleable, non-resizable. Change the width here.
 const NUM_COL_WIDTH = 20;
+// Fine-tune the "#" cell's centered content left/right without moving the
+// following column: shift the box itself by this many px (positive = left)
+// via equal-and-opposite margins, so the net space it occupies is unchanged.
+const NUM_COL_SHIFT = 8;
 
 const COLUMNS: Record<string, ColumnDef> = {
   track:   { id: "track",   label: "TRACK",       minWidth: 220, sortable: false },
@@ -176,7 +187,7 @@ function deriveFilterValues(tracks: Track[], col: string): string[] {
   return [...vals].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
 }
 
-function sortKey(t: Track, col: string): string | number {
+function sortKey(t: Track, col: string, bpmCache?: Record<string, number>): string | number {
   switch (col) {
     case "title": return t.title.toLowerCase();
     case "artist": return t.artist.toLowerCase();
@@ -187,16 +198,16 @@ function sortKey(t: Track, col: string): string | number {
     case "trackno": return t.track_number;
     case "year": return t.year ?? 0;
     case "date": return t.created ?? "";
-    case "bpm": return t.bpm ?? 0;
+    case "bpm": return bpmCache?.[t.id] ?? t.bpm ?? 0;
     default: return 0;
   }
 }
 
-function sortTracks(tracks: Track[], col: string, dir: "asc" | "desc"): Track[] {
+function sortTracks(tracks: Track[], col: string, dir: "asc" | "desc", bpmCache?: Record<string, number>): Track[] {
   const factor = dir === "asc" ? 1 : -1;
   return [...tracks].sort((a, b) => {
-    const ka = sortKey(a, col);
-    const kb = sortKey(b, col);
+    const ka = sortKey(a, col, bpmCache);
+    const kb = sortKey(b, col, bpmCache);
     if (ka < kb) return -1 * factor;
     if (ka > kb) return 1 * factor;
     return 0;
@@ -252,6 +263,7 @@ function HoverToken({ text, clickable, onClick, onHover, className }: {
 function FavoriteHeart({ track }: { track: Track }) {
   const [starred, setStarred] = useState(track.starred);
   const [hov, setHov] = useState(false);
+  const qc = useQueryClient();
   useEffect(() => setStarred(track.starred), [track.id, track.starred]);
 
   async function toggle(e: React.MouseEvent) {
@@ -260,6 +272,11 @@ function FavoriteHeart({ track }: { track: Track }) {
     setStarred(next);
     try {
       await api.setFavorite(track.id, next, "id");
+      // Lets the Favorites tab's starred-tracks list drop this row (or the
+      // Tracks/Album tables pick up the new heart state) without needing a
+      // manual re-visit — matches the old app's immediate row removal on
+      // un-star, just via a refetch instead of a local splice.
+      qc.invalidateQueries({ queryKey: ["starred"] });
     } catch {
       setStarred(!next);
     }
@@ -288,6 +305,7 @@ export function TrackTable({
   serverDriven = false, sortState: controlledSortState, onSortChange, query: controlledQuery, onQueryChange,
   pagination, toolbarLeft, toolbarRight, numColSource = "trackNumber", numColOffset = 0, viewKey,
   filterableCols = [], colFilters, onFilterChange, colValues,
+  reorderable = false, onReorder, extraMenuItems,
 }: {
   tracks: Track[];
   loading?: boolean;
@@ -328,9 +346,13 @@ export function TrackTable({
    *  column picker — matches the old app's header order: search box, then refresh,
    *  then the rightmost burger/column menu. */
   toolbarRight?: React.ReactNode;
-  /** Column ids that get an Excel-style filter funnel icon in their header (matches the
-   *  old app's `filterableCols` — Tracks screen sets `["artist","album","genre","year"]`,
-   *  album detail leaves this empty). Requires `colFilters`/`onFilterChange`/`colValues`. */
+  /** Column ids where the cell's own value becomes clickable-to-filter (genre/year cells
+   *  call `onFilterChange` with just that one value) — matches the old app's
+   *  `filterableCols`. The header's Excel-style filter *funnel icon* additionally requires
+   *  `colValues` (its checklist's value source); without it, cells are still clickable but
+   *  no funnel icon renders — e.g. Playlists.tsx wires genre/year cells to navigate to the
+   *  Tracks tab pre-filtered, without needing the full checklist popup Tracks.tsx itself
+   *  provides via colValues. */
   filterableCols?: string[];
   /** Active filter values per column id (empty/absent = no filter on that column) — owned
    *  by the parent since applying one means refetching server-side (see Tracks.tsx). */
@@ -340,6 +362,21 @@ export function TrackTable({
    *  not just this page) — used unless another column already has an active filter, in
    *  which case values are instead derived from the currently-loaded `tracks` (cascading). */
   colValues?: Record<string, string[]>;
+  /** Drag-to-reorder via the Queue panel's own grip/drag mechanics (GripDots/
+   *  InsertionIndicator/GhostRow, imported from QueuePanel.tsx rather than
+   *  duplicated). Only takes effect in natural order (no active sort/search)
+   *  and requires `showDiscHeaders` to be false — reorder math assumes every
+   *  row is a uniform TRACK_ROW_HEIGHT, which disc-header rows would break. */
+  reorderable?: boolean;
+  /** Called once per completed drag with the moved track's id and the
+   *  insertion index (0..tracks.length) it was dropped at — the host owns
+   *  actually persisting the new order (e.g. Playlists.tsx's
+   *  reorderPlaylistTracks) and updating its own `tracks` prop afterward. */
+  onReorder?: (trackId: string, toIndex: number) => void;
+  /** Extra context-menu rows appended after the built-in ones (e.g.
+   *  Playlists.tsx's "Remove from Playlist") — a callback rather than a
+   *  static list since the entry usually needs the specific track/index. */
+  extraMenuItems?: (track: Track) => MenuEntry[];
 }) {
   const playTrack = useStore((s) => s.playTrack);
   const navigateTo = useStore((s) => s.navigateTo);
@@ -386,6 +423,50 @@ export function TrackTable({
   const pickerRef = useRef<HTMLDivElement>(null);
   const parentRef = useRef<HTMLDivElement>(null);
 
+  // ── Drag-to-reorder (see reorderable/onReorder prop docs above) — natural
+  // order only, same manual mousedown/mousemove/mouseup mechanics as the
+  // Queue panel's own drag-reorder.
+  const reorderActive = reorderable && !showDiscHeaders && !sortState && !query.trim();
+  const dropIndexRef = useRef<number | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const [ghostY, setGhostY] = useState<number | null>(null);
+
+  function handleGripMouseDown(trackId: string) {
+    return (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDragId(trackId);
+      dropIndexRef.current = null;
+      document.body.style.userSelect = "none";
+
+      function onMove(ev: MouseEvent) {
+        const listEl = parentRef.current;
+        if (!listEl) return;
+        const listRect = listEl.getBoundingClientRect();
+        const relY = ev.clientY - listRect.top + listEl.scrollTop;
+        setGhostY(relY);
+        const rawIndex = relY / TRACK_ROW_HEIGHT;
+        const index = Math.floor(rawIndex);
+        const fraction = rawIndex - index;
+        const insertIndex = Math.max(0, Math.min(sorted.length, fraction > 0.5 ? index + 1 : index));
+        dropIndexRef.current = insertIndex;
+        setDropIndex(insertIndex);
+      }
+      function onUp() {
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+        document.body.style.userSelect = "";
+        if (dropIndexRef.current !== null) onReorder?.(trackId, dropIndexRef.current);
+        setDragId(null);
+        setDropIndex(null);
+        setGhostY(null);
+      }
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+    };
+  }
+
   useEffect(() => {
     if (parentRef.current) parentRef.current.scrollTop = 0;
   }, [pagination?.page]);
@@ -405,9 +486,10 @@ export function TrackTable({
         return t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q) || (t.album ?? "").toLowerCase().includes(q);
       });
 
+  const bpmCache = useStore((s) => s.bpmCache);
   const sorted = React.useMemo(
-    () => serverDriven || !sortState ? filtered : sortTracks(filtered, sortState.col, sortState.dir),
-    [filtered, sortState, serverDriven],
+    () => serverDriven || !sortState ? filtered : sortTracks(filtered, sortState.col, sortState.dir, bpmCache),
+    [filtered, sortState, serverDriven, bpmCache],
   );
 
   // Disc separators only make sense in natural (unsorted, unfiltered) order —
@@ -545,7 +627,7 @@ export function TrackTable({
   async function toggleFavoriteFromMenu(track: Track) {
     try {
       await api.setFavorite(track.id, !track.starred, "id");
-      qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === "album-tracks" || q.queryKey[0] === "tracks-native" });
+      qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === "album-tracks" || q.queryKey[0] === "tracks-native" || q.queryKey[0] === "starred" });
     } catch { /* best-effort — row will just show the stale state until next fetch */ }
   }
 
@@ -610,6 +692,7 @@ export function TrackTable({
         color: FAVORITE_PINK,
         onClick: () => toggleFavoriteFromMenu(track),
       },
+      ...(extraMenuItems ? extraMenuItems(track) : []),
     ];
   }
 
@@ -703,7 +786,7 @@ export function TrackTable({
       case "date":
         return <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>{fmtDate(t.created)}</span>;
       case "bpm":
-        return <span className="tabular-nums" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>{fmtBpm(t.bpm)}</span>;
+        return <span className="tabular-nums" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>{fmtBpm(bpmCache[t.id] ?? t.bpm)}</span>;
       default:
         return null;
     }
@@ -766,7 +849,7 @@ export function TrackTable({
 
       {/* Column headers */}
       <div className="flex items-center shrink-0" style={{ height: 36, padding: "0 24px", gap: 12 }}>
-        <div style={{ flex: `0 0 ${NUM_COL_WIDTH}px` }}>
+        <div style={{ flex: `0 0 ${NUM_COL_WIDTH}px`, marginLeft: -NUM_COL_SHIFT, marginRight: NUM_COL_SHIFT, display: "flex", justifyContent: "center" }}>
           <span style={{ fontSize: "var(--fs-small)", fontWeight: 700, letterSpacing: 0.8, color: "var(--text-secondary)" }}>#</span>
         </div>
         {visibleCols.map((id) => {
@@ -796,7 +879,7 @@ export function TrackTable({
               {sortState?.col === id && (
                 <span style={{ color: "var(--accent)", fontSize: "var(--fs-small)" }}>{sortState.dir === "asc" ? "▲" : "▼"}</span>
               )}
-              {filterableCols.includes(id) && (
+              {filterableCols.includes(id) && colValues && (
                 <FilterIcon
                   active={Boolean(colFilters?.[id]?.size)}
                   onClick={(e) => {
@@ -819,7 +902,7 @@ export function TrackTable({
       </div>
 
       {/* Rows */}
-      <div ref={parentRef} className="flex-1 scroll-clean" tabIndex={0} onKeyDown={handleKeyDown} style={{ borderTop: "1px solid var(--border)" }}>
+      <div ref={parentRef} className="flex-1 scroll-clean" tabIndex={0} onKeyDown={handleKeyDown} style={{ borderTop: "1px solid var(--border)", position: "relative" }}>
         {loading && displayRows.length === 0 && Array.from({ length: 12 }, (_, i) => (
           <SkeletonTrackRow key={i} numColWidth={NUM_COL_WIDTH} />
         ))}
@@ -856,6 +939,7 @@ export function TrackTable({
                 onClick={(e) => handleRowClick(e, t, trackIndex)}
                 onDoubleClick={() => handleRowDoubleClick(t)}
                 onContextMenu={(e) => handleRowContextMenu(e, t)}
+                className={reorderActive ? "reorder-row" : undefined}
                 style={{
                   position: "absolute", top: row.start, left: 0, right: 0, height: 58,
                   display: "flex", alignItems: "center", gap: 12,
@@ -869,12 +953,22 @@ export function TrackTable({
                 onMouseEnter={(e) => { if (!isPlaying && !isSelected) e.currentTarget.style.background = "var(--hover-bg)"; }}
                 onMouseLeave={(e) => { if (!isPlaying && !isSelected) e.currentTarget.style.background = "transparent"; }}
               >
-                <div style={{ flex: `0 0 ${NUM_COL_WIDTH}px`, display: "flex", alignItems: "center" }}>
-                  {isPlaying && playing ? <PlayingBars /> : (
-                    <span className="tabular-nums" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>
-                      {numColSource === "position" ? numColOffset + trackIndex + 1 : (t.track_number || "")}
-                    </span>
+                <div
+                  onMouseDown={reorderActive ? handleGripMouseDown(t.id) : undefined}
+                  style={{ flex: `0 0 ${NUM_COL_WIDTH}px`, marginLeft: -NUM_COL_SHIFT, marginRight: NUM_COL_SHIFT, position: "relative", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: reorderActive ? "grab" : "default" }}
+                >
+                  {reorderActive && (
+                    <div className="track-num-grip" style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <GripDots />
+                    </div>
                   )}
+                  <div className={reorderActive ? "track-num-plain" : undefined} style={{ position: reorderActive ? "absolute" : undefined, inset: reorderActive ? 0 : undefined, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {isPlaying && playing ? <PlayingBars /> : (
+                      <span className="tabular-nums" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>
+                        {numColSource === "position" ? numColOffset + trackIndex + 1 : (t.track_number || "")}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {visibleCols.map((id) => (
                   <div
@@ -891,7 +985,16 @@ export function TrackTable({
               </div>
             );
           })}
+          {dragId && dropIndex !== null && (
+            <div style={{ position: "absolute", top: dropIndex * TRACK_ROW_HEIGHT, left: 0, right: 0 }}>
+              <InsertionIndicator />
+            </div>
+          )}
         </div>
+        {dragId && ghostY !== null && (() => {
+          const draggedTrack = sorted.find((t) => t.id === dragId);
+          return draggedTrack ? <GhostRow track={draggedTrack} y={ghostY} /> : null;
+        })()}
       </div>
 
       {pagination && (

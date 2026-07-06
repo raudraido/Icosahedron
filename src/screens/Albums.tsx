@@ -44,7 +44,7 @@ function getSortIcon(sortKey: string, ascending: boolean): string {
 }
 
 
-const AlbumCard = React.memo(function AlbumCard({ album, onOpen }: { album: Album; onOpen: (a: Album) => void }) {
+export const AlbumCard = React.memo(function AlbumCard({ album, onOpen }: { album: Album; onOpen: (a: Album) => void }) {
   const [hovered, setHovered] = useState(false);
   const [playHovered, setPlayHovered] = useState(false);
   const qc = useQueryClient();
@@ -99,11 +99,11 @@ const AlbumCard = React.memo(function AlbumCard({ album, onOpen }: { album: Albu
   );
 });
 
-const CARD_MIN = 200;
-const GAP = 12;
+export const CARD_MIN = 200;
+export const GAP = 12;
 const META_HEIGHT = 62; // 3 text rows below cover
 
-function getColsFromWidth(width: number) {
+export function getColsFromWidth(width: number) {
   return Math.max(1, Math.floor((width + GAP) / (CARD_MIN + GAP)));
 }
 
@@ -191,6 +191,7 @@ function fmtAlbumDuration(totalSecs: number): string {
 
 function AlbumDetail({ album }: { album: Album }) {
   const playTrack = useStore((s) => s.playTrack);
+  const navigateTo = useStore((s) => s.navigateTo);
   const coverUrl = useStore((s) => s.coverUrl);
   const [starred, setStarred] = useState(album.starred);
   const [coverHovered, setCoverHovered] = useState(false);
@@ -330,6 +331,11 @@ function AlbumDetail({ album }: { album: Album }) {
           defaultSort={null}
           persistSort={false}
           showDiscHeaders
+          filterableCols={["genre", "year"]}
+          onFilterChange={(col, values) => {
+            const value = [...values][0];
+            if (value) navigateTo({ tab: "tracks", trackFilter: { col, value } });
+          }}
         />
       </div>
       </div>

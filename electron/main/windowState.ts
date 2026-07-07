@@ -39,7 +39,17 @@ export function applyWindowState(win: BrowserWindow, initial: Bounds): void {
       // best-effort persistence
     }
   };
-  if (initial.maximized) win.maximize();
+  win.once("ready-to-show", () => {
+    if (initial.maximized) {
+      win.maximize();
+    } else {
+      const bounds: Partial<Electron.Rectangle> = { width: initial.width, height: initial.height };
+      if (initial.x !== undefined) bounds.x = initial.x;
+      if (initial.y !== undefined) bounds.y = initial.y;
+      win.setBounds(bounds);
+    }
+    win.show();
+  });
   win.on("close", save);
   win.on("resize", save);
   win.on("move", save);

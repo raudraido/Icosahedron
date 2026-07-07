@@ -16,6 +16,16 @@ protocol.registerSchemesAsPrivileged([
   { scheme: "cover", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
 ]);
 
+// Electron defaults to XWayland on Linux, which on mixed-resolution
+// multi-monitor Wayland setups (e.g. a 1440p + 1080p display) sizes its
+// virtual screen to the lowest-resolution output, capping every window at
+// 1080p regardless of which monitor it's meant for. Forcing the native
+// Wayland backend avoids that.
+if (process.platform === "linux" && process.env["XDG_SESSION_TYPE"] === "wayland") {
+  app.commandLine.appendSwitch("ozone-platform", "wayland");
+  app.commandLine.appendSwitch("enable-features", "WaylandWindowDecorations");
+}
+
 let client: SubsonicClient | null = null;
 let audioEngine: AudioEngineClient | null = null;
 // Tracked separately from the AudioEngineClient's own copy so the
@@ -26,10 +36,13 @@ let mainWindow: BrowserWindow | null = null;
 function createWindow(): void {
   const state = loadWindowState();
   const win = new BrowserWindow({
-    x: state.x,
-    y: state.y,
-    width: state.width,
-    height: state.height,
+    // Bounds are applied explicitly in applyWindowState() once the window is
+    // ready, rather than passed here: on Wayland, Chromium clamps a
+    // constructor-time width/height to whichever display it (unreliably)
+    // detects as primary, silently shrinking a >1080p saved size down to
+    // 1080p on a mixed-resolution multi-monitor setup. A live setBounds()
+    // call after creation isn't subject to that clamp.
+    show: false,
     title: "icosahedron",
     // Packaged AppImage/.exe already get their icon baked in via
     // electron-builder's build.linux/build.win config — this just covers

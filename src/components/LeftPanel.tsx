@@ -106,10 +106,10 @@ export function LeftPanel() {
             style={{
               position: "absolute", inset: 0,
               background: "var(--accent)",
-              WebkitMaskImage: "url(/img/shahedron1.png)",
+              WebkitMaskImage: "url(img/shahedron1.png)",
               WebkitMaskSize: "100% 100%",
               WebkitMaskRepeat: "no-repeat",
-              maskImage: "url(/img/shahedron1.png)",
+              maskImage: "url(img/shahedron1.png)",
               maskSize: "100% 100%",
               maskRepeat: "no-repeat",
             }}

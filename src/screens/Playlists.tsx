@@ -378,7 +378,7 @@ export function Playlists() {
       className="flex flex-col h-full page-fade-in"
       onContextMenu={(e) => { e.preventDefault(); setBgMenu({ x: e.clientX, y: e.clientY }); }}
     >
-      <div className="flex items-center px-6" style={{ height: 58, gap: 6 }}>
+      <div className="flex items-center shrink-0 px-6" style={{ height: 58, gap: 6 }}>
         <h2 className="font-semibold" style={{ flex: 1, color: "var(--text-secondary)", fontSize: "var(--fs-primary)" }}>
           {isLoading
             ? "Loading playlists…"
@@ -395,7 +395,7 @@ export function Playlists() {
         />
         <IconBtn src="img/add.png" title="New Playlist" onClick={() => setCreateOpen(true)} />
       </div>
-      <div className="flex-1 overflow-y-auto scroll-overlay" style={{ padding: 12 }}>
+      <div className="flex-1 overflow-y-auto scroll-overlay" style={{ padding: "0 12px 12px" }}>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))]" style={{ gap: GAP }}>
           {displayedPlaylists.map((p) => (
             <PlaylistCard

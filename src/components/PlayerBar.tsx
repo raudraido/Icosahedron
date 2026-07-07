@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useStore } from "../store";
+import { useSmoothDisplaySeconds } from "../hooks/useSmoothDisplaySeconds";
 import { CoverArt } from "./CoverArt";
 import { Icon } from "./Icon";
 import { PlayRingButton } from "./PlayRingButton";
@@ -68,7 +69,7 @@ export function PlayerBar() {
   const shuffle        = useStore((s) => s.shuffle);
   const repeat         = useStore((s) => s.repeat);
   const volume         = useStore((s) => s.volume);
-  const currentTime    = useStore((s) => s.currentTime);
+  const currentTime    = useSmoothDisplaySeconds();
   const duration       = useStore((s) => s.duration);
   const playPause      = useStore((s) => s.playPause);
   const next           = useStore((s) => s.next);
@@ -381,7 +382,6 @@ export function PlayerBar() {
             <Waveform
               streamUrl={track.stream_url}
               trackId={track.id}
-              currentTime={currentTime}
               duration={duration}
               onSeek={setCurrentTime}
             />

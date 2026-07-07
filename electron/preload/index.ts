@@ -19,4 +19,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("update_download_progress", listener);
     return () => ipcRenderer.removeListener("update_download_progress", listener);
   },
+  // Fired once the installer/AppImage has been handed off to the OS shell,
+  // shortly before this app quits — see updater.ts's downloadAndInstallUpdate
+  // for why the app doesn't just quit silently at that point.
+  onUpdateInstallerLaunching: (cb: () => void) => {
+    const listener = () => cb();
+    ipcRenderer.on("update_installer_launching", listener);
+    return () => ipcRenderer.removeListener("update_installer_launching", listener);
+  },
 });

@@ -95,6 +95,7 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
 export async function downloadAndInstallUpdate(
   downloadUrl: string,
   onProgress?: (progress: UpdateDownloadProgress) => void,
+  onLaunching?: () => void,
 ): Promise<void> {
   const resp = await fetch(downloadUrl);
   if (!resp.ok) throw new Error(`Download failed: HTTP ${resp.status}`);
@@ -148,5 +149,15 @@ export async function downloadAndInstallUpdate(
     openError = await shell.openPath(targetPath);
   }
   if (openError) throw new Error(`Failed to launch installer: ${openError}`);
+
+  // The installer window itself doesn't appear immediately — NSIS
+  // self-extracts its embedded (100+MB) payload with no progress UI of its
+  // own before showing the wizard, which can take tens of seconds. Quitting
+  // this app instantly right after the handoff made that gap look like the
+  // installer had failed to launch at all. Tell the renderer so it can show
+  // a "still launching" message, and give it a moment to actually render
+  // that before tearing the window down.
+  onLaunching?.();
+  await new Promise((resolve) => setTimeout(resolve, 2000));
   app.quit();
 }

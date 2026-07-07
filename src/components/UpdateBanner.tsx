@@ -15,9 +15,10 @@ function formatBytes(n: number): string {
 
 export function UpdateBanner() {
   const [info, setInfo] = useState<UpdateInfo | null>(null);
-  const [state, setState] = useState<"idle" | "downloading" | "error">("idle");
+  const [state, setState] = useState<"idle" | "downloading" | "launching" | "error">("idle");
   const [progress, setProgress] = useState<UpdateDownloadProgress | null>(null);
   const unsubRef = useRef<(() => void) | null>(null);
+  const unsubLaunchingRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     api.checkForUpdate().then((result) => {
@@ -40,16 +41,19 @@ export function UpdateBanner() {
     setState("downloading");
     setProgress(null);
     unsubRef.current = window.electronAPI.onUpdateDownloadProgress((p) => setProgress(p as UpdateDownloadProgress));
+    unsubLaunchingRef.current = window.electronAPI.onUpdateInstallerLaunching(() => setState("launching"));
     try {
       await api.downloadAndInstallUpdate(info!.downloadUrl);
-      // The main process quits the app right after this resolves (or the
-      // app has already exited by the time we'd render again) — nothing
-      // further to do here on success.
+      // The main process quits the app a couple seconds after this resolves
+      // (or the app has already exited by the time we'd render again) —
+      // nothing further to do here on success.
     } catch {
       setState("error");
     } finally {
       unsubRef.current?.();
       unsubRef.current = null;
+      unsubLaunchingRef.current?.();
+      unsubLaunchingRef.current = null;
     }
   }
 
@@ -75,11 +79,17 @@ export function UpdateBanner() {
                 ? `Downloading update… ${pct}%`
                 : `Downloading update… ${formatBytes(progress.receivedBytes)}`
               : "Downloading update…"
-            : state === "error"
-              ? "Download failed — try again later."
-              : `Version ${info.version} is available.`}
+            : state === "launching"
+              // The installer window can take a while to appear — it's
+              // self-extracting its payload with no progress UI of its own
+              // before then. Say so explicitly instead of the app just
+              // vanishing, which reads as a failed launch.
+              ? "Installer launching — this app will close now; the setup window may take a moment to appear."
+              : state === "error"
+                ? "Download failed — try again later."
+                : `Version ${info.version} is available.`}
         </span>
-        {state !== "downloading" && (
+        {state !== "downloading" && state !== "launching" && (
           <div className="flex items-center" style={{ gap: 8 }}>
             <button
               onClick={installNow}

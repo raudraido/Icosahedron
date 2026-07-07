@@ -184,7 +184,11 @@ function registerIpcHandlers(): void {
   ipcMain.handle("app_version", () => app.getVersion());
   ipcMain.handle("check_for_update", () => checkForUpdate());
   ipcMain.handle("download_and_install_update", (_e, { downloadUrl }: { downloadUrl: string }) =>
-    downloadAndInstallUpdate(downloadUrl, (progress) => mainWindow?.webContents.send("update_download_progress", progress)));
+    downloadAndInstallUpdate(
+      downloadUrl,
+      (progress) => mainWindow?.webContents.send("update_download_progress", progress),
+      () => mainWindow?.webContents.send("update_installer_launching"),
+    ));
 
   // Native OS window-frame/titlebar dark-vs-light mode — ports the old app's
   // enable_dark_title_bar (DwmSetWindowAttribute 20/19 on Windows), which

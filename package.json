@@ -1,7 +1,7 @@
 {
   "name": "icosahedron",
   "private": true,
-  "version": "0.13.1",
+  "version": "0.13.2",
   "license": "GPL-3.0-or-later",
   "description": "Electron + React desktop client for Subsonic/Navidrome music servers, with a native Rust gapless audio engine.",
   "type": "module",
@@ -66,6 +66,16 @@
         "nsis"
       ],
       "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "icosahedron",
+      "deleteAppDataOnUninstall": true
     }
   }
 }

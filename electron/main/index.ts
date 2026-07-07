@@ -18,6 +18,10 @@ protocol.registerSchemesAsPrivileged([
 
 let client: SubsonicClient | null = null;
 let audioEngine: AudioEngineClient | null = null;
+// Tracked separately from the AudioEngineClient's own copy so the
+// download_and_install_update handler (registered outside createWindow) can
+// push progress events without needing to reach back into that closure.
+let mainWindow: BrowserWindow | null = null;
 
 function createWindow(): void {
   const state = loadWindowState();
@@ -40,6 +44,7 @@ function createWindow(): void {
   });
   applyWindowState(win, state);
   audioEngine = new AudioEngineClient(win);
+  mainWindow = win;
 
   // Tour-date links (Info tab) and any other window.open() call should go to
   // the OS's default browser — matches the old app's webbrowser.open(url) —
@@ -165,7 +170,8 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle("app_version", () => app.getVersion());
   ipcMain.handle("check_for_update", () => checkForUpdate());
-  ipcMain.handle("download_and_install_update", (_e, { downloadUrl }: { downloadUrl: string }) => downloadAndInstallUpdate(downloadUrl));
+  ipcMain.handle("download_and_install_update", (_e, { downloadUrl }: { downloadUrl: string }) =>
+    downloadAndInstallUpdate(downloadUrl, (progress) => mainWindow?.webContents.send("update_download_progress", progress)));
 
   // Native OS window-frame/titlebar dark-vs-light mode — ports the old app's
   // enable_dark_title_bar (DwmSetWindowAttribute 20/19 on Windows), which

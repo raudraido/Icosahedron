@@ -1,6 +1,8 @@
-import { app } from "electron";
-import { execFile } from "node:child_process";
-import { writeFile, rename } from "node:fs/promises";
+import { app, shell } from "electron";
+import { createWriteStream } from "node:fs";
+import { rename } from "node:fs/promises";
+import { pipeline } from "node:stream/promises";
+import { Readable } from "node:stream";
 import path from "node:path";
 
 // Lightweight "a new version is out" check — not a full electron-updater
@@ -17,6 +19,13 @@ export interface UpdateInfo {
   version: string;
   downloadUrl: string;
   releaseUrl: string;
+}
+
+export interface UpdateDownloadProgress {
+  receivedBytes: number;
+  /** 0 when the server didn't send a Content-Length — UpdateBanner.tsx falls
+   *  back to showing bytes-received-so-far instead of a percentage then. */
+  totalBytes: number;
 }
 
 function parseVersion(v: string): number[] {
@@ -83,31 +92,61 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
 // permanent: the shortcut would still point at the old file next launch,
 // leaving the new one orphaned in temp. Instead, replace the AppImage in
 // place (same directory, atomic rename) before relaunching.
-export async function downloadAndInstallUpdate(downloadUrl: string): Promise<void> {
+export async function downloadAndInstallUpdate(
+  downloadUrl: string,
+  onProgress?: (progress: UpdateDownloadProgress) => void,
+): Promise<void> {
   const resp = await fetch(downloadUrl);
   if (!resp.ok) throw new Error(`Download failed: HTTP ${resp.status}`);
-  const buf = Buffer.from(await resp.arrayBuffer());
+  if (!resp.body) throw new Error("empty response body");
+  const totalBytes = Number(resp.headers.get("content-length") ?? 0) || 0;
 
   const runningAppImage = process.platform === "linux" ? process.env.APPIMAGE : undefined;
-  if (runningAppImage) {
-    // Write alongside the target (not to os.tmpdir(), which may be a
-    // different filesystem — rename() across filesystems isn't atomic and
-    // can fail) then rename over it. Mode 0o755 makes it executable
-    // directly; a fresh download otherwise has no exec bit set at all.
-    const tmp = `${runningAppImage}.update-tmp`;
-    await writeFile(tmp, buf, { mode: 0o755 });
-    await rename(tmp, runningAppImage);
-    execFile(runningAppImage, [], { detached: true, stdio: "ignore" }).unref();
-    app.quit();
-    return;
-  }
+  // Write alongside the eventual target rather than to os.tmpdir(), which
+  // may be a different filesystem — rename() across filesystems isn't
+  // atomic and can fail. Mode 0o755 makes it executable directly; a fresh
+  // download otherwise has no exec bit set at all (matters on Linux; a
+  // harmless no-op on Windows).
+  const targetPath = runningAppImage
+    ? `${runningAppImage}.update-tmp`
+    : path.join(app.getPath("temp"), path.basename(new URL(downloadUrl).pathname) || "icosahedron-update");
 
-  // Windows (and any other case without a known running-AppImage path):
-  // download to temp and hand off to the installer, which does the actual
-  // "replace the app" work itself.
-  const filename = path.basename(new URL(downloadUrl).pathname) || "icosahedron-update";
-  const dest = path.join(app.getPath("temp"), filename);
-  await writeFile(dest, buf, { mode: 0o755 });
-  execFile(dest, [], { detached: true, stdio: "ignore" }).unref();
+  let receivedBytes = 0;
+  // web ReadableStream -> Node stream so it can pipe into a file write
+  // stream while still letting us count bytes as they arrive for progress.
+  const nodeStream = Readable.fromWeb(resp.body as import("node:stream/web").ReadableStream<Uint8Array>);
+  nodeStream.on("data", (chunk: Buffer) => {
+    receivedBytes += chunk.length;
+    onProgress?.({ receivedBytes, totalBytes });
+  });
+  await pipeline(nodeStream, createWriteStream(targetPath, { mode: 0o755 }));
+
+  // shell.openPath (not child_process.execFile) — Electron/Chromium puts
+  // itself in a Windows Job Object that kills *all* child processes when
+  // the parent exits, and Node's `detached: true` isn't enough to escape
+  // that on Windows (it only detaches the console, not the job). The
+  // installer was getting killed by app.quit() below before it could fully
+  // start. shell.openPath launches the file the same way double-clicking
+  // it in Explorer would (via the OS shell), which sits entirely outside
+  // Electron's process tree and survives the app quitting.
+  // shell.openPath resolves to an error message string on failure (not a
+  // throw) — surface it as a real rejection so the renderer's error state
+  // reflects a launch failure instead of quietly "succeeding".
+  let openError: string;
+  if (runningAppImage) {
+    // AppImage has no separate install step — the file *is* the app, and
+    // whatever desktop shortcut/launcher the user has points at a fixed
+    // path. Replace it in place so that shortcut picks up the new version
+    // too, not just this one relaunch.
+    await rename(targetPath, runningAppImage);
+    openError = await shell.openPath(runningAppImage);
+  } else {
+    // Windows: hand off to the installer, which does the actual "replace
+    // the app" work itself — NSIS is configured as an assisted wizard (not
+    // one-click, see package.json's build.nsis), so the user still walks
+    // through the normal install steps from here.
+    openError = await shell.openPath(targetPath);
+  }
+  if (openError) throw new Error(`Failed to launch installer: ${openError}`);
   app.quit();
 }

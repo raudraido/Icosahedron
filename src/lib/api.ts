@@ -134,6 +134,14 @@ export interface UpdateInfo {
   releaseUrl: string;
 }
 
+/** Pushed from electron/main/updater.ts's downloadAndInstallUpdate via the
+ *  `onUpdateDownloadProgress` preload channel, while UpdateBanner.tsx's own
+ *  `downloadAndInstallUpdate()` invoke call is still in flight. */
+export interface UpdateDownloadProgress {
+  receivedBytes: number;
+  totalBytes: number;
+}
+
 /** Pushed from the native gapless audio engine (electron/main/audioEngine.ts)
  *  via the `onAudioEvent` preload channel — see src/store/index.ts's
  *  `handleAudioEvent` for how each kind is handled. */

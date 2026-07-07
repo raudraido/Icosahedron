@@ -52,6 +52,16 @@ interface AppStore {
   queuePanelTab: QueueTab;
   setQueuePanelTab: (tab: QueueTab) => void;
 
+  // Spotlight search overlay (components/SpotlightSearch.tsx) — ports the
+  // old app's SpotlightSearch/show_search: summoned by Ctrl+F or by typing
+  // any plain printable character while nothing else has focus (see
+  // GlobalHotkeys.tsx), `spotlightInitial` is that first typed character so
+  // it's seeded into the input instead of being lost.
+  spotlightOpen: boolean;
+  spotlightInitial: string;
+  openSpotlight: (initialChar?: string) => void;
+  closeSpotlight: () => void;
+
   // left-panel art expand/collapse — mirrors the footer's small thumbnail
   // shrinking to 0 in lockstep (both driven by this one flag), matching the
   // old app's window._toggle_sidebar_art
@@ -178,6 +188,11 @@ export const useStore = create<AppStore>((set, get) => ({
 
   queuePanelTab: "queue",
   setQueuePanelTab: (tab) => set({ queuePanelTab: tab }),
+
+  spotlightOpen: false,
+  spotlightInitial: "",
+  openSpotlight: (initialChar = "") => set({ spotlightOpen: true, spotlightInitial: initialChar }),
+  closeSpotlight: () => set({ spotlightOpen: false, spotlightInitial: "" }),
 
   // `remember` matches the old app's "Remember my credentials" checkbox
   // (login_dialog.py/main.py): url+username are non-secret, but the
@@ -600,4 +615,5 @@ export async function tryAutoConnect() {
   try {
     useStore.getState().restoreSession();
   } catch { /* a failed session restore shouldn't be treated as a bad-credentials error */ }
+  useStore.getState().loadBpmCache();
 }

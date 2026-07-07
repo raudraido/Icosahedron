@@ -28,17 +28,40 @@ export function SkeletonCard({ pillCount = 3 }: { pillCount?: number }) {
   );
 }
 
-export function SkeletonTrackRow({ numColWidth = 28 }: { numColWidth?: number }) {
+// One shimmer cell per *actually visible* column (not a fixed guess) — the
+// "track" column gets the cover+title/artist stack treatment, every other
+// currently-visible column (album, genre, dur, plays, trackno, year, date,
+// bpm, ...) gets a single centered pill sized to its own column width, so
+// the skeleton row's shape always matches whatever columns the user has
+// picked instead of silently leaving extra columns blank while loading.
+export function SkeletonTrackRow({
+  numColWidth = 28,
+  columns,
+}: {
+  numColWidth?: number;
+  columns: { id: string; width: number; centered?: boolean }[];
+}) {
   return (
     <div style={{ height: 58, display: "flex", alignItems: "center", gap: 12, padding: "0 24px", pointerEvents: "none" }}>
       <div style={{ flex: `0 0 ${numColWidth}px` }} />
-      <div className="shimmer-sweep shrink-0" style={{ width: 52, height: 52, borderRadius: 3 }} />
-      <div className="flex flex-col" style={{ gap: 6, flex: 1, minWidth: 0 }}>
-        <div className="shimmer-sweep" style={{ width: 170, maxWidth: "60%", height: 11, borderRadius: 5 }} />
-        <div className="shimmer-sweep" style={{ width: 110, maxWidth: "40%", height: 9, borderRadius: 4, opacity: 0.7 }} />
-      </div>
-      <div className="shimmer-sweep shrink-0" style={{ width: 70, height: 9, borderRadius: 4 }} />
-      <div className="shimmer-sweep shrink-0" style={{ width: 44, height: 9, borderRadius: 4 }} />
+      {columns.map((col) =>
+        col.id === "track" ? (
+          <div key={col.id} className="flex items-center min-w-0" style={{ gap: 12, flex: 1 }}>
+            <div className="shimmer-sweep shrink-0" style={{ width: 52, height: 52, borderRadius: 3 }} />
+            <div className="flex flex-col" style={{ gap: 6, flex: 1, minWidth: 0 }}>
+              <div className="shimmer-sweep" style={{ width: 170, maxWidth: "60%", height: 11, borderRadius: 5 }} />
+              <div className="shimmer-sweep" style={{ width: 110, maxWidth: "40%", height: 9, borderRadius: 4, opacity: 0.7 }} />
+            </div>
+          </div>
+        ) : (
+          <div
+            key={col.id}
+            style={{ flex: `0 0 ${col.width}px`, minWidth: 0, display: "flex", justifyContent: col.centered ? "center" : "flex-start" }}
+          >
+            <div className="shimmer-sweep" style={{ width: "70%", height: 9, borderRadius: 4 }} />
+          </div>
+        ),
+      )}
     </div>
   );
 }

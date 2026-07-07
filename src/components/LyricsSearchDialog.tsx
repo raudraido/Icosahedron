@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, LyricsSearchResult } from "../lib/api";
 import { parseLrc } from "../lib/lrc";
 import { PLAY_ICON_DARK } from "../lib/theme";
+import { ScrollThumb } from "./ScrollThumb";
 
 const SOURCES = ["LRCLib", "NetEase", "SimpMusic"];
 
@@ -23,6 +24,8 @@ export function LyricsSearchDialog({ artist, title, activeSource, activeSid, onA
   const [artistQuery, setArtistQuery] = useState(artist);
   const [results, setResults] = useState<LyricsSearchResult[]>([]);
   const [status, setStatus] = useState("");
+  const resultsRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<LyricsSearchResult | null>(null);
   const [preview, setPreview] = useState("Select a result to preview");
   const [previewRaw, setPreviewRaw] = useState("");
@@ -125,7 +128,8 @@ export function LyricsSearchDialog({ artist, title, activeSource, activeSid, onA
         </div>
 
         <div className="flex-1 flex" style={{ gap: 10, minHeight: 0 }}>
-          <div className="scroll-clean" style={{ flex: 1, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 6 }}>
+          <div style={{ flex: 1, position: "relative" }}>
+          <div ref={resultsRef} className="scroll-clean" style={{ height: "100%", overflowY: "auto", border: "1px solid var(--border)", borderRadius: 6 }}>
             {results.map((r) => {
               const isActive = r.source === activeSource && r.id === activeSid;
               return (
@@ -144,14 +148,20 @@ export function LyricsSearchDialog({ artist, title, activeSource, activeSid, onA
               );
             })}
           </div>
+          <ScrollThumb scrollRef={resultsRef} />
+          </div>
+          <div style={{ flex: 1, position: "relative" }}>
           <div
+            ref={previewRef}
             className="scroll-clean"
             style={{
-              flex: 1, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 6, padding: 10,
+              height: "100%", overflowY: "auto", border: "1px solid var(--border)", borderRadius: 6, padding: 10,
               color: "var(--text-secondary)", fontSize: "var(--fs-secondary)", whiteSpace: "pre-wrap",
             }}
           >
             {preview}
+          </div>
+          <ScrollThumb scrollRef={previewRef} />
           </div>
         </div>
 

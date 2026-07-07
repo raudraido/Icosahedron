@@ -28,6 +28,9 @@ import { PlayerBar } from "./components/PlayerBar";
 import { LeftPanel } from "./components/LeftPanel";
 import { QueuePanel } from "./components/QueuePanel";
 import { Icon } from "./components/Icon";
+import { GlobalTooltip } from "./components/GlobalTooltip";
+import { GlobalHotkeys } from "./components/GlobalHotkeys";
+import { SpotlightSearch } from "./components/SpotlightSearch";
 
 // Full old-app nav order (window.py's addTab sequence) — Home, Now Playing,
 // Mix Builder, and Visualizer aren't built out yet, so they render Placeholder
@@ -263,5 +266,12 @@ function AppInner() {
     );
   }
 
-  return connected ? <MainApp /> : <Login />;
+  return (
+    <>
+      {connected ? <MainApp /> : <Login />}
+      {connected && <GlobalHotkeys />}
+      {connected && <SpotlightSearch />}
+      <GlobalTooltip />
+    </>
+  );
 }

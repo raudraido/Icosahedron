@@ -5,12 +5,13 @@ interface Props {
   coverId: string | null;
   size?: number;
   className?: string;
+  style?: React.CSSProperties;
 }
 
 const MAX_RETRIES = 3;
 const RETRY_BASE_MS = 800;
 
-export function CoverArt({ coverId, size = 200, className = "" }: Props) {
+export function CoverArt({ coverId, size = 200, className = "", style }: Props) {
   const coverUrl = useStore((s) => s.coverUrl);
   const src = coverUrl(coverId, size);
   const [errored, setErrored] = useState(false);
@@ -42,7 +43,7 @@ export function CoverArt({ coverId, size = 200, className = "" }: Props) {
 
   if (!src || errored) {
     return (
-      <div className={`flex items-center justify-center ${className}`} style={{ background: "var(--skeleton)" }}>
+      <div className={`flex items-center justify-center ${className}`} style={{ background: "var(--skeleton)", ...style }}>
         <span className="select-none" style={{ fontSize: "var(--fs-title)", color: "var(--text-primary)", opacity: 0.3 }}>♪</span>
       </div>
     );
@@ -53,6 +54,7 @@ export function CoverArt({ coverId, size = 200, className = "" }: Props) {
       key={attempt}
       src={src}
       className={`object-cover ${className}`}
+      style={style}
       decoding="async"
       onError={() => setErrored(true)}
     />

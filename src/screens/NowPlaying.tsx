@@ -7,6 +7,7 @@ import { CoverArt } from "../components/CoverArt";
 import { CoverZoomOverlay } from "../components/CoverZoomOverlay";
 import { Icon } from "../components/Icon";
 import { FAVORITE_PINK, PLAY_ICON_DARK } from "../lib/theme";
+import { ScrollThumb } from "../components/ScrollThumb";
 
 // Ported from now_playing.qml / now_playing_info.py — the rich "Now Playing"
 // info page (track hero, from-this-album, most-played-by-artist, about-the-
@@ -664,13 +665,18 @@ export function NowPlaying({ active }: { active: boolean }) {
   }
 
   const [zoomOpen, setZoomOpen] = useState(false);
+  const emptyScrollRef = useRef<HTMLDivElement>(null);
+  const mainScrollRef = useRef<HTMLDivElement>(null);
 
   if (!track) {
     return (
-      <div className="flex-1 overflow-y-auto scroll-clean" style={{ padding: 12 }}>
-        <Card style={{ height: 80, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>No track playing</p>
-        </Card>
+      <div className="flex-1" style={{ position: "relative", minHeight: 0 }}>
+        <div ref={emptyScrollRef} className="h-full overflow-y-auto scroll-clean" style={{ padding: 12 }}>
+          <Card style={{ height: 80, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>No track playing</p>
+          </Card>
+        </div>
+        <ScrollThumb scrollRef={emptyScrollRef} />
       </div>
     );
   }
@@ -682,7 +688,8 @@ export function NowPlaying({ active }: { active: boolean }) {
           block for `position: fixed` descendants, which would otherwise confine
           this overlay to the Now Playing area instead of the whole window. */}
       {zoomOpen && track.cover_id && <CoverZoomOverlay coverId={track.cover_id} onClose={() => setZoomOpen(false)} />}
-      <div className="flex-1 overflow-y-auto scroll-clean" style={{ padding: 12 }}>
+      <div className="flex-1" style={{ position: "relative", minHeight: 0 }}>
+      <div ref={mainScrollRef} className="h-full overflow-y-auto scroll-clean" style={{ padding: 12 }}>
       <div className="flex flex-col" style={{ gap: 10 }}>
         <TrackHeroCard track={track} active={active} onCoverClick={() => setZoomOpen(true)} />
 
@@ -697,6 +704,8 @@ export function NowPlaying({ active }: { active: boolean }) {
           </div>
         </div>
       </div>
+      </div>
+      <ScrollThumb scrollRef={mainScrollRef} />
       </div>
     </>
   );

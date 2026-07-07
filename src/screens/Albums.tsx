@@ -12,6 +12,7 @@ import { TrackTable, loadJSON, saveJSON } from "../components/TrackTable";
 import { IconBtn } from "../components/IconBtn";
 import { SearchBox } from "../components/SearchBox";
 import { SkeletonCard } from "../components/Skeleton";
+import { ScrollThumb } from "../components/ScrollThumb";
 import { FAVORITE_PINK, PLAY_ICON_DARK } from "../lib/theme";
 
 const SORT_OPTIONS = [
@@ -117,7 +118,7 @@ interface RowData {
 const GridRow = React.memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
   const { albums, cols, cardWidth, onOpen } = data;
   return (
-    <div style={{ ...style, display: "grid", gridTemplateColumns: `repeat(${cols}, ${cardWidth}px)`, gap: GAP, padding: `0 10px`, alignContent: "start" }}>
+    <div style={{ ...style, display: "grid", gridTemplateColumns: `repeat(${cols}, ${cardWidth}px)`, gap: GAP, padding: `0 12px`, alignContent: "start" }}>
       {Array.from({ length: cols }, (_, c) => {
         const album = albums[index * cols + c];
         return album
@@ -130,6 +131,7 @@ const GridRow = React.memo(({ index, style, data }: ListChildComponentProps<RowD
 
 function AlbumGrid({ albums, loading, onOpen }: { albums: Album[]; loading: boolean; onOpen: (a: Album) => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const listOuterRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
@@ -143,8 +145,8 @@ function AlbumGrid({ albums, loading, onOpen }: { albums: Album[]; loading: bool
   }, []);
 
   const { width, height } = size;
-  const cols = width > 0 ? getColsFromWidth(width - 20) : 4;
-  const cardWidth = width > 0 ? (width - 20 - GAP * (cols - 1)) / cols : CARD_MIN;
+  const cols = width > 0 ? getColsFromWidth(width - 24) : 4;
+  const cardWidth = width > 0 ? (width - 24 - GAP * (cols - 1)) / cols : CARD_MIN;
   const rowHeight = cardWidth + META_HEIGHT + GAP;
   const rowCount = Math.ceil(albums.length / cols);
   const itemData: RowData = { albums, cols, cardWidth, onOpen };
@@ -158,24 +160,29 @@ function AlbumGrid({ albums, loading, onOpen }: { albums: Album[]; loading: bool
           key={r}
           style={{
             position: "absolute", top: r * rowHeight, left: 0, right: 0,
-            display: "grid", gridTemplateColumns: `repeat(${cols}, ${cardWidth}px)`, gap: GAP, padding: "0 10px",
+            display: "grid", gridTemplateColumns: `repeat(${cols}, ${cardWidth}px)`, gap: GAP, padding: "0 12px",
           }}
         >
           {Array.from({ length: cols }, (_, c) => <SkeletonCard key={c} />)}
         </div>
       ))}
       {!showSkeleton && height > 0 && width > 0 && (
-        <FixedSizeList
-          height={height}
-          width={width}
-          itemCount={rowCount}
-          itemSize={rowHeight}
-          itemData={itemData}
-          overscanCount={6}
-          style={{ willChange: "transform" }}
-        >
-          {GridRow}
-        </FixedSizeList>
+        <>
+          <FixedSizeList
+            outerRef={listOuterRef}
+            className="scroll-clean"
+            height={height}
+            width={width}
+            itemCount={rowCount}
+            itemSize={rowHeight}
+            itemData={itemData}
+            overscanCount={6}
+            style={{ willChange: "transform" }}
+          >
+            {GridRow}
+          </FixedSizeList>
+          <ScrollThumb scrollRef={listOuterRef} />
+        </>
       )}
     </div>
   );
@@ -421,7 +428,7 @@ export function Albums() {
   return (
     <div className="flex flex-col h-full page-fade-in">
       {/* ── Toolbar ── */}
-      <div className="flex items-center shrink-0 px-6" style={{ height: 58, gap: 6, borderBottom: "1px solid var(--border)" }}>
+      <div className="flex items-center shrink-0 px-6" style={{ height: 58, gap: 6 }}>
         <h2 className="font-semibold" style={{ flex: 1, color: "var(--text-secondary)", fontSize: "var(--fs-primary)" }}>
           {loading
             ? "Loading albums…"

@@ -3,6 +3,8 @@ import { useStore } from "../store";
 import { api } from "../lib/api";
 import { applyTheme, loadSavedTheme, saveTheme, saveCustomTheme, allThemes, AppTheme } from "../lib/theme";
 import { PromptDialog } from "../components/PromptDialog";
+import { DEFAULT_HOTKEYS, loadHotkeyBindings, saveHotkeyBindings, bindingFromEvent } from "../lib/hotkeys";
+import { ScrollThumb } from "../components/ScrollThumb";
 
 // New view (no old-app equivalent — Sonar's SettingsWindow is a single
 // two-column dialog with no tabs) opened via the footer bar's gear icon
@@ -13,7 +15,7 @@ import { PromptDialog } from "../components/PromptDialog";
 // account switch" discussion this was born from); only System and Themes
 // have real functionality today.
 
-type SettingsTab = "system" | "themes" | "servers" | "users" | "themeBuilder";
+type SettingsTab = "system" | "themes" | "servers" | "users" | "themeBuilder" | "hotkeys";
 
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: "system",       label: "System" },
@@ -21,6 +23,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "servers",      label: "Servers" },
   { id: "users",        label: "Users" },
   { id: "themeBuilder", label: "Theme Builder" },
+  { id: "hotkeys",      label: "Hotkeys" },
 ];
 
 function SideTabButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
@@ -330,8 +333,118 @@ function ThemeBuilderTab() {
   );
 }
 
+// Rebindable global shortcuts — ports the old app's SettingsWindow hotkey
+// list (backed by components/hotkeys.py's HotkeyManager) to this app's
+// GlobalHotkeys.tsx listener. Click "Record", press the new key combo, and
+// it's saved + live immediately (HOTKEYS_CHANGED_EVENT); "Reset" restores
+// that one row's default, "Reset All" restores everything.
+function HotkeyRow({
+  label, binding, recording, onStartRecord, onReset, isDefault,
+}: {
+  label: string; binding: string; recording: boolean; onStartRecord: () => void; onReset: () => void; isDefault: boolean;
+}) {
+  return (
+    <div className="flex items-center" style={{ gap: 12, padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
+      <span style={{ flex: 1, color: "var(--text-primary)", fontSize: "var(--fs-secondary)" }}>{label}</span>
+      <button
+        onClick={onStartRecord}
+        style={{
+          minWidth: 140, textAlign: "center", padding: "5px 10px", borderRadius: 4, cursor: "pointer",
+          background: recording ? "color-mix(in srgb, var(--accent) 20%, transparent)" : "var(--card-bg)",
+          border: `1px solid ${recording ? "var(--accent)" : "var(--border)"}`,
+          color: recording ? "var(--accent)" : "var(--text-primary)",
+          fontSize: "var(--fs-secondary)", fontWeight: 600,
+        }}
+      >
+        {recording ? "Press a key…" : binding}
+      </button>
+      <button
+        onClick={onReset}
+        disabled={isDefault}
+        title="Reset to default"
+        style={{
+          background: "transparent", border: "none", cursor: isDefault ? "default" : "pointer",
+          color: "var(--text-secondary)", opacity: isDefault ? 0.3 : 1, fontSize: "var(--fs-secondary)",
+        }}
+      >
+        Reset
+      </button>
+    </div>
+  );
+}
+
+function HotkeysTab() {
+  const [bindings, setBindings] = useState<Record<string, string>>(loadHotkeyBindings);
+  const [recordingId, setRecordingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!recordingId) return;
+    function onKeyDown(e: KeyboardEvent) {
+      e.preventDefault();
+      if (e.key === "Escape") { setRecordingId(null); return; }
+      const combo = bindingFromEvent(e);
+      if (!combo) return; // still just a modifier held down — wait for the real key
+      setBindings((prev) => {
+        const next = { ...prev, [recordingId!]: combo };
+        saveHotkeyBindings(next);
+        return next;
+      });
+      setRecordingId(null);
+    }
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [recordingId]);
+
+  function resetOne(id: string) {
+    const def = DEFAULT_HOTKEYS.find((h) => h.id === id)!.default;
+    setBindings((prev) => {
+      const next = { ...prev, [id]: def };
+      saveHotkeyBindings(next);
+      return next;
+    });
+  }
+
+  function resetAll() {
+    const next: Record<string, string> = {};
+    for (const h of DEFAULT_HOTKEYS) next[h.id] = h.default;
+    setBindings(next);
+    saveHotkeyBindings(next);
+  }
+
+  return (
+    <div className="flex flex-col" style={{ gap: 16, maxWidth: 520 }}>
+      <Section title="Global Shortcuts">
+        <div>
+          {DEFAULT_HOTKEYS.map((h) => (
+            <HotkeyRow
+              key={h.id}
+              label={h.label}
+              binding={bindings[h.id] ?? h.default}
+              recording={recordingId === h.id}
+              onStartRecord={() => setRecordingId(h.id)}
+              onReset={() => resetOne(h.id)}
+              isDefault={(bindings[h.id] ?? h.default) === h.default}
+            />
+          ))}
+        </div>
+        <button
+          onClick={resetAll}
+          style={{
+            alignSelf: "flex-start", marginTop: 8, background: "transparent", color: "var(--text-secondary)",
+            border: "1px solid var(--border)", borderRadius: 4, padding: "7px 16px", cursor: "pointer",
+            fontSize: "var(--fs-secondary)", fontWeight: 700,
+          }}
+        >
+          Reset All
+        </button>
+      </Section>
+    </div>
+  );
+}
+
 export function Settings() {
   const [tab, setTab] = useState<SettingsTab>("system");
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   return (
     <div className="h-full flex flex-col page-fade-in">
@@ -344,12 +457,16 @@ export function Settings() {
             <SideTabButton key={t.id} label={t.label} active={tab === t.id} onClick={() => setTab(t.id)} />
           ))}
         </div>
-        <div className="flex-1 overflow-y-auto scroll-clean" style={{ padding: 28 }}>
-          {tab === "system" && <SystemTab />}
-          {tab === "themes" && <ThemesTab />}
-          {tab === "servers" && <ComingSoon label="Servers" />}
-          {tab === "users" && <ComingSoon label="Users" />}
-          {tab === "themeBuilder" && <ThemeBuilderTab />}
+        <div className="flex-1" style={{ position: "relative", minHeight: 0 }}>
+          <div ref={scrollRef} className="h-full overflow-y-auto scroll-clean" style={{ padding: 28 }}>
+            {tab === "system" && <SystemTab />}
+            {tab === "themes" && <ThemesTab />}
+            {tab === "servers" && <ComingSoon label="Servers" />}
+            {tab === "users" && <ComingSoon label="Users" />}
+            {tab === "themeBuilder" && <ThemeBuilderTab />}
+            {tab === "hotkeys" && <HotkeysTab />}
+          </div>
+          <ScrollThumb scrollRef={scrollRef} />
         </div>
       </div>
     </div>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
 import { api, ArtistDetail, TourEvent } from "../lib/api";
 import { ARTIST_SEP_RE } from "./ArtistTokens";
+import { ScrollThumb } from "./ScrollThumb";
 
 const TOUR_LIMIT = 5;
 const LS_BIT_ENABLED = "bandsintown_enabled";
@@ -77,6 +78,7 @@ export function ArtistInfoPanel({ active }: { active: boolean }) {
 
   const [pages, setPages] = useState<ArtistPage[]>([]);
   const [pageIdx, setPageIdx] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(false);
   const [detail, setDetail] = useState<ArtistDetail | null>(null);
   const [bioExpanded, setBioExpanded] = useState(false);
@@ -177,7 +179,8 @@ export function ArtistInfoPanel({ active }: { active: boolean }) {
   const visibleEvents = events ? (showAllTours ? events : events.slice(0, TOUR_LIMIT)) : [];
 
   return (
-    <div className="flex-1 overflow-y-auto scroll-clean" style={{ minHeight: 0, padding: 8 }}>
+    <div className="flex-1" style={{ minHeight: 0, position: "relative" }}>
+    <div ref={scrollRef} className="h-full overflow-y-auto scroll-clean" style={{ padding: 8 }}>
       {loading && !detail ? (
         <p className="text-center" style={{ color: "var(--text-secondary)", opacity: 0.4, fontSize: "var(--fs-secondary)", padding: 32 }}>Loading…</p>
       ) : (
@@ -268,6 +271,8 @@ export function ArtistInfoPanel({ active }: { active: boolean }) {
           )}
         </>
       )}
+    </div>
+    <ScrollThumb scrollRef={scrollRef} />
     </div>
   );
 }

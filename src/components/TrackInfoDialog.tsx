@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Track, fmtDuration, api } from "../lib/api";
 import { useStore } from "../store";
 import { Icon } from "./Icon";
 import { ArtistTokens } from "./ArtistTokens";
 import { AlbumLink } from "./AlbumLink";
+import { ScrollThumb } from "./ScrollThumb";
 
 interface Props {
   track: Track;
@@ -98,6 +99,7 @@ export function TrackInfoDialog({ track, onClose }: Props) {
     queryFn: () => api.getTrackInfo(track.id),
   });
   const detectedBpm = useStore((s) => s.bpmCache[track.id]);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   return (
     <div
@@ -126,7 +128,8 @@ export function TrackInfoDialog({ track, onClose }: Props) {
           </button>
         </div>
 
-        <div className="scroll-clean" style={{ padding: "4px 20px 20px", overflowY: "auto" }}>
+        <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
+        <div ref={scrollRef} className="scroll-clean" style={{ height: "100%", padding: "4px 20px 20px", overflowY: "auto" }}>
           <Row label="Title" value={track.title} />
           <PathRow path={full?.path} />
           <ArtistRow label="Album artist" name={full?.album_artist} artistId={null} onNavigate={onClose} />
@@ -150,6 +153,8 @@ export function TrackInfoDialog({ track, onClose }: Props) {
           <Row label="Play count" value={track.play_count} />
           <Row label="Modified" value={track.created} />
           <Row label="Id" value={track.id} />
+        </div>
+        <ScrollThumb scrollRef={scrollRef} />
         </div>
       </div>
     </div>

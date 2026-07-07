@@ -7,7 +7,7 @@ import { useStore } from "../store";
 import { CoverArt } from "./CoverArt";
 import { Icon } from "./Icon";
 import { IconBtn } from "./IconBtn";
-import { SearchBox } from "./SearchBox";
+import { SearchBox, SearchScopeOption } from "./SearchBox";
 import { PlayingBars } from "./PlayingBars";
 import { ArtistTokens } from "./ArtistTokens";
 import { SkeletonTrackRow } from "./Skeleton";
@@ -18,6 +18,7 @@ import { ColumnFilterPopup } from "./ColumnFilterPopup";
 import { ARTIST_SEP_RE } from "./ArtistTokens";
 import { FAVORITE_PINK } from "../lib/theme";
 import { GripDots, InsertionIndicator, GhostRow } from "./QueuePanel";
+import { ScrollThumb } from "./ScrollThumb";
 
 // Fixed track-row height — used both by react-virtual's estimateSize and by
 // the reorder drag math below (Math.floor(relY / TRACK_ROW_HEIGHT)). Only
@@ -222,6 +223,7 @@ function FilterIcon({ active, onClick }: { active: boolean; onClick: (e: React.M
   const [hov, setHov] = useState(false);
   return (
     <div
+      data-filter-trigger
       onClick={onClick}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
@@ -303,6 +305,7 @@ function FavoriteHeart({ track }: { track: Track }) {
 export function TrackTable({
   tracks, loading = false, defaultSort = DEFAULT_SORT, persistSort = true, showDiscHeaders = false,
   serverDriven = false, sortState: controlledSortState, onSortChange, query: controlledQuery, onQueryChange,
+  searchScope, searchScopeOptions, onSearchScopeChange,
   pagination, toolbarLeft, toolbarRight, numColSource = "trackNumber", numColOffset = 0, viewKey,
   filterableCols = [], colFilters, onFilterChange, colValues,
   reorderable = false, onReorder, extraMenuItems,
@@ -339,6 +342,12 @@ export function TrackTable({
   onSortChange?: (s: SortState) => void;
   query?: string;
   onQueryChange?: (q: string) => void;
+  /** Optional search-scope dropdown, forwarded to SearchBox's small
+   *  down-arrow button — only the main Tracks screen passes these; every
+   *  other host omits them and the search box renders unchanged. */
+  searchScope?: string;
+  searchScopeOptions?: SearchScopeOption[];
+  onSearchScopeChange?: (v: string) => void;
   pagination?: { page: number; totalPages: number; onPageChange: (page: number) => void };
   /** Extra content (e.g. track count) rendered at the toolbar's left edge. */
   toolbarLeft?: React.ReactNode;
@@ -812,6 +821,9 @@ export function TrackTable({
           value={query}
           onChange={setQuery}
           placeholder="Search tracks…"
+          scope={searchScope}
+          scopeOptions={searchScopeOptions}
+          onScopeChange={onSearchScopeChange}
         />
         {toolbarRight}
         <div ref={pickerRef} style={{ position: "relative" }}>
@@ -884,6 +896,10 @@ export function TrackTable({
                   active={Boolean(colFilters?.[id]?.size)}
                   onClick={(e) => {
                     e.stopPropagation(); // don't also trigger handleSort(id)
+                    if (filterPopup?.col === id) {
+                      setFilterPopup(null); // clicking the open column's icon again closes it
+                      return;
+                    }
                     const rect = e.currentTarget.closest<HTMLElement>("[data-col-header]")!.getBoundingClientRect();
                     setFilterPopup({ col: id, x: rect.left, y: rect.bottom });
                   }}
@@ -902,9 +918,18 @@ export function TrackTable({
       </div>
 
       {/* Rows */}
-      <div ref={parentRef} className="flex-1 scroll-clean" tabIndex={0} onKeyDown={handleKeyDown} style={{ borderTop: "1px solid var(--border)", position: "relative" }}>
+      <div className="flex-1" style={{ position: "relative", minHeight: 0 }}>
+      <div ref={parentRef} className="scroll-clean" tabIndex={0} onKeyDown={handleKeyDown} style={{ height: "100%", borderTop: "1px solid var(--border)", position: "relative" }}>
         {loading && displayRows.length === 0 && Array.from({ length: 12 }, (_, i) => (
-          <SkeletonTrackRow key={i} numColWidth={NUM_COL_WIDTH} />
+          <SkeletonTrackRow
+            key={i}
+            numColWidth={NUM_COL_WIDTH}
+            columns={visibleCols.map((id) => ({
+              id,
+              width: colWidths[id] ?? COLUMNS[id].minWidth,
+              centered: MID_COLS.has(id),
+            }))}
+          />
         ))}
         <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
           {virtualizer.getVirtualItems().map((row) => {
@@ -995,6 +1020,8 @@ export function TrackTable({
           const draggedTrack = sorted.find((t) => t.id === dragId);
           return draggedTrack ? <GhostRow track={draggedTrack} y={ghostY} /> : null;
         })()}
+      </div>
+      <ScrollThumb scrollRef={parentRef} />
       </div>
 
       {pagination && (

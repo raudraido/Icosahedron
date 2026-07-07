@@ -3,6 +3,7 @@ import { useStore } from "../store";
 import { api, Track } from "../lib/api";
 import { parseLrc, ParsedLyrics, extractOffset, withOffset } from "../lib/lrc";
 import { LyricsSearchDialog } from "./LyricsSearchDialog";
+import { ScrollThumb } from "./ScrollThumb";
 
 // Auto-fetch priority, matching the old app's _LyricsFetcher.run() exactly:
 // local cache → server (Subsonic getLyrics) → LRCLib direct → LRCLib search
@@ -265,6 +266,7 @@ export function LyricsPanel({ active }: { active: boolean }) {
           </div>
         )}
       </div>
+      <ScrollThumb scrollRef={scrollRef} />
 
       {/* Hover toolbar — fades in only while the mouse is over the panel,
           matches lyrics_panel.py's _LyricsToolbar opacity animation. */}

@@ -12,6 +12,7 @@ import { FAVORITE_PINK, PLAY_ICON_DARK } from "../lib/theme";
 import { ContextMenu, MenuEntry } from "../components/ContextMenu";
 import { PromptDialog } from "../components/PromptDialog";
 import { TrackInfoDialog } from "../components/TrackInfoDialog";
+import { ScrollThumb } from "../components/ScrollThumb";
 
 // Ported from the old app's ArtistPlayWorker/search_artist_tracks — "Play all
 // tracks" isn't just the first album: it's every track matching this artist
@@ -344,6 +345,7 @@ export function ArtistDetail({ artistId }: Props) {
   // Start Radio, Add to Playlist, Get Info, Favorite toggle). No "Go to
   // Artist" here since it'd just point back at this same page.
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; track: Track } | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [infoTrack, setInfoTrack] = useState<Track | null>(null);
   const [newPlaylistFor, setNewPlaylistFor] = useState<Track | null>(null);
   const { data: playlists = [] } = useQuery({ queryKey: ["playlists"], queryFn: api.getPlaylists });
@@ -509,7 +511,8 @@ export function ArtistDetail({ artistId }: Props) {
       {photoZoomOpen && data.artist.cover_id && (
         <CoverZoomOverlay coverId={data.artist.cover_id} onClose={() => setPhotoZoomOpen(false)} />
       )}
-      <div className="h-full overflow-y-auto scroll-clean page-fade-in" style={{ padding: 12 }}>
+      <div className="h-full page-fade-in" style={{ position: "relative", minHeight: 0 }}>
+      <div ref={scrollRef} className="h-full overflow-y-auto scroll-clean" style={{ padding: 12 }}>
       <div className="flex flex-col" style={{ gap: 10 }}>
         {/* ── Header ── */}
         <Card>
@@ -637,6 +640,8 @@ export function ArtistDetail({ artistId }: Props) {
           </div>
         )}
       </div>
+      </div>
+      <ScrollThumb scrollRef={scrollRef} />
       </div>
 
       {ctxMenu && (

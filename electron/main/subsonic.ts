@@ -347,17 +347,21 @@ export class SubsonicClient {
    *  unlike the standard Subsonic API which has no arbitrary-sort-field pagination for a flat track list.
    *  `filters` backs the Tracks tab's Excel-style column filters (tracks_browser.py's
    *  _build_server_filters): artist_id/album_id/genre_id are Navidrome's native ID-list filters
-   *  (repeated query params, ANDed as an IN-list) — `year` is a plain scalar column, not a
-   *  many-valued relation, so unlike the ID filters it only ever takes one value server-side
-   *  (matches the old app's `next(iter(allowed))` — deliberately not "fixing" this to multi-value,
-   *  since there's no evidence Navidrome's REST filter treats `year` as an IN-list the way it does
-   *  for the ID-based fields, and guessing wrong here means silently broken filtering). */
+   *  (repeated query params, ANDed as an IN-list) — `year` is NOT: repeated `year` params were
+   *  tried and empirically return zero results (Navidrome treats it as a single scalar column,
+   *  not a many-valued relation), so unlike the ID filters it only ever takes one value
+   *  server-side, matching the old app's `next(iter(allowed))` behavior. Do not "fix" this to
+   *  multi-value again without confirming the server actually supports it. */
   async getTracksNativePage(
     sortBy: string, order: "ASC" | "DESC", start: number, end: number, query?: string,
     filters?: { artistIds?: string[]; albumIds?: string[]; genreIds?: string[]; year?: string; starred?: boolean },
   ): Promise<{ tracks: Track[]; total: number }> {
     await this.authenticateNative();
     const params = new URLSearchParams({ _start: String(start), _end: String(end), _sort: sortBy, _order: order });
+    // Despite the param name, Navidrome resolves `title` as a combined
+    // search across title/artist/album server-side (not a literal
+    // title-only column match) — same behavior Feishin relies on for its
+    // own /api/song search box.
     if (query) params.set("title", query);
     if (filters?.artistIds) for (const id of filters.artistIds) params.append("artist_id", id);
     if (filters?.albumIds) for (const id of filters.albumIds) params.append("album_id", id);
@@ -472,6 +476,10 @@ export class SubsonicClient {
 
   private parseTrack(s: any): Track {
     const id = strField(s, "id");
+    const genres: any[] = Array.isArray(s.genres) ? s.genres : [];
+    const genre = genres.length
+      ? genres.map((g) => (typeof g === "object" ? g?.name : g)).filter(Boolean).join(" • ")
+      : (s.genre ?? null);
     return {
       stream_url: this.streamUrl(id),
       cover_id: s.coverArt ?? null,
@@ -485,7 +493,7 @@ export class SubsonicClient {
       disc_number: s.discNumber ?? 1,
       duration_secs: Math.floor(s.duration ?? 0),
       starred: s.starred !== undefined,
-      genre: s.genre ?? null,
+      genre,
       year: s.year ?? null,
       play_count: s.playCount ?? 0,
       bitrate: s.bitRate ?? null,

@@ -1,0 +1,256 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useStore } from "../store";
+import { api, Artist, Album, Track } from "../lib/api";
+import { CoverArt } from "./CoverArt";
+import { Icon } from "./Icon";
+import { PlayRingButton } from "./PlayRingButton";
+import { ScrollThumb } from "./ScrollThumb";
+
+// System-wide Spotlight search overlay — ports the old app's
+// components/spotlight_search.py SpotlightSearch: a dimmed full-window
+// overlay with a big search input, live results grouped by Tracks/Artists/
+// Albums, and keyboard-first navigation. Opened via GlobalHotkeys.tsx
+// (Ctrl+F, or typing any plain character while nothing else has focus).
+
+type FlatRow =
+  | { kind: "header"; label: string }
+  | { kind: "track"; item: Track }
+  | { kind: "artist"; item: Artist }
+  | { kind: "album"; item: Album };
+
+const SEARCH_DEBOUNCE_MS = 250;
+
+export function SpotlightSearch() {
+  const open = useStore((s) => s.spotlightOpen);
+  const initial = useStore((s) => s.spotlightInitial);
+  const close = useStore((s) => s.closeSpotlight);
+  const playTrack = useStore((s) => s.playTrack);
+  const navigateTo = useStore((s) => s.navigateTo);
+
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<{ tracks: Track[]; artists: Artist[]; albums: Album[] }>({ tracks: [], artists: [], albums: [] });
+  const [activeIndex, setActiveIndex] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setQuery(initial);
+    setResults({ tracks: [], artists: [], albums: [] });
+    setActiveIndex(0);
+    // Rendered fresh each time it opens, so the input isn't focusable until
+    // after this paint — a microtask-delayed focus matches show_search's
+    // own QTimer-free "just show and focus" but actually works in the DOM.
+    requestAnimationFrame(() => {
+      const el = inputRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const q = query.trim();
+    if (!q) {
+      setResults({ tracks: [], artists: [], albums: [] });
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const r = await api.search(q, 4, 4, 6);
+        setResults({ tracks: r.tracks, artists: r.artists, albums: r.albums });
+        setActiveIndex(0);
+      } catch { /* best-effort — leave prior results in place */ }
+    }, SEARCH_DEBOUNCE_MS);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [query, open]);
+
+  const rows = useMemo((): FlatRow[] => {
+    const out: FlatRow[] = [];
+    if (results.tracks.length) {
+      out.push({ kind: "header", label: "Tracks" });
+      for (const t of results.tracks) out.push({ kind: "track", item: t });
+    }
+    if (results.artists.length) {
+      out.push({ kind: "header", label: "Artists" });
+      for (const a of results.artists) out.push({ kind: "artist", item: a });
+    }
+    if (results.albums.length) {
+      out.push({ kind: "header", label: "Albums" });
+      for (const a of results.albums) out.push({ kind: "album", item: a });
+    }
+    return out;
+  }, [results]);
+
+  const selectableIndexes = useMemo(() => rows.map((r, i) => (r.kind === "header" ? -1 : i)).filter((i) => i >= 0), [rows]);
+
+  function moveSelection(dir: 1 | -1, step = 1) {
+    if (!selectableIndexes.length) return;
+    const pos = selectableIndexes.indexOf(activeIndex);
+    const nextPos = Math.max(0, Math.min(selectableIndexes.length - 1, (pos === -1 ? 0 : pos) + dir * step));
+    setActiveIndex(selectableIndexes[nextPos]);
+  }
+
+  async function playDefault(row: FlatRow) {
+    if (row.kind === "track") {
+      playTrack(row.item, [row.item]);
+      close();
+    } else if (row.kind === "album") {
+      const tracks = await api.getAlbumTracks(row.item.id);
+      if (tracks.length) playTrack(tracks[0], tracks);
+      close();
+    } else if (row.kind === "artist") {
+      // Plain "play" for an artist row has no single obvious track — pull
+      // their top songs and play the set, same source the old app's
+      // ArtistPlayWorker used for this exact spotlight action.
+      const top = await api.getTopSongs(row.item.name, 50);
+      if (top.length) playTrack(top[0], top);
+      close();
+    }
+  }
+
+  // Secondary action for a track row — play the whole album it's on, same
+  // as the old app's "Play Full Album" button (Shift+Enter's track branch).
+  async function playTrackAlbum(track: Track) {
+    if (!track.album_id) return;
+    const tracks = await api.getAlbumTracks(track.album_id);
+    if (tracks.length) playTrack(tracks[0], tracks);
+    close();
+  }
+
+  function enterView(row: FlatRow) {
+    if (row.kind === "album") {
+      navigateTo({ tab: "albums", album: row.item });
+      close();
+    } else if (row.kind === "artist") {
+      navigateTo({ tab: "artists", artistId: row.item.id });
+      close();
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Escape") { close(); return; }
+    if (e.key === "ArrowDown") { e.preventDefault(); moveSelection(1); return; }
+    if (e.key === "ArrowUp") { e.preventDefault(); moveSelection(-1); return; }
+    if (e.key === "PageDown") { e.preventDefault(); moveSelection(1, 5); return; }
+    if (e.key === "PageUp") { e.preventDefault(); moveSelection(-1, 5); return; }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const row = rows[activeIndex];
+      if (!row || row.kind === "header") return;
+      if (e.shiftKey && (row.kind === "album" || row.kind === "artist")) enterView(row);
+      else if (e.shiftKey && row.kind === "track" && row.item.album_id) playTrackAlbum(row.item);
+      else playDefault(row);
+    }
+  }
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="flex items-start justify-center"
+      style={{ position: "fixed", inset: 0, zIndex: 2000, background: "rgba(0,0,0,0.55)", paddingTop: "12vh" }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}
+    >
+      <div
+        className="flex flex-col"
+        style={{
+          width: 640, maxWidth: "90vw", maxHeight: "72vh",
+          background: "var(--panel-bg)", border: "1px solid var(--border)", borderRadius: 10,
+          boxShadow: "0 12px 40px rgba(0,0,0,0.45)", overflow: "hidden",
+        }}
+      >
+        <div style={{ padding: "18px 20px" }}>
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Search for songs, artists, or albums…"
+            className="w-full outline-none"
+            style={{ background: "transparent", border: "none", color: "var(--text-primary)", fontSize: "var(--fs-title)" }}
+          />
+        </div>
+
+        {rows.length > 0 && (
+          <div style={{ position: "relative", minHeight: 0, maxHeight: "54vh", borderTop: "1px solid var(--border)" }}>
+          <div ref={listRef} className="scroll-clean" style={{ maxHeight: "54vh", overflowY: "auto", padding: "6px 8px" }}>
+            {rows.map((row, i) => {
+              if (row.kind === "header") {
+                return (
+                  <div key={`h-${row.label}`} style={{ padding: "10px 10px 4px" }}>
+                    <span style={{ color: "var(--text-secondary)", fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>
+                      {row.label}
+                    </span>
+                  </div>
+                );
+              }
+              const active = i === activeIndex;
+              const coverId = row.item.cover_id;
+              const title = row.kind === "artist" ? row.item.name : (row.kind === "album" ? row.item.name : row.item.title);
+              const subtitle =
+                row.kind === "track" ? (row.item.artist || "Unknown Artist") :
+                row.kind === "album" ? (row.item.artist || "Various Artists") :
+                `${row.item.album_count} album${row.item.album_count !== 1 ? "s" : ""}`;
+              return (
+                <div
+                  key={`${row.kind}-${row.item.id}-${i}`}
+                  onMouseEnter={() => setActiveIndex(i)}
+                  onClick={() => playDefault(row)}
+                  className="flex items-center"
+                  style={{
+                    gap: 12, padding: "8px 10px", borderRadius: 6, cursor: "pointer",
+                    background: active ? "var(--hover-bg)" : "transparent",
+                  }}
+                >
+                  <CoverArt coverId={coverId} size={48} className="shrink-0" style={{ width: 44, height: 44, borderRadius: row.kind === "artist" ? "50%" : 4 }} />
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <span className="truncate" style={{ color: "var(--text-primary)", fontWeight: 700, fontSize: "var(--fs-primary)" }}>{title}</span>
+                    <span className="truncate" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>{subtitle}</span>
+                  </div>
+                  {active && (
+                    <div className="flex items-center shrink-0" style={{ gap: 6 }}>
+                      {row.kind === "track" && row.item.album_id && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); playTrackAlbum(row.item); }}
+                          title="Play Full Album (Shift+Enter)"
+                          className="flex items-center justify-center shrink-0"
+                          style={{ width: 32, height: 32, borderRadius: "50%", background: "transparent", border: "none", cursor: "pointer" }}
+                        >
+                          <Icon src="img/album.png" size={16} style={{ background: "var(--accent)" }} />
+                        </button>
+                      )}
+                      {(row.kind === "album" || row.kind === "artist") && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); enterView(row); }}
+                          title="Enter view (Shift+Enter)"
+                          className="flex items-center justify-center shrink-0"
+                          style={{ width: 32, height: 32, borderRadius: "50%", background: "transparent", border: "none", cursor: "pointer" }}
+                        >
+                          <Icon src="img/enter.png" size={16} style={{ background: "var(--accent)" }} />
+                        </button>
+                      )}
+                      <PlayRingButton
+                        icon="img/play.png"
+                        size={32}
+                        iconSize={13}
+                        title={row.kind === "track" ? "Play Track" : row.kind === "album" ? "Play Album" : "Play Artist"}
+                        onClick={() => playDefault(row)}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <ScrollThumb scrollRef={listRef} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

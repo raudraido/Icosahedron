@@ -115,14 +115,23 @@ html, body, #root {
 /*
  * Any non-zero scrollbar width (real or gutter-reserved, one-sided or
  * `both-edges`) throws off exact symmetric padding by that width — there's
- * no `scrollbar-gutter` value that reserves *zero* extra space. So for
- * views where padding must match exactly on both sides, skip gutter
- * reservation entirely and make the scrollbar itself zero-width instead
- * (it was already invisible except while actively scrolling, so there's
- * nothing lost). Scrolling still works fine via wheel/trackpad.
+ * no `scrollbar-gutter` value that reserves *zero* extra space, and toggling
+ * a real ::-webkit-scrollbar's width on scroll reflows the content by that
+ * same amount right when it appears (asymmetric at the exact moment you're
+ * scrolling). So the native scrollbar here stays permanently zero-width —
+ * visibility during scroll comes from ScrollThumb.tsx's own absolutely
+ * positioned overlay div instead (pure paint, never affects layout).
  */
 .scroll-clean { overflow-y: auto; will-change: transform; }
 .scroll-clean::-webkit-scrollbar { width: 0; }
+
+/* ScrollThumb.tsx toggles this div's opacity/top/height inline as the mouse
+   hovers its track or the real container scrolls; the transition just
+   smooths that fade in/out. Hover brightens it exactly like the native
+   ::-webkit-scrollbar-thumb:hover rule below, for parity with the Albums/
+   Artists grids' real (react-window-owned) scrollbar. */
+.overlay-thumb { transition: opacity 200ms, background 150ms; }
+.overlay-thumb:hover { background: var(--accent) !important; }
 
 ::-webkit-scrollbar       { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

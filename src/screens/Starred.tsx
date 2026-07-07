@@ -8,6 +8,7 @@ import { PlayRingButton } from "../components/PlayRingButton";
 import { Icon } from "../components/Icon";
 import { ColumnFilterPopup } from "../components/ColumnFilterPopup";
 import { TrackTable } from "../components/TrackTable";
+import { ScrollThumb } from "../components/ScrollThumb";
 import { useStore } from "../store";
 
 // Ported from favorites.qml / favorites_view.py — a single scrolling page:
@@ -327,6 +328,7 @@ export function Starred() {
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [tracks]);
   const [genrePopup, setGenrePopup] = useState<{ x: number; y: number } | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   function selectTopArtist(name: string) {
     setArtistFilter((prev) => (prev === name ? null : name));
@@ -361,7 +363,8 @@ export function Starred() {
 
   return (
     <>
-      <div className="h-full overflow-y-auto scroll-clean" style={{ padding: 16 }}>
+      <div className="h-full" style={{ position: "relative", minHeight: 0 }}>
+      <div ref={scrollRef} className="h-full overflow-y-auto scroll-clean" style={{ padding: 12 }}>
         <div className="flex flex-col" style={{ gap: 24 }}>
           {isLoading && tracks.length === 0 && (
             <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>Loading…</p>
@@ -411,6 +414,8 @@ export function Starred() {
             </div>
           )}
         </div>
+      </div>
+      <ScrollThumb scrollRef={scrollRef} />
       </div>
 
       {genrePopup && (

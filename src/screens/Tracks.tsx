@@ -2,12 +2,23 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, Track, TrackFilters } from "../lib/api";
 import { TrackTable, SortState, DEFAULT_SORT, loadJSON, saveJSON, LS_SORT } from "../components/TrackTable";
+import { SearchScopeOption } from "../components/SearchBox";
 import { IconBtn } from "../components/IconBtn";
 import { Icon } from "../components/Icon";
 import { useStore } from "../store";
 
 const PAGE_SIZE = 200;
 const FILTERABLE_COLS = ["artist", "album", "genre", "year"];
+const SEARCH_SCOPE_OPTIONS: SearchScopeOption[] = [
+  { value: "title", label: "Title" },
+  { value: "artist", label: "Artist" },
+  { value: "album", label: "Album" },
+];
+// Fields on Track each scope value narrows the client-side filter to —
+// mirrors SEARCH_SCOPE_OPTIONS' values 1:1.
+const SCOPE_FIELD: Record<string, "title" | "artist" | "album"> = {
+  title: "title", artist: "artist", album: "album",
+};
 
 // Maps our column ids to Navidrome's native /api/song `_sort` field names.
 const SORT_FIELD: Record<string, string> = {
@@ -23,6 +34,17 @@ export function Tracks() {
   const [sortState, setSortState] = useState<SortState>(() => loadJSON(LS_SORT("tracks"), DEFAULT_SORT));
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  // Search-scope dropdown (SearchBox's small down-arrow) — Navidrome's
+  // `title=` filter is actually a combined title/artist/album match (see
+  // subsonic.ts's getTracksNativePage), so narrowing to a single field can't
+  // be expressed server-side. "all" (the default) trusts the server as
+  // before; any narrower scope still sends the query to the server as a
+  // coarse pre-filter (a match on any one field is necessarily also a
+  // combined match, so no false negatives), then fetches everything that
+  // matches and narrows to just that field client-side — same "fetch all,
+  // filter/paginate in memory" fallback as the multi-year case below,
+  // unified into one code path.
+  const [searchScope, setSearchScope] = useState("all");
   const [refreshing, setRefreshing] = useState(false);
   // Excel-style column filters (Artist/Album/Genre/Year) — matches
   // tracks_browser.py's _col_filters; kept as component state (the old app
@@ -50,7 +72,7 @@ export function Tracks() {
   }, [query]);
 
   // Sort/search changes invalidate the current page position.
-  useEffect(() => { setPage(1); }, [sortState, debouncedQuery]);
+  useEffect(() => { setPage(1); }, [sortState, debouncedQuery, searchScope]);
 
   const sortCol = sortState ?? { col: "date", dir: "desc" as const };
   const sortField = SORT_FIELD[sortCol.col] ?? "createdAt";
@@ -89,11 +111,21 @@ export function Tracks() {
     [colFilters],
   );
 
+  // Year is a plain scalar column, not a many-valued relation like
+  // artist/album/genre — repeated `year` params were tried and confirmed to
+  // make the server return zero results. So a single checked year is sent
+  // server-side as usual, but when *more than one* is checked, `year` is
+  // dropped from the server request entirely and every matching track
+  // (across all years, still narrowed by any artist/album/genre filters) is
+  // fetched in one shot and filtered/paginated in memory instead — matches
+  // the "fetch everything, slice client-side" fallback discussed for cases
+  // the server API can't express, same idea as yearSample's client sampling.
+  const yearValuesSelected = useMemo(() => [...(colFilters.year ?? [])], [colFilters]);
+  const multiYear = yearValuesSelected.length > 1;
+
   // Converts display-value filters to Navidrome's native id-list params —
-  // matches _build_server_filters. Year is a plain scalar column, not a
-  // many-valued relation like artist/album/genre, so (same as the old app)
-  // only one checked value ever makes it to the server regardless of how
-  // many are checked in the popup.
+  // matches _build_server_filters. Omits `year` outright when multiYear is
+  // true (see above); otherwise includes the single checked value, if any.
   const serverFilters = useMemo((): TrackFilters | undefined => {
     if (!Object.keys(colFilters).length) return undefined;
     const filters: TrackFilters = {};
@@ -103,19 +135,58 @@ export function Tracks() {
     if (albumIds.length) filters.albumIds = albumIds;
     const genreIds = [...(colFilters.genre ?? [])].map((n) => genreMap[n]).filter(Boolean);
     if (genreIds.length) filters.genreIds = genreIds;
-    const year = [...(colFilters.year ?? [])][0];
-    if (year) filters.year = year;
+    if (yearValuesSelected.length === 1) filters.year = yearValuesSelected[0];
     return filters;
-  }, [colFilters, artistMap, albumMap, genreMap]);
+  }, [colFilters, artistMap, albumMap, genreMap, yearValuesSelected]);
 
-  const { data, isLoading } = useQuery({
+  // Client-side fallback mode: either multiple years are checked, or a
+  // narrower-than-"all" search scope is selected *and there's actually a
+  // query to narrow* — both need a full fetch + local filter/paginate
+  // instead of trusting the server's own pagination/total (see comments on
+  // `multiYear` and `searchScope` above for why each can't be expressed as a
+  // single server-side request). Picking "Title" alone with an empty query
+  // box is a no-op (there's nothing to filter by title yet, so the result
+  // is identical to "All"), so it shouldn't trigger the fetch-all fallback
+  // by itself — only once the user actually types something does the mode
+  // switch and the real fetch happen.
+  const clientSideMode = multiYear || (searchScope !== "all" && debouncedQuery.trim() !== "");
+
+  const { data, isLoading: pageLoading } = useQuery({
     queryKey: ["tracks-native", sortField, order, page, debouncedQuery, filterKey],
     queryFn: () => api.getTracksNativePage(sortField, order, (page - 1) * PAGE_SIZE, page * PAGE_SIZE, debouncedQuery || undefined, serverFilters),
     placeholderData: (prev) => prev,
+    enabled: !clientSideMode,
   });
 
-  const tracks = data?.tracks ?? [];
-  const total = data?.total ?? 0;
+  // Fallback path: one large fetch (no server-side pagination — `_end` set
+  // generously high), still narrowed server-side by serverFilters and the
+  // query (a coarse pre-filter — see `searchScope` comment), then further
+  // filtered down to just the checked years and/or the selected search
+  // scope's field, and paginated in memory below.
+  const { data: clientSideData, isLoading: clientSideLoading } = useQuery({
+    queryKey: ["tracks-native-clientside", sortField, order, debouncedQuery, filterKey],
+    queryFn: () => api.getTracksNativePage(sortField, order, 0, 1_000_000, debouncedQuery || undefined, serverFilters),
+    placeholderData: (prev) => prev,
+    enabled: clientSideMode,
+  });
+
+  const isLoading = clientSideMode ? clientSideLoading : pageLoading;
+
+  const yearSelectedSet = useMemo(() => new Set(yearValuesSelected), [yearValuesSelected]);
+  const clientSideFiltered = useMemo(() => {
+    if (!clientSideMode) return [];
+    let filtered = clientSideData?.tracks ?? [];
+    if (multiYear) filtered = filtered.filter((t) => t.year && yearSelectedSet.has(String(t.year)));
+    if (searchScope !== "all" && debouncedQuery) {
+      const q = debouncedQuery.toLowerCase();
+      const field = SCOPE_FIELD[searchScope];
+      filtered = filtered.filter((t) => (t[field] ?? "").toLowerCase().includes(q));
+    }
+    return filtered;
+  }, [clientSideMode, clientSideData, multiYear, yearSelectedSet, searchScope, debouncedQuery]);
+
+  const tracks = clientSideMode ? clientSideFiltered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : (data?.tracks ?? []);
+  const total = clientSideMode ? clientSideFiltered.length : (data?.total ?? 0);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   function handleSortChange(next: SortState) {
@@ -132,17 +203,27 @@ export function Tracks() {
     setPage(1);
   }
 
-  const filtersActive = Object.keys(colFilters).length > 0;
+  // A non-empty search box narrows the track list exactly like a column
+  // filter does — fetchAllFiltered() below already folds the query into its
+  // request either way, so the toolbar (Play/Shuffle filtered, Clear
+  // filters) should reflect that instead of only reacting to colFilters.
+  // Uses the live `query`, not `debouncedQuery`, so the button appears the
+  // instant you start typing rather than waiting out the debounce.
+  const filtersActive = Object.keys(colFilters).length > 0 || query.trim().length > 0;
 
   function handleClearAllFilters() {
     setColFilters({});
+    setQuery("");
     setPage(1);
   }
 
   // Matches _fetch_all_filtered_tracks: a single request for the *entire*
   // filtered result set (not just the current page) using the same sort/
   // query/filters as the table — reused by both Play and Shuffle filtered.
+  // In the client-side fallback, clientSideFiltered already *is* the entire
+  // matching set, so no extra fetch is needed.
   async function fetchAllFiltered(): Promise<Track[]> {
+    if (clientSideMode) return clientSideFiltered;
     if (total === 0) return [];
     const result = await api.getTracksNativePage(sortField, order, 0, total, debouncedQuery || undefined, serverFilters);
     return result.tracks;
@@ -209,6 +290,9 @@ export function Tracks() {
         onSortChange={handleSortChange}
         query={query}
         onQueryChange={setQuery}
+        searchScope={searchScope}
+        searchScopeOptions={SEARCH_SCOPE_OPTIONS}
+        onSearchScopeChange={setSearchScope}
         pagination={{ page, totalPages, onPageChange: setPage }}
         filterableCols={FILTERABLE_COLS}
         colFilters={colFilters}

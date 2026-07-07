@@ -6,6 +6,7 @@ import { AlbumCard, CARD_MIN, GAP, getColsFromWidth } from "./Albums";
 import { SkeletonCard } from "../components/Skeleton";
 import { Icon } from "../components/Icon";
 import { loadJSON, saveJSON } from "../components/TrackTable";
+import { ScrollThumb } from "../components/ScrollThumb";
 
 // Ported from home.qml/home.py — three album rows (Recently Added / Random
 // Mix / Most Played), each backed by the same get_album_list_sorted call the
@@ -237,6 +238,7 @@ export function Home() {
   const orderRef = useRef(rowOrder);
   orderRef.current = rowOrder;
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { saveJSON(LS_ROW_ORDER, rowOrder); }, [rowOrder]);
 
@@ -288,19 +290,22 @@ export function Home() {
   const rows = rowOrder.map((id) => ROWS.find((r) => r.id === id)).filter((r): r is RowConfig => !!r);
 
   return (
-    <div className="flex-1 overflow-y-auto scroll-clean" style={{ padding: 16 }}>
-      <div className="flex flex-col" style={{ gap: 28 }}>
-        {rows.map((row) => (
-          <div key={row.id} ref={(el) => { rowRefs.current[row.id] = el; }}>
-            <AlbumRow
-              {...row}
-              active={active}
-              dragging={dragRowId === row.id}
-              onGripMouseDown={handleGripMouseDown(row.id)}
-            />
-          </div>
-        ))}
+    <div className="flex-1" style={{ position: "relative", minHeight: 0 }}>
+      <div ref={scrollRef} className="h-full overflow-y-auto scroll-clean" style={{ padding: 12 }}>
+        <div className="flex flex-col" style={{ gap: 28 }}>
+          {rows.map((row) => (
+            <div key={row.id} ref={(el) => { rowRefs.current[row.id] = el; }}>
+              <AlbumRow
+                {...row}
+                active={active}
+                dragging={dragRowId === row.id}
+                onGripMouseDown={handleGripMouseDown(row.id)}
+              />
+            </div>
+          ))}
+        </div>
       </div>
+      <ScrollThumb scrollRef={scrollRef} />
     </div>
   );
 }

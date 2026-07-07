@@ -13,6 +13,7 @@ import { TrackInfoDialog } from "./TrackInfoDialog";
 import { FAVORITE_PINK } from "../lib/theme";
 import { QueueBottomTabs } from "./QueueBottomTabs";
 import { LyricsPanel } from "./LyricsPanel";
+import { ScrollThumb } from "./ScrollThumb";
 import { ArtistInfoPanel } from "./ArtistInfoPanel";
 
 export const ROW_HEIGHT = 53;
@@ -425,10 +426,11 @@ export function QueuePanel() {
           as the track changes rather than only once the tab is first opened
           (that old-app optimization relied on per-tab pending/timer state
           that doesn't map cleanly onto "always mounted"). */}
+      <div className="flex-1" style={{ position: "relative", minHeight: 0, display: activeTab === "queue" ? "block" : "none" }}>
       <div
         ref={listRef}
-        className="flex-1 overflow-y-auto scroll-clean"
-        style={{ position: "relative", display: activeTab === "queue" ? "block" : "none" }}
+        className="overflow-y-auto scroll-clean"
+        style={{ position: "relative", height: "100%" }}
       >
         {radioLoading && (
           <div
@@ -475,6 +477,8 @@ export function QueuePanel() {
         )}
 
         {draggedTrack && ghostY !== null && <GhostRow track={draggedTrack} y={ghostY} />}
+      </div>
+      <ScrollThumb scrollRef={listRef} />
       </div>
 
       <div style={{ display: activeTab === "lyrics" ? "flex" : "none", flexDirection: "column", flex: 1, minHeight: 0 }}>

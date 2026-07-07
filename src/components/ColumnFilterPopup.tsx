@@ -1,16 +1,17 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "./Icon";
+import { ScrollThumb } from "./ScrollThumb";
 
 // Excel-style column filter popup for the Tracks tab's Artist/Album/Genre/
 // Year columns — ports tracks_browser.py's ColumnFilterPopup. Sort rows +
 // clear-filter row, a search box, and a checkbox checklist ("Select All" +
-// per-value), matching the old app's slightly unusual but deliberate
-// search semantics:
+// per-value):
 //  - No active filter: everything starts checked (no filter = show all).
 //  - Reopening with an active filter: only the previously-selected values
-//    start checked *and visible* — unchecked values are hidden until you
-//    search for them (classic Excel "here's what's currently selected").
+//    start checked, but every value is still visible in the list (real
+//    Excel semantics — unchecked options must stay pickable, not vanish
+//    until you search for them by name).
 //  - Typing a search auto-checks every match (narrowing = selecting, not
 //    just hiding) — clicking OK with a live search text replaces the
 //    filter with whatever's both visible and still checked, so manually
@@ -34,6 +35,7 @@ interface Props {
 
 export function ColumnFilterPopup({ x, y, allValues, activeValues, isIdBased, onApply, onSort, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x, y, ready: false });
   const hasActiveFilter = activeValues.size > 0;
 
@@ -43,7 +45,15 @@ export function ColumnFilterPopup({ x, y, allValues, activeValues, isIdBased, on
 
   useEffect(() => {
     function onDown(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+      const target = e.target as HTMLElement;
+      // The funnel icon that opened this popup lives in TrackTable's header,
+      // not inside this portaled popup — without this check, mousedown (which
+      // fires before the icon's own click) would close the popup here first,
+      // and then that same click's toggle-close logic would reopen it from
+      // stale state, so a second click on an already-open column's icon
+      // never actually closed anything.
+      if (target.closest("[data-filter-trigger]")) return;
+      if (ref.current && !ref.current.contains(target)) onClose();
     }
     function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
     document.addEventListener("mousedown", onDown);
@@ -79,7 +89,7 @@ export function ColumnFilterPopup({ x, y, allValues, activeValues, isIdBased, on
   const q = search.trim().toLowerCase();
   const visible = q
     ? allValues.filter((v) => v.toLowerCase().includes(q))
-    : allValues.filter((v) => !hasActiveFilter || checked.has(v));
+    : allValues;
   const hasNewMatch = visible.some((v) => !activeValues.has(v));
   const showAddToFilter = hasActiveFilter && q.length > 0 && hasNewMatch;
   const allChecked = checked.size === allValues.length;
@@ -162,19 +172,22 @@ export function ColumnFilterPopup({ x, y, allValues, activeValues, isIdBased, on
         }}
       />
 
-      <div className="scroll-clean" style={{ height: 200, overflowY: "auto", display: "flex", flexDirection: "column" }}>
-        <CheckRow label="(Select All)" bold checked={allChecked} onToggle={toggleSelectAll} />
-        {showAddToFilter && (
-          <CheckRow
-            label="(Add current selection to filter)"
-            bold
-            checked={addToFilter}
-            onToggle={() => setAddToFilter((v) => !v)}
-          />
-        )}
-        {visible.map((v) => (
-          <CheckRow key={v} label={v} checked={checked.has(v)} onToggle={() => toggleValue(v)} />
-        ))}
+      <div style={{ height: 200, position: "relative" }}>
+        <div ref={listRef} className="scroll-clean" style={{ height: "100%", overflowY: "auto", display: "flex", flexDirection: "column" }}>
+          <CheckRow label="(Select All)" bold checked={allChecked} onToggle={toggleSelectAll} />
+          {showAddToFilter && (
+            <CheckRow
+              label="(Add current selection to filter)"
+              bold
+              checked={addToFilter}
+              onToggle={() => setAddToFilter((v) => !v)}
+            />
+          )}
+          {visible.map((v) => (
+            <CheckRow key={v} label={v} checked={checked.has(v)} onToggle={() => toggleValue(v)} />
+          ))}
+        </div>
+        <ScrollThumb scrollRef={listRef} />
       </div>
 
       {showWarning && (

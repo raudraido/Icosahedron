@@ -3,11 +3,6 @@
 A desktop client for Subsonic/Navidrome music servers, built with Electron,
 React, and TypeScript. A rewrite of the original Python/Qt "Sonar" app.
 
-Playback runs through a native Rust audio engine (`native/audio-engine`, a
-napi-rs port of [psysonic](https://github.com/Psychotoxical/psysonic)'s
-rodio/Symphonia engine) for true sample-accurate gapless transitions between
-tracks — not a browser `<audio>` element.
-
 ## Development
 
 ```bash

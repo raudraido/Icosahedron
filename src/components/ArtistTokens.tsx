@@ -5,6 +5,22 @@ import { useStore } from "../store";
 // Same separator regex as the old app's album_grid.qml / TrackListView.qml
 export const ARTIST_SEP_RE = /( \/\/\/ | • | \/ | feat\. | Feat\. | vs\. )/;
 
+// Exact (not substring) match against one of a track/album's possibly
+// multiple credited artists — a track's `artist` field can be a combined
+// string like "A feat. B", so a plain `.includes()` on the raw string would
+// both false-positive (an unrelated artist whose name happens to be a
+// substring of another) and miss real matches buried mid-string. Shared by
+// ArtistDetail's "Appears On" and Spotlight's artist-row fallback, both of
+// which need "does this artist actually have a credited track here" rather
+// than "does this text contain that word".
+export function matchesArtistCredit(creditField: string, artistName: string): boolean {
+  const nameLower = artistName.trim().toLowerCase();
+  const names = creditField.split(ARTIST_SEP_RE)
+    .filter((part) => part.trim() && !ARTIST_SEP_RE.test(part))
+    .map((s) => s.trim().toLowerCase());
+  return names.includes(nameLower);
+}
+
 export const ArtistTokens = React.memo(function ArtistTokens({ name, artistId, fontSize = "var(--fs-secondary)", alwaysAccent = false, onNavigate, clip = true }: { name: string; artistId: string | null; fontSize?: string; alwaysAccent?: boolean; onNavigate?: () => void; clip?: boolean }) {
   const navigateTo = useStore((s) => s.navigateTo);
   const tokens = name.split(ARTIST_SEP_RE).filter(Boolean);

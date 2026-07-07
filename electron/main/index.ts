@@ -10,6 +10,7 @@ import {
 } from "./lyrics";
 import { saveCredentials, loadCredentials, clearCredentials } from "./credentials";
 import { getCachedBpm, setCachedBpm, getAllCachedBpm } from "./bpmCache";
+import { checkForUpdate, downloadAndInstallUpdate } from "./updater";
 
 protocol.registerSchemesAsPrivileged([
   { scheme: "cover", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
@@ -163,6 +164,8 @@ function registerIpcHandlers(): void {
   ipcMain.handle("bandsintown_events", (_e, { artistName }) => getBandsintownEvents(artistName));
 
   ipcMain.handle("app_version", () => app.getVersion());
+  ipcMain.handle("check_for_update", () => checkForUpdate());
+  ipcMain.handle("download_and_install_update", (_e, { downloadUrl }: { downloadUrl: string }) => downloadAndInstallUpdate(downloadUrl));
 
   // Native OS window-frame/titlebar dark-vs-light mode — ports the old app's
   // enable_dark_title_bar (DwmSetWindowAttribute 20/19 on Windows), which

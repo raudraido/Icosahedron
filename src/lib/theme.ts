@@ -35,14 +35,14 @@ export const DARK: AppTheme = {
   mainBg:            "rgb(28,30,39)",
   cardBg:            "#232631",
   textPrimary:       "#72a1cd",
-  textSecondary:     "#d8f0ee",
+  textSecondary:     "#a3bdba",
   border:            "#232631",
   hoverBg:           "#2c2f3c",
   skeleton:          "#354b5f",
   error:             "#e06c75",
   fontSizeSmall:     11,
-  fontSizeSecondary: 13,
-  fontSizePrimary:   15,
+  fontSizeSecondary: 12,
+  fontSizePrimary:   14,
   fontSizeHeading:   18,
   fontSizeTitle:     24,
   fontSizeHero:      28,
@@ -93,7 +93,18 @@ export function loadCustomThemes(): AppTheme[] {
   }
 }
 
+// The two shipped presets are plain hardcoded constants, never read back
+// from or written to localStorage — there is no code path that can rename,
+// restyle, or delete them. This check exists only to stop a custom preset
+// from being *saved under the same name* (which would otherwise sit
+// alongside — not replace — the real one, showing two confusingly identical
+// "Cream"/"Dark" cards in the Themes tab).
+export function isBuiltInThemeName(name: string): boolean {
+  return THEMES.some((t) => t.name.toLowerCase() === name.trim().toLowerCase());
+}
+
 export function saveCustomTheme(t: AppTheme) {
+  if (isBuiltInThemeName(t.name)) return; // see isBuiltInThemeName — refuse the collision instead of shadowing a built-in
   const next = [...loadCustomThemes().filter((c) => c.name !== t.name), t];
   localStorage.setItem(LS_CUSTOM_THEMES_KEY, JSON.stringify(next));
 }

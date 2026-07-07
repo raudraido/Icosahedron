@@ -6,7 +6,7 @@ import { CoverZoomOverlay } from "../components/CoverZoomOverlay";
 import { PlayRingButton } from "../components/PlayRingButton";
 import { Icon } from "../components/Icon";
 import { AlbumCard, CARD_MIN, GAP } from "./Albums";
-import { ARTIST_SEP_RE } from "../components/ArtistTokens";
+import { ARTIST_SEP_RE, matchesArtistCredit } from "../components/ArtistTokens";
 import { useStore } from "../store";
 import { FAVORITE_PINK, PLAY_ICON_DARK } from "../lib/theme";
 import { ContextMenu, MenuEntry } from "../components/ContextMenu";
@@ -362,14 +362,25 @@ export function ArtistDetail({ artistId }: Props) {
   });
 
   // "Appears On" — approximated client-side via a broad search rather than a
-  // dedicated server endpoint (see file header comment).
+  // dedicated server endpoint (see file header comment). Searches *songs*
+  // (not albums) and checks each track's own artist credit (tokenized on
+  // ARTIST_SEP_RE, since a track can list several artists) for an exact
+  // match — searching albums directly (as this used to) matches on album
+  // *title* text too, so e.g. an artist named "Exit" would wrongly pull in
+  // any compilation whose title merely contains the word "Exit", not just
+  // ones it actually has a track on.
   const { data: appearsOn } = useQuery({
     queryKey: ["artist-appears-on", data?.artist.name],
     queryFn: async () => {
-      const result = await api.search(data!.artist.name, 0, 500, 0);
-      const ownIds = new Set((data?.albums ?? []).map((a) => a.id));
-      const nameLower = data!.artist.name.toLowerCase();
-      return result.albums.filter((a) => !ownIds.has(a.id) && a.artist.toLowerCase() !== nameLower);
+      const result = await api.search(data!.artist.name, 0, 0, 500);
+      const ownAlbumIds = new Set((data?.albums ?? []).map((a) => a.id));
+      const matchingAlbumIds = new Set<string>();
+      for (const t of result.tracks) {
+        if (!t.album_id || ownAlbumIds.has(t.album_id) || matchingAlbumIds.has(t.album_id)) continue;
+        if (matchesArtistCredit(t.artist, data!.artist.name)) matchingAlbumIds.add(t.album_id);
+      }
+      const albums = await Promise.all([...matchingAlbumIds].map((id) => api.getAlbum(id).catch(() => null)));
+      return albums.filter((a): a is Album => a !== null);
     },
     enabled: !!data?.artist.name,
   });
@@ -471,6 +482,23 @@ export function ArtistDetail({ artistId }: Props) {
     if (tracks.length) playTrack(tracks[0], tracks);
   }
 
+  // Hold-to-shuffle for the header's PlayRingButton — same 600ms MouseArea
+  // gesture as the grid cards' hover play circle (AlbumCard/ArtistCard).
+  async function handleShuffleAll() {
+    if (!data) return;
+    const tracks = await qc.fetchQuery({
+      queryKey: ["artist-play-all", data.artist.id],
+      queryFn: () => fetchArtistPlaybackTracks(data.artist.id, data.artist.name),
+    });
+    if (!tracks.length) return;
+    const shuffled = [...tracks];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    playTrack(shuffled[0], shuffled);
+  }
+
   async function toggleFavorite() {
     if (!data) return;
     const next = !(starred ?? data.artist.starred);
@@ -546,7 +574,7 @@ export function ArtistDetail({ artistId }: Props) {
               <h1 className="truncate" style={{ color: "var(--text-primary)", fontSize: "var(--fs-hero)", fontWeight: 700 }}>{data.artist.name}</h1>
               <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)", fontWeight: 600 }}>{statsLine}</p>
               <div className="flex items-center" style={{ gap: 6, marginTop: 8 }}>
-                <PlayRingButton icon="img/play.png" onClick={handlePlayAll} title="Play" />
+                <PlayRingButton icon="img/play.png" onClick={handlePlayAll} onHoldShuffle={handleShuffleAll} title="Play" />
                 <ActionButton
                   icon={isStarred ? "img/heart_filled.png" : "img/heart.png"}
                   tint={isStarred ? FAVORITE_PINK : undefined}

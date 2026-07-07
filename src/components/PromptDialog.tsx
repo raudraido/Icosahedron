@@ -7,14 +7,21 @@ interface Props {
   confirmLabel?: string;
   onSubmit: (value: string) => void;
   onCancel: () => void;
+  /** Optional validator — return an error message to block submission and
+   *  show it inline, or null/undefined if the trimmed value is fine. */
+  validate?: (value: string) => string | null | undefined;
 }
 
-export function PromptDialog({ title, placeholder, confirmLabel = "Create", onSubmit, onCancel }: Props) {
+export function PromptDialog({ title, placeholder, confirmLabel = "Create", onSubmit, onCancel, validate }: Props) {
   const [value, setValue] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   function submit() {
     const trimmed = value.trim();
-    if (trimmed) onSubmit(trimmed);
+    if (!trimmed) return;
+    const err = validate?.(trimmed);
+    if (err) { setError(err); return; }
+    onSubmit(trimmed);
   }
 
   return (
@@ -37,15 +44,16 @@ export function PromptDialog({ title, placeholder, confirmLabel = "Create", onSu
         <input
           autoFocus
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => { setValue(e.target.value); setError(null); }}
           onKeyDown={(e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") onCancel(); }}
           placeholder={placeholder}
           className="w-full outline-none"
           style={{
             background: "var(--card-bg)", color: "var(--text-primary)", fontSize: "var(--fs-primary)",
-            border: "1px solid var(--border)", borderRadius: 6, padding: "8px 10px",
+            border: `1px solid ${error ? "var(--error)" : "var(--border)"}`, borderRadius: 6, padding: "8px 10px",
           }}
         />
+        {error && <p style={{ color: "var(--error)", fontSize: "var(--fs-small)", marginTop: 6 }}>{error}</p>}
         <div className="flex justify-end" style={{ gap: 8, marginTop: 16 }}>
           <button
             onClick={onCancel}

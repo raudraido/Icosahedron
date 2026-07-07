@@ -5,6 +5,7 @@ import { CoverArt } from "./CoverArt";
 import { Icon } from "./Icon";
 import { PlayRingButton } from "./PlayRingButton";
 import { ScrollThumb } from "./ScrollThumb";
+import { matchesArtistCredit } from "./ArtistTokens";
 
 // System-wide Spotlight search overlay — ports the old app's
 // components/spotlight_search.py SpotlightSearch: a dimmed full-window
@@ -123,7 +124,17 @@ export function SpotlightSearch() {
       // Plain "play" for an artist row has no single obvious track — pull
       // their top songs and play the set, same source the old app's
       // ArtistPlayWorker used for this exact spotlight action.
-      const top = await api.getTopSongs(row.item.name, 50);
+      let top = await api.getTopSongs(row.item.name, 50);
+      if (!top.length) {
+        // getTopSongs relies on Navidrome/last.fm charting data, which an
+        // artist who only appears via a featured/compilation credit (not as
+        // a primary album artist) won't have — fall back to a broad song
+        // search filtered to a genuine track-credit match (same check
+        // ArtistDetail's "Appears On" uses), so an artist with at least one
+        // real track always has something to play.
+        const result = await api.search(row.item.name, 0, 0, 500);
+        top = result.tracks.filter((t) => matchesArtistCredit(t.artist, row.item.name));
+      }
       if (top.length) playTrack(top[0], top);
       close();
     }

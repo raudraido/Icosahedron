@@ -1,17 +1,52 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Icon } from "./Icon";
 
-/** Accent-ring play/pause button with a hover glow — used in the footer transport and every detail-view header. */
+const HOLD_MS = 600;
+
+/** Accent-ring play/pause button with a hover glow — used in the footer transport and every detail-view header.
+ *  Pass `onHoldShuffle` to also support the grid cards' press+hold-to-shuffle
+ *  gesture (PlayFilteredButton/AlbumCard/ArtistCard): a quick click still
+ *  calls `onClick`, holding for 600ms instead calls `onHoldShuffle`. Omit it
+ *  (e.g. the footer's plain play/pause transport button) to keep the exact
+ *  original plain-click-only behavior. */
 export function PlayRingButton({
-  icon, onClick, title, size = 58, iconSize = 16,
-}: { icon: string; onClick: () => void; title?: string; size?: number; iconSize?: number }) {
+  icon, onClick, onHoldShuffle, title, size = 58, iconSize = 16,
+}: { icon: string; onClick: () => void; onHoldShuffle?: () => void; title?: string; size?: number; iconSize?: number }) {
   const [hovered, setHovered] = useState(false);
+  const holdTimerRef = useRef<number | null>(null);
+  const heldRef = useRef(false);
+
+  function clearHoldTimer() {
+    if (holdTimerRef.current !== null) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+  }
+
+  function handleMouseDown() {
+    if (!onHoldShuffle) return;
+    heldRef.current = false;
+    holdTimerRef.current = window.setTimeout(() => {
+      heldRef.current = true;
+      holdTimerRef.current = null;
+      onHoldShuffle();
+    }, HOLD_MS);
+  }
+  function handleMouseUp() {
+    if (!onHoldShuffle) return;
+    const held = holdTimerRef.current === null && heldRef.current;
+    clearHoldTimer();
+    if (!held) onClick();
+  }
+
   return (
     <button
-      onClick={onClick}
-      title={title}
+      onClick={onHoldShuffle ? undefined : onClick}
+      onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
+      title={onHoldShuffle ? `${title} (hold to shuffle)` : title}
       onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseLeave={() => { setHovered(false); clearHoldTimer(); }}
       className="relative flex items-center justify-center shrink-0"
       style={{
         width: size, height: size, borderRadius: "50%",

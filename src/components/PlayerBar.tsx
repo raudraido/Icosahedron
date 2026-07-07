@@ -77,6 +77,16 @@ export function PlayerBar() {
   const setVolume      = useStore((s) => s.setVolume);
   const toggleShuffle  = useStore((s) => s.toggleShuffle);
   const toggleRepeat   = useStore((s) => s.toggleRepeat);
+
+  // Remembers the last non-zero volume so unmuting restores the actual
+  // previous level instead of always jumping back to a hardcoded 80 —
+  // matches GlobalHotkeys.tsx's own mute-toggle shortcut logic.
+  const lastVolumeRef = useRef(volume || 50);
+  useEffect(() => { if (volume > 0) lastVolumeRef.current = volume; }, [volume]);
+  function toggleMute() {
+    if (volume > 0) setVolume(0);
+    else setVolume(lastVolumeRef.current || 50);
+  }
   const stop           = useStore((s) => s.stop);
   const sidebarArtExpanded = useStore((s) => s.sidebarArtExpanded);
   const toggleSidebarArt   = useStore((s) => s.toggleSidebarArt);
@@ -409,7 +419,8 @@ export function PlayerBar() {
 
         {/* Mute — muted uses a distinct muted-gray tint (not a dimmed accent), matching the old app */}
         <button
-          onClick={() => setVolume(volume === 0 ? 80 : 0)}
+          onClick={toggleMute}
+          title={volume === 0 ? "Unmute" : "Mute"}
           className="flex items-center justify-center shrink-0"
           style={{ width: 40, height: 40, borderRadius: 20, background: "transparent", border: "none", cursor: "pointer", color: volume === 0 ? "var(--text-secondary)" : "var(--accent)" }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}

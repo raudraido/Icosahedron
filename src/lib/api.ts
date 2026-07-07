@@ -128,6 +128,12 @@ export interface Starred {
   tracks: Track[];
 }
 
+export interface UpdateInfo {
+  version: string;
+  downloadUrl: string;
+  releaseUrl: string;
+}
+
 /** Pushed from the native gapless audio engine (electron/main/audioEngine.ts)
  *  via the `onAudioEvent` preload channel — see src/store/index.ts's
  *  `handleAudioEvent` for how each kind is handled. */
@@ -232,6 +238,12 @@ export const api = {
 
   getAppVersion: () => invoke<string>("app_version"),
   setWindowTheme: (dark: boolean) => invoke<void>("set_window_theme", { dark }),
+
+  // ── Update check (electron/main/updater.ts) — lightweight GitHub Releases
+  // poll, not a full electron-updater integration (see that file's header
+  // comment for why). ──────────────────────────────────────────────────────
+  checkForUpdate: () => invoke<UpdateInfo | null>("check_for_update"),
+  downloadAndInstallUpdate: (downloadUrl: string) => invoke<void>("download_and_install_update", { downloadUrl }),
 
   // ── Native gapless audio engine (electron/main/audioEngine.ts) ──────────
   // `volume` here is 0-1 (the store keeps its own volume as a 0-100 int for

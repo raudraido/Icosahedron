@@ -45,6 +45,8 @@ export const ArtistCard = React.memo(function ArtistCard({ artist, onOpen }: { a
   const [playHovered, setPlayHovered] = useState(false);
   const qc = useQueryClient();
   const playTrack = useStore((s) => s.playTrack);
+  const holdTimerRef = useRef<number | null>(null);
+  const heldRef = useRef(false);
 
   function fetchTracks() {
     return qc.fetchQuery({
@@ -53,8 +55,32 @@ export const ArtistCard = React.memo(function ArtistCard({ artist, onOpen }: { a
     });
   }
 
-  async function handlePlay(e: React.MouseEvent) {
+  function clearHoldTimer() {
+    if (holdTimerRef.current !== null) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+  }
+
+  // Click = play from track 1, press+hold 600ms = shuffle instead — matches
+  // PlayFilteredButton's (Tracks.tsx) same hold-to-shuffle MouseArea.
+  function handlePlayMouseDown(e: React.MouseEvent) {
     e.stopPropagation();
+    heldRef.current = false;
+    holdTimerRef.current = window.setTimeout(async () => {
+      heldRef.current = true;
+      holdTimerRef.current = null;
+      const tracks = await fetchTracks();
+      if (!tracks.length) return;
+      const shuffled = shuffleArray(tracks);
+      playTrack(shuffled[0], shuffled);
+    }, 600);
+  }
+  async function handlePlayMouseUp(e: React.MouseEvent) {
+    e.stopPropagation();
+    const held = holdTimerRef.current === null && heldRef.current;
+    clearHoldTimer();
+    if (held) return;
     const tracks = await fetchTracks();
     if (tracks.length) playTrack(tracks[0], tracks);
   }
@@ -69,9 +95,12 @@ export const ArtistCard = React.memo(function ArtistCard({ artist, onOpen }: { a
       <div style={{ position: "relative" }}>
         <CoverArt coverId={artist.cover_id} size={200} className="w-full aspect-square rounded-lg group-hover:brightness-75 transition-all" />
         <div
-          onClick={handlePlay}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={handlePlayMouseDown}
+          onMouseUp={handlePlayMouseUp}
           onMouseEnter={() => setPlayHovered(true)}
-          onMouseLeave={() => setPlayHovered(false)}
+          onMouseLeave={() => { setPlayHovered(false); clearHoldTimer(); }}
+          title="Play (hold to shuffle)"
           style={{
             position: "absolute", top: "50%", left: "50%",
             width: "min(60px, 33%)", aspectRatio: "1",

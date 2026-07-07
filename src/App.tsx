@@ -31,6 +31,7 @@ import { Icon } from "./components/Icon";
 import { GlobalTooltip } from "./components/GlobalTooltip";
 import { GlobalHotkeys } from "./components/GlobalHotkeys";
 import { SpotlightSearch } from "./components/SpotlightSearch";
+import { UpdateBanner } from "./components/UpdateBanner";
 
 // Full old-app nav order (window.py's addTab sequence) — Home, Now Playing,
 // Mix Builder, and Visualizer aren't built out yet, so they render Placeholder
@@ -272,6 +273,7 @@ function AppInner() {
       {connected && <GlobalHotkeys />}
       {connected && <SpotlightSearch />}
       <GlobalTooltip />
+      <UpdateBanner />
     </>
   );
 }

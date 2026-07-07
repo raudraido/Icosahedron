@@ -50,13 +50,44 @@ export const AlbumCard = React.memo(function AlbumCard({ album, onOpen }: { albu
   const [playHovered, setPlayHovered] = useState(false);
   const qc = useQueryClient();
   const playTrack = useStore((s) => s.playTrack);
+  const holdTimerRef = useRef<number | null>(null);
+  const heldRef = useRef(false);
 
   function fetchTracks() {
     return qc.fetchQuery({ queryKey: ["album-tracks", album.id], queryFn: () => api.getAlbumTracks(album.id) });
   }
 
-  async function handlePlay(e: React.MouseEvent) {
+  function clearHoldTimer() {
+    if (holdTimerRef.current !== null) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+  }
+
+  // Click = play the album from track 1, press+hold 600ms = shuffle it
+  // instead — matches PlayFilteredButton's (Tracks.tsx) same hold-to-shuffle
+  // MouseArea interaction.
+  function handlePlayMouseDown(e: React.MouseEvent) {
     e.stopPropagation();
+    heldRef.current = false;
+    holdTimerRef.current = window.setTimeout(async () => {
+      heldRef.current = true;
+      holdTimerRef.current = null;
+      const tracks = await fetchTracks();
+      if (!tracks.length) return;
+      const shuffled = [...tracks];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      playTrack(shuffled[0], shuffled);
+    }, 600);
+  }
+  async function handlePlayMouseUp(e: React.MouseEvent) {
+    e.stopPropagation();
+    const held = holdTimerRef.current === null && heldRef.current;
+    clearHoldTimer();
+    if (held) return;
     const tracks = await fetchTracks();
     if (tracks.length) playTrack(tracks[0], tracks);
   }
@@ -71,9 +102,12 @@ export const AlbumCard = React.memo(function AlbumCard({ album, onOpen }: { albu
       <div style={{ position: "relative" }}>
         <CoverArt coverId={album.cover_id} size={200} className="w-full aspect-square rounded-lg group-hover:brightness-75 transition-all" />
         <div
-          onClick={handlePlay}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={handlePlayMouseDown}
+          onMouseUp={handlePlayMouseUp}
           onMouseEnter={() => setPlayHovered(true)}
-          onMouseLeave={() => setPlayHovered(false)}
+          onMouseLeave={() => { setPlayHovered(false); clearHoldTimer(); }}
+          title="Play album (hold to shuffle)"
           style={{
             position: "absolute", top: "50%", left: "50%",
             width: "min(60px, 33%)", aspectRatio: "1",
@@ -293,7 +327,7 @@ function AlbumDetail({ album }: { album: Album }) {
             </p>
 
             <div className="flex items-center" style={{ gap: 10, marginTop: 16 }}>
-              <PlayRingButton icon="img/play.png" onClick={handlePlay} title="Play Album" />
+              <PlayRingButton icon="img/play.png" onClick={handlePlay} onHoldShuffle={handleShuffle} title="Play Album" />
 
               <button
                 onClick={handleShuffle}

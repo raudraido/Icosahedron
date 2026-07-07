@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
 import { api } from "../lib/api";
-import { applyTheme, loadSavedTheme, saveTheme, saveCustomTheme, allThemes, AppTheme } from "../lib/theme";
+import { applyTheme, loadSavedTheme, saveTheme, saveCustomTheme, deleteCustomTheme, isBuiltInThemeName, allThemes, CREAM, AppTheme } from "../lib/theme";
 import { PromptDialog } from "../components/PromptDialog";
 import { DEFAULT_HOTKEYS, loadHotkeyBindings, saveHotkeyBindings, bindingFromEvent } from "../lib/hotkeys";
 import { ScrollThumb } from "../components/ScrollThumb";
@@ -100,13 +100,24 @@ function ThemesTab() {
   const [current, setCurrent] = useState<AppTheme>(loadSavedTheme);
   // Settings.tsx only renders this component while its sub-tab is active, so
   // remounting (which re-runs this initializer) is what picks up any preset
-  // just saved from the Theme Builder tab — no extra effect needed.
-  const [themes] = useState<AppTheme[]>(allThemes);
+  // just saved from the Theme Builder tab — deletions update this same state
+  // directly instead (see handleDelete) so a card disappears immediately.
+  const [themes, setThemes] = useState<AppTheme[]>(allThemes);
 
   function select(t: AppTheme) {
     setCurrent(t);
     saveTheme(t);
     applyTheme(t);
+  }
+
+  // Only ever offered for user-saved presets — isBuiltInThemeName gates the
+  // delete button's very existence below, so CREAM/DARK can't reach this at
+  // all (they also aren't in the localStorage array deleteCustomTheme edits,
+  // so even a direct call here would just no-op against them).
+  function handleDelete(t: AppTheme) {
+    deleteCustomTheme(t.name);
+    setThemes((prev) => prev.filter((x) => x.name !== t.name));
+    if (current.name === t.name) select(CREAM);
   }
 
   return (
@@ -115,34 +126,50 @@ function ThemesTab() {
         <div className="flex flex-wrap" style={{ gap: 12 }}>
           {themes.map((t) => {
             const active = t.name === current.name;
+            const deletable = !isBuiltInThemeName(t.name);
             return (
-              <button
-                key={t.name}
-                onClick={() => select(t)}
-                className="flex flex-col items-center"
-                style={{
-                  gap: 8, padding: 12, borderRadius: 10, cursor: "pointer",
-                  border: `2px solid ${active ? "var(--accent)" : "var(--border)"}`,
-                  background: "var(--card-bg)",
-                }}
-              >
-                <div
-                  aria-hidden
+              <div key={t.name} style={{ position: "relative" }}>
+                <button
+                  onClick={() => select(t)}
+                  className="flex flex-col items-center"
                   style={{
-                    width: 96, height: 60, borderRadius: 6, overflow: "hidden",
-                    border: `1px solid ${t.border}`, background: t.mainBg,
-                    display: "flex", flexDirection: "column",
+                    gap: 8, padding: 12, borderRadius: 10, cursor: "pointer",
+                    border: `2px solid ${active ? "var(--accent)" : "var(--border)"}`,
+                    background: "var(--card-bg)",
                   }}
                 >
-                  <div style={{ height: "40%", background: t.panelBg }} />
-                  <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <div style={{ width: 20, height: 20, borderRadius: "50%", background: t.accent }} />
+                  <div
+                    aria-hidden
+                    style={{
+                      width: 96, height: 60, borderRadius: 6, overflow: "hidden",
+                      border: `1px solid ${t.border}`, background: t.mainBg,
+                      display: "flex", flexDirection: "column",
+                    }}
+                  >
+                    <div style={{ height: "40%", background: t.panelBg }} />
+                    <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <div style={{ width: 20, height: 20, borderRadius: "50%", background: t.accent }} />
+                    </div>
                   </div>
-                </div>
-                <span style={{ color: active ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-secondary)", fontWeight: 600 }}>
-                  {t.name}
-                </span>
-              </button>
+                  <span style={{ color: active ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-secondary)", fontWeight: 600 }}>
+                    {t.name}
+                  </span>
+                </button>
+                {deletable && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDelete(t); }}
+                    title={`Delete "${t.name}"`}
+                    className="flex items-center justify-center"
+                    style={{
+                      position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%",
+                      background: "var(--main-bg)", border: "1px solid var(--border)", color: "var(--text-secondary)",
+                      cursor: "pointer", fontSize: 12, lineHeight: 1, padding: 0,
+                    }}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
             );
           })}
         </div>
@@ -327,6 +354,7 @@ function ThemeBuilderTab() {
           confirmLabel="Save"
           onSubmit={handleSave}
           onCancel={() => setSavePromptOpen(false)}
+          validate={(name) => isBuiltInThemeName(name) ? "That name is reserved for a built-in theme." : null}
         />
       )}
     </div>

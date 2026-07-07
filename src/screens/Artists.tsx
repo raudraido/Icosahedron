@@ -201,8 +201,18 @@ export function Artists() {
   const pushNav = useStore((s) => s.pushNav);
   const navBack = useStore((s) => s.navBack);
   const selectedId = useStore((s) => s.navHistory[s.navPos]?.artistId ?? null);
-  const navQuery = useStore((s) => s.navHistory[s.navPos]?.artistQuery ?? "");
-  const [searchText, setSearchText] = useState(navQuery);
+  const navEntry = useStore((s) => s.navHistory[s.navPos]);
+  const [searchText, setSearchText] = useState(navEntry?.artistQuery ?? "");
+  // Re-applies on every *new* navigateTo carrying an artistQuery — keyed off
+  // the whole nav entry (not just the string) so re-searching the exact same
+  // artist name a second time (e.g. from Spotlight) still re-applies it,
+  // rather than only working once at mount like a plain useState initializer
+  // would (Artists stays mounted across tab switches, App.tsx's `mounted` set).
+  useEffect(() => {
+    if (navEntry?.artistQuery === undefined) return;
+    setSearchText(navEntry.artistQuery);
+    setSearchOpen(true);
+  }, [navEntry]);
 
   const isAscending = (sortKey: string) => sortStates[sortKey] ?? defaultAscending(sortKey);
 

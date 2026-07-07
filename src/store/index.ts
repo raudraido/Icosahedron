@@ -13,6 +13,13 @@ export type NavEntry = {
    *  consumed once by Tracks.tsx on mount, the same way artistQuery is
    *  consumed once by Artists.tsx. */
   trackFilter?: { col: string; value: string };
+  /** Cross-tab "open Tracks/Albums pre-filled with this free-text search"
+   *  intent — set by Spotlight's "Show all N results" links (SpotlightSearch.tsx).
+   *  Unlike trackFilter/artistQuery, consumers key their effect off the whole
+   *  nav entry object (not just this string), so re-searching the exact same
+   *  text from Spotlight a second time still re-applies it. */
+  trackQuery?: string;
+  albumQuery?: string;
 };
 
 interface AppStore {

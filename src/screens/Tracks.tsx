@@ -66,6 +66,19 @@ export function Tracks() {
     setPage(1);
   }, [trackFilter]);
 
+  // Cross-tab "open Tracks pre-filled with this free-text search" intent —
+  // set by Spotlight's "Show all N results" link (SpotlightSearch.tsx). Keyed
+  // off the whole nav entry (not just trackQuery itself) so re-searching the
+  // exact same text from Spotlight a second time still re-applies it, the
+  // same identity trick trackFilter's effect above relies on.
+  const navEntry = useStore((s) => s.navHistory[s.navPos]);
+  useEffect(() => {
+    if (navEntry?.trackQuery === undefined) return;
+    setQuery(navEntry.trackQuery);
+    setSearchScope("all");
+    setPage(1);
+  }, [navEntry]);
+
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(query), 400);
     return () => clearTimeout(t);

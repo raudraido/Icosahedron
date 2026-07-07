@@ -40,6 +40,12 @@ export function SearchBox({
       onChange("");
       setMenuOpen(false);
       if (hasScope && scope !== "all") onScopeChange?.("all");
+      // Without this, the (now invisible, width:0) input keeps focus after
+      // collapsing — keystrokes keep landing in it instead of reaching
+      // GlobalHotkeys' document-level listener, silently eating both
+      // shortcuts and the "type anywhere to open Spotlight" trigger (which
+      // bails whenever an <input> has focus, invisible or not).
+      ref.current?.blur();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);

@@ -12,13 +12,23 @@ import { ScrollThumb } from "./ScrollThumb";
 // Albums, and keyboard-first navigation. Opened via GlobalHotkeys.tsx
 // (Ctrl+F, or typing any plain character while nothing else has focus).
 
+type CategoryKind = "track" | "artist" | "album";
 type FlatRow =
   | { kind: "header"; label: string }
   | { kind: "track"; item: Track }
   | { kind: "artist"; item: Artist }
-  | { kind: "album"; item: Album };
+  | { kind: "album"; item: Album }
+  | { kind: "showAll"; category: CategoryKind; count: number; capped: boolean };
 
 const SEARCH_DEBOUNCE_MS = 250;
+
+// Each category's row list is capped tight (matches the old app's compact
+// dropdown), but the underlying server search asks for a much larger pool —
+// the gap between what's fetched and what's displayed is exactly what "Show
+// all N results" needs to report a real (if possibly-capped) count without a
+// second round-trip just to find out how many there are.
+const DISPLAY_LIMIT = { track: 6, artist: 4, album: 4 };
+const FETCH_LIMIT = { track: 50, artist: 20, album: 20 };
 
 export function SpotlightSearch() {
   const open = useStore((s) => s.spotlightOpen);
@@ -61,7 +71,7 @@ export function SpotlightSearch() {
     }
     debounceRef.current = setTimeout(async () => {
       try {
-        const r = await api.search(q, 4, 4, 6);
+        const r = await api.search(q, FETCH_LIMIT.artist, FETCH_LIMIT.album, FETCH_LIMIT.track);
         setResults({ tracks: r.tracks, artists: r.artists, albums: r.albums });
         setActiveIndex(0);
       } catch { /* best-effort — leave prior results in place */ }
@@ -73,20 +83,26 @@ export function SpotlightSearch() {
     const out: FlatRow[] = [];
     if (results.tracks.length) {
       out.push({ kind: "header", label: "Tracks" });
-      for (const t of results.tracks) out.push({ kind: "track", item: t });
+      for (const t of results.tracks.slice(0, DISPLAY_LIMIT.track)) out.push({ kind: "track", item: t });
+      out.push({ kind: "showAll", category: "track", count: results.tracks.length, capped: results.tracks.length >= FETCH_LIMIT.track });
     }
     if (results.artists.length) {
       out.push({ kind: "header", label: "Artists" });
-      for (const a of results.artists) out.push({ kind: "artist", item: a });
+      for (const a of results.artists.slice(0, DISPLAY_LIMIT.artist)) out.push({ kind: "artist", item: a });
+      out.push({ kind: "showAll", category: "artist", count: results.artists.length, capped: results.artists.length >= FETCH_LIMIT.artist });
     }
     if (results.albums.length) {
       out.push({ kind: "header", label: "Albums" });
-      for (const a of results.albums) out.push({ kind: "album", item: a });
+      for (const a of results.albums.slice(0, DISPLAY_LIMIT.album)) out.push({ kind: "album", item: a });
+      out.push({ kind: "showAll", category: "album", count: results.albums.length, capped: results.albums.length >= FETCH_LIMIT.album });
     }
     return out;
   }, [results]);
 
-  const selectableIndexes = useMemo(() => rows.map((r, i) => (r.kind === "header" ? -1 : i)).filter((i) => i >= 0), [rows]);
+  const selectableIndexes = useMemo(
+    () => rows.map((r, i) => (r.kind === "header" ? -1 : i)).filter((i) => i >= 0),
+    [rows],
+  );
 
   function moveSelection(dir: 1 | -1, step = 1) {
     if (!selectableIndexes.length) return;
@@ -132,6 +148,19 @@ export function SpotlightSearch() {
     }
   }
 
+  // "Show all N results" — jumps to the full tab pre-filled with the same
+  // search text instead of trying to browse/paginate the whole result set
+  // inside this overlay, which isn't what Spotlight is for (see the
+  // trackQuery/albumQuery NavEntry fields and their consuming effects in
+  // Tracks.tsx/Albums.tsx/Artists.tsx).
+  function showAll(category: CategoryKind) {
+    const q = query.trim();
+    if (category === "track") navigateTo({ tab: "tracks", trackQuery: q });
+    else if (category === "album") navigateTo({ tab: "albums", albumQuery: q });
+    else navigateTo({ tab: "artists", artistQuery: q });
+    close();
+  }
+
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Escape") { close(); return; }
     if (e.key === "ArrowDown") { e.preventDefault(); moveSelection(1); return; }
@@ -142,6 +171,7 @@ export function SpotlightSearch() {
       e.preventDefault();
       const row = rows[activeIndex];
       if (!row || row.kind === "header") return;
+      if (row.kind === "showAll") { showAll(row.category); return; }
       if (e.shiftKey && (row.kind === "album" || row.kind === "artist")) enterView(row);
       else if (e.shiftKey && row.kind === "track" && row.item.album_id) playTrackAlbum(row.item);
       else playDefault(row);
@@ -185,6 +215,24 @@ export function SpotlightSearch() {
                   <div key={`h-${row.label}`} style={{ padding: "10px 10px 4px" }}>
                     <span style={{ color: "var(--text-secondary)", fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>
                       {row.label}
+                    </span>
+                  </div>
+                );
+              }
+              if (row.kind === "showAll") {
+                const active = i === activeIndex;
+                return (
+                  <div
+                    key={`showall-${row.category}`}
+                    onMouseEnter={() => setActiveIndex(i)}
+                    onClick={() => showAll(row.category)}
+                    style={{
+                      padding: "8px 10px", marginBottom: 2, borderRadius: 6, cursor: "pointer",
+                      background: active ? "var(--hover-bg)" : "transparent",
+                    }}
+                  >
+                    <span style={{ color: "var(--accent)", fontSize: "var(--fs-secondary)", fontWeight: 700 }}>
+                      Show all {row.count}{row.capped ? "+" : ""} result{row.count === 1 && !row.capped ? "" : "s"} →
                     </span>
                   </div>
                 );

@@ -362,6 +362,18 @@ export function Albums() {
   const sortRef   = useRef<HTMLDivElement>(null);
   const pushNav    = useStore((s) => s.pushNav);
   const selected = useStore((s) => s.navHistory[s.navPos]?.album ?? null);
+  // Cross-tab "open Albums pre-filled with this free-text search" intent —
+  // set by Spotlight's "Show all N results" link (SpotlightSearch.tsx).
+  // Keyed off the whole nav entry (not just albumQuery itself) so
+  // re-searching the exact same text a second time still re-applies it —
+  // Albums stays mounted across tab switches (App.tsx's `mounted` set), so a
+  // plain useState initializer would only ever apply once at mount.
+  const navEntry = useStore((s) => s.navHistory[s.navPos]);
+  useEffect(() => {
+    if (navEntry?.albumQuery === undefined) return;
+    setSearchText(navEntry.albumQuery);
+    setSearchOpen(true);
+  }, [navEntry]);
 
   const isAscending = (sortKey: string) => sortStates[sortKey] ?? defaultAscending(sortKey);
 

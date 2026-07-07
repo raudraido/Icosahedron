@@ -407,6 +407,10 @@ export function TrackTable({
   const setQuery = serverDriven ? (onQueryChange ?? (() => {})) : setInternalQuery;
 
   const [searchOpen, setSearchOpen] = useState(false);
+  // A controlled query can arrive from outside (e.g. Spotlight's "Show all N
+  // results" link setting Tracks.tsx's query via nav-entry effect) while the
+  // box is still collapsed — reveal it so the populated text isn't hidden.
+  useEffect(() => { if (controlledQuery) setSearchOpen(true); }, [controlledQuery]);
   const [colOrder, setColOrder] = useState<string[]>(() => loadJSON(LS_ORDER(viewKey), DEFAULT_COL_ORDER));
   const [colVisibility, setColVisibility] = useState<Record<string, boolean>>(() => loadJSON(LS_VIS(viewKey), DEFAULT_COL_VISIBILITY));
   const [colWidths, setColWidths] = useState<Record<string, number>>(() => loadJSON(LS_WIDTHS(viewKey), DEFAULT_COL_WIDTHS));

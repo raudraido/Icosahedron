@@ -15,6 +15,11 @@ import {
 } from "./credentials";
 import { getCachedBpm, setCachedBpm, getAllCachedBpm } from "./bpmCache";
 import { checkForUpdate, downloadAndInstallUpdate } from "./updater";
+import * as lastfm from "./lastfm";
+import {
+  saveSession as saveLastFmSession, loadSessionForDisplay as loadLastFmSession, getSessionKey as getLastFmSessionKey,
+  clearSession as clearLastFmSession, setToggle as setLastFmToggle,
+} from "./lastfmSession";
 
 protocol.registerSchemesAsPrivileged([
   { scheme: "cover", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
@@ -314,6 +319,39 @@ function registerIpcHandlers(): void {
   ipcMain.handle("set_favorite", (_e, { itemId, active, idParam }) => requireClient().setFavorite(itemId, active, idParam));
 
   ipcMain.handle("scrobble", (_e, { trackId, submission }) => requireClient().scrobble(trackId, submission));
+
+  // ── Client-side Last.fm scrobbling (electron/main/lastfm.ts) — independent
+  // of the Navidrome-relayed scrobble above, for users without Last.fm
+  // configured server-side. Session key never leaves the main process; see
+  // lastfmSession.ts. ──────────────────────────────────────────────────────
+  ipcMain.handle("lastfm_connect_start", async () => {
+    const token = await lastfm.getToken();
+    shell.openExternal(lastfm.authUrl(token));
+    return { token };
+  });
+  ipcMain.handle("lastfm_connect_poll", async (_e, { token, serverId }) => {
+    try {
+      const { key, username } = await lastfm.getSession(token);
+      await saveLastFmSession(serverId, key, username);
+      return { connected: true, username };
+    } catch (e) {
+      if (e instanceof lastfm.LastFmApiError && e.code === 14) return { connected: false };
+      throw e;
+    }
+  });
+  ipcMain.handle("lastfm_get_connection", (_e, { serverId }) => loadLastFmSession(serverId));
+  ipcMain.handle("lastfm_public_api_key", () => lastfm.getApiKey());
+  ipcMain.handle("lastfm_disconnect", (_e, { serverId }) => clearLastFmSession(serverId));
+  ipcMain.handle("lastfm_set_history_enabled", (_e, { serverId, value }) => setLastFmToggle(serverId, "historyEnabled", value));
+  ipcMain.handle("lastfm_set_scrobble_enabled", (_e, { serverId, value }) => setLastFmToggle(serverId, "scrobbleEnabled", value));
+  ipcMain.handle("lastfm_now_playing", async (_e, { track, serverId }) => {
+    const sessionKey = await getLastFmSessionKey(serverId);
+    if (sessionKey) await lastfm.updateNowPlaying(track, sessionKey);
+  });
+  ipcMain.handle("lastfm_scrobble", async (_e, { track, timestamp, serverId }) => {
+    const sessionKey = await getLastFmSessionKey(serverId);
+    if (sessionKey) await lastfm.scrobble(track, timestamp, sessionKey);
+  });
 
   ipcMain.handle("cover_art_url", (_e, { coverId, size }) => requireClient().coverArtUrl(coverId, size ?? undefined));
   ipcMain.handle("stream_url", (_e, { songId }) => requireClient().streamUrl(songId));

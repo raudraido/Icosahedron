@@ -45,24 +45,49 @@ interface AppStore {
   bpmDetectionEnabled: boolean;
   setBpmDetectionEnabled: (v: boolean) => void;
 
-  // Left panel's "Recently Played" list (LeftPanel.tsx) reads your Last.fm
-  // play history directly — separate from Navidrome's own scrobbling above,
-  // this is purely a read against Last.fm's public API.
-  lastFmApiKey: string;
-  lastFmUsername: string;
-  setLastFmSettings: (apiKey: string, username: string) => void;
-  /** Master switch (Settings > Integrations > Last.fm's "Enable Recent
-   *  History via Last.fm") — gates whether the API key/username fields are
-   *  even usable, and whether anything is ever fetched. */
+  // Client-side Last.fm integration (Settings > Integrations) — connecting
+  // is a one-time browser-approval handshake (see LastFmSection in
+  // Settings.tsx). Scoped **per Navidrome server profile**, not global to
+  // the app install — a household sharing one install across several
+  // Navidrome logins gets one independent Last.fm account per profile.
+  // `lastfmConnected`/`lastfmConnectedUsername`/`lastFmEnabled`/
+  // `lastfmScrobbleEnabled` all mirror main-process state keyed by
+  // `activeServerId` (the session key itself never reaches the renderer;
+  // see electron/main/lastfmSession.ts) — (re)hydrated in tryAutoConnect,
+  // connect, and switchServer below, whenever the active profile changes.
+  lastfmConnected: boolean;
+  lastfmConnectedUsername: string | null;
+  /** Sets connection + both toggle fields at once, from whatever
+   *  electron/main/lastfmSession.ts reports for the current profile —
+   *  `null` (disconnected) clears the toggles too, since they're
+   *  meaningless without an account behind them. */
+  setLastfmConnection: (conn: { username: string; historyEnabled: boolean; scrobbleEnabled: boolean } | null) => void;
+  // Last.fm's own API key isn't a secret (sent in the clear on every
+  // request) — hydrated alongside the connection state above, used by
+  // LeftPanel.tsx's "Recently Played" list, which only needs a public
+  // key + a username, no session/signing.
+  lastfmPublicApiKey: string;
+
+  /** Left panel's "Recently Played" list (Settings > Integrations >
+   *  Last.fm's "Recently Played" toggle) — only togglable once connected;
+   *  reads `lastfmConnectedUsername`'s history via Last.fm's public API. */
   lastFmEnabled: boolean;
   setLastFmEnabled: (v: boolean) => void;
   /** Secondary, purely-visual switch (Settings > Appearance > Left Panel's
    *  "Show Recently Played") — hiding the list this way doesn't touch
-   *  `lastFmEnabled`/credentials, but it has no effect (and the toggle
-   *  renders disabled) while `lastFmEnabled` itself is off, since there's
-   *  nothing to show either way in that case. */
+   *  `lastFmEnabled`, but it has no effect (and the toggle renders disabled)
+   *  while `lastFmEnabled` itself is off, since there's nothing to show
+   *  either way in that case. Deliberately still a plain global localStorage
+   *  flag, not per-server like the fields above — purely visual, no account
+   *  behind it, no reason to reset when switching profiles. */
   lastFmSidebarVisible: boolean;
   setLastFmSidebarVisible: (v: boolean) => void;
+
+  // "Scrobble to Last.fm" (Settings > Integrations) — independent of both
+  // the read-only fields above and the Navidrome-relayed `scrobble` module
+  // function further down; also only togglable once connected.
+  lastfmScrobbleEnabled: boolean;
+  setLastfmScrobbleEnabled: (v: boolean) => void;
 
   // multi-server (Settings > Servers) — `servers` never carries passwords,
   // those stay main-process-side (electron/main/credentials.ts) and are only
@@ -280,58 +305,51 @@ function loadBpmDetectionEnabled(): boolean {
   }
 }
 
+// Last.fm connection/toggle state (electron/main/lastfmSession.ts) is keyed
+// by Navidrome server profile id — this resolves which key applies right
+// now, falling back to DEFAULT_KEY (must match lastfmSession.ts's own
+// constant) when there's no saved profile at all, e.g. a "connect without
+// remembering" session with no stable id to key persistent storage by.
+export const LASTFM_DEFAULT_SERVER_KEY = "default";
+export function activeLastfmKey(): string {
+  return useStore.getState().activeServerId ?? LASTFM_DEFAULT_SERVER_KEY;
+}
+
 // Every scrobble() call in this file goes through here instead of api.scrobble
 // directly, so Settings' "Scrobble" toggle has exactly one place to gate —
-// when off, this is a straight no-op and nothing ever reaches Navidrome
-// (which is what actually relays on to Last.fm server-side, if configured
-// there; see the "no way to detect that server-side" discussion this toggle
-// came out of).
-function scrobble(trackId: string, submission: boolean) {
-  if (!useStore.getState().scrobbleEnabled) return;
-  api.scrobble(trackId, submission).catch(() => {});
-}
-
-// Last.fm's read API (user.getrecenttracks, see lib/lastfm.ts) needs only a
-// public API key + the target username — neither is a secret the way a
-// Navidrome password is, so plain localStorage (not the OS-backed
-// credential store) is enough, same tier as the scrobble-enabled flag above.
-const LS_LASTFM_API_KEY = "icosahedron_lastfm_api_key";
-const LS_LASTFM_USERNAME = "icosahedron_lastfm_username";
-const LS_LASTFM_ENABLED_KEY = "icosahedron_lastfm_enabled";
-const LS_LASTFM_SIDEBAR_VISIBLE_KEY = "icosahedron_lastfm_sidebar_visible";
-
-// Defaults to on, same reasoning as loadScrobbleEnabled above — this toggle
-// is being added after "Recently Played" already works for existing users,
-// so defaulting to off would look like a regression the moment it ships.
-// Turning it off doesn't touch the saved API key/username, so re-enabling
-// later needs no reconfiguration.
-function loadLastFmEnabled(): boolean {
-  try {
-    return localStorage.getItem(LS_LASTFM_ENABLED_KEY) !== "false";
-  } catch {
-    return true;
+// when off, nothing reaches Navidrome (which is what actually relays on to
+// Last.fm server-side, if configured there; see the "no way to detect that
+// server-side" discussion this toggle came out of). Independently, when
+// "Scrobble to Last.fm" is connected+enabled, the same call also submits
+// directly to Last.fm — the two destinations don't gate each other, so a
+// user with no server-side Last.fm relay still gets scrobbles this way.
+function scrobble(track: Track, submission: boolean) {
+  if (useStore.getState().scrobbleEnabled) {
+    api.scrobble(track.id, submission).catch(() => {});
+  }
+  const { lastfmScrobbleEnabled, lastfmConnected } = useStore.getState();
+  if (lastfmScrobbleEnabled && lastfmConnected) {
+    const meta = { title: track.title, artist: track.artist, album: track.album ?? "", duration: track.duration_secs };
+    const serverId = activeLastfmKey();
+    if (submission) {
+      api.lastfmScrobble(meta, Math.floor(Date.now() / 1000), serverId).catch(() => {});
+    } else {
+      api.lastfmNowPlaying(meta, serverId).catch(() => {});
+    }
   }
 }
+
+// Purely visual (Settings > Appearance > Left Panel's "Show Recently
+// Played") — deliberately still a plain global flag, not scoped per server
+// like the connection/toggle state above: no account behind it, no reason
+// to reset when switching profiles.
+const LS_LASTFM_SIDEBAR_VISIBLE_KEY = "icosahedron_lastfm_sidebar_visible";
 
 function loadLastFmSidebarVisible(): boolean {
   try {
-    return localStorage.getItem(LS_LASTFM_SIDEBAR_VISIBLE_KEY) !== "false";
+    return localStorage.getItem(LS_LASTFM_SIDEBAR_VISIBLE_KEY) === "true";
   } catch {
-    return true;
-  }
-}
-
-// Named to match the store's own field names exactly (not "apiKey"/
-// "username", the latter of which would collide with the Navidrome
-// username field when spread into the store below).
-function loadLastFmSettings(): { lastFmApiKey: string; lastFmUsername: string } {
-  try {
-    return {
-      lastFmApiKey: localStorage.getItem(LS_LASTFM_API_KEY) ?? "",
-      lastFmUsername: localStorage.getItem(LS_LASTFM_USERNAME) ?? "",
-    };
-  } catch {
-    return { lastFmApiKey: "", lastFmUsername: "" };
+    return false;
   }
 }
 
@@ -353,18 +371,27 @@ export const useStore = create<AppStore>((set, get) => ({
     set({ bpmDetectionEnabled: v });
   },
 
-  ...loadLastFmSettings(),
-  setLastFmSettings: (apiKey, username) => {
-    try {
-      localStorage.setItem(LS_LASTFM_API_KEY, apiKey);
-      localStorage.setItem(LS_LASTFM_USERNAME, username);
-    } catch { /* best-effort */ }
-    set({ lastFmApiKey: apiKey, lastFmUsername: username });
-  },
+  // Real initial values come from tryAutoConnect()/connect()/switchServer()
+  // hydrating the *current* server profile's Last.fm state asynchronously
+  // (can't read main-process storage synchronously at store-creation time)
+  // — these are just the pre-hydration defaults. Disconnecting sets this to
+  // null too, via setLastfmConnection, which switches off both toggles
+  // below at the same time — both require a connection to do anything, so
+  // leaving them "on" with no account behind them would be a stale,
+  // confusing state.
+  lastfmConnected: false,
+  lastfmConnectedUsername: null,
+  setLastfmConnection: (conn) => set({
+    lastfmConnected: conn != null,
+    lastfmConnectedUsername: conn?.username ?? null,
+    lastFmEnabled: conn?.historyEnabled ?? false,
+    lastfmScrobbleEnabled: conn?.scrobbleEnabled ?? false,
+  }),
+  lastfmPublicApiKey: "",
 
-  lastFmEnabled: loadLastFmEnabled(),
+  lastFmEnabled: false,
   setLastFmEnabled: (v) => {
-    try { localStorage.setItem(LS_LASTFM_ENABLED_KEY, String(v)); } catch { /* best-effort */ }
+    api.lastfmSetHistoryEnabled(activeLastfmKey(), v).catch(() => {});
     set({ lastFmEnabled: v });
   },
 
@@ -372,6 +399,12 @@ export const useStore = create<AppStore>((set, get) => ({
   setLastFmSidebarVisible: (v) => {
     try { localStorage.setItem(LS_LASTFM_SIDEBAR_VISIBLE_KEY, String(v)); } catch { /* best-effort */ }
     set({ lastFmSidebarVisible: v });
+  },
+
+  lastfmScrobbleEnabled: false,
+  setLastfmScrobbleEnabled: (v) => {
+    api.lastfmSetScrobbleEnabled(activeLastfmKey(), v).catch(() => {});
+    set({ lastfmScrobbleEnabled: v });
   },
 
   bpmCache: {},
@@ -416,6 +449,8 @@ export const useStore = create<AppStore>((set, get) => ({
       coverUrl: (coverId, size = 200) =>
         coverId ? `cover://localhost/${encodeURIComponent(coverId)}?size=${size}` : "",
     });
+    api.lastfmGetConnection(activeServerId ?? LASTFM_DEFAULT_SERVER_KEY)
+      .then((conn) => get().setLastfmConnection(conn)).catch(() => {});
     try {
       await get().restoreSession();
     } catch { /* a failed session restore shouldn't be treated as a bad-credentials error */ }
@@ -461,6 +496,11 @@ export const useStore = create<AppStore>((set, get) => ({
       coverUrl: (coverId, size = 200) =>
         coverId ? `cover://localhost/${encodeURIComponent(coverId)}?size=${size}` : "",
     });
+    // Last.fm is scoped per server profile — the newly-active profile's own
+    // connection/toggle state (or none at all) replaces whatever the
+    // previous profile had, exactly like everything else this function
+    // already resets on switch.
+    api.lastfmGetConnection(id).then((conn) => get().setLastfmConnection(conn)).catch(() => {});
     try {
       await get().restoreSession();
     } catch { /* a failed session restore shouldn't block the switch itself */ }
@@ -557,14 +597,14 @@ export const useStore = create<AppStore>((set, get) => ({
     // falsely count as a full play.
     const prevTrack = prevQueue[prevIndex];
     if (prevTrack && prevTrack.id !== track.id && pastScrobbleThreshold(currentTime, duration)) {
-      scrobble(prevTrack.id, true);
+      scrobble(prevTrack, true);
     }
 
     // manual=true: bypasses the gapless pre-chain hit and starts immediately
     // (this is always a user-initiated action — auto-advance never calls
     // playTrack, see handleAudioEvent's "track_switched" case).
     api.audioPlay(track.stream_url, volume / 100, track.duration_secs, true, false).catch(() => {});
-    scrobble(track.id, false);
+    scrobble(track, false);
 
     set({
       queue: resolvedQueue,
@@ -843,8 +883,8 @@ function handleAudioEvent(payload: AudioEventPayload) {
       });
       // The track that just finished played out in full — always counts as
       // a real play, unlike playTrack's threshold-gated manual-switch case.
-      if (finishedTrack) scrobble(finishedTrack.id, true);
-      if (committed) scrobble(committed.id, false);
+      if (finishedTrack) scrobble(finishedTrack, true);
+      if (committed) scrobble(committed, false);
       break;
     }
     case "ended": {
@@ -852,7 +892,7 @@ function handleAudioEvent(payload: AudioEventPayload) {
       // ahead, so there's nothing left to advance to. The track that just
       // ended played out in full, so it always counts as a real play.
       const finishedTrack = s.queue[s.currentIndex];
-      if (finishedTrack) scrobble(finishedTrack.id, true);
+      if (finishedTrack) scrobble(finishedTrack, true);
       useStore.setState({ playing: false });
       break;
     }
@@ -921,7 +961,16 @@ window.addEventListener("beforeunload", () => useStore.getState().persistSession
 // main.py's "trust saved credentials and open immediately" step).
 export async function tryAutoConnect() {
   await useStore.getState().loadServers();
-  const [result, activeServerId] = await Promise.all([api.tryAutoConnectSaved(), api.getActiveServerId()]);
+  api.lastfmPublicApiKey().then((key) => useStore.setState({ lastfmPublicApiKey: key })).catch(() => {});
+  // Last.fm is scoped per server profile (electron/main/lastfmSession.ts) —
+  // hydrate as soon as the active profile id is known, independent of
+  // tryAutoConnectSaved's slower network ping to Navidrome below (that one
+  // might fail or find nothing; Last.fm's own state shouldn't wait on it).
+  const activeServerIdPromise = api.getActiveServerId();
+  activeServerIdPromise.then((activeServerId) =>
+    api.lastfmGetConnection(activeServerId ?? LASTFM_DEFAULT_SERVER_KEY)
+  ).then((conn) => useStore.getState().setLastfmConnection(conn)).catch(() => {});
+  const [result, activeServerId] = await Promise.all([api.tryAutoConnectSaved(), activeServerIdPromise]);
   if (!result) return;
   useStore.setState({
     connected: true,

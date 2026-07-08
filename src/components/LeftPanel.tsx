@@ -27,21 +27,23 @@ const RECENTLY_PLAYED_MIN_HEIGHT = 80;
 const RECENTLY_PLAYED_MAX_HEIGHT_FALLBACK = 480;
 const RECENTLY_PLAYED_MAX_ROWS = 10;
 
-// "Recently Played" — Last.fm's own play history (Settings > Playback's
-// Last.fm API key/username), not Navidrome's. Entirely separate signal
-// from the "Scrobble" toggle: this only ever reads, never writes, and
-// works regardless of whether Navidrome's own server-side Last.fm relay
-// is configured at all.
+// "Recently Played" — Last.fm's own play history for whichever account is
+// connected (Settings > Integrations > Last.fm), not Navidrome's. Entirely
+// separate signal from the "Scrobble" toggle: this only ever reads, never
+// writes, and works regardless of whether Navidrome's own server-side
+// Last.fm relay is configured at all.
 function RecentlyPlayed() {
-  const apiKey = useStore((s) => s.lastFmApiKey);
-  const username = useStore((s) => s.lastFmUsername);
-  // Both gates have to be on: lastFmEnabled is the Integrations-level
-  // master switch (also gates whether credentials are even usable there),
-  // lastFmSidebarVisible is the purely-visual Appearance toggle layered on
-  // top of it.
+  const apiKey = useStore((s) => s.lastfmPublicApiKey);
+  const username = useStore((s) => s.lastfmConnectedUsername);
+  // Three gates have to be on: lastfmConnected means an account is actually
+  // linked (see Settings > Integrations > Last.fm's Connect flow),
+  // lastFmEnabled is the Integrations-level "Recently Played" toggle
+  // (only togglable once connected), lastFmSidebarVisible is the
+  // purely-visual Appearance toggle layered on top of it.
+  const lastfmConnected = useStore((s) => s.lastfmConnected);
   const lastFmEnabled = useStore((s) => s.lastFmEnabled);
   const sidebarVisible = useStore((s) => s.lastFmSidebarVisible);
-  const enabled = lastFmEnabled && sidebarVisible;
+  const enabled = lastfmConnected && lastFmEnabled && sidebarVisible;
   const playTrack = useStore((s) => s.playTrack);
   const addTrackNext = useStore((s) => s.addTrackNext);
   const addTrackToQueue = useStore((s) => s.addTrackToQueue);
@@ -108,7 +110,7 @@ function RecentlyPlayed() {
     data, fetchNextPage, hasNextPage, isFetchingNextPage,
   } = useInfiniteQuery({
     queryKey: ["lastfm-recent-tracks", apiKey, username],
-    queryFn: ({ pageParam }) => getRecentTracks(apiKey, username, pageParam, 50),
+    queryFn: ({ pageParam }) => getRecentTracks(apiKey, username ?? "", pageParam, 50),
     initialPageParam: 1,
     getNextPageParam: (lastPage) => (lastPage.page < lastPage.totalPages ? lastPage.page + 1 : undefined),
     // Gated on the Settings > Playback toggle too, not just "are

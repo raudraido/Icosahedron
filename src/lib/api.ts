@@ -52,6 +52,13 @@ export interface Track {
   format: string | null;
 }
 
+export interface LastFmTrackMeta {
+  title: string;
+  artist: string;
+  album: string;
+  duration: number;
+}
+
 export interface ScanStatus {
   scanning: boolean;
   count: number;
@@ -242,6 +249,28 @@ export const api = {
 
   scrobble: (trackId: string, submission: boolean) =>
     invoke<void>("scrobble", { trackId, submission }),
+
+  // Client-side Last.fm scrobbling (independent of the Navidrome-relayed
+  // `scrobble` above) — see electron/main/lastfm.ts. The session key never
+  // reaches the renderer; these calls only ever carry track metadata. Scoped
+  // per Navidrome server profile — `serverId` is the active profile's id, or
+  // lastfmDefaultServerKey() when there's no saved profile (see store).
+  lastfmConnectStart: () => invoke<{ token: string }>("lastfm_connect_start"),
+  lastfmConnectPoll: (token: string, serverId: string) =>
+    invoke<{ connected: boolean; username?: string }>("lastfm_connect_poll", { token, serverId }),
+  lastfmGetConnection: (serverId: string) =>
+    invoke<{ username: string; historyEnabled: boolean; scrobbleEnabled: boolean } | null>("lastfm_get_connection", { serverId }),
+  lastfmDisconnect: (serverId: string) => invoke<void>("lastfm_disconnect", { serverId }),
+  lastfmSetHistoryEnabled: (serverId: string, value: boolean) =>
+    invoke<void>("lastfm_set_history_enabled", { serverId, value }),
+  lastfmSetScrobbleEnabled: (serverId: string, value: boolean) =>
+    invoke<void>("lastfm_set_scrobble_enabled", { serverId, value }),
+  // Not a secret (sent in the clear on every Last.fm request) — safe to hand
+  // to the renderer for the unauthenticated user.getrecenttracks call.
+  lastfmPublicApiKey: () => invoke<string>("lastfm_public_api_key"),
+  lastfmNowPlaying: (track: LastFmTrackMeta, serverId: string) => invoke<void>("lastfm_now_playing", { track, serverId }),
+  lastfmScrobble: (track: LastFmTrackMeta, timestamp: number, serverId: string) =>
+    invoke<void>("lastfm_scrobble", { track, timestamp, serverId }),
 
   coverArtUrl: (coverId: string, size?: number) =>
     invoke<string>("cover_art_url", { coverId, size: size ?? null }),

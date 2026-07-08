@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useStore } from "../store";
+import { useStore, activeLastfmKey } from "../store";
 import { api, UpdateInfo, UpdateDownloadProgress, TraySettings } from "../lib/api";
 import { applyTheme, loadSavedTheme, saveTheme, saveCustomTheme, deleteCustomTheme, isBuiltInThemeName, allThemes, CREAM, AppTheme } from "../lib/theme";
 import { PromptDialog } from "../components/PromptDialog";
@@ -261,71 +261,6 @@ function ApplicationSection() {
   );
 }
 
-function LastFmSection() {
-  const lastFmApiKey = useStore((s) => s.lastFmApiKey);
-  const lastFmUsername = useStore((s) => s.lastFmUsername);
-  const setLastFmSettings = useStore((s) => s.setLastFmSettings);
-  const lastFmEnabled = useStore((s) => s.lastFmEnabled);
-  const setLastFmEnabled = useStore((s) => s.setLastFmEnabled);
-  const [apiKey, setApiKey] = useState(lastFmApiKey);
-  const [username, setUsername] = useState(lastFmUsername);
-
-  const dirty = apiKey !== lastFmApiKey || username !== lastFmUsername;
-
-  const inputStyle = {
-    background: "var(--card-bg)", color: "var(--text-primary)", border: "1px solid var(--border)",
-    borderRadius: 6, padding: "6px 10px", fontSize: "var(--fs-secondary)", width: "100%",
-    opacity: lastFmEnabled ? 1 : 0.5,
-  };
-
-  return (
-    <Section title="Last.fm">
-      <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
-        Powers the left panel's "Recently Played" list — reads your public Last.fm play history directly. Separate from the "Scrobble" toggle above, which only ever talks to Navidrome.
-      </p>
-      <ToggleRow
-        label="Enable Recent History via Last.fm"
-        description="Turn this on to enter your API key/username below."
-        checked={lastFmEnabled}
-        onChange={setLastFmEnabled}
-      />
-      <div className="flex flex-col" style={{ gap: 10 }}>
-        <label className="flex flex-col" style={{ gap: 4 }}>
-          <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>API Key</span>
-          <input
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="Last.fm API key"
-            disabled={!lastFmEnabled}
-            style={inputStyle}
-          />
-        </label>
-        <label className="flex flex-col" style={{ gap: 4 }}>
-          <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>Username</span>
-          <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="Last.fm username"
-            disabled={!lastFmEnabled}
-            style={inputStyle}
-          />
-        </label>
-        <button
-          onClick={() => setLastFmSettings(apiKey.trim(), username.trim())}
-          disabled={!dirty || !lastFmEnabled}
-          style={{
-            alignSelf: "flex-start", background: "transparent", border: "1px solid var(--border)", borderRadius: 4,
-            padding: "6px 14px", cursor: dirty && lastFmEnabled ? "pointer" : "default", color: "var(--text-primary)",
-            fontSize: "var(--fs-secondary)", fontWeight: 700, opacity: dirty && lastFmEnabled ? 1 : 0.5,
-          }}
-        >
-          Save
-        </button>
-      </div>
-    </Section>
-  );
-}
-
 function PlaybackTab() {
   const bpmDetectionEnabled = useStore((s) => s.bpmDetectionEnabled);
   const setBpmDetectionEnabled = useStore((s) => s.setBpmDetectionEnabled);
@@ -351,6 +286,139 @@ function PlaybackTab() {
 // Appearance (what's visible in the UI) and Playback (actual playback
 // behavior, not yet used) — those are different questions from "what's
 // connected and how."
+// Connecting is a browser-approval handshake (auth.getToken -> last.fm/api/
+// auth -> poll auth.getSession), not a password field: Icosahedron ships
+// with its own Last.fm API application (one key, shared by every install,
+// matching how most desktop scrobblers work), and each user separately
+// authorizes their own Last.fm account against it here. Once connected, it
+// reveals two independent toggles: "Recently Played" (a pure read against
+// Last.fm's public API, powers the left panel's list) and "Scrobble to
+// Last.fm" (writes track.scrobble/track.updateNowPlaying directly —
+// independent of the "Scrobble" toggle above, which only ever talks to
+// Navidrome, so this works even with no server-side Last.fm relay).
+function LastFmSection() {
+  const lastfmConnected = useStore((s) => s.lastfmConnected);
+  const lastfmConnectedUsername = useStore((s) => s.lastfmConnectedUsername);
+  const setLastfmConnection = useStore((s) => s.setLastfmConnection);
+  const lastFmEnabled = useStore((s) => s.lastFmEnabled);
+  const setLastFmEnabled = useStore((s) => s.setLastFmEnabled);
+  const lastfmScrobbleEnabled = useStore((s) => s.lastfmScrobbleEnabled);
+  const setLastfmScrobbleEnabled = useStore((s) => s.setLastfmScrobbleEnabled);
+  const [status, setStatus] = useState<"idle" | "waiting" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  async function connect() {
+    setStatus("waiting");
+    setError(null);
+    let token: string;
+    try {
+      ({ token } = await api.lastfmConnectStart());
+    } catch (e) {
+      setStatus("error");
+      setError(e instanceof Error ? e.message : "Could not start Last.fm connection.");
+      return;
+    }
+
+    const serverId = activeLastfmKey();
+    const deadline = Date.now() + 120_000;
+    const poll = async () => {
+      if (Date.now() > deadline) {
+        setStatus("error");
+        setError("Timed out waiting for authorization — please try again.");
+        return;
+      }
+      try {
+        const result = await api.lastfmConnectPoll(token, serverId);
+        if (result.connected) {
+          // A fresh connection always starts with both toggles off (see
+          // lastfmSession.ts's saveSession) — re-fetch rather than assume,
+          // so this stays correct if that default ever changes.
+          const conn = await api.lastfmGetConnection(serverId);
+          setLastfmConnection(conn);
+          setStatus("idle");
+        } else {
+          setTimeout(poll, 2000);
+        }
+      } catch (e) {
+        setStatus("error");
+        setError(e instanceof Error ? e.message : "Could not verify Last.fm authorization.");
+      }
+    };
+    setTimeout(poll, 2000);
+  }
+
+  async function disconnect() {
+    await api.lastfmDisconnect(activeLastfmKey()).catch(() => {});
+    setLastfmConnection(null);
+  }
+
+  return (
+    <Section title="Last.fm">
+      {lastfmConnected ? (
+        <>
+          <div className="flex items-center justify-between" style={{ gap: 12, padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
+            <span style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)" }}>
+              Connected as <strong>@{lastfmConnectedUsername}</strong>
+            </span>
+            <button
+              onClick={disconnect}
+              style={{
+                background: "transparent", border: "1px solid var(--border)", borderRadius: 4,
+                padding: "6px 14px", cursor: "pointer", color: "var(--text-primary)",
+                fontSize: "var(--fs-secondary)", fontWeight: 700,
+              }}
+            >
+              Disconnect
+            </button>
+          </div>
+          <ToggleRow
+            label="Recently Played"
+            description="Reads your Last.fm play history for the left panel's list."
+            checked={lastFmEnabled}
+            onChange={setLastFmEnabled}
+          />
+          <ToggleRow
+            label="Scrobble to Last.fm"
+            description="Scrobbles at the halfway point (or 4 minutes), same as Last.fm itself."
+            checked={lastfmScrobbleEnabled}
+            onChange={setLastfmScrobbleEnabled}
+          />
+          <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
+            Leave off if your Navidrome server already scrobbles to Last.fm server-side — with both on, every play scrobbles twice.
+          </p>
+        </>
+      ) : (
+        <div className="flex flex-col" style={{ gap: 10 }}>
+          <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
+            Connect your Last.fm account to show your recent play history in the left panel and/or scrobble directly to Last.fm from this app.
+          </p>
+          <button
+            onClick={connect}
+            disabled={status === "waiting"}
+            style={{
+              alignSelf: "flex-start", background: "transparent", border: "1px solid var(--border)", borderRadius: 4,
+              padding: "6px 14px", color: "var(--text-primary)",
+              fontSize: "var(--fs-secondary)", fontWeight: 700,
+              cursor: status === "waiting" ? "default" : "pointer",
+              opacity: status === "waiting" ? 0.5 : 1,
+            }}
+          >
+            {status === "waiting" ? "Waiting for authorization…" : "Connect to Last.fm"}
+          </button>
+          {status === "waiting" && (
+            <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
+              Approve access in the browser tab that just opened, then this updates automatically.
+            </span>
+          )}
+          {status === "error" && (
+            <span style={{ color: "var(--error)", fontSize: "var(--fs-small)" }}>{error}</span>
+          )}
+        </div>
+      )}
+    </Section>
+  );
+}
+
 function IntegrationsTab() {
   const scrobbleEnabled = useStore((s) => s.scrobbleEnabled);
   const setScrobbleEnabled = useStore((s) => s.setScrobbleEnabled);
@@ -371,23 +439,30 @@ function IntegrationsTab() {
 }
 
 function AppearanceTab() {
+  const lastfmConnected = useStore((s) => s.lastfmConnected);
   const lastFmEnabled = useStore((s) => s.lastFmEnabled);
   const lastFmSidebarVisible = useStore((s) => s.lastFmSidebarVisible);
   const setLastFmSidebarVisible = useStore((s) => s.setLastFmSidebarVisible);
+  // lastFmEnabled already resets to false on disconnect (see
+  // setLastfmConnection in store/index.ts), but check lastfmConnected
+  // directly too rather than relying solely on that invariant holding.
+  const historyAvailable = lastfmConnected && lastFmEnabled;
 
   return (
     <div className="flex flex-col" style={{ gap: 24, maxWidth: 480 }}>
       <Section title="Left Panel">
         <ToggleRow
           label="Show Recently Played"
-          description="Hides the list without clearing your saved Last.fm API key/username."
+          description="Hides the list without disconnecting Last.fm."
           checked={lastFmSidebarVisible}
           onChange={setLastFmSidebarVisible}
-          disabled={!lastFmEnabled}
+          disabled={!historyAvailable}
         />
-        {!lastFmEnabled && (
+        {!historyAvailable && (
           <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
-            Enable "Recent History via Last.fm" in Settings &gt; Integrations first.
+            {lastfmConnected
+              ? "Enable \"Recently Played\" in Settings > Integrations first."
+              : "Connect to Last.fm and enable \"Recently Played\" in Settings > Integrations first."}
           </p>
         )}
       </Section>

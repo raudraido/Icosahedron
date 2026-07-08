@@ -1,7 +1,7 @@
 {
   "name": "icosahedron",
   "private": true,
-  "version": "0.13.6",
+  "version": "0.13.7",
   "license": "GPL-3.0-or-later",
   "description": "Electron + React desktop client for Subsonic/Navidrome music servers, with a native Rust gapless audio engine.",
   "type": "module",

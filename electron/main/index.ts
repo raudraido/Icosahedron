@@ -1,4 +1,5 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeTheme, protocol, shell, Tray } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, protocol, shell, Tray } from "electron";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { SubsonicClient } from "./subsonic";
 import { AudioEngineClient } from "./audioEngine";
@@ -44,6 +45,24 @@ let tray: Tray | null = null;
 // "Exit to tray".
 let isQuitting = false;
 
+// `build/icon.png` (used for the BrowserWindow `icon` option below) is a
+// build-time-only asset — electron-builder reads it to embed the OS-level
+// exe/AppImage icon, but it's never copied into the packaged app itself
+// (package.json's build.files only ships "out/**/*"). A Tray icon has no
+// exe/AppImage fallback to lean on, so unlike the window icon, resolving to
+// a path that doesn't exist in a packaged build means no tray icon ever
+// appears at all — silently, since `new Tray()` doesn't throw on a bad path.
+// `public/img/icon.png` is a renderer asset instead, which Vite always
+// copies into `out/renderer/img/` on every build (dev or packaged), so it
+// reliably exists either way; falls back to the dev-only build/ copy just
+// in case `npm run dev` is being used before `out/renderer` has ever been
+// generated on disk.
+function resolveTrayIconPath(): string {
+  const rendererIcon = join(__dirname, "../renderer/img/icon.png");
+  if (existsSync(rendererIcon)) return rendererIcon;
+  return join(__dirname, "../../build/icon.png");
+}
+
 // Tray icon only exists while at least one of the two settings could
 // actually use it — a user who wants neither behavior shouldn't have a
 // stray icon sitting in their tray for no reason. Re-run on every settings
@@ -52,7 +71,16 @@ let isQuitting = false;
 function syncTray(): void {
   const wantsTray = traySettings.minimizeToTray || traySettings.exitToTray;
   if (wantsTray && !tray) {
-    tray = new Tray(join(__dirname, "../../build/icon.png"));
+    const iconPath = resolveTrayIconPath();
+    const icon = nativeImage.createFromPath(iconPath);
+    // Electron's Tray never throws on a bad path — it just silently ends up
+    // with an empty (0×0) image and no visible icon at all, which is
+    // exactly how this broke before (build/icon.png isn't shipped in a
+    // packaged build, see resolveTrayIconPath's comment). Logging here
+    // means a future regression shows up in the console instead of another
+    // silent "nothing appears in the tray" bug report.
+    if (icon.isEmpty()) console.error(`[tray] icon failed to load from ${iconPath} — tray will be invisible`);
+    tray = new Tray(icon);
     tray.setToolTip("Icosahedron");
     tray.setContextMenu(Menu.buildFromTemplate([
       { label: "Show Icosahedron", click: () => { mainWindow?.show(); mainWindow?.focus(); } },

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { PLAY_ICON_DARK } from "../lib/theme";
 
 interface Props {
@@ -24,7 +25,12 @@ export function PromptDialog({ title, placeholder, confirmLabel = "Create", onSu
     onSubmit(trimmed);
   }
 
-  return (
+  // Portaled to <body> — some callers (e.g. Settings' Theme Builder "Save as
+  // Preset") live inside a `will-change: transform` scroll container
+  // (.scroll-clean), which establishes its own containing block for
+  // `position: fixed` descendants. Left un-portaled, the dimmed backdrop
+  // below would only cover that scrollable pane instead of the whole window.
+  return createPortal(
     <div
       onClick={onCancel}
       style={{
@@ -77,6 +83,7 @@ export function PromptDialog({ title, placeholder, confirmLabel = "Create", onSu
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

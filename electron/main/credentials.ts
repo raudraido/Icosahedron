@@ -1,58 +1,132 @@
 import { app, safeStorage } from "electron";
 import { mkdir, readFile, writeFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 
-// Matches the old app's login_dialog.py + main.py credential handling:
-// url/username are non-secret, so they're stored plainly; the password goes
-// through the OS's secure secret store instead of plain QSettings — there
-// it was Python's `keyring` (libsecret/GNOME-Keyring/KWallet on Linux,
-// Windows Credential Manager on Windows). Electron's `safeStorage` is the
-// direct equivalent: libsecret on Linux, DPAPI on Windows, Keychain on
-// macOS — same OS-backed encryption-at-rest guarantee, just a different
-// binding API. `safeStorage` only encrypts/decrypts bytes, though — unlike
-// `keyring` it doesn't persist anything itself, so the ciphertext still
-// needs a home; it goes in the same on-disk JSON file as url/username,
-// base64-encoded, rather than a second storage mechanism.
+// Multi-server credential store. Extends the original single-profile design
+// (OS-backed safeStorage encryption for the password, plain JSON for
+// everything else — libsecret/DPAPI/Keychain, matching the old app's
+// `keyring` usage) to a *list* of named server profiles plus which one is
+// "active" — used both for auto-connect on next launch and as the default
+// selection in Settings > Servers. url/username/name stay non-secret plain
+// JSON; only the password ever goes through safeStorage.
 
-interface StoredCreds {
+export interface ServerProfile {
+  id: string;
+  name: string;
   url: string;
   username: string;
+}
+
+interface StoredProfile extends ServerProfile {
   password: string; // base64-encoded ciphertext from safeStorage.encryptString
 }
 
-function credsPath(): string {
+interface StoredData {
+  servers: StoredProfile[];
+  activeServerId: string | null;
+}
+
+function dataPath(): string {
+  return join(app.getPath("userData"), "servers.json");
+}
+
+// Pre-multi-server builds stored a single profile under this filename —
+// migrated into the new list format (as the sole, active entry) the first
+// time this module loads after upgrading, then removed.
+function legacyCredsPath(): string {
   return join(app.getPath("userData"), "credentials.json");
 }
 
-export async function saveCredentials(url: string, username: string, password: string): Promise<void> {
+function hostLabel(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
+}
+
+async function migrateLegacy(): Promise<StoredData> {
+  try {
+    const raw = JSON.parse(await readFile(legacyCredsPath(), "utf-8")) as {
+      url: string; username: string; password: string;
+    };
+    const profile: StoredProfile = {
+      id: randomUUID(), name: hostLabel(raw.url), url: raw.url, username: raw.username, password: raw.password,
+    };
+    const data: StoredData = { servers: [profile], activeServerId: profile.id };
+    await writeData(data);
+    await unlink(legacyCredsPath()).catch(() => {});
+    return data;
+  } catch {
+    return { servers: [], activeServerId: null };
+  }
+}
+
+async function readData(): Promise<StoredData> {
+  try {
+    const raw = JSON.parse(await readFile(dataPath(), "utf-8")) as Partial<StoredData>;
+    return { servers: raw.servers ?? [], activeServerId: raw.activeServerId ?? null };
+  } catch {
+    return migrateLegacy();
+  }
+}
+
+async function writeData(data: StoredData): Promise<void> {
+  await mkdir(app.getPath("userData"), { recursive: true });
+  await writeFile(dataPath(), JSON.stringify(data), "utf-8");
+}
+
+function toPublic(p: StoredProfile): ServerProfile {
+  return { id: p.id, name: p.name, url: p.url, username: p.username };
+}
+
+export async function listServers(): Promise<ServerProfile[]> {
+  return (await readData()).servers.map(toPublic);
+}
+
+export async function getActiveServerId(): Promise<string | null> {
+  return (await readData()).activeServerId;
+}
+
+export async function setActiveServerId(id: string | null): Promise<void> {
+  const data = await readData();
+  data.activeServerId = id;
+  await writeData(data);
+}
+
+// Upserts by id (existing profile, e.g. editing credentials) or creates a
+// new one when no id is given — same encryption guarantee as the old
+// single-slot saveCredentials, just keyed into a list instead.
+export async function saveServer(input: {
+  id?: string; name: string; url: string; username: string; password: string;
+}): Promise<ServerProfile> {
   if (!safeStorage.isEncryptionAvailable()) {
     // No OS secret store reachable (e.g. no libsecret/keyring daemon running
     // on this Linux session) — refuse to persist rather than silently
     // falling back to writing the password in plain text.
     throw new Error("OS secret storage is unavailable on this system");
   }
-  const encrypted = safeStorage.encryptString(password).toString("base64");
-  const dir = join(app.getPath("userData"));
-  await mkdir(dir, { recursive: true });
-  const data: StoredCreds = { url, username, password: encrypted };
-  await writeFile(credsPath(), JSON.stringify(data), "utf-8");
+  const data = await readData();
+  const encrypted = safeStorage.encryptString(input.password).toString("base64");
+  const id = input.id ?? randomUUID();
+  const profile: StoredProfile = { id, name: input.name, url: input.url, username: input.username, password: encrypted };
+  data.servers = [...data.servers.filter((s) => s.id !== id), profile];
+  await writeData(data);
+  return toPublic(profile);
 }
 
-export async function loadCredentials(): Promise<{ url: string; username: string; password: string } | null> {
-  try {
-    const raw = JSON.parse(await readFile(credsPath(), "utf-8")) as StoredCreds;
-    if (!safeStorage.isEncryptionAvailable()) return null;
-    const password = safeStorage.decryptString(Buffer.from(raw.password, "base64"));
-    return { url: raw.url, username: raw.username, password };
-  } catch {
-    return null;
-  }
+export async function deleteServer(id: string): Promise<void> {
+  const data = await readData();
+  data.servers = data.servers.filter((s) => s.id !== id);
+  if (data.activeServerId === id) data.activeServerId = null;
+  await writeData(data);
 }
 
-export async function clearCredentials(): Promise<void> {
-  try {
-    await unlink(credsPath());
-  } catch {
-    // already gone
-  }
+export async function loadServerCredentials(id: string): Promise<{ url: string; username: string; password: string } | null> {
+  const profile = (await readData()).servers.find((s) => s.id === id);
+  if (!profile) return null;
+  if (!safeStorage.isEncryptionAvailable()) return null;
+  const password = safeStorage.decryptString(Buffer.from(profile.password, "base64"));
+  return { url: profile.url, username: profile.username, password };
 }

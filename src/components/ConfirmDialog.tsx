@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { PLAY_ICON_DARK } from "../lib/theme";
 
 interface Props {
@@ -10,7 +11,12 @@ interface Props {
 }
 
 export function ConfirmDialog({ title, message, confirmLabel = "Confirm", danger = false, onConfirm, onCancel }: Props) {
-  return (
+  // Portaled to <body> — some callers (e.g. Settings' Log Out button) live
+  // inside a `will-change: transform` scroll container (.scroll-clean),
+  // which establishes its own containing block for `position: fixed`
+  // descendants. Left un-portaled, the dimmed backdrop below would only
+  // cover that scrollable pane instead of the whole window.
+  return createPortal(
     <div
       onClick={onCancel}
       style={{
@@ -50,6 +56,7 @@ export function ConfirmDialog({ title, message, confirmLabel = "Confirm", danger
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

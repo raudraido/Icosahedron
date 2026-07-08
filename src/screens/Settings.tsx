@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useStore } from "../store";
-import { api, UpdateInfo, UpdateDownloadProgress } from "../lib/api";
+import { api, UpdateInfo, UpdateDownloadProgress, TraySettings } from "../lib/api";
 import { applyTheme, loadSavedTheme, saveTheme, saveCustomTheme, deleteCustomTheme, isBuiltInThemeName, allThemes, CREAM, AppTheme } from "../lib/theme";
 import { PromptDialog } from "../components/PromptDialog";
 import { DEFAULT_HOTKEYS, loadHotkeyBindings, saveHotkeyBindings, bindingFromEvent } from "../lib/hotkeys";
 import { ScrollThumb } from "../components/ScrollThumb";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 
 // New view (no old-app equivalent — Sonar's SettingsWindow is a single
 // two-column dialog with no tabs) opened via the footer bar's gear icon
@@ -184,23 +186,357 @@ function UpdateRow() {
   );
 }
 
+function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      style={{
+        position: "relative", width: 38, height: 22, borderRadius: 11, padding: 2, cursor: "pointer",
+        border: "1px solid var(--border)",
+        background: checked ? "var(--accent)" : "var(--hover-bg)",
+        transition: "background 150ms",
+      }}
+    >
+      <div
+        style={{
+          width: 16, height: 16, borderRadius: "50%", background: "#fff",
+          transform: `translateX(${checked ? 16 : 0}px)`,
+          transition: "transform 150ms",
+        }}
+      />
+    </button>
+  );
+}
+
+function ToggleRow({ label, description, checked, onChange }: { label: string; description?: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className="flex items-center justify-between" style={{ gap: 12, padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
+      <div className="flex flex-col">
+        <span style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)", fontWeight: 600 }}>{label}</span>
+        {description && <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>{description}</span>}
+      </div>
+      <ToggleSwitch checked={checked} onChange={onChange} />
+    </div>
+  );
+}
+
+function ApplicationSection() {
+  const [settings, setSettings] = useState<TraySettings | null>(null);
+
+  useEffect(() => { api.getTraySettings().then(setSettings); }, []);
+
+  function update(patch: Partial<TraySettings>) {
+    setSettings((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+      api.setTraySettings(patch);
+      return next;
+    });
+  }
+
+  if (!settings) return null;
+
+  return (
+    <Section title="Application">
+      <ToggleRow
+        label="Minimize to tray"
+        description="Minimizing the window hides it to the system tray instead of the taskbar."
+        checked={settings.minimizeToTray}
+        onChange={(v) => update({ minimizeToTray: v })}
+      />
+      <ToggleRow
+        label="Exit to tray"
+        description="Closing the window keeps the app running in the system tray instead of quitting."
+        checked={settings.exitToTray}
+        onChange={(v) => update({ exitToTray: v })}
+      />
+    </Section>
+  );
+}
+
 function SystemTab() {
   const serverUrl = useStore((s) => s.serverUrl);
   const username = useStore((s) => s.username);
+  const logout = useStore((s) => s.logout);
   const [version, setVersion] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => { api.getAppVersion().then(setVersion); }, []);
 
   return (
     <div className="flex flex-col" style={{ gap: 24, maxWidth: 480 }}>
+      <ApplicationSection />
       <Section title="About">
         <Row label="Version" value={version ? `v${version}` : ""} />
         <UpdateRow />
       </Section>
-      <Section title="Connection">
+      <Section title="Active Connection">
         <Row label="Server" value={serverUrl} />
         <Row label="Username" value={username} />
+        <button
+          onClick={() => setConfirmOpen(true)}
+          style={{
+            alignSelf: "flex-start", marginTop: 4, background: "transparent", color: "var(--error)",
+            border: "1px solid var(--error)", borderRadius: 4, padding: "7px 16px", cursor: "pointer",
+            fontSize: "var(--fs-secondary)", fontWeight: 700,
+          }}
+        >
+          Log Out
+        </button>
       </Section>
+
+      {confirmOpen && (
+        <ConfirmDialog
+          title="Log Out"
+          message={`Log out of "${username}" on ${serverUrl}? Any queued playback will be cleared.`}
+          confirmLabel="Log Out"
+          danger
+          onConfirm={() => { setConfirmOpen(false); logout(); }}
+          onCancel={() => setConfirmOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function AddServerDialog({
+  onCancel, onCreate,
+}: {
+  onCancel: () => void;
+  onCreate: (name: string, url: string, username: string, password: string) => Promise<void>;
+}) {
+  const [name, setName] = useState("");
+  const [url, setUrl] = useState("");
+  const [secure, setSecure] = useState(true);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // Same "explicit protocol wins and syncs the toggle" rule as Login.tsx.
+  function handleUrlChange(v: string) {
+    setUrl(v);
+    const m = v.match(/^(https?):\/\//i);
+    if (m) setSecure(m[1].toLowerCase() === "https");
+  }
+
+  async function submit() {
+    setError("");
+    const trimmedUrl = url.trim();
+    if (!trimmedUrl || !username.trim() || !password) return;
+    setLoading(true);
+    try {
+      const fullUrl = /^https?:\/\//i.test(trimmedUrl) ? trimmedUrl : `${secure ? "https" : "http"}://${trimmedUrl}`;
+      await onCreate(name.trim() || fullUrl, fullUrl, username.trim(), password);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const inputStyle = {
+    background: "var(--card-bg)", color: "var(--text-primary)", border: "1px solid var(--border)",
+    borderRadius: 6, padding: "8px 10px", fontSize: "var(--fs-secondary)", width: "100%",
+  };
+  const disabled = loading || !url.trim() || !username.trim() || !password;
+
+  // Portaled to <body> — this dialog is opened from inside the Servers
+  // tab's own `.scroll-clean` pane (will-change: transform), which
+  // establishes a containing block for `position: fixed` descendants; left
+  // un-portaled, the dimmed backdrop would only cover that scroll pane
+  // instead of the whole window (same fix as ConfirmDialog/PromptDialog).
+  return createPortal(
+    <div
+      onClick={onCancel}
+      style={{ position: "fixed", inset: 0, zIndex: 2000, background: "color-mix(in srgb, black 40%, transparent)", display: "flex", alignItems: "center", justifyContent: "center" }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="flex flex-col"
+        style={{ background: "var(--main-bg)", border: "1px solid var(--border)", borderRadius: 10, padding: 20, width: 360, gap: 10, boxShadow: "0 12px 32px color-mix(in srgb, black 30%, transparent)" }}
+      >
+        <h3 style={{ color: "var(--text-primary)", fontSize: "var(--fs-heading)", fontWeight: 700 }}>Add Server</h3>
+        <input autoFocus placeholder="Name (optional)" value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
+        <input placeholder="Server URL (e.g. server.domain.com)" value={url} onChange={(e) => handleUrlChange(e.target.value)} style={inputStyle} />
+        <div className="flex items-center justify-end" style={{ gap: 4 }}>
+          {(["http", "https"] as const).map((proto) => {
+            const active = secure === (proto === "https");
+            return (
+              <button
+                key={proto}
+                type="button"
+                onClick={() => setSecure(proto === "https")}
+                className="uppercase font-medium"
+                style={{
+                  borderRadius: 6, padding: "4px 8px", fontSize: "var(--fs-small)",
+                  background: active ? "color-mix(in srgb, var(--accent) 20%, transparent)" : "transparent",
+                  color: active ? "var(--accent)" : "var(--text-primary)",
+                  opacity: active ? 1 : 0.5,
+                  border: `1px solid ${active ? "color-mix(in srgb, var(--accent) 30%, transparent)" : "transparent"}`,
+                  cursor: "pointer",
+                }}
+              >
+                {proto}
+              </button>
+            );
+          })}
+        </div>
+        <input placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} style={inputStyle} />
+        <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} style={inputStyle} />
+        {error && <p style={{ color: "var(--error)", fontSize: "var(--fs-small)" }}>{error}</p>}
+        <div className="flex justify-end" style={{ gap: 8, marginTop: 8 }}>
+          <button
+            onClick={onCancel}
+            style={{ padding: "6px 14px", borderRadius: 6, border: "none", cursor: "pointer", background: "var(--hover-bg)", color: "var(--text-primary)", fontSize: "var(--fs-secondary)" }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={submit}
+            disabled={disabled}
+            style={{
+              padding: "6px 14px", borderRadius: 6, border: "none", cursor: disabled ? "default" : "pointer",
+              background: "var(--accent)", color: "#111", fontSize: "var(--fs-secondary)", fontWeight: 700,
+              opacity: disabled ? 0.5 : 1,
+            }}
+          >
+            {loading ? "Testing…" : "Add"}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function ServersTab() {
+  const servers = useStore((s) => s.servers);
+  const activeServerId = useStore((s) => s.activeServerId);
+  const loadServers = useStore((s) => s.loadServers);
+  const addServer = useStore((s) => s.addServer);
+  const switchServer = useStore((s) => s.switchServer);
+  const removeServer = useStore((s) => s.removeServer);
+
+  const [addOpen, setAddOpen] = useState(false);
+  const [testStatus, setTestStatus] = useState<Record<string, "testing" | "ok" | "fail">>({});
+  const [switchingId, setSwitchingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => { loadServers(); }, [loadServers]);
+
+  async function handleTest(id: string) {
+    setTestStatus((s) => ({ ...s, [id]: "testing" }));
+    const ok = await api.testServer(id);
+    setTestStatus((s) => ({ ...s, [id]: ok ? "ok" : "fail" }));
+  }
+
+  async function handleUse(id: string) {
+    setError("");
+    setSwitchingId(id);
+    try {
+      await switchServer(id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSwitchingId(null);
+    }
+  }
+
+  async function handleAdd(name: string, url: string, username: string, password: string) {
+    await addServer(name, url, username, password);
+    setAddOpen(false);
+  }
+
+  return (
+    <div className="flex flex-col" style={{ gap: 16, maxWidth: 520 }}>
+      <Section title="Servers">
+        <div className="flex flex-col" style={{ gap: 10 }}>
+          {servers.map((s) => {
+            const active = s.id === activeServerId;
+            const status = testStatus[s.id];
+            return (
+              <div
+                key={s.id}
+                className="flex items-center justify-between"
+                style={{
+                  padding: "10px 14px", borderRadius: 8, gap: 12,
+                  border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
+                  background: "var(--card-bg)",
+                }}
+              >
+                <div className="flex flex-col min-w-0">
+                  <span className="truncate" style={{ color: "var(--text-primary)", fontWeight: 700, fontSize: "var(--fs-primary)" }}>{s.name}</span>
+                  <span className="truncate" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>{s.username}@{s.url}</span>
+                  {status && (
+                    <span style={{ color: status === "ok" ? "var(--accent)" : status === "fail" ? "var(--error)" : "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
+                      {status === "testing" ? "Testing…" : status === "ok" ? "Connection OK" : "Connection failed"}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center shrink-0" style={{ gap: 8 }}>
+                  <button
+                    onClick={() => handleTest(s.id)}
+                    disabled={status === "testing"}
+                    style={{ background: "transparent", border: "1px solid var(--border)", borderRadius: 4, padding: "6px 12px", cursor: "pointer", color: "var(--text-primary)", fontSize: "var(--fs-secondary)", fontWeight: 600 }}
+                  >
+                    Test Connection
+                  </button>
+                  {active ? (
+                    <span style={{ padding: "6px 12px", borderRadius: 4, background: "color-mix(in srgb, var(--accent) 20%, transparent)", color: "var(--accent)", fontSize: "var(--fs-secondary)", fontWeight: 700 }}>
+                      Active
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => handleUse(s.id)}
+                      disabled={switchingId === s.id}
+                      style={{ background: "var(--accent)", border: "none", borderRadius: 4, padding: "6px 12px", cursor: "pointer", color: "#111", fontSize: "var(--fs-secondary)", fontWeight: 700 }}
+                    >
+                      {switchingId === s.id ? "Connecting…" : "Use"}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setDeleteTarget(s.id)}
+                    disabled={active}
+                    title={active ? "Switch to another server before deleting this one" : `Delete "${s.name}"`}
+                    style={{ background: "transparent", border: "none", cursor: active ? "default" : "pointer", color: "var(--text-secondary)", opacity: active ? 0.3 : 1, fontSize: 16, lineHeight: 1, padding: "6px 4px" }}
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {!servers.length && (
+            <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)", opacity: 0.7 }}>No saved servers yet.</p>
+          )}
+        </div>
+
+        {error && <p style={{ color: "var(--error)", fontSize: "var(--fs-secondary)" }}>{error}</p>}
+
+        <button
+          onClick={() => setAddOpen(true)}
+          style={{ alignSelf: "flex-start", marginTop: 4, background: "transparent", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: 4, padding: "7px 16px", cursor: "pointer", fontSize: "var(--fs-secondary)", fontWeight: 700 }}
+        >
+          + Add Server
+        </button>
+      </Section>
+
+      {addOpen && <AddServerDialog onCancel={() => setAddOpen(false)} onCreate={handleAdd} />}
+
+      {deleteTarget && (
+        <ConfirmDialog
+          title="Delete Server"
+          message={`Remove "${servers.find((s) => s.id === deleteTarget)?.name}" from your saved servers? Its stored credentials will be deleted.`}
+          confirmLabel="Delete"
+          danger
+          onConfirm={() => { removeServer(deleteTarget); setDeleteTarget(null); }}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 }
@@ -443,6 +779,20 @@ function ThemeBuilderTab() {
 
       <div className="flex items-center" style={{ gap: 8, paddingTop: 8, borderTop: "1px solid var(--border)" }}>
         <button
+          onClick={() => handleSave(draft.name)}
+          disabled={isBuiltInThemeName(draft.name)}
+          title={isBuiltInThemeName(draft.name) ? "Cream/Dark can't be overwritten — use Save as Preset" : `Overwrite "${draft.name}"`}
+          style={{
+            background: "transparent", border: "1px solid var(--border)", borderRadius: 4, padding: "7px 16px",
+            fontSize: "var(--fs-secondary)", fontWeight: 700,
+            color: isBuiltInThemeName(draft.name) ? "var(--text-secondary)" : "var(--text-primary)",
+            opacity: isBuiltInThemeName(draft.name) ? 0.4 : 1,
+            cursor: isBuiltInThemeName(draft.name) ? "default" : "pointer",
+          }}
+        >
+          Save
+        </button>
+        <button
           onClick={() => setSavePromptOpen(true)}
           style={{ background: "transparent", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: 4, padding: "7px 16px", cursor: "pointer", fontSize: "var(--fs-secondary)", fontWeight: 700 }}
         >
@@ -583,6 +933,16 @@ export function Settings() {
   const [tab, setTab] = useState<SettingsTab>("system");
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Cross-tab "jump straight to this sub-tab" intent — set by the left
+  // panel logo menu's "Manage Servers" entry (LeftPanel.tsx). Keyed off the
+  // whole nav entry, same one-shot-consumption pattern as Tracks.tsx's
+  // trackQuery/Albums.tsx's albumQuery.
+  const navEntry = useStore((s) => s.navHistory[s.navPos]);
+  useEffect(() => {
+    if (!navEntry?.settingsTab) return;
+    if (TABS.some((t) => t.id === navEntry.settingsTab)) setTab(navEntry.settingsTab as SettingsTab);
+  }, [navEntry]);
+
   return (
     <div className="h-full flex flex-col page-fade-in">
       <div className="flex items-center shrink-0 px-6" style={{ height: 58, borderBottom: "1px solid var(--border)" }}>
@@ -598,7 +958,7 @@ export function Settings() {
           <div ref={scrollRef} className="h-full overflow-y-auto scroll-clean" style={{ padding: 28 }}>
             {tab === "system" && <SystemTab />}
             {tab === "themes" && <ThemesTab />}
-            {tab === "servers" && <ComingSoon label="Servers" />}
+            {tab === "servers" && <ServersTab />}
             {tab === "users" && <ComingSoon label="Users" />}
             {tab === "themeBuilder" && <ThemeBuilderTab />}
             {tab === "hotkeys" && <HotkeysTab />}

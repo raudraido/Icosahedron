@@ -1,14 +1,17 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeTheme, protocol, shell } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, nativeTheme, protocol, shell, Tray } from "electron";
 import { join } from "node:path";
 import { SubsonicClient } from "./subsonic";
 import { AudioEngineClient } from "./audioEngine";
 import { registerCoverProtocol } from "./coverProtocol";
 import { applyWindowState, loadWindowState } from "./windowState";
+import { loadTraySettings, saveTraySettings, TraySettings } from "./traySettings";
 import {
   searchLyrics, fetchLyrics, lrclibDirect, loadLocalLyrics, saveLocalLyrics,
   removeLocalLyrics, getBandsintownEvents,
 } from "./lyrics";
-import { saveCredentials, loadCredentials, clearCredentials } from "./credentials";
+import {
+  listServers, saveServer, deleteServer, getActiveServerId, setActiveServerId, loadServerCredentials,
+} from "./credentials";
 import { getCachedBpm, setCachedBpm, getAllCachedBpm } from "./bpmCache";
 import { checkForUpdate, downloadAndInstallUpdate } from "./updater";
 
@@ -32,6 +35,43 @@ let audioEngine: AudioEngineClient | null = null;
 // download_and_install_update handler (registered outside createWindow) can
 // push progress events without needing to reach back into that closure.
 let mainWindow: BrowserWindow | null = null;
+
+let traySettings: TraySettings = loadTraySettings();
+let tray: Tray | null = null;
+// Flips true on an actual quit (tray "Quit", Cmd+Q, OS shutdown, etc.) so
+// the window's 'close' handler can tell that apart from a plain click on
+// the titlebar's X button — only the latter should be interceptable by
+// "Exit to tray".
+let isQuitting = false;
+
+// Tray icon only exists while at least one of the two settings could
+// actually use it — a user who wants neither behavior shouldn't have a
+// stray icon sitting in their tray for no reason. Re-run on every settings
+// change (see set_tray_settings) so toggling either one on/off creates or
+// destroys it immediately rather than needing a restart.
+function syncTray(): void {
+  const wantsTray = traySettings.minimizeToTray || traySettings.exitToTray;
+  if (wantsTray && !tray) {
+    tray = new Tray(join(__dirname, "../../build/icon.png"));
+    tray.setToolTip("Icosahedron");
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: "Show Icosahedron", click: () => { mainWindow?.show(); mainWindow?.focus(); } },
+      { type: "separator" },
+      { label: "Quit", click: () => { isQuitting = true; app.quit(); } },
+    ]));
+    // Left-click (Windows/Linux — macOS doesn't fire 'click' on tray icons
+    // the same way and isn't a build target for this app) toggles the
+    // window, matching most tray-icon apps' expected one-click behavior.
+    tray.on("click", () => {
+      if (!mainWindow) return;
+      if (mainWindow.isVisible()) mainWindow.hide();
+      else { mainWindow.show(); mainWindow.focus(); }
+    });
+  } else if (!wantsTray && tray) {
+    tray.destroy();
+    tray = null;
+  }
+}
 
 function createWindow(): void {
   const state = loadWindowState();
@@ -58,6 +98,23 @@ function createWindow(): void {
   applyWindowState(win, state);
   audioEngine = new AudioEngineClient(win);
   mainWindow = win;
+
+  // 'minimize' isn't cancelable in current Electron typings — hiding right
+  // after it's already minimized achieves the same "gone from the taskbar"
+  // result, just one step removed from intercepting the minimize itself.
+  win.on("minimize", () => {
+    if (!traySettings.minimizeToTray) return;
+    win.hide();
+  });
+
+  // Only intercept a plain titlebar-X close — an actual quit (tray menu,
+  // Cmd+Q, OS shutdown) sets isQuitting first specifically so this doesn't
+  // trap the app open forever.
+  win.on("close", (event) => {
+    if (isQuitting || !traySettings.exitToTray) return;
+    event.preventDefault();
+    win.hide();
+  });
 
   // Tour-date links (Info tab) and any other window.open() call should go to
   // the OS's default browser — matches the old app's webbrowser.open(url) —
@@ -102,14 +159,65 @@ function registerIpcHandlers(): void {
   });
   ipcMain.handle("ping", () => requireClient().ping());
 
-  // ── Saved-credentials (see credentials.ts) ──────────────────────────────
-  // The password never travels back over IPC on auto-connect — it's read,
-  // decrypted, and handed straight to a new SubsonicClient entirely inside
-  // this process; the renderer only ever learns whether it worked.
-  ipcMain.handle("save_credentials", (_e, { url, username, password }) => saveCredentials(url, username, password));
-  ipcMain.handle("clear_credentials", () => clearCredentials());
+  // Validates not-yet-saved credentials (Settings > Servers' "Add Server"
+  // dialog) without touching the live `client` — unlike "connect" above,
+  // testing a brand-new profile shouldn't swap out whatever server is
+  // actually driving the rest of the app right now.
+  ipcMain.handle("test_connection", async (_e, { url, username, password }) => {
+    try {
+      await new SubsonicClient(url, username, password).ping();
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
+  // ── Multi-server profiles (see credentials.ts) ──────────────────────────
+  // Passwords never travel back over IPC — they're read, decrypted, and
+  // handed straight to a new SubsonicClient entirely inside this process;
+  // the renderer only ever learns whether a connect attempt worked.
+  ipcMain.handle("list_servers", () => listServers());
+  ipcMain.handle("get_active_server", () => getActiveServerId());
+  ipcMain.handle("save_server", (_e, profile) => saveServer(profile));
+  ipcMain.handle("delete_server", (_e, { id }) => deleteServer(id));
+  ipcMain.handle("set_active_server", (_e, { id }) => setActiveServerId(id));
+
+  // Connects using a saved profile's stored (decrypted) credentials —
+  // powers both "Use" in Settings > Servers and the boot-time auto-connect
+  // below. Marks the profile active on success so next launch picks it back
+  // up automatically.
+  ipcMain.handle("connect_server", async (_e, { id }) => {
+    const creds = await loadServerCredentials(id);
+    if (!creds) return null;
+    try {
+      const c = new SubsonicClient(creds.url, creds.username, creds.password);
+      await c.ping();
+      client = c;
+      await setActiveServerId(id);
+      return { url: creds.url, username: creds.username };
+    } catch {
+      return null;
+    }
+  });
+
+  // "Test Connection" in Settings > Servers — pings without touching the
+  // live `client`, so testing a non-active saved profile can't accidentally
+  // swap out the connection actually driving the rest of the app.
+  ipcMain.handle("test_server", async (_e, { id }) => {
+    const creds = await loadServerCredentials(id);
+    if (!creds) return false;
+    try {
+      await new SubsonicClient(creds.url, creds.username, creds.password).ping();
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
   ipcMain.handle("try_auto_connect", async () => {
-    const creds = await loadCredentials();
+    const activeId = await getActiveServerId();
+    if (!activeId) return null;
+    const creds = await loadServerCredentials(activeId);
     if (!creds) return null;
     try {
       const c = new SubsonicClient(creds.url, creds.username, creds.password);
@@ -224,6 +332,23 @@ function registerIpcHandlers(): void {
     await setCachedBpm(trackId, bpm);
   });
   ipcMain.handle("get_bpm_cache_all", () => getAllCachedBpm());
+
+  // ── Settings > System > Application ─────────────────────────────────────
+  ipcMain.handle("get_tray_settings", () => traySettings);
+  ipcMain.handle("set_tray_settings", (_e, settings: Partial<TraySettings>) => {
+    traySettings = { ...traySettings, ...settings };
+    saveTraySettings(traySettings);
+    syncTray();
+  });
+
+  // Deliberate quit (logo menu's "Quit" row) — same isQuitting-first
+  // sequence as the tray's own Quit item, so createWindow()'s 'close'
+  // handler lets the window actually close instead of hiding it to the
+  // tray even when "Exit to tray" is on.
+  ipcMain.handle("quit_app", () => {
+    isQuitting = true;
+    app.quit();
+  });
 }
 
 app.whenReady().then(() => {
@@ -232,9 +357,11 @@ app.whenReady().then(() => {
   registerCoverProtocol(cacheDir, () => client);
   registerIpcHandlers();
   createWindow();
+  syncTray(); // in case either setting was already on from a prior launch
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    else { mainWindow?.show(); mainWindow?.focus(); }
   });
 });
 
@@ -242,6 +369,12 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 
+// Fires before any window's own 'close' event during a real quit sequence
+// (app.quit() from the tray menu, the updater's app.quit() handoff, Cmd+Q,
+// OS shutdown, …) — flip isQuitting here so createWindow()'s 'close'
+// handler lets the window actually close instead of hiding it to the tray,
+// no matter which path triggered the quit.
 app.on("before-quit", () => {
+  isQuitting = true;
   audioEngine?.stop();
 });

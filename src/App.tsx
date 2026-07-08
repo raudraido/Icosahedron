@@ -1,19 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { useStore, tryAutoConnect, Tab } from "./store";
 import { applyTheme, loadSavedTheme } from "./lib/theme";
 import { loadJSON, saveJSON } from "./components/TrackTable";
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime:  1000 * 60 * 5,   // 5 min — data is fresh, no background refetch
-      gcTime:     1000 * 60 * 30,  // 30 min — inactive data kept in RAM
-      retry: 1,
-      refetchOnWindowFocus: false,
-    },
-  },
-});
+import { queryClient } from "./lib/queryClient";
 import { Login } from "./screens/Login";
 import { Albums } from "./screens/Albums";
 import { Artists } from "./screens/Artists";
@@ -25,7 +15,7 @@ import { NowPlaying } from "./screens/NowPlaying";
 import { Home } from "./screens/Home";
 import { Settings } from "./screens/Settings";
 import { PlayerBar } from "./components/PlayerBar";
-import { LeftPanel } from "./components/LeftPanel";
+import { LeftPanel, NavArrow } from "./components/LeftPanel";
 import { QueuePanel } from "./components/QueuePanel";
 import { Icon } from "./components/Icon";
 import { GlobalTooltip } from "./components/GlobalTooltip";
@@ -78,6 +68,12 @@ function loadNavOrder(): Tab[] {
 // "Mix Builder" once it's the active tab.
 // Full-label tab width (used both for layout and for computing the icon-only
 // breakpoint below) and the icon-only mode's tighter width.
+// 2 × 30px NavArrow buttons + 4px gap between them — occupies the tab bar's
+// left corner now (see MainApp), mirrored by an equal-width empty spacer on
+// the right so the tab group still visually centers on the whole row, not
+// just the space left over next to the buttons.
+const NAV_ARROWS_WIDTH = 30 * 2 + 4;
+
 const FULL_TAB_WIDTH = 110;
 const COMPACT_TAB_WIDTH = 44;
 const TAB_GAP = 4;
@@ -125,6 +121,10 @@ function MainApp() {
   const setTab       = useStore((s) => s.setTab);
   const pushNav      = useStore((s) => s.pushNav);
   const currentEntry = useStore((s) => s.navHistory[s.navPos]);
+  const navBack = useStore((s) => s.navBack);
+  const navFwd  = useStore((s) => s.navFwd);
+  const canBack = useStore((s) => s.navHistory.length > 0 && s.navPos > 0);
+  const canFwd  = useStore((s) => s.navPos < s.navHistory.length - 1);
   const [mounted, setMounted] = useState<Set<string>>(() => new Set([activeTab]));
   useEffect(() => {
     setMounted((prev) => prev.has(activeTab) ? prev : new Set([...prev, activeTab]));
@@ -145,7 +145,10 @@ function MainApp() {
     if (!el) return;
     function check() {
       const needed = navOrder.length * FULL_TAB_WIDTH + (navOrder.length - 1) * TAB_GAP;
-      setCompact(needed > el!.clientWidth - 24); // -24 = the row's own px-3 padding
+      // -24 = the row's own px-3 padding; -2×NAV_ARROWS_WIDTH = the left
+      // corner's nav-arrow buttons and their balancing right-side spacer,
+      // both of which eat into the middle segment's actual available width.
+      setCompact(needed > el!.clientWidth - 24 - NAV_ARROWS_WIDTH * 2);
     }
     check();
     const ro = new ResizeObserver(check);
@@ -181,13 +184,23 @@ function MainApp() {
         <LeftPanel />
 
         <div className="flex flex-col flex-1 overflow-hidden" style={{ background: "var(--main-bg)" }}>
-          {/* Tab bar — centered in the header (matches the old app's main_header,
-              which puts an addStretch() on both sides of the QTabBar) */}
+          {/* Tab bar — centered on the whole row (matches the old app's
+              main_header, which puts an addStretch() on both sides of the
+              QTabBar). The nav (back/forward) arrows sit in the left corner
+              — moved here from LeftPanel.tsx's header — balanced by an
+              equal-width empty spacer on the right so they don't throw off
+              that centering. */}
           <div
             ref={headerRef}
-            className="flex items-center justify-center px-3 shrink-0"
-            style={{ height: 62, gap: 4, borderBottom: "1px solid var(--border)" }}
+            className="flex items-center px-3 shrink-0"
+            style={{ height: 62, borderBottom: "1px solid var(--border)" }}
           >
+            <div className="flex items-center shrink-0" style={{ width: NAV_ARROWS_WIDTH, gap: 4 }}>
+              <NavArrow direction="left"  disabled={!canBack} onClick={navBack} />
+              <NavArrow direction="right" disabled={!canFwd}  onClick={navFwd} />
+            </div>
+
+            <div className="flex-1 flex items-center justify-center" style={{ gap: 4 }}>
             {navOrder.map((id) => {
               const n = NAV.find((entry) => entry.id === id);
               if (!n) return null;
@@ -205,6 +218,9 @@ function MainApp() {
                 />
               );
             })}
+            </div>
+
+            <div className="shrink-0" style={{ width: NAV_ARROWS_WIDTH }} />
           </div>
 
           <div className="flex-1 overflow-hidden relative">

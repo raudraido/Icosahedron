@@ -15,7 +15,19 @@ export interface MenuItem {
    *  its icon — matches the old app's `add_action(..., color=...)` (e.g. the pink
    *  Favorites row, `color='#E91E63'`). */
   color?: string;
-  submenu?: MenuItem[];
+  /** Renders `icon` as a plain <img> in its own original colors instead of
+   *  the default mask-tinted-to-`color` treatment — for icons that are
+   *  already a finished piece of art (e.g. a server/service logo) rather
+   *  than a single-color glyph meant to match the theme. */
+  rawIcon?: boolean;
+  /** Overrides the default 14px icon size — e.g. a larger untinted logo. */
+  iconSize?: number;
+  /** Nudges the icon horizontally (px, usually negative) — a bigger rawIcon
+   *  logo often has its own internal padding baked into the asset, which
+   *  otherwise reads as misaligned against smaller glyph icons in rows
+   *  below it despite both sharing the same box's left inset. */
+  iconOffsetX?: number;
+  submenu?: MenuEntry[];
 }
 export type MenuEntry = MenuItem | "separator";
 
@@ -144,7 +156,11 @@ function MenuRow({ item, onSelect }: { item: MenuItem; onSelect: (item: MenuItem
           fontSize: "var(--fs-primary)", fontWeight: 400,
         }}
       >
-        {item.icon && <Icon src={item.icon} size={14} style={{ background: item.color ?? "var(--accent)" }} />}
+        {item.icon && (
+          item.rawIcon
+            ? <img src={item.icon} alt="" style={{ width: item.iconSize ?? 14, height: item.iconSize ?? 14, objectFit: "contain", flexShrink: 0, marginLeft: item.iconOffsetX ?? 0 }} />
+            : <Icon src={item.icon} size={item.iconSize ?? 14} style={{ background: item.color ?? "var(--accent)" }} />
+        )}
         <span style={{ flex: 1 }}>{item.label}</span>
         {item.submenu && <span style={{ opacity: 0.5 }}>›</span>}
       </button>
@@ -164,9 +180,11 @@ function MenuRow({ item, onSelect }: { item: MenuItem; onSelect: (item: MenuItem
             display: "flex", flexDirection: "column", gap: 1,
           }}
         >
-          {item.submenu.map((sub, j) => (
-            <SubmenuRow key={j} item={sub} onSelect={onSelect} />
-          ))}
+          {item.submenu.map((sub, j) =>
+            sub === "separator"
+              ? <div key={j} style={{ height: 1, background: "var(--border)", margin: "4px 0" }} />
+              : <SubmenuRow key={j} item={sub} onSelect={onSelect} />
+          )}
         </div>
       )}
     </div>
@@ -190,7 +208,11 @@ function SubmenuRow({ item, onSelect }: { item: MenuItem; onSelect: (item: MenuI
         fontSize: "var(--fs-primary)", fontWeight: 400,
       }}
     >
-      {item.icon && <Icon src={item.icon} size={14} style={{ background: item.color ?? "var(--accent)" }} />}
+      {item.icon && (
+        item.rawIcon
+          ? <img src={item.icon} alt="" style={{ width: item.iconSize ?? 14, height: item.iconSize ?? 14, objectFit: "contain", flexShrink: 0, marginLeft: item.iconOffsetX ?? 0 }} />
+          : <Icon src={item.icon} size={item.iconSize ?? 14} style={{ background: item.color ?? "var(--accent)" }} />
+      )}
       {item.label}
     </button>
   );

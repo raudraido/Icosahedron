@@ -153,17 +153,34 @@ export interface AudioEventPayload {
   message?: string;
 }
 
+export interface ServerProfile {
+  id: string;
+  name: string;
+  url: string;
+  username: string;
+}
+
 export const api = {
   connect: (url: string, username: string, password: string) =>
     invoke<boolean>("connect", { url, username, password }),
+  // Validates credentials without swapping the live connection — used to
+  // test a brand-new server before it's saved (Settings > Servers).
+  testConnection: (url: string, username: string, password: string) =>
+    invoke<boolean>("test_connection", { url, username, password }),
 
-  // ── Saved credentials — password is OS-keystore-encrypted in the main
-  // process (Electron safeStorage: libsecret/DPAPI/Keychain); tryAutoConnect
-  // never returns the plaintext password to the renderer, only whether the
-  // reconnect succeeded and who/where it connected to. ──
-  saveCredentials: (url: string, username: string, password: string) =>
-    invoke<void>("save_credentials", { url, username, password }),
-  clearCredentials: () => invoke<void>("clear_credentials"),
+  // ── Multi-server profiles — password is OS-keystore-encrypted in the main
+  // process (Electron safeStorage: libsecret/DPAPI/Keychain) and never
+  // travels back over IPC; connectServer/tryAutoConnectSaved only ever
+  // return whether the (re)connect succeeded and who/where it connected
+  // to. ──
+  listServers: () => invoke<ServerProfile[]>("list_servers"),
+  getActiveServerId: () => invoke<string | null>("get_active_server"),
+  saveServer: (profile: { id?: string; name: string; url: string; username: string; password: string }) =>
+    invoke<ServerProfile>("save_server", profile),
+  deleteServer: (id: string) => invoke<void>("delete_server", { id }),
+  setActiveServer: (id: string | null) => invoke<void>("set_active_server", { id }),
+  connectServer: (id: string) => invoke<{ url: string; username: string } | null>("connect_server", { id }),
+  testServer: (id: string) => invoke<boolean>("test_server", { id }),
   tryAutoConnectSaved: () => invoke<{ url: string; username: string } | null>("try_auto_connect"),
 
   getArtists: () => invoke<Artist[]>("get_artists"),
@@ -272,7 +289,17 @@ export const api = {
   getBpm: (trackId: string, streamUrl: string) => invoke<number>("get_bpm", { trackId, streamUrl }),
   setBpmOverride: (trackId: string, bpm: number) => invoke<void>("set_bpm_override", { trackId, bpm }),
   getBpmCacheAll: () => invoke<Record<string, number>>("get_bpm_cache_all"),
+
+  // ── Settings > System > Application ─────────────────────────────────────
+  getTraySettings: () => invoke<TraySettings>("get_tray_settings"),
+  setTraySettings: (settings: Partial<TraySettings>) => invoke<void>("set_tray_settings", settings),
+  quitApp: () => invoke<void>("quit_app"),
 };
+
+export interface TraySettings {
+  minimizeToTray: boolean;
+  exitToTray: boolean;
+}
 
 export function fmtDuration(secs: number): string {
   const total = Math.floor(secs);

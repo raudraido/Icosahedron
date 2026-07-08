@@ -1,6 +1,7 @@
 import { create } from "zustand";
-import { api, AudioEventPayload, Track, Album, Playlist } from "../lib/api";
+import { api, AudioEventPayload, Track, Album, Playlist, ServerProfile } from "../lib/api";
 import type { QueueTab } from "../components/QueueBottomTabs";
+import { queryClient } from "../lib/queryClient";
 
 export type Tab =
   | "home" | "nowPlaying" | "albums" | "artists" | "tracks" | "playlists" | "starred"
@@ -20,6 +21,10 @@ export type NavEntry = {
    *  text from Spotlight a second time still re-applies it. */
   trackQuery?: string;
   albumQuery?: string;
+  /** Cross-tab "open Settings directly on this sub-tab" intent — set by the
+   *  left panel logo menu's "Manage Servers" entry, consumed once by
+   *  Settings.tsx on mount the same way trackQuery/albumQuery are. */
+  settingsTab?: string;
 };
 
 interface AppStore {
@@ -28,6 +33,23 @@ interface AppStore {
   serverUrl: string;
   username: string;
   connect: (url: string, user: string, pass: string, remember: boolean) => Promise<void>;
+  logout: () => Promise<void>;
+
+  // multi-server (Settings > Servers) — `servers` never carries passwords,
+  // those stay main-process-side (electron/main/credentials.ts) and are only
+  // ever referenced by profile id.
+  servers: ServerProfile[];
+  activeServerId: string | null;
+  loadServers: () => Promise<void>;
+  /** Tests + persists a new profile without touching the live connection —
+   *  doesn't switch to it, just adds it to the list (mirrors "Add Server"
+   *  saving without an implicit "Use"). Throws on a failed connection test. */
+  addServer: (name: string, url: string, username: string, password: string) => Promise<void>;
+  /** Switches the live connection to an already-saved profile: reconnects,
+   *  clears the queue + every cached query (stale data from the old server
+   *  shouldn't linger), and restores/seeds that server's own session. */
+  switchServer: (id: string) => Promise<void>;
+  removeServer: (id: string) => Promise<void>;
 
   // cover URL — synchronous, no IPC, computed once at connect
   coverUrl: (coverId: string | null, size?: number) => string;
@@ -142,10 +164,25 @@ interface AppStore {
   // session persistence (queue/current track/position survive a restart) —
   // matches the old app's save_playlist/load_playlist (closeEvent-triggered)
   persistSession: () => void;
-  restoreSession: () => void;
+  restoreSession: () => Promise<void>;
+  loadRandomTrack: () => Promise<void>;
 }
 
-const SESSION_KEY = "icosahedron_session";
+// Namespaced per server — otherwise switching servers would restore (or
+// clobber) another server's queue/position. `null` (no active server known
+// yet, e.g. mid-migration) falls back to the original unnamespaced key so
+// existing single-server installs don't lose their session on upgrade.
+const LEGACY_SESSION_KEY = "icosahedron_session";
+function sessionKey(serverId: string | null): string {
+  return serverId ? `icosahedron_session_${serverId}` : LEGACY_SESSION_KEY;
+}
+
+// Default display name for a newly-saved server profile — matches the same
+// derivation electron/main/credentials.ts uses for its legacy-format
+// migration, just renderer-side for the normal Login/Add Server path.
+function hostLabel(url: string): string {
+  try { return new URL(url).hostname; } catch { return url; }
+}
 
 /** Picks the track (and its queue index) that should play after the current
  *  one: `repeat` replays the same track, `shuffle` picks a fresh random pick
@@ -178,6 +215,15 @@ function positionPatch(secs: number) {
   return { currentTime: Math.floor(secs), currentTimeRaw: secs, currentTimeAnchorMs: performance.now() };
 }
 
+// Standard scrobble threshold (Last.fm's own rule — Navidrome's `scrobble`
+// endpoint doesn't enforce this itself, callers are expected to). Only
+// relevant to a manually-interrupted track (see playTrack below); a track
+// that finishes naturally (track_switched/ended in handleAudioEvent) always
+// counts regardless, since it played out in full.
+function pastScrobbleThreshold(currentTime: number, duration: number): boolean {
+  return duration > 0 && (currentTime >= duration * 0.5 || currentTime >= 240);
+}
+
 export const useStore = create<AppStore>((set, get) => ({
   connected: false,
   serverUrl: "",
@@ -205,23 +251,96 @@ export const useStore = create<AppStore>((set, get) => ({
   // (login_dialog.py/main.py): url+username are non-secret, but the
   // password is only ever persisted through the OS-backed secret store
   // (electron/main/credentials.ts), never in localStorage — and only at
-  // all if the user opts in. Unchecking explicitly wipes any previously
-  // saved credentials, same as the old app's keyring.delete_password branch.
+  // all if the user opts in. Since a saved profile is what Settings >
+  // Servers switches between, "remember" now means "add this as a server
+  // profile" — unchecking just connects for this session without adding one.
   connect: async (url, user, pass, remember) => {
     await api.connect(url, user, pass);
+    let activeServerId: string | null = null;
     if (remember) {
-      await api.saveCredentials(url, user, pass);
-    } else {
-      await api.clearCredentials();
+      const profile = await api.saveServer({ name: hostLabel(url), url, username: user, password: pass });
+      await api.setActiveServer(profile.id);
+      activeServerId = profile.id;
+      set((s) => ({ servers: [...s.servers.filter((x) => x.id !== profile.id), profile] }));
     }
     set({
       connected: true,
       serverUrl: url,
       username: user,
+      activeServerId,
+      activeTab: "home", navHistory: [{ tab: "home" }], navPos: 0,
       coverUrl: (coverId, size = 200) =>
         coverId ? `cover://localhost/${encodeURIComponent(coverId)}?size=${size}` : "",
     });
+    try {
+      await get().restoreSession();
+    } catch { /* a failed session restore shouldn't be treated as a bad-credentials error */ }
     get().loadBpmCache();
+  },
+
+  servers: [],
+  activeServerId: null,
+
+  loadServers: async () => {
+    try {
+      const servers = await api.listServers();
+      set({ servers });
+    } catch { /* best-effort — Servers tab just shows an empty list */ }
+  },
+
+  // Tests + persists a profile without touching the live connection or
+  // marking it active — matches "Add Server" saving to the list without an
+  // implicit "Use" (switching is a separate, explicit action below).
+  addServer: async (name, url, username, password) => {
+    const ok = await api.testConnection(url, username, password);
+    if (!ok) throw new Error("Couldn't connect with those credentials.");
+    const profile = await api.saveServer({ name, url, username, password });
+    set((s) => ({ servers: [...s.servers, profile] }));
+  },
+
+  // Reconnects to an already-saved profile, then discards anything tied to
+  // the previous server: the queue/playback, every cached Navidrome query
+  // (react-query — stale albums/artists/etc. from the old server shouldn't
+  // leak into the new one's screens), and finally seeds/restores this
+  // server's own session (namespaced by id, see sessionKey).
+  switchServer: async (id) => {
+    const result = await api.connectServer(id);
+    if (!result) throw new Error("Couldn't connect to that server.");
+    get().clearQueue();
+    queryClient.clear();
+    set({
+      connected: true,
+      serverUrl: result.url,
+      username: result.username,
+      activeServerId: id,
+      activeTab: "home", navHistory: [{ tab: "home" }], navPos: 0,
+      coverUrl: (coverId, size = 200) =>
+        coverId ? `cover://localhost/${encodeURIComponent(coverId)}?size=${size}` : "",
+    });
+    try {
+      await get().restoreSession();
+    } catch { /* a failed session restore shouldn't block the switch itself */ }
+    get().loadBpmCache();
+  },
+
+  removeServer: async (id) => {
+    await api.deleteServer(id);
+    localStorage.removeItem(sessionKey(id));
+    set((s) => ({ servers: s.servers.filter((x) => x.id !== id) }));
+  },
+
+  // Stops playback and drops back to connected:false — App.tsx renders
+  // <Login /> as soon as that flips, same gate the initial boot check uses.
+  // This only signs the current user out; the server profile itself (and
+  // its saved credentials) stays put in Settings > Servers / Login's saved-
+  // servers list, just no longer marked active so next launch won't
+  // auto-connect into it without the user picking it again.
+  logout: async () => {
+    const { activeServerId } = get();
+    get().clearQueue();
+    if (activeServerId) await api.setActiveServer(null);
+    queryClient.clear();
+    set({ connected: false, serverUrl: "", username: "", activeServerId: null });
   },
 
   activeTab: "home",
@@ -283,7 +402,19 @@ export const useStore = create<AppStore>((set, get) => ({
   playTrack: (track, queue) => {
     const resolvedQueue = queue ?? [track];
     const idx = resolvedQueue.findIndex((t) => t.id === track.id);
-    const { volume } = get();
+    const { volume, queue: prevQueue, currentIndex: prevIndex, currentTime, duration } = get();
+
+    // Submit the real "played" scrobble for whatever this replaces — a
+    // manual switch never reaches handleAudioEvent's track_switched/ended
+    // cases (those are gapless-engine-only signals), so without this, plays
+    // interrupted by picking a new track (as opposed to letting one finish)
+    // would never actually scrobble at all. Gated on the standard
+    // half-the-track-or-4-minutes threshold so a 10-second skip doesn't
+    // falsely count as a full play.
+    const prevTrack = prevQueue[prevIndex];
+    if (prevTrack && prevTrack.id !== track.id && pastScrobbleThreshold(currentTime, duration)) {
+      api.scrobble(prevTrack.id, true).catch(() => {});
+    }
 
     // manual=true: bypasses the gapless pre-chain hit and starts immediately
     // (this is always a user-initiated action — auto-advance never calls
@@ -448,19 +579,27 @@ export const useStore = create<AppStore>((set, get) => ({
   // shuffle/repeat/volume were never persisted there either — matching that,
   // not extending scope.
   persistSession: () => {
-    const { queue, currentIndex, currentTime } = get();
+    const { queue, currentIndex, currentTime, activeServerId } = get();
     try {
-      localStorage.setItem(SESSION_KEY, JSON.stringify({ queue, currentIndex, positionSecs: currentTime }));
+      localStorage.setItem(sessionKey(activeServerId), JSON.stringify({ queue, currentIndex, positionSecs: currentTime }));
     } catch { /* ignore quota/serialization errors — losing the session is non-fatal */ }
   },
 
-  restoreSession: () => {
+  restoreSession: async () => {
     let saved: { queue: Track[]; currentIndex: number; positionSecs: number } | null = null;
     try {
-      const raw = localStorage.getItem(SESSION_KEY);
+      const raw = localStorage.getItem(sessionKey(get().activeServerId));
       saved = raw ? JSON.parse(raw) : null;
     } catch { saved = null; }
-    if (!saved || !saved.queue.length || saved.currentIndex < 0 || saved.currentIndex >= saved.queue.length) return;
+
+    if (!saved || !saved.queue.length || saved.currentIndex < 0 || saved.currentIndex >= saved.queue.length) {
+      // No prior session to restore — matches the old app's first-launch
+      // behavior of seeding the queue with one random library track instead
+      // of leaving the player looking empty/broken before anything's ever
+      // been played.
+      await get().loadRandomTrack();
+      return;
+    }
 
     const track = saved.queue[saved.currentIndex];
     const { volume } = get();
@@ -474,9 +613,26 @@ export const useStore = create<AppStore>((set, get) => ({
     // start_paused=true: the engine sits paused at position 0 until the
     // explicit seek below — avoids the audible blip a naive play-then-pause
     // would cause on a real device.
-    api.audioPlay(track.stream_url, volume / 100, track.duration_secs, true, true)
+    await api.audioPlay(track.stream_url, volume / 100, track.duration_secs, true, true)
       .then(() => api.audioSeek(saved!.positionSecs))
       .catch(() => {});
+  },
+
+  // Seeds the queue with a single random library track, paused at position 0
+  // — same "primed and ready, not auto-played" state restoreSession leaves a
+  // restored session in, just from a random pick instead of prior history.
+  loadRandomTrack: async () => {
+    try {
+      const [track] = await api.getRandomSongs(1);
+      if (!track) return;
+      const { volume } = get();
+      set({
+        queue: [track], currentIndex: 0, playing: false,
+        ...positionPatch(0), duration: track.duration_secs || 0,
+        _committedNext: null, _committedNextIndex: null, _chainedForTrackId: null,
+      });
+      await api.audioPlay(track.stream_url, volume / 100, track.duration_secs, true, true).catch(() => {});
+    } catch { /* best-effort — an empty queue beats a boot-time error */ }
   },
 }));
 
@@ -521,6 +677,7 @@ function handleAudioEvent(payload: AudioEventPayload) {
       // playTrack()/audio_play call. Apply the committed choice from the
       // chain-preload trigger above, not a fresh pick (which could disagree
       // with what the engine actually chained under shuffle/repeat).
+      const finishedTrack = s.queue[s.currentIndex];
       const committed = s._committedNext;
       const duration = Math.floor(payload.duration ?? 0);
       let newIndex = s.currentIndex;
@@ -540,12 +697,18 @@ function handleAudioEvent(payload: AudioEventPayload) {
         _committedNextIndex: null,
         _chainedForTrackId: null,
       });
+      // The track that just finished played out in full — always counts as
+      // a real play, unlike playTrack's threshold-gated manual-switch case.
+      if (finishedTrack) api.scrobble(finishedTrack.id, true).catch(() => {});
       if (committed) api.scrobble(committed.id, false).catch(() => {});
       break;
     }
     case "ended": {
       // Only reached at true queue exhaustion — chain commits happen ~30s
-      // ahead, so there's nothing left to advance to.
+      // ahead, so there's nothing left to advance to. The track that just
+      // ended played out in full, so it always counts as a real play.
+      const finishedTrack = s.queue[s.currentIndex];
+      if (finishedTrack) api.scrobble(finishedTrack.id, true).catch(() => {});
       useStore.setState({ playing: false });
       break;
     }
@@ -597,7 +760,10 @@ window.addEventListener("beforeunload", () => useStore.getState().persistSession
     const raw = localStorage.getItem("icosahedron_creds");
     if (!raw) return;
     const { url, user, pass } = JSON.parse(raw);
-    if (url && user && pass) await api.saveCredentials(url, user, pass);
+    if (url && user && pass) {
+      const profile = await api.saveServer({ name: hostLabel(url), url, username: user, password: pass });
+      await api.setActiveServer(profile.id);
+    }
   } catch {
     // best-effort — worst case the user just has to log in again
   } finally {
@@ -605,22 +771,24 @@ window.addEventListener("beforeunload", () => useStore.getState().persistSession
   }
 })();
 
-// Auto-reconnect on startup if credentials were saved (main process handles
-// the whole thing — reads the encrypted file, decrypts, pings — the
-// plaintext password never comes back over IPC here, matching main.py's
-// "trust saved credentials and open immediately" step).
+// Auto-reconnect on startup if a server profile was marked active (main
+// process handles the whole thing — reads the encrypted file, decrypts,
+// pings — the plaintext password never comes back over IPC here, matching
+// main.py's "trust saved credentials and open immediately" step).
 export async function tryAutoConnect() {
-  const result = await api.tryAutoConnectSaved();
+  await useStore.getState().loadServers();
+  const [result, activeServerId] = await Promise.all([api.tryAutoConnectSaved(), api.getActiveServerId()]);
   if (!result) return;
   useStore.setState({
     connected: true,
     serverUrl: result.url,
     username: result.username,
+    activeServerId,
     coverUrl: (coverId, size = 200) =>
       coverId ? `cover://localhost/${encodeURIComponent(coverId)}?size=${size}` : "",
   });
   try {
-    useStore.getState().restoreSession();
+    await useStore.getState().restoreSession();
   } catch { /* a failed session restore shouldn't be treated as a bad-credentials error */ }
   useStore.getState().loadBpmCache();
 }

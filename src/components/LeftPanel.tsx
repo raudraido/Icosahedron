@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { useStore } from "../store";
+import { api } from "../lib/api";
 import { CoverArt } from "./CoverArt";
 import { Icon } from "./Icon";
 import { TetrisWidget } from "./TetrisWidget";
@@ -23,7 +24,7 @@ const ART_SIZE = 297 - 8 * 2;
 // not the theme's plain text color), disabled swaps to a fixed #333 rather
 // than fading via opacity. Hover fills the whole 30×30 box (12px radius,
 // matching the button's own border-radius) with the theme's hover color.
-function NavArrow({ direction, disabled, onClick }: { direction: "left" | "right"; disabled: boolean; onClick: () => void }) {
+export function NavArrow({ direction, disabled, onClick }: { direction: "left" | "right"; disabled: boolean; onClick: () => void }) {
   const color = disabled ? "#333333" : "var(--accent)";
   return (
     <button
@@ -55,13 +56,23 @@ export function LeftPanel() {
   const queue   = useStore((s) => s.queue);
   const idx     = useStore((s) => s.currentIndex);
   const track   = queue[idx] ?? null;
-  const navBack = useStore((s) => s.navBack);
-  const navFwd  = useStore((s) => s.navFwd);
-  const canBack = useStore((s) => s.navHistory.length > 0 && s.navPos > 0);
-  const canFwd  = useStore((s) => s.navPos < s.navHistory.length - 1);
   const expanded = useStore((s) => s.sidebarArtExpanded);
   const toggleSidebarArt = useStore((s) => s.toggleSidebarArt);
   const [closeHov, setCloseHov] = useState(false);
+  const [logoHovered, setLogoHovered] = useState(false);
+  const [searchHandoff, setSearchHandoff] = useState("");
+
+  // Server switcher — click opens a menu (see render below); the active
+  // server, its saved siblings, and the switch/navigate actions all come
+  // straight from the same multi-server store used by Settings > Servers.
+  const servers = useStore((s) => s.servers);
+  const activeServerId = useStore((s) => s.activeServerId);
+  const switchServer = useStore((s) => s.switchServer);
+  const navigateTo = useStore((s) => s.navigateTo);
+  const openSpotlight = useStore((s) => s.openSpotlight);
+  const username = useStore((s) => s.username);
+  const [serverMenuPos, setServerMenuPos] = useState<{ x: number; y: number } | null>(null);
+  const activeServer = servers.find((s) => s.id === activeServerId);
 
   // Easter egg — ported from the old app's 7-rapid-clicks-on-Home-tab
   // Tetris trigger (window.py:1066-1082), retargeted to 3 clicks on the
@@ -73,13 +84,20 @@ export function LeftPanel() {
   const logoClickCountRef = useRef(0);
   const logoClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   function handleLogoClick(e: React.MouseEvent<HTMLDivElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    // A plain click always toggles the server menu immediately (no delay —
+    // this is the primary, everyday gesture and should feel instant). The
+    // rapid-triple-click game-picker egg below rides along on the same
+    // click stream; overlapping both menus on an intentional triple-click
+    // is a harmless, rare edge case next to keeping the common case snappy.
+    setServerMenuPos((prev) => (prev ? null : { x: rect.left, y: rect.bottom + 6 }));
+
     logoClickCountRef.current += 1;
     if (logoClickTimerRef.current) clearTimeout(logoClickTimerRef.current);
     logoClickTimerRef.current = setTimeout(() => { logoClickCountRef.current = 0; }, 600);
     if (logoClickCountRef.current >= 3) {
       logoClickCountRef.current = 0;
       clearTimeout(logoClickTimerRef.current);
-      const rect = e.currentTarget.getBoundingClientRect();
       setGameMenuPos({ x: rect.right + 8, y: rect.top });
     }
   }
@@ -89,14 +107,29 @@ export function LeftPanel() {
       className="flex flex-col shrink-0"
       style={{ width: 297, background: "var(--panel-bg)", borderRight: "1px solid var(--border)" }}
     >
-      {/* Header: logo left, nav arrows + window controls right — entire row is drag region */}
+      {/* Header: just the logo now — nav arrows moved to the tab bar's left
+          corner (App.tsx) so the tab row itself stays centered on the whole
+          window instead of the remaining space next to these buttons.
+          Entire row is still drag region. */}
       <div
         className="flex items-center shrink-0"
         data-tauri-drag-region
         style={{ height: 62, gap: 4, borderBottom: "1px solid var(--border)", paddingRight: 8 }}
       >
-        {/* Logo: shahedron2 base + shahedron1 alpha-masked with accent */}
-        <div onClick={handleLogoClick} style={{ position: "relative", width: 46, height: 46, marginLeft: 8, flexShrink: 0 }}>
+        {/* Logo: shahedron2 base + shahedron1 alpha-masked with accent —
+            scales up slightly on hover so it reads as clickable (triple-click
+            opens the game picker, see handleLogoClick above). */}
+        <div
+          onClick={handleLogoClick}
+          onMouseEnter={() => setLogoHovered(true)}
+          onMouseLeave={() => setLogoHovered(false)}
+          style={{
+            position: "relative", width: 46, height: 46, marginLeft: 8, flexShrink: 0,
+            cursor: "pointer",
+            transform: `scale(${logoHovered ? 1.12 : 1})`,
+            transition: "transform 150ms cubic-bezier(0.34, 1.56, 0.64, 1)",
+          }}
+        >
           <img
             src="img/shahedron2.png"
             alt=""
@@ -116,10 +149,40 @@ export function LeftPanel() {
           />
         </div>
 
-        <div style={{ flex: 1 }} />
-
-        <NavArrow direction="left"  disabled={!canBack} onClick={navBack} />
-        <NavArrow direction="right" disabled={!canFwd}  onClick={navFwd} />
+        {/* Search bar — a real input, but only ever holds the very first
+            keystroke: onChange immediately hands off to Spotlight (pre-filled,
+            same openSpotlight(initialChar) mechanism GlobalHotkeys.tsx uses
+            for "type anywhere" already) and clears itself, so the rest of
+            the query is typed into Spotlight's own input with live results
+            building as you go — not typed blind into this box first. */}
+        <div
+          className="flex items-center"
+          style={{
+            flex: 1, marginLeft: 10, height: 34, gap: 8, padding: "0 12px",
+            background: "var(--card-bg)", border: "1px solid var(--border)", borderRadius: 8,
+          }}
+        >
+          <Icon src="img/search.png" size={14} style={{ background: "var(--text-secondary)", flexShrink: 0 }} />
+          <input
+            value={searchHandoff}
+            onChange={(e) => {
+              const v = e.target.value;
+              // Explicit state reset (not a hardcoded value="") — guarantees
+              // this component re-renders and the input clears immediately,
+              // rather than relying on openSpotlight() incidentally causing
+              // one.
+              setSearchHandoff("");
+              if (v) openSpotlight(v);
+            }}
+            onClick={() => openSpotlight()}
+            placeholder="Search…"
+            className="w-full outline-none"
+            style={{
+              background: "transparent", border: "none", color: "var(--text-primary)",
+              fontSize: "var(--fs-secondary)", cursor: "text",
+            }}
+          />
+        </div>
       </div>
 
       <div className="flex flex-col flex-1" style={{ position: "relative" }}>
@@ -187,6 +250,49 @@ export function LeftPanel() {
             { label: "Xonix", onClick: () => setActiveGame("xonix") },
           ]}
           onClose={() => setGameMenuPos(null)}
+        />
+      )}
+
+      {serverMenuPos && (
+        <ContextMenu
+          x={serverMenuPos.x}
+          y={serverMenuPos.y}
+          items={[
+            {
+              label: activeServer?.name ?? username ?? "Not connected",
+              icon: "img/navidrome.png",
+              rawIcon: true,
+              iconSize: 32,
+              iconOffsetX: -6,
+              submenu: [
+                ...servers.map((s) => ({
+                  label: s.name,
+                  icon: "img/navidrome.png",
+                  rawIcon: true,
+                  color: s.id === activeServerId ? "var(--accent)" : undefined,
+                  onClick: () => { if (s.id !== activeServerId) switchServer(s.id).catch(() => {}); },
+                })),
+                "separator" as const,
+                {
+                  label: "Manage Servers",
+                  icon: "img/settings.png",
+                  onClick: () => navigateTo({ tab: "settings", settingsTab: "servers" }),
+                },
+              ],
+            },
+            "separator",
+            {
+              label: "Settings",
+              icon: "img/settings.png",
+              onClick: () => navigateTo({ tab: "settings" }),
+            },
+            {
+              label: "Quit",
+              icon: "img/sub_close.png",
+              onClick: () => api.quitApp(),
+            },
+          ]}
+          onClose={() => setServerMenuPos(null)}
         />
       )}
     </div>

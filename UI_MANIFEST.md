@@ -1824,3 +1824,28 @@ though, so both shapes need handling. Fixed via one shared `GENRE_SEP_RE`
 (`/[;/|,•]+/`, surrounding whitespace stripped by the existing
 `.trim()` per part) used by both the render-cell split and
 `deriveFilterValues`'s cascading split.
+
+## Settings `ToggleRow`: description text must fit on one line
+
+`ToggleRow`/`ToggleSwitch` (`Settings.tsx`) vertically center the switch
+against the whole label+description text block via plain flexbox
+`align-items: center` — this looks fine and consistent row-to-row **only**
+as long as every row's description wraps to the same number of lines. Two
+toggles were added with long descriptions that wrapped to 2 lines (the
+Last.fm section's "Show Recently Played", and earlier the Playback tab's
+"Scrobble") while every other row in the same section stayed at 1 line —
+centering against a taller 2-line block puts the switch at a visibly
+different vertical spot relative to the label than the 1-line rows above/
+below it, reported twice as the toggle looking "funky"/inconsistent even
+though `ToggleSwitch` itself was byte-for-byte identical every time.
+
+**Not a component bug — a copy-length constraint.** Fixed both times by
+shortening the description to fit one line at the Settings panel's
+`maxWidth: 480` column width, not by changing `ToggleRow`'s layout. When
+writing a new toggle description, keep it to roughly the same length as
+the shortest existing row in that section (e.g. "Minimize to tray"'s ~74
+characters) and sanity-check it doesn't wrap before shipping — a longer
+description that genuinely needs two lines would need `ToggleRow` itself
+changed (e.g. `align-items: flex-start` with the switch pinned to the
+label's own line), which hasn't been done since every row so far has fit
+comfortably once trimmed.

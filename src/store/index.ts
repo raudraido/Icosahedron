@@ -35,6 +35,35 @@ interface AppStore {
   connect: (url: string, user: string, pass: string, remember: boolean) => Promise<void>;
   logout: () => Promise<void>;
 
+  // Settings > Playback's "Scrobble" toggle — see the `scrobble()` module
+  // function below for the actual gating; this is just the persisted flag.
+  scrobbleEnabled: boolean;
+  setScrobbleEnabled: (v: boolean) => void;
+
+  // Settings > Playback's "Detect BPM" toggle — see loadBpmDetectionEnabled
+  // below for exactly what this does and doesn't gate.
+  bpmDetectionEnabled: boolean;
+  setBpmDetectionEnabled: (v: boolean) => void;
+
+  // Left panel's "Recently Played" list (LeftPanel.tsx) reads your Last.fm
+  // play history directly — separate from Navidrome's own scrobbling above,
+  // this is purely a read against Last.fm's public API.
+  lastFmApiKey: string;
+  lastFmUsername: string;
+  setLastFmSettings: (apiKey: string, username: string) => void;
+  /** Master switch (Settings > Integrations > Last.fm's "Enable Recent
+   *  History via Last.fm") — gates whether the API key/username fields are
+   *  even usable, and whether anything is ever fetched. */
+  lastFmEnabled: boolean;
+  setLastFmEnabled: (v: boolean) => void;
+  /** Secondary, purely-visual switch (Settings > Appearance > Left Panel's
+   *  "Show Recently Played") — hiding the list this way doesn't touch
+   *  `lastFmEnabled`/credentials, but it has no effect (and the toggle
+   *  renders disabled) while `lastFmEnabled` itself is off, since there's
+   *  nothing to show either way in that case. */
+  lastFmSidebarVisible: boolean;
+  setLastFmSidebarVisible: (v: boolean) => void;
+
   // multi-server (Settings > Servers) — `servers` never carries passwords,
   // those stay main-process-side (electron/main/credentials.ts) and are only
   // ever referenced by profile id.
@@ -224,11 +253,126 @@ function pastScrobbleThreshold(currentTime: number, duration: number): boolean {
   return duration > 0 && (currentTime >= duration * 0.5 || currentTime >= 240);
 }
 
+const LS_SCROBBLE_ENABLED_KEY = "icosahedron_scrobble_enabled";
+
+// Defaults to on (matches the behavior every existing install already had
+// before this toggle existed) — only ever off if the user explicitly
+// disabled it once before.
+function loadScrobbleEnabled(): boolean {
+  try {
+    return localStorage.getItem(LS_SCROBBLE_ENABLED_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
+const LS_BPM_DETECTION_ENABLED_KEY = "icosahedron_bpm_detection_enabled";
+
+// Defaults to on, same reasoning as loadScrobbleEnabled above. Only gates
+// the *native on-device analysis* (PlayerBar.tsx's api.getBpm call on a
+// cache miss) — a track's ID3 bpm tag or an already-cached/detected value
+// still shows regardless, this just stops new analysis from running.
+function loadBpmDetectionEnabled(): boolean {
+  try {
+    return localStorage.getItem(LS_BPM_DETECTION_ENABLED_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
+// Every scrobble() call in this file goes through here instead of api.scrobble
+// directly, so Settings' "Scrobble" toggle has exactly one place to gate —
+// when off, this is a straight no-op and nothing ever reaches Navidrome
+// (which is what actually relays on to Last.fm server-side, if configured
+// there; see the "no way to detect that server-side" discussion this toggle
+// came out of).
+function scrobble(trackId: string, submission: boolean) {
+  if (!useStore.getState().scrobbleEnabled) return;
+  api.scrobble(trackId, submission).catch(() => {});
+}
+
+// Last.fm's read API (user.getrecenttracks, see lib/lastfm.ts) needs only a
+// public API key + the target username — neither is a secret the way a
+// Navidrome password is, so plain localStorage (not the OS-backed
+// credential store) is enough, same tier as the scrobble-enabled flag above.
+const LS_LASTFM_API_KEY = "icosahedron_lastfm_api_key";
+const LS_LASTFM_USERNAME = "icosahedron_lastfm_username";
+const LS_LASTFM_ENABLED_KEY = "icosahedron_lastfm_enabled";
+const LS_LASTFM_SIDEBAR_VISIBLE_KEY = "icosahedron_lastfm_sidebar_visible";
+
+// Defaults to on, same reasoning as loadScrobbleEnabled above — this toggle
+// is being added after "Recently Played" already works for existing users,
+// so defaulting to off would look like a regression the moment it ships.
+// Turning it off doesn't touch the saved API key/username, so re-enabling
+// later needs no reconfiguration.
+function loadLastFmEnabled(): boolean {
+  try {
+    return localStorage.getItem(LS_LASTFM_ENABLED_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
+function loadLastFmSidebarVisible(): boolean {
+  try {
+    return localStorage.getItem(LS_LASTFM_SIDEBAR_VISIBLE_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
+// Named to match the store's own field names exactly (not "apiKey"/
+// "username", the latter of which would collide with the Navidrome
+// username field when spread into the store below).
+function loadLastFmSettings(): { lastFmApiKey: string; lastFmUsername: string } {
+  try {
+    return {
+      lastFmApiKey: localStorage.getItem(LS_LASTFM_API_KEY) ?? "",
+      lastFmUsername: localStorage.getItem(LS_LASTFM_USERNAME) ?? "",
+    };
+  } catch {
+    return { lastFmApiKey: "", lastFmUsername: "" };
+  }
+}
+
 export const useStore = create<AppStore>((set, get) => ({
   connected: false,
   serverUrl: "",
   username: "",
   coverUrl: () => "",
+
+  scrobbleEnabled: loadScrobbleEnabled(),
+  setScrobbleEnabled: (v) => {
+    try { localStorage.setItem(LS_SCROBBLE_ENABLED_KEY, String(v)); } catch { /* best-effort */ }
+    set({ scrobbleEnabled: v });
+  },
+
+  bpmDetectionEnabled: loadBpmDetectionEnabled(),
+  setBpmDetectionEnabled: (v) => {
+    try { localStorage.setItem(LS_BPM_DETECTION_ENABLED_KEY, String(v)); } catch { /* best-effort */ }
+    set({ bpmDetectionEnabled: v });
+  },
+
+  ...loadLastFmSettings(),
+  setLastFmSettings: (apiKey, username) => {
+    try {
+      localStorage.setItem(LS_LASTFM_API_KEY, apiKey);
+      localStorage.setItem(LS_LASTFM_USERNAME, username);
+    } catch { /* best-effort */ }
+    set({ lastFmApiKey: apiKey, lastFmUsername: username });
+  },
+
+  lastFmEnabled: loadLastFmEnabled(),
+  setLastFmEnabled: (v) => {
+    try { localStorage.setItem(LS_LASTFM_ENABLED_KEY, String(v)); } catch { /* best-effort */ }
+    set({ lastFmEnabled: v });
+  },
+
+  lastFmSidebarVisible: loadLastFmSidebarVisible(),
+  setLastFmSidebarVisible: (v) => {
+    try { localStorage.setItem(LS_LASTFM_SIDEBAR_VISIBLE_KEY, String(v)); } catch { /* best-effort */ }
+    set({ lastFmSidebarVisible: v });
+  },
 
   bpmCache: {},
   setBpm: (trackId, bpm) => set((s) => ({ bpmCache: { ...s.bpmCache, [trackId]: bpm } })),
@@ -413,14 +557,14 @@ export const useStore = create<AppStore>((set, get) => ({
     // falsely count as a full play.
     const prevTrack = prevQueue[prevIndex];
     if (prevTrack && prevTrack.id !== track.id && pastScrobbleThreshold(currentTime, duration)) {
-      api.scrobble(prevTrack.id, true).catch(() => {});
+      scrobble(prevTrack.id, true);
     }
 
     // manual=true: bypasses the gapless pre-chain hit and starts immediately
     // (this is always a user-initiated action — auto-advance never calls
     // playTrack, see handleAudioEvent's "track_switched" case).
     api.audioPlay(track.stream_url, volume / 100, track.duration_secs, true, false).catch(() => {});
-    api.scrobble(track.id, false).catch(() => {});
+    scrobble(track.id, false);
 
     set({
       queue: resolvedQueue,
@@ -699,8 +843,8 @@ function handleAudioEvent(payload: AudioEventPayload) {
       });
       // The track that just finished played out in full — always counts as
       // a real play, unlike playTrack's threshold-gated manual-switch case.
-      if (finishedTrack) api.scrobble(finishedTrack.id, true).catch(() => {});
-      if (committed) api.scrobble(committed.id, false).catch(() => {});
+      if (finishedTrack) scrobble(finishedTrack.id, true);
+      if (committed) scrobble(committed.id, false);
       break;
     }
     case "ended": {
@@ -708,7 +852,7 @@ function handleAudioEvent(payload: AudioEventPayload) {
       // ahead, so there's nothing left to advance to. The track that just
       // ended played out in full, so it always counts as a real play.
       const finishedTrack = s.queue[s.currentIndex];
-      if (finishedTrack) api.scrobble(finishedTrack.id, true).catch(() => {});
+      if (finishedTrack) scrobble(finishedTrack.id, true);
       useStore.setState({ playing: false });
       break;
     }

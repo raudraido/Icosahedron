@@ -30,6 +30,19 @@ if (process.platform === "linux" && process.env["XDG_SESSION_TYPE"] === "wayland
   app.commandLine.appendSwitch("enable-features", "WaylandWindowDecorations");
 }
 
+// Single-instance lock — a second launch (double-clicking the exe again,
+// clicking a desktop shortcut while it's already running, etc.) would
+// otherwise open a second native audio-engine connection against the same
+// server, fight over the same window-state/credentials files, and generally
+// behave as two independent apps rather than one. requestSingleInstanceLock
+// returns false in whichever process loses the race; that one just quits
+// immediately and hands off to the 'second-instance' event fired in the
+// original, which brings the existing window forward instead (see below —
+// registered once mainWindow exists, after app.whenReady()).
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+}
+
 let client: SubsonicClient | null = null;
 let audioEngine: AudioEngineClient | null = null;
 // Tracked separately from the AudioEngineClient's own copy so the
@@ -390,6 +403,17 @@ app.whenReady().then(() => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
     else { mainWindow?.show(); mainWindow?.focus(); }
+  });
+
+  // Fired in this (the original) process when a second launch attempt hit
+  // the single-instance lock above and quit itself — bring the real window
+  // forward instead of silently doing nothing, since "double-click the exe
+  // again" should read as "show me the app", not a no-op.
+  app.on("second-instance", () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    if (!mainWindow.isVisible()) mainWindow.show();
+    mainWindow.focus();
   });
 });
 

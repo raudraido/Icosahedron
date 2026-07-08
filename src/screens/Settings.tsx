@@ -17,10 +17,13 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 // account switch" discussion this was born from); only System and Themes
 // have real functionality today.
 
-type SettingsTab = "system" | "themes" | "servers" | "users" | "themeBuilder" | "hotkeys";
+type SettingsTab = "system" | "playback" | "integrations" | "appearance" | "themes" | "servers" | "users" | "themeBuilder" | "hotkeys";
 
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: "system",       label: "System" },
+  { id: "playback",     label: "Playback" },
+  { id: "integrations", label: "Integrations" },
+  { id: "appearance",   label: "Appearance" },
   { id: "themes",       label: "Themes" },
   { id: "servers",      label: "Servers" },
   { id: "users",        label: "Users" },
@@ -186,16 +189,18 @@ function UpdateRow() {
   );
 }
 
-function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+function ToggleSwitch({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
     <button
       role="switch"
       aria-checked={checked}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
       style={{
-        position: "relative", width: 38, height: 22, borderRadius: 11, padding: 2, cursor: "pointer",
+        position: "relative", width: 38, height: 22, borderRadius: 11, padding: 2, cursor: disabled ? "default" : "pointer",
         border: "1px solid var(--border)",
         background: checked ? "var(--accent)" : "var(--hover-bg)",
+        opacity: disabled ? 0.5 : 1,
         transition: "background 150ms",
       }}
     >
@@ -210,14 +215,14 @@ function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: b
   );
 }
 
-function ToggleRow({ label, description, checked, onChange }: { label: string; description?: string; checked: boolean; onChange: (v: boolean) => void }) {
+function ToggleRow({ label, description, checked, onChange, disabled }: { label: string; description?: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
     <div className="flex items-center justify-between" style={{ gap: 12, padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
-      <div className="flex flex-col">
+      <div className="flex flex-col" style={{ opacity: disabled ? 0.5 : 1 }}>
         <span style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)", fontWeight: 600 }}>{label}</span>
         {description && <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>{description}</span>}
       </div>
-      <ToggleSwitch checked={checked} onChange={onChange} />
+      <ToggleSwitch checked={checked} onChange={onChange} disabled={disabled} />
     </div>
   );
 }
@@ -253,6 +258,140 @@ function ApplicationSection() {
         onChange={(v) => update({ exitToTray: v })}
       />
     </Section>
+  );
+}
+
+function LastFmSection() {
+  const lastFmApiKey = useStore((s) => s.lastFmApiKey);
+  const lastFmUsername = useStore((s) => s.lastFmUsername);
+  const setLastFmSettings = useStore((s) => s.setLastFmSettings);
+  const lastFmEnabled = useStore((s) => s.lastFmEnabled);
+  const setLastFmEnabled = useStore((s) => s.setLastFmEnabled);
+  const [apiKey, setApiKey] = useState(lastFmApiKey);
+  const [username, setUsername] = useState(lastFmUsername);
+
+  const dirty = apiKey !== lastFmApiKey || username !== lastFmUsername;
+
+  const inputStyle = {
+    background: "var(--card-bg)", color: "var(--text-primary)", border: "1px solid var(--border)",
+    borderRadius: 6, padding: "6px 10px", fontSize: "var(--fs-secondary)", width: "100%",
+    opacity: lastFmEnabled ? 1 : 0.5,
+  };
+
+  return (
+    <Section title="Last.fm">
+      <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
+        Powers the left panel's "Recently Played" list — reads your public Last.fm play history directly. Separate from the "Scrobble" toggle above, which only ever talks to Navidrome.
+      </p>
+      <ToggleRow
+        label="Enable Recent History via Last.fm"
+        description="Turn this on to enter your API key/username below."
+        checked={lastFmEnabled}
+        onChange={setLastFmEnabled}
+      />
+      <div className="flex flex-col" style={{ gap: 10 }}>
+        <label className="flex flex-col" style={{ gap: 4 }}>
+          <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>API Key</span>
+          <input
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="Last.fm API key"
+            disabled={!lastFmEnabled}
+            style={inputStyle}
+          />
+        </label>
+        <label className="flex flex-col" style={{ gap: 4 }}>
+          <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>Username</span>
+          <input
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Last.fm username"
+            disabled={!lastFmEnabled}
+            style={inputStyle}
+          />
+        </label>
+        <button
+          onClick={() => setLastFmSettings(apiKey.trim(), username.trim())}
+          disabled={!dirty || !lastFmEnabled}
+          style={{
+            alignSelf: "flex-start", background: "transparent", border: "1px solid var(--border)", borderRadius: 4,
+            padding: "6px 14px", cursor: dirty && lastFmEnabled ? "pointer" : "default", color: "var(--text-primary)",
+            fontSize: "var(--fs-secondary)", fontWeight: 700, opacity: dirty && lastFmEnabled ? 1 : 0.5,
+          }}
+        >
+          Save
+        </button>
+      </div>
+    </Section>
+  );
+}
+
+function PlaybackTab() {
+  const bpmDetectionEnabled = useStore((s) => s.bpmDetectionEnabled);
+  const setBpmDetectionEnabled = useStore((s) => s.setBpmDetectionEnabled);
+
+  return (
+    <div className="flex flex-col" style={{ gap: 24, maxWidth: 480 }}>
+      <Section title="Analysis">
+        <ToggleRow
+          label="Detect BPM"
+          description="Runs on-device tempo analysis for tracks with no BPM tag."
+          checked={bpmDetectionEnabled}
+          onChange={setBpmDetectionEnabled}
+        />
+      </Section>
+    </div>
+  );
+}
+
+// Groups every "connects to an external service" setting — Scrobbling
+// (Navidrome + Last.fm relay) and the Last.fm read-API credentials behind
+// the left panel's "Recently Played" list today, room for e.g. a future
+// Discord Rich Presence connection alongside them later. Kept separate from
+// Appearance (what's visible in the UI) and Playback (actual playback
+// behavior, not yet used) — those are different questions from "what's
+// connected and how."
+function IntegrationsTab() {
+  const scrobbleEnabled = useStore((s) => s.scrobbleEnabled);
+  const setScrobbleEnabled = useStore((s) => s.setScrobbleEnabled);
+
+  return (
+    <div className="flex flex-col" style={{ gap: 24, maxWidth: 480 }}>
+      <Section title="Scrobbling">
+        <ToggleRow
+          label="Scrobble"
+          description="Sends play counts to Navidrome, and to Last.fm if configured there."
+          checked={scrobbleEnabled}
+          onChange={setScrobbleEnabled}
+        />
+      </Section>
+      <LastFmSection />
+    </div>
+  );
+}
+
+function AppearanceTab() {
+  const lastFmEnabled = useStore((s) => s.lastFmEnabled);
+  const lastFmSidebarVisible = useStore((s) => s.lastFmSidebarVisible);
+  const setLastFmSidebarVisible = useStore((s) => s.setLastFmSidebarVisible);
+
+  return (
+    <div className="flex flex-col" style={{ gap: 24, maxWidth: 480 }}>
+      <Section title="Left Panel">
+        <ToggleRow
+          label="Show Recently Played"
+          description="Hides the list without clearing your saved Last.fm API key/username."
+          checked={lastFmSidebarVisible}
+          onChange={setLastFmSidebarVisible}
+          disabled={!lastFmEnabled}
+        />
+        {!lastFmEnabled && (
+          <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
+            Enable "Recent History via Last.fm" in Settings &gt; Integrations first.
+          </p>
+        )}
+      </Section>
+    </div>
   );
 }
 
@@ -957,6 +1096,9 @@ export function Settings() {
         <div className="flex-1" style={{ position: "relative", minHeight: 0 }}>
           <div ref={scrollRef} className="h-full overflow-y-auto scroll-clean" style={{ padding: 28 }}>
             {tab === "system" && <SystemTab />}
+            {tab === "playback" && <PlaybackTab />}
+            {tab === "integrations" && <IntegrationsTab />}
+            {tab === "appearance" && <AppearanceTab />}
             {tab === "themes" && <ThemesTab />}
             {tab === "servers" && <ServersTab />}
             {tab === "users" && <ComingSoon label="Users" />}

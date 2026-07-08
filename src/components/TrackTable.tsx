@@ -428,6 +428,7 @@ export function TrackTable({
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
 
   const clickCountRef = useRef(1);
+  const justResizedRef = useRef(false);
   const colOrderRef = useRef(colOrder);
   const colWidthsRef = useRef(colWidths);
   useEffect(() => { colOrderRef.current = colOrder; }, [colOrder]);
@@ -531,6 +532,14 @@ export function TrackTable({
   const visibleCols = colOrder.filter((id) => id === "track" || colVisibility[id]);
 
   function handleSort(colId: string) {
+    // A column-resize drag ends with the mouse wherever it happened to be
+    // released — shrinking a column drags the cursor away from the resize
+    // handle (which follows the shrinking right edge) and onto the header's
+    // own body, so the browser's native "click" fires on the header itself
+    // afterward, not just on the handle strip. justResizedRef (set in
+    // onResizeStart's onMove, cleared here) swallows that one spurious click
+    // without needing to guess a distance/time threshold.
+    if (justResizedRef.current) { justResizedRef.current = false; return; }
     const def = COLUMNS[colId];
     if (!def.sortable) return;
     let next: SortState;
@@ -562,6 +571,7 @@ export function TrackTable({
     const startX = e.clientX;
     const startWidth = colWidthsRef.current[colId] ?? COLUMNS[colId].minWidth;
     function onMove(ev: MouseEvent) {
+      justResizedRef.current = true;
       const width = Math.max(COLUMNS[colId].minWidth, startWidth + (ev.clientX - startX));
       setColWidths((prev) => ({ ...prev, [colId]: width }));
     }

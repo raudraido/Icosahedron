@@ -125,6 +125,10 @@ export function PlayerBar() {
   useEffect(() => {
     setBpmLoading(false);
     if (!track || useStore.getState().bpmCache[track.id] != null) return;
+    // Settings > Playback's "Detect BPM" toggle — only gates *new* native
+    // on-device analysis; a track's ID3 tag or an already-cached value
+    // (effectiveBpm below) still shows regardless of this setting.
+    if (!useStore.getState().bpmDetectionEnabled) return;
     const gen = ++bpmGenRef.current;
     const timer = setTimeout(() => {
       setBpmLoading(true);

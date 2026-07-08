@@ -38,8 +38,10 @@ const GAP = 12;
 function PlaylistCard({ playlist, onOpen, onContextMenu }: { playlist: Playlist; onOpen: () => void; onContextMenu: (e: React.MouseEvent) => void }) {
   const [hovered, setHovered] = useState(false);
   const [playHovered, setPlayHovered] = useState(false);
+  const [queueHovered, setQueueHovered] = useState(false);
   const qc = useQueryClient();
   const playTrack = useStore((s) => s.playTrack);
+  const appendToQueue = useStore((s) => s.appendToQueue);
 
   function fetchTracks() {
     return qc.fetchQuery({ queryKey: ["playlist-tracks", playlist.id], queryFn: () => api.getPlaylistTracks(playlist.id) });
@@ -49,6 +51,12 @@ function PlaylistCard({ playlist, onOpen, onContextMenu }: { playlist: Playlist;
     e.stopPropagation();
     const tracks = await fetchTracks();
     if (tracks.length) playTrack(tracks[0], tracks);
+  }
+
+  async function handleAddToQueue(e: React.MouseEvent) {
+    e.stopPropagation();
+    const tracks = await fetchTracks();
+    if (tracks.length) appendToQueue(tracks);
   }
 
   return (
@@ -62,22 +70,50 @@ function PlaylistCard({ playlist, onOpen, onContextMenu }: { playlist: Playlist;
       <div style={{ position: "relative" }}>
         <CoverArt coverId={playlist.cover_id} size={200} className="w-full aspect-square rounded-lg group-hover:brightness-75 transition-all" />
         <div
-          onClick={handlePlay}
-          onMouseEnter={() => setPlayHovered(true)}
-          onMouseLeave={() => setPlayHovered(false)}
           style={{
             position: "absolute", top: "50%", left: "50%",
-            width: "min(60px, 33%)", aspectRatio: "1",
-            transform: `translate(-50%, -50%) scale(${playHovered ? 1 : 0.8})`,
-            borderRadius: "50%",
-            background: "var(--accent)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            opacity: playHovered ? 1 : hovered ? 0.8 : 0,
-            transition: "opacity 150ms, transform 150ms",
-            cursor: "pointer",
+            transform: "translate(-50%, -50%)",
+            width: "min(60px, 33%)",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+            opacity: playHovered || queueHovered ? 1 : hovered ? 0.8 : 0,
+            transition: "opacity 150ms",
           }}
         >
-          <Icon src="img/play.png" size={20} style={{ background: PLAY_ICON_DARK, marginLeft: 2 }} />
+          <div
+            onClick={handlePlay}
+            onMouseEnter={() => setPlayHovered(true)}
+            onMouseLeave={() => setPlayHovered(false)}
+            title="Play playlist"
+            style={{
+              width: "100%", aspectRatio: "1",
+              transform: `scale(${playHovered ? 1 : 0.8})`,
+              borderRadius: "50%",
+              background: "var(--accent)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "transform 150ms",
+              cursor: "pointer",
+            }}
+          >
+            <Icon src="img/play.png" size={20} style={{ background: PLAY_ICON_DARK, marginLeft: 2 }} />
+          </div>
+          <div
+            onClick={handleAddToQueue}
+            onMouseEnter={() => setQueueHovered(true)}
+            onMouseLeave={() => setQueueHovered(false)}
+            title="Add to Queue"
+            style={{
+              width: "55%", aspectRatio: "1",
+              transform: `scale(${queueHovered ? 1 : 0.85})`,
+              borderRadius: "50%",
+              background: "var(--card-bg)",
+              border: "1px solid var(--border)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "transform 150ms",
+              cursor: "pointer",
+            }}
+          >
+            <Icon src="img/add_list.png" size={20} style={{ background: "var(--accent)" }} />
+          </div>
         </div>
       </div>
       <div className="flex flex-col" style={{ marginTop: 8, gap: 2 }}>

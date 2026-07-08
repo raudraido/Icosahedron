@@ -5,7 +5,7 @@ import { CoverArt } from "./CoverArt";
 import { Icon } from "./Icon";
 import { PlayRingButton } from "./PlayRingButton";
 import { ScrollThumb } from "./ScrollThumb";
-import { matchesArtistCredit } from "./ArtistTokens";
+import { ArtistTokens, matchesArtistCredit } from "./ArtistTokens";
 
 // System-wide Spotlight search overlay — ports the old app's
 // components/spotlight_search.py SpotlightSearch: a dimmed full-window
@@ -36,6 +36,7 @@ export function SpotlightSearch() {
   const initial = useStore((s) => s.spotlightInitial);
   const close = useStore((s) => s.closeSpotlight);
   const playTrack = useStore((s) => s.playTrack);
+  const appendToQueue = useStore((s) => s.appendToQueue);
   const navigateTo = useStore((s) => s.navigateTo);
 
   const [query, setQuery] = useState("");
@@ -140,6 +141,25 @@ export function SpotlightSearch() {
     }
   }
 
+  // "Add to Queue" — same track resolution as playDefault, but appends to
+  // the end of the queue instead of replacing it, and doesn't close the
+  // overlay so several results can be queued up in one search session.
+  async function addToQueue(row: FlatRow) {
+    if (row.kind === "track") {
+      appendToQueue([row.item]);
+    } else if (row.kind === "album") {
+      const tracks = await api.getAlbumTracks(row.item.id);
+      if (tracks.length) appendToQueue(tracks);
+    } else if (row.kind === "artist") {
+      let top = await api.getTopSongs(row.item.name, 50);
+      if (!top.length) {
+        const result = await api.search(row.item.name, 0, 0, 500);
+        top = result.tracks.filter((t) => matchesArtistCredit(t.artist, row.item.name));
+      }
+      if (top.length) appendToQueue(top);
+    }
+  }
+
   // Secondary action for a track row — play the whole album it's on, same
   // as the old app's "Play Full Album" button (Shift+Enter's track branch).
   async function playTrackAlbum(track: Track) {
@@ -194,13 +214,13 @@ export function SpotlightSearch() {
   return (
     <div
       className="flex items-start justify-center"
-      style={{ position: "fixed", inset: 0, zIndex: 2000, background: "rgba(0,0,0,0.55)", paddingTop: "12vh" }}
+      style={{ position: "fixed", inset: 0, zIndex: 2000, background: "rgba(0,0,0,0.55)", paddingTop: "5vh" }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}
     >
       <div
         className="flex flex-col"
         style={{
-          width: 640, maxWidth: "90vw", maxHeight: "72vh",
+          width: 640, maxWidth: "90vw", maxHeight: "90vh",
           background: "var(--panel-bg)", border: "1px solid var(--border)", borderRadius: 10,
           boxShadow: "0 12px 40px rgba(0,0,0,0.45)", overflow: "hidden",
         }}
@@ -218,8 +238,8 @@ export function SpotlightSearch() {
         </div>
 
         {rows.length > 0 && (
-          <div style={{ position: "relative", minHeight: 0, maxHeight: "54vh", borderTop: "1px solid var(--border)" }}>
-          <div ref={listRef} className="scroll-clean" style={{ maxHeight: "54vh", overflowY: "auto", padding: "6px 8px" }}>
+          <div className="flex-1" style={{ position: "relative", minHeight: 0, borderTop: "1px solid var(--border)" }}>
+          <div ref={listRef} className="scroll-clean h-full" style={{ overflowY: "auto", padding: "6px 8px" }}>
             {rows.map((row, i) => {
               if (row.kind === "header") {
                 return (
@@ -251,10 +271,7 @@ export function SpotlightSearch() {
               const active = i === activeIndex;
               const coverId = row.item.cover_id;
               const title = row.kind === "artist" ? row.item.name : (row.kind === "album" ? row.item.name : row.item.title);
-              const subtitle =
-                row.kind === "track" ? (row.item.artist || "Unknown Artist") :
-                row.kind === "album" ? (row.item.artist || "Various Artists") :
-                `${row.item.album_count} album${row.item.album_count !== 1 ? "s" : ""}`;
+              const albumCountSubtitle = row.kind === "artist" ? `${row.item.album_count} album${row.item.album_count !== 1 ? "s" : ""}` : null;
               return (
                 <div
                   key={`${row.kind}-${row.item.id}-${i}`}
@@ -269,7 +286,15 @@ export function SpotlightSearch() {
                   <CoverArt coverId={coverId} size={48} className="shrink-0" style={{ width: 44, height: 44, borderRadius: row.kind === "artist" ? "50%" : 4 }} />
                   <div className="flex flex-col min-w-0 flex-1">
                     <span className="truncate" style={{ color: "var(--text-primary)", fontWeight: 700, fontSize: "var(--fs-primary)" }}>{title}</span>
-                    <span className="truncate" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>{subtitle}</span>
+                    {(row.kind === "track" || row.kind === "album") ? (
+                      <ArtistTokens
+                        name={row.item.artist || (row.kind === "track" ? "Unknown Artist" : "Various Artists")}
+                        artistId={row.item.artist_id}
+                        onNavigate={close}
+                      />
+                    ) : (
+                      <span className="truncate" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>{albumCountSubtitle}</span>
+                    )}
                   </div>
                   {active && (
                     <div className="flex items-center shrink-0" style={{ gap: 6 }}>
@@ -300,6 +325,14 @@ export function SpotlightSearch() {
                         title={row.kind === "track" ? "Play Track" : row.kind === "album" ? "Play Album" : "Play Artist"}
                         onClick={() => playDefault(row)}
                       />
+                      <button
+                        onClick={(e) => { e.stopPropagation(); addToQueue(row); }}
+                        title="Add to Queue"
+                        className="flex items-center justify-center shrink-0"
+                        style={{ width: 32, height: 32, borderRadius: "50%", background: "transparent", border: "none", cursor: "pointer" }}
+                      >
+                        <Icon src="img/add_list.png" size={22} style={{ background: "var(--accent)" }} />
+                      </button>
                     </div>
                   )}
                 </div>

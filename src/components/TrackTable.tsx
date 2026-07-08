@@ -913,8 +913,11 @@ export function TrackTable({
                 <div
                   onMouseDown={(e) => onResizeStart(e, id)}
                   onClick={(e) => e.stopPropagation()}
+                  className="flex items-center justify-center"
                   style={{ position: "absolute", right: -6, top: 0, bottom: 0, width: 12, cursor: "col-resize" }}
-                />
+                >
+                  <div style={{ width: 1, height: "50%", background: "var(--text-primary)" }} />
+                </div>
               )}
             </div>
           );

@@ -43,8 +43,10 @@ function shuffleArray<T>(arr: T[]): T[] {
 export const ArtistCard = React.memo(function ArtistCard({ artist, onOpen }: { artist: Artist; onOpen: (a: Artist) => void }) {
   const [hovered, setHovered] = useState(false);
   const [playHovered, setPlayHovered] = useState(false);
+  const [queueHovered, setQueueHovered] = useState(false);
   const qc = useQueryClient();
   const playTrack = useStore((s) => s.playTrack);
+  const appendToQueue = useStore((s) => s.appendToQueue);
   const holdTimerRef = useRef<number | null>(null);
   const heldRef = useRef(false);
 
@@ -85,6 +87,12 @@ export const ArtistCard = React.memo(function ArtistCard({ artist, onOpen }: { a
     if (tracks.length) playTrack(tracks[0], tracks);
   }
 
+  async function handleAddToQueue(e: React.MouseEvent) {
+    e.stopPropagation();
+    const tracks = await fetchTracks();
+    if (tracks.length) appendToQueue(tracks);
+  }
+
   return (
     <button
       onClick={() => onOpen(artist)}
@@ -95,25 +103,52 @@ export const ArtistCard = React.memo(function ArtistCard({ artist, onOpen }: { a
       <div style={{ position: "relative" }}>
         <CoverArt coverId={artist.cover_id} size={200} className="w-full aspect-square rounded-lg group-hover:brightness-75 transition-all" />
         <div
-          onClick={(e) => e.stopPropagation()}
-          onMouseDown={handlePlayMouseDown}
-          onMouseUp={handlePlayMouseUp}
-          onMouseEnter={() => setPlayHovered(true)}
-          onMouseLeave={() => { setPlayHovered(false); clearHoldTimer(); }}
-          title="Play (hold to shuffle)"
           style={{
             position: "absolute", top: "50%", left: "50%",
-            width: "min(60px, 33%)", aspectRatio: "1",
-            transform: `translate(-50%, -50%) scale(${playHovered ? 1 : 0.8})`,
-            borderRadius: "50%",
-            background: "var(--accent)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            opacity: playHovered ? 1 : hovered ? 0.8 : 0,
-            transition: "opacity 150ms, transform 150ms",
-            cursor: "pointer",
+            transform: "translate(-50%, -50%)",
+            width: "min(60px, 33%)",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+            opacity: playHovered || queueHovered ? 1 : hovered ? 0.8 : 0,
+            transition: "opacity 150ms",
           }}
         >
-          <Icon src="img/play.png" size={20} style={{ background: PLAY_ICON_DARK, marginLeft: 2 }} />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={handlePlayMouseDown}
+            onMouseUp={handlePlayMouseUp}
+            onMouseEnter={() => setPlayHovered(true)}
+            onMouseLeave={() => { setPlayHovered(false); clearHoldTimer(); }}
+            title="Play (hold to shuffle)"
+            style={{
+              width: "100%", aspectRatio: "1",
+              transform: `scale(${playHovered ? 1 : 0.8})`,
+              borderRadius: "50%",
+              background: "var(--accent)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "transform 150ms",
+              cursor: "pointer",
+            }}
+          >
+            <Icon src="img/play.png" size={20} style={{ background: PLAY_ICON_DARK, marginLeft: 2 }} />
+          </div>
+          <div
+            onClick={handleAddToQueue}
+            onMouseEnter={() => setQueueHovered(true)}
+            onMouseLeave={() => setQueueHovered(false)}
+            title="Add to Queue"
+            style={{
+              width: "55%", aspectRatio: "1",
+              transform: `scale(${queueHovered ? 1 : 0.85})`,
+              borderRadius: "50%",
+              background: "var(--card-bg)",
+              border: "1px solid var(--border)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "transform 150ms",
+              cursor: "pointer",
+            }}
+          >
+            <Icon src="img/add_list.png" size={20} style={{ background: "var(--accent)" }} />
+          </div>
         </div>
       </div>
       <div className="flex flex-col" style={{ marginTop: 8, gap: 2 }}>

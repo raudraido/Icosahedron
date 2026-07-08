@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
-import { api } from "../lib/api";
+import { api, UpdateInfo, UpdateDownloadProgress } from "../lib/api";
 import { applyTheme, loadSavedTheme, saveTheme, saveCustomTheme, deleteCustomTheme, isBuiltInThemeName, allThemes, CREAM, AppTheme } from "../lib/theme";
 import { PromptDialog } from "../components/PromptDialog";
 import { DEFAULT_HOTKEYS, loadHotkeyBindings, saveHotkeyBindings, bindingFromEvent } from "../lib/hotkeys";
@@ -76,6 +76,114 @@ function ComingSoon({ label }: { label: string }) {
   );
 }
 
+function formatBytes(n: number): string {
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// Same check/download/install flow as UpdateBanner.tsx, surfaced here too so
+// a user who dismissed (or never saw, e.g. it fired before this tab existed)
+// the boot-time banner still has a way to check for and install an update.
+function UpdateRow() {
+  const [status, setStatus] = useState<"checking" | "upToDate" | "available" | "downloading" | "launching" | "error">("checking");
+  const [info, setInfo] = useState<UpdateInfo | null>(null);
+  const [progress, setProgress] = useState<UpdateDownloadProgress | null>(null);
+  const unsubRef = useRef<(() => void) | null>(null);
+  const unsubLaunchingRef = useRef<(() => void) | null>(null);
+
+  function check() {
+    setStatus("checking");
+    api.checkForUpdate().then((result) => {
+      if (result) { setInfo(result); setStatus("available"); }
+      else setStatus("upToDate");
+    }).catch(() => setStatus("error"));
+  }
+
+  useEffect(() => {
+    check();
+    return () => { unsubRef.current?.(); unsubLaunchingRef.current?.(); };
+  }, []);
+
+  async function installNow() {
+    setStatus("downloading");
+    setProgress(null);
+    unsubRef.current = window.electronAPI.onUpdateDownloadProgress((p) => setProgress(p as UpdateDownloadProgress));
+    unsubLaunchingRef.current = window.electronAPI.onUpdateInstallerLaunching(() => setStatus("launching"));
+    try {
+      await api.downloadAndInstallUpdate(info!.downloadUrl);
+    } catch {
+      setStatus("error");
+    } finally {
+      unsubRef.current?.(); unsubRef.current = null;
+      unsubLaunchingRef.current?.(); unsubLaunchingRef.current = null;
+    }
+  }
+
+  const pct = progress && progress.totalBytes > 0
+    ? Math.min(100, Math.round((progress.receivedBytes / progress.totalBytes) * 100))
+    : null;
+
+  return (
+    <div className="flex flex-col" style={{ gap: 8, padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
+      <div className="flex items-center" style={{ gap: 12 }}>
+        <span style={{ width: 140, flexShrink: 0, color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>Updates</span>
+        <span className="flex-1" style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)", fontWeight: 600 }}>
+          {status === "checking" && "Checking for updates…"}
+          {status === "upToDate" && "You're up to date."}
+          {status === "available" && `Version ${info!.version} is available.`}
+          {status === "downloading" && (
+            progress
+              ? pct !== null ? `Downloading… ${pct}%` : `Downloading… ${formatBytes(progress.receivedBytes)}`
+              : "Downloading…"
+          )}
+          {status === "launching" && "Installer launching — this app will close now."}
+          {status === "error" && "Couldn't check for updates."}
+        </span>
+        {status === "available" && (
+          <button
+            onClick={installNow}
+            style={{
+              padding: "5px 12px", borderRadius: 5, border: "none", cursor: "pointer",
+              background: "var(--accent)", color: "#111", fontSize: "var(--fs-secondary)", fontWeight: 700,
+            }}
+          >
+            Update
+          </button>
+        )}
+        {(status === "upToDate" || status === "error") && (
+          <button
+            onClick={check}
+            style={{
+              padding: "5px 12px", borderRadius: 5, border: "1px solid var(--border)", cursor: "pointer",
+              background: "transparent", color: "var(--text-secondary)", fontSize: "var(--fs-secondary)", fontWeight: 600,
+            }}
+          >
+            Check Again
+          </button>
+        )}
+      </div>
+      {status === "downloading" && (
+        <div style={{ height: 4, borderRadius: 2, background: "var(--hover-bg)", overflow: "hidden" }}>
+          <div
+            style={{
+              height: "100%", width: pct !== null ? `${pct}%` : "35%", background: "var(--accent)",
+              borderRadius: 2, transition: "width 200ms",
+              animation: pct === null ? "update-progress-sweep 1.2s ease-in-out infinite" : undefined,
+            }}
+          />
+        </div>
+      )}
+      <style>{`
+        @keyframes update-progress-sweep {
+          0%   { margin-left: 0%; width: 25%; }
+          50%  { margin-left: 75%; width: 25%; }
+          100% { margin-left: 0%; width: 25%; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 function SystemTab() {
   const serverUrl = useStore((s) => s.serverUrl);
   const username = useStore((s) => s.username);
@@ -87,6 +195,7 @@ function SystemTab() {
     <div className="flex flex-col" style={{ gap: 24, maxWidth: 480 }}>
       <Section title="About">
         <Row label="Version" value={version ? `v${version}` : ""} />
+        <UpdateRow />
       </Section>
       <Section title="Connection">
         <Row label="Server" value={serverUrl} />

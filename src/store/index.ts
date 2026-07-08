@@ -323,20 +323,45 @@ export function activeLastfmKey(): string {
 // "Scrobble to Last.fm" is connected+enabled, the same call also submits
 // directly to Last.fm — the two destinations don't gate each other, so a
 // user with no server-side Last.fm relay still gets scrobbles this way.
+//
+// Deferred a full tick via setTimeout(...,0) — scrobbling is fire-and-forget
+// bookkeeping that must never be able to add latency to the actual
+// playback-start path (api.audioPlay / playTrack's own `playing` flip),
+// even in principle. Everything inside only ever reads state and fires
+// off already-async IPC calls, so this was never truly blocking, but
+// "click play -> audio starts" must not share so much as a synchronous
+// call stack with it regardless.
 function scrobble(track: Track, submission: boolean) {
-  if (useStore.getState().scrobbleEnabled) {
-    api.scrobble(track.id, submission).catch(() => {});
-  }
-  const { lastfmScrobbleEnabled, lastfmConnected } = useStore.getState();
-  if (lastfmScrobbleEnabled && lastfmConnected) {
-    const meta = { title: track.title, artist: track.artist, album: track.album ?? "", duration: track.duration_secs };
-    const serverId = activeLastfmKey();
-    if (submission) {
-      api.lastfmScrobble(meta, Math.floor(Date.now() / 1000), serverId).catch(() => {});
-    } else {
-      api.lastfmNowPlaying(meta, serverId).catch(() => {});
+  setTimeout(() => {
+    if (useStore.getState().scrobbleEnabled) {
+      api.scrobble(track.id, submission).catch(() => {});
     }
-  }
+    const { lastfmScrobbleEnabled, lastfmConnected } = useStore.getState();
+    if (lastfmScrobbleEnabled && lastfmConnected) {
+      const meta = { title: track.title, artist: track.artist, album: track.album ?? "", duration: track.duration_secs };
+      const serverId = activeLastfmKey();
+      // The left panel's "Recently Played" list (LeftPanel.tsx) otherwise only
+      // learns about this via its own 30s poll — we already know the instant
+      // Last.fm's data changed (we're the ones changing it), so invalidate
+      // right away instead of leaving the sidebar to catch up on its own.
+      const refreshRecentlyPlayed = () => queryClient.invalidateQueries({ queryKey: ["lastfm-recent-tracks"] });
+      if (submission) {
+        api.lastfmScrobble(meta, Math.floor(Date.now() / 1000), serverId).then(refreshRecentlyPlayed).catch(() => {});
+      } else {
+        // No cache-poking here (an earlier attempt tried optimistically
+        // writing into the "lastfm-recent-tracks" query cache directly) — the
+        // pre-existing 30s refetchInterval on that query runs on its own
+        // independent timer, unaffected by a manual setQueryData call, and can
+        // clobber an optimistic write with still-lagging server data at any
+        // point in its own cycle. LeftPanel.tsx instead derives the "now
+        // playing" row straight from local playback state whenever this app
+        // itself is the one reporting to Last.fm — zero network dependency,
+        // so there's no race to lose. This call still needs to happen so
+        // Last.fm's own record (and any other device reading it) is accurate.
+        api.lastfmNowPlaying(meta, serverId).catch(() => {});
+      }
+    }
+  }, 0);
 }
 
 // Purely visual (Settings > Appearance > Left Panel's "Show Recently

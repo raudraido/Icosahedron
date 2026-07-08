@@ -44,6 +44,11 @@ function RecentlyPlayed() {
   const lastFmEnabled = useStore((s) => s.lastFmEnabled);
   const sidebarVisible = useStore((s) => s.lastFmSidebarVisible);
   const enabled = lastfmConnected && lastFmEnabled && sidebarVisible;
+  // Local playback state, used only to derive the "now playing" row below —
+  // see its comment for why.
+  const lastfmScrobbleEnabled = useStore((s) => s.lastfmScrobbleEnabled);
+  const currentTrack = useStore((s) => s.queue[s.currentIndex]);
+  const playing = useStore((s) => s.playing);
   const playTrack = useStore((s) => s.playTrack);
   const addTrackNext = useStore((s) => s.addTrackNext);
   const addTrackToQueue = useStore((s) => s.addTrackToQueue);
@@ -126,6 +131,18 @@ function RecentlyPlayed() {
     retry: false,
   });
   const tracks = data?.pages.flatMap((p) => p.tracks);
+  // Last.fm's read API (user.getrecenttracks) can lag several seconds
+  // behind its own write API, and behind our 30s poll's own timing — when
+  // this app itself is the one reporting to Last.fm (Scrobble to Last.fm
+  // is on and connected), we already know what's playing with zero network
+  // dependency, so trust that instead of waiting on a round-trip that's
+  // both slower and race-prone. Falls back to whatever Last.fm itself
+  // reports whenever we can't make that claim locally (playing on a
+  // different device, or this app is paused/stopped).
+  const liveNowPlaying: LastFmTrack | null = lastfmScrobbleEnabled && lastfmConnected && playing && currentTrack
+    ? { name: currentTrack.title, artist: currentTrack.artist, album: currentTrack.album ?? "", nowPlaying: true, playedAt: null }
+    : null;
+  const displayTracks = liveNowPlaying ? [liveNowPlaying, ...(tracks ?? []).filter((t) => !t.nowPlaying)] : tracks;
 
   function handleScroll(e: React.UIEvent<HTMLDivElement>) {
     const el = e.currentTarget;
@@ -181,7 +198,7 @@ function RecentlyPlayed() {
   // spacer the sidebar used before this list existed, so the art section/
   // games below still anchor to the bottom instead of collapsing upward
   // with no filler.
-  if (!apiKey || !username || !enabled || !tracks?.length) return <div className="flex-1" />;
+  if (!apiKey || !username || !enabled || !displayTracks?.length) return <div className="flex-1" />;
 
   function toggleCollapsed() {
     setCollapsed((prev: boolean) => {
@@ -212,7 +229,7 @@ function RecentlyPlayed() {
         {!collapsed && (
         <div className="flex-1" style={{ position: "relative", minHeight: 0 }}>
         <div ref={listRef} onScroll={handleScroll} className="h-full overflow-y-auto scroll-clean" style={{ minHeight: 0 }}>
-          {tracks.map((t, i) => {
+          {displayTracks.map((t, i) => {
             const key = `${t.name}|${t.artist}|${t.playedAt ?? i}`;
             const resolving = resolvingKey === key;
             return (

@@ -382,6 +382,29 @@ export function Playlists() {
   // around because this component never unmounts.
   const pushNav = useStore((s) => s.pushNav);
   const selected = useStore((s) => s.navHistory[s.navPos]?.playlist ?? null);
+  // This screen (App.tsx's `mounted` set) never unmounts once first
+  // visited, and react-query's 5min staleTime means just switching back to
+  // this tab wouldn't otherwise refetch — so a playlist edited from another
+  // client (or the Navidrome web UI) while this app sits open on another
+  // tab would show stale data indefinitely. Re-checking server state on
+  // every tab activation instead of trusting the cache fixes that.
+  const activeTab = useStore((s) => s.activeTab);
+  useEffect(() => {
+    if (activeTab !== "playlists") return;
+    // Deferred a tick — this fires right as the previous tab is tearing
+    // down (e.g. Favorites' own large list unmount), and invalidating
+    // synchronously in that same window competes with it for the main
+    // thread, turning what should be an instant tab switch (cached data
+    // renders immediately either way) into a noticeable stall. Letting the
+    // switch itself finish painting first keeps this a pure background
+    // refetch, same "show cached now, patch in fresh data if any" as before.
+    const t = setTimeout(() => {
+      qc.invalidateQueries({ queryKey: ["playlists"] });
+      if (selected) qc.invalidateQueries({ queryKey: ["playlist-tracks", selected.id] });
+    }, 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
   const [createOpen, setCreateOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchText, setSearchText] = useState("");

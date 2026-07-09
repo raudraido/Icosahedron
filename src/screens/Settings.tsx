@@ -447,6 +447,8 @@ function AppearanceTab() {
   // setLastfmConnection in store/index.ts), but check lastfmConnected
   // directly too rather than relying solely on that invariant holding.
   const historyAvailable = lastfmConnected && lastFmEnabled;
+  const leftPanelPlaylistsVisible = useStore((s) => s.leftPanelPlaylistsVisible);
+  const setLeftPanelPlaylistsVisible = useStore((s) => s.setLeftPanelPlaylistsVisible);
 
   return (
     <div className="flex flex-col" style={{ gap: 24, maxWidth: 480 }}>
@@ -465,6 +467,12 @@ function AppearanceTab() {
               : "Connect to Last.fm and enable \"Recently Played\" in Settings > Integrations first."}
           </p>
         )}
+        <ToggleRow
+          label="Show Playlists"
+          description="Adds a collapsible/resizable playlists list, same as Recently Played above."
+          checked={leftPanelPlaylistsVisible}
+          onChange={setLeftPanelPlaylistsVisible}
+        />
       </Section>
     </div>
   );

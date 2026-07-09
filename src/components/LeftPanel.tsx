@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useStore } from "../store";
-import { api } from "../lib/api";
+import { api, Playlist } from "../lib/api";
 import { getRecentTracks, formatRelativeTime, LastFmTrack } from "../lib/lastfm";
-import { matchesArtistCredit } from "./ArtistTokens";
+import { ArtistTokens, matchesArtistCredit } from "./ArtistTokens";
 import { CoverArt } from "./CoverArt";
 import { Icon } from "./Icon";
 import { TetrisWidget } from "./TetrisWidget";
@@ -26,6 +26,13 @@ const RECENTLY_PLAYED_MIN_HEIGHT = 80;
 // that first measurement lands.
 const RECENTLY_PLAYED_MAX_HEIGHT_FALLBACK = 480;
 const RECENTLY_PLAYED_MAX_ROWS = 10;
+
+const LS_PLAYLISTS_HEIGHT = "icosahedron_left_panel_playlists_height";
+const LS_PLAYLISTS_COLLAPSED = "icosahedron_left_panel_playlists_collapsed";
+const PLAYLISTS_DEFAULT_HEIGHT = 220;
+const PLAYLISTS_MIN_HEIGHT = 80;
+const PLAYLISTS_MAX_HEIGHT_FALLBACK = 480;
+const PLAYLISTS_MAX_ROWS = 10;
 
 // "Recently Played" — Last.fm's own play history for whichever account is
 // connected (Settings > Integrations > Last.fm), not Navidrome's. Entirely
@@ -194,11 +201,10 @@ function RecentlyPlayed() {
     }
   }
 
-  // Not configured, toggled off, or nothing to show yet — same plain
-  // spacer the sidebar used before this list existed, so the art section/
-  // games below still anchor to the bottom instead of collapsing upward
-  // with no filler.
-  if (!apiKey || !username || !enabled || !displayTracks?.length) return <div className="flex-1" />;
+  // Not configured, toggled off, or nothing to show yet — renders nothing;
+  // LeftPanel's own trailing flex-1 spacer (shared with PlaylistsPanel)
+  // still anchors the art section/games below to the bottom either way.
+  if (!apiKey || !username || !enabled || !displayTracks?.length) return null;
 
   function toggleCollapsed() {
     setCollapsed((prev: boolean) => {
@@ -256,15 +262,9 @@ function RecentlyPlayed() {
                   </span>
                 </div>
                 <div className="flex items-center" style={{ gap: 6, paddingLeft: t.nowPlaying ? 12 : 0 }}>
-                  <span
-                    className="truncate flex-1"
-                    onClick={(e) => { e.stopPropagation(); goToArtist(t, key); }}
-                    onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.textDecoration = "underline"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-secondary)"; e.currentTarget.style.textDecoration = "none"; }}
-                    style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)", cursor: "pointer" }}
-                  >
-                    {t.artist}
-                  </span>
+                  <div className="flex-1" style={{ minWidth: 0 }}>
+                    <ArtistTokens name={t.artist} artistId={null} fontSize="var(--fs-small)" />
+                  </div>
                   {t.playedAt != null && (
                     <span className="shrink-0" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)", opacity: 0.6 }}>
                       {formatRelativeTime(t.playedAt)}
@@ -300,10 +300,6 @@ function RecentlyPlayed() {
         </div>
       )}
 
-      {/* Absorbs whatever space the fixed-height list above doesn't use —
-          same role the old plain flex-1 spacer had before this list existed. */}
-      <div className="flex-1" />
-
       {menu && (
         <ContextMenu
           x={menu.x}
@@ -314,6 +310,169 @@ function RecentlyPlayed() {
             { label: "Add to Queue", icon: "img/queue.png", onClick: () => withResolvedTrack(menu.entry, `${menu.entry.name}|${menu.entry.artist}`, (t) => t && addTrackToQueue(t)) },
             "separator",
             { label: "Go to Artist", icon: "img/sub_artist.png", onClick: () => goToArtist(menu.entry, `${menu.entry.name}|${menu.entry.artist}`) },
+          ]}
+          onClose={() => setMenu(null)}
+        />
+      )}
+    </>
+  );
+}
+
+// "Playlists" — same collapsible/resizable list mechanics as RecentlyPlayed
+// above (drag-to-resize handle, collapse toggle, persisted height/collapsed
+// state), just backed by the user's own Navidrome playlists instead of
+// Last.fm history. Shares the ["playlists"] query key with Playlists.tsx so
+// opening this panel doesn't duplicate that fetch.
+function PlaylistsPanel() {
+  const visible = useStore((s) => s.leftPanelPlaylistsVisible);
+  const navigateTo = useStore((s) => s.navigateTo);
+  const playTrack = useStore((s) => s.playTrack);
+  const addTrackNext = useStore((s) => s.addTrackNext);
+  const addTrackToQueue = useStore((s) => s.appendToQueue);
+  const [menu, setMenu] = useState<{ x: number; y: number; playlist: Playlist } | null>(null);
+  const [height, setHeight] = useState(() => loadJSON(LS_PLAYLISTS_HEIGHT, PLAYLISTS_DEFAULT_HEIGHT));
+  const [collapsed, setCollapsed] = useState(() => loadJSON(LS_PLAYLISTS_COLLAPSED, false));
+  const labelRef = useRef<HTMLDivElement>(null);
+  const firstRowRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const [maxHeight, setMaxHeight] = useState(PLAYLISTS_MAX_HEIGHT_FALLBACK);
+
+  const { data: playlists = [] } = useQuery({
+    queryKey: ["playlists"],
+    queryFn: () => api.getPlaylists(),
+    enabled: visible,
+  });
+
+  useEffect(() => {
+    const labelEl = labelRef.current;
+    const rowEl = firstRowRef.current;
+    if (!labelEl || !rowEl) return;
+    function measure() {
+      const next = labelEl!.offsetHeight + rowEl!.offsetHeight * PLAYLISTS_MAX_ROWS;
+      setMaxHeight(next);
+    }
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(labelEl);
+    ro.observe(rowEl);
+    return () => ro.disconnect();
+  });
+
+  useEffect(() => {
+    if (height > maxHeight) {
+      setHeight(maxHeight);
+      saveJSON(LS_PLAYLISTS_HEIGHT, maxHeight);
+    }
+  }, [height, maxHeight]);
+
+  function onResizeStart(e: React.MouseEvent) {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startHeight = height;
+    let current = startHeight;
+    function onMove(ev: MouseEvent) {
+      current = Math.max(PLAYLISTS_MIN_HEIGHT, Math.min(maxHeight, startHeight + (ev.clientY - startY)));
+      setHeight(current);
+    }
+    function onUp() {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      saveJSON(LS_PLAYLISTS_HEIGHT, current);
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
+  function toggleCollapsed() {
+    setCollapsed((prev: boolean) => {
+      const next = !prev;
+      saveJSON(LS_PLAYLISTS_COLLAPSED, next);
+      return next;
+    });
+  }
+
+  function openPlaylist(p: Playlist) {
+    navigateTo({ tab: "playlists", playlist: p });
+  }
+
+  async function playPlaylist(p: Playlist, andThen?: (tracks: Awaited<ReturnType<typeof api.getPlaylistTracks>>) => void) {
+    const tracks = await api.getPlaylistTracks(p.id).catch(() => []);
+    if (!tracks.length) return;
+    if (andThen) andThen(tracks);
+    else playTrack(tracks[0], tracks);
+  }
+
+  if (!visible || !playlists.length) return null;
+
+  return (
+    <>
+      <div className="flex flex-col" style={{ height: collapsed ? "auto" : height, flexShrink: 0, minHeight: 0, padding: "8px 8px 0" }}>
+        <div ref={labelRef} className="flex items-center justify-between" style={{ padding: "0 2px 6px" }}>
+          <span style={{ color: "var(--text-secondary)", fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>
+            Playlists
+          </span>
+          <button
+            onClick={toggleCollapsed}
+            title={collapsed ? "Expand" : "Collapse"}
+            className="flex items-center justify-center"
+            style={{ width: 18, height: 18, background: "transparent", border: "none", cursor: "pointer", borderRadius: 4 }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--hover-bg)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+          >
+            <Icon src={collapsed ? "img/down_arrow.png" : "img/up_arrow.png"} size={10} style={{ background: "var(--text-secondary)" }} />
+          </button>
+        </div>
+        {!collapsed && (
+        <div className="flex-1" style={{ position: "relative", minHeight: 0 }}>
+        <div ref={listRef} className="h-full overflow-y-auto scroll-clean" style={{ minHeight: 0 }}>
+          {playlists.map((p, i) => (
+            <button
+              key={p.id}
+              ref={i === 0 ? firstRowRef : undefined}
+              onClick={() => openPlaylist(p)}
+              onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, playlist: p }); }}
+              className="flex items-center w-full text-left"
+              style={{ gap: 8, padding: "6px 8px", borderRadius: 6, cursor: "pointer", background: "transparent" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--hover-bg)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+            >
+              <CoverArt coverId={p.cover_id} size={32} className="shrink-0" style={{ width: 32, height: 32, borderRadius: 4 }} />
+              <div className="flex flex-col min-w-0 flex-1">
+                <span className="truncate" style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)", fontWeight: 600 }}>
+                  {p.name}
+                </span>
+                <span className="truncate" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
+                  {p.song_count} track{p.song_count === 1 ? "" : "s"}
+                </span>
+              </div>
+            </button>
+          ))}
+        </div>
+        <ScrollThumb scrollRef={listRef} />
+        </div>
+        )}
+      </div>
+
+      {!collapsed && (
+        <div
+          onMouseDown={onResizeStart}
+          className="flex items-center justify-center shrink-0"
+          style={{ height: 10, margin: "0 8px", cursor: "row-resize" }}
+        >
+          <div style={{ width: "100%", height: 1, background: "var(--border)" }} />
+        </div>
+      )}
+
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          items={[
+            { label: "Play Now", icon: "img/sub_play.png", onClick: () => playPlaylist(menu.playlist) },
+            { label: "Play Next", icon: "img/sub_next.png", onClick: () => playPlaylist(menu.playlist, (tracks) => tracks.forEach((t) => addTrackNext(t))) },
+            { label: "Add to Queue", icon: "img/queue.png", onClick: () => playPlaylist(menu.playlist, (tracks) => addTrackToQueue(tracks)) },
+            "separator",
+            { label: "Open Playlist", icon: "img/sub_artist.png", onClick: () => openPlaylist(menu.playlist) },
           ]}
           onClose={() => setMenu(null)}
         />
@@ -499,6 +658,11 @@ export function LeftPanel() {
 
       <div className="flex flex-col flex-1" style={{ position: "relative", minHeight: 0 }}>
         <RecentlyPlayed />
+        <PlaylistsPanel />
+
+        {/* Absorbs whatever space the panels above don't use — shared by
+            both since each now renders only its own fixed-height content. */}
+        <div className="flex-1" />
 
         {/* Art section — collapsed (height 0) by default, expands upward when the
             footer thumbnail's expand button is clicked. Matches left_panel.qml's

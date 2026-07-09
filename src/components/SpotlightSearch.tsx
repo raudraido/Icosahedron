@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useStore } from "../store";
 import { api, Artist, Album, Track } from "../lib/api";
 import { CoverArt } from "./CoverArt";
@@ -29,7 +30,7 @@ const SEARCH_DEBOUNCE_MS = 250;
 // all N results" needs to report a real (if possibly-capped) count without a
 // second round-trip just to find out how many there are.
 const DISPLAY_LIMIT = { track: 6, artist: 4, album: 4 };
-const FETCH_LIMIT = { track: 50, artist: 20, album: 20 };
+const FETCH_LIMIT = { track: 50, album: 20 };
 
 export function SpotlightSearch() {
   const open = useStore((s) => s.spotlightOpen);
@@ -41,6 +42,19 @@ export function SpotlightSearch() {
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<{ tracks: Track[]; artists: Artist[]; albums: Album[] }>({ tracks: [], artists: [], albums: [] });
+  // Raw (pre-filter) fetched counts — used only to tell whether the *server*
+  // fetch itself hit FETCH_LIMIT, since the client-side name/title filter
+  // below can shrink the displayed count well under FETCH_LIMIT even when
+  // there were more true matches sitting beyond what got fetched at all.
+  const [rawCounts, setRawCounts] = useState({ tracks: 0, albums: 0 });
+  // Artists don't go through search3 at all (see the effect below) — its
+  // own text search only matches some word-boundary/prefix subset of a
+  // plain substring match (e.g. missed real hits Artists.tsx's full-list
+  // substring filter finds), so it's an unreliable pre-filter for this one
+  // category specifically, unlike tracks/albums where it's a safe (if
+  // coarse) superset. Artists.tsx already pays this same full-list fetch
+  // cost and it's cheap/cached, so Spotlight just reuses that approach.
+  const { data: allArtists = [] } = useQuery({ queryKey: ["all-artists"], queryFn: api.getAllArtists, staleTime: 10 * 60_000, enabled: open });
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -50,6 +64,7 @@ export function SpotlightSearch() {
     if (!open) return;
     setQuery(initial);
     setResults({ tracks: [], artists: [], albums: [] });
+    setRawCounts({ tracks: 0, albums: 0 });
     setActiveIndex(0);
     // Rendered fresh each time it opens, so the input isn't focusable until
     // after this paint — a microtask-delayed focus matches show_search's
@@ -69,37 +84,51 @@ export function SpotlightSearch() {
     const q = query.trim();
     if (!q) {
       setResults({ tracks: [], artists: [], albums: [] });
+      setRawCounts({ tracks: 0, albums: 0 });
       return;
     }
     debounceRef.current = setTimeout(async () => {
       try {
-        const r = await api.search(q, FETCH_LIMIT.artist, FETCH_LIMIT.album, FETCH_LIMIT.track);
-        setResults({ tracks: r.tracks, artists: r.artists, albums: r.albums });
+        const r = await api.search(q, 0, FETCH_LIMIT.album, FETCH_LIMIT.track);
+        const qLower = q.toLowerCase();
+        // search3 is a coarse server-side pre-filter (matches loosely across
+        // title/artist/album/genre/etc, same as Tracks.tsx's own scope
+        // comment above), so narrow it down client-side to each category's
+        // own field — a track title match, not an artist-name match (that's
+        // what the Artists section below is for), same idea as Tracks.tsx's
+        // per-field scope filter. Artists themselves are matched against
+        // allArtists below instead, not this search3 result.
+        setResults({
+          tracks: r.tracks.filter((t) => t.title.toLowerCase().includes(qLower)),
+          artists: allArtists.filter((a) => a.name.toLowerCase().includes(qLower)),
+          albums: r.albums.filter((a) => a.name.toLowerCase().includes(qLower)),
+        });
+        setRawCounts({ tracks: r.tracks.length, albums: r.albums.length });
         setActiveIndex(0);
       } catch { /* best-effort — leave prior results in place */ }
     }, SEARCH_DEBOUNCE_MS);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [query, open]);
+  }, [query, open, allArtists]);
 
   const rows = useMemo((): FlatRow[] => {
     const out: FlatRow[] = [];
     if (results.tracks.length) {
       out.push({ kind: "header", label: "Tracks" });
       for (const t of results.tracks.slice(0, DISPLAY_LIMIT.track)) out.push({ kind: "track", item: t });
-      out.push({ kind: "showAll", category: "track", count: results.tracks.length, capped: results.tracks.length >= FETCH_LIMIT.track });
+      out.push({ kind: "showAll", category: "track", count: results.tracks.length, capped: rawCounts.tracks >= FETCH_LIMIT.track });
     }
     if (results.artists.length) {
       out.push({ kind: "header", label: "Artists" });
       for (const a of results.artists.slice(0, DISPLAY_LIMIT.artist)) out.push({ kind: "artist", item: a });
-      out.push({ kind: "showAll", category: "artist", count: results.artists.length, capped: results.artists.length >= FETCH_LIMIT.artist });
+      out.push({ kind: "showAll", category: "artist", count: results.artists.length, capped: false });
     }
     if (results.albums.length) {
       out.push({ kind: "header", label: "Albums" });
       for (const a of results.albums.slice(0, DISPLAY_LIMIT.album)) out.push({ kind: "album", item: a });
-      out.push({ kind: "showAll", category: "album", count: results.albums.length, capped: results.albums.length >= FETCH_LIMIT.album });
+      out.push({ kind: "showAll", category: "album", count: results.albums.length, capped: rawCounts.albums >= FETCH_LIMIT.album });
     }
     return out;
-  }, [results]);
+  }, [results, rawCounts]);
 
   const selectableIndexes = useMemo(
     () => rows.map((r, i) => (r.kind === "header" ? -1 : i)).filter((i) => i >= 0),
@@ -186,8 +215,8 @@ export function SpotlightSearch() {
   // Tracks.tsx/Albums.tsx/Artists.tsx).
   function showAll(category: CategoryKind) {
     const q = query.trim();
-    if (category === "track") navigateTo({ tab: "tracks", trackQuery: q });
-    else if (category === "album") navigateTo({ tab: "albums", albumQuery: q });
+    if (category === "track") navigateTo({ tab: "tracks", trackQuery: q, trackQueryScope: "title" });
+    else if (category === "album") navigateTo({ tab: "albums", albumQuery: q, albumQueryNameOnly: true });
     else navigateTo({ tab: "artists", artistQuery: q });
     close();
   }
@@ -238,8 +267,8 @@ export function SpotlightSearch() {
         </div>
 
         {rows.length > 0 && (
-          <div className="flex-1" style={{ position: "relative", minHeight: 0, borderTop: "1px solid var(--border)" }}>
-          <div ref={listRef} className="scroll-clean h-full" style={{ overflowY: "auto", padding: "6px 8px" }}>
+          <div style={{ flex: "1 1 auto", minHeight: 0, position: "relative", display: "flex", flexDirection: "column", borderTop: "1px solid var(--border)" }}>
+          <div ref={listRef} className="scroll-clean" style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto", padding: "6px 8px" }}>
             {rows.map((row, i) => {
               if (row.kind === "header") {
                 return (

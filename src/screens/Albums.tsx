@@ -427,6 +427,10 @@ export function Albums() {
   const [sortStates, setSortStates] = useState<Record<string, boolean>>(() => loadJSON(LS_ALBUMS_SORT_STATES, {}));
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
+  // Set when Spotlight's "Show all" hands off a name-only match (see
+  // albumQueryNameOnly below) — cleared as soon as the user edits the box
+  // themselves, reverting to the normal name-or-artist match.
+  const [nameOnlyScope, setNameOnlyScope] = useState(false);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const sortRef   = useRef<HTMLDivElement>(null);
   const pushNav    = useStore((s) => s.pushNav);
@@ -441,6 +445,7 @@ export function Albums() {
   useEffect(() => {
     if (navEntry?.albumQuery === undefined) return;
     setSearchText(navEntry.albumQuery);
+    setNameOnlyScope(!!navEntry.albumQueryNameOnly);
     setSearchOpen(true);
   }, [navEntry]);
 
@@ -494,7 +499,7 @@ export function Albums() {
   const displayedAlbums = searchText.trim()
     ? albums.filter((a) => {
         const q = searchText.toLowerCase();
-        return a.name.toLowerCase().includes(q) || a.artist.toLowerCase().includes(q);
+        return a.name.toLowerCase().includes(q) || (!nameOnlyScope && a.artist.toLowerCase().includes(q));
       })
     : albums;
 
@@ -522,7 +527,7 @@ export function Albums() {
           open={searchOpen}
           onToggle={() => setSearchOpen((v) => !v)}
           value={searchText}
-          onChange={setSearchText}
+          onChange={(v) => { setSearchText(v); setNameOnlyScope(false); }}
           placeholder="Search albums…"
         />
 

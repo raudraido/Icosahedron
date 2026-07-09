@@ -75,7 +75,7 @@ export function Tracks() {
   useEffect(() => {
     if (navEntry?.trackQuery === undefined) return;
     setQuery(navEntry.trackQuery);
-    setSearchScope("all");
+    setSearchScope(navEntry.trackQueryScope ?? "all");
     setPage(1);
   }, [navEntry]);
 

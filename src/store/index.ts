@@ -20,7 +20,14 @@ export type NavEntry = {
    *  nav entry object (not just this string), so re-searching the exact same
    *  text from Spotlight a second time still re-applies it. */
   trackQuery?: string;
+  /** Narrows trackQuery to a single field, same as Tracks.tsx's own search-
+   *  scope dropdown — set by Spotlight so its per-category "Show all" link
+   *  doesn't widen back out to a loose all-field match. */
+  trackQueryScope?: "title" | "artist" | "album";
   albumQuery?: string;
+  /** Narrows albumQuery to album name only (not also artist) — same reason
+   *  as trackQueryScope above. */
+  albumQueryNameOnly?: boolean;
   /** Cross-tab "open Settings directly on this sub-tab" intent — set by the
    *  left panel logo menu's "Manage Servers" entry, consumed once by
    *  Settings.tsx on mount the same way trackQuery/albumQuery are. */
@@ -82,6 +89,13 @@ interface AppStore {
    *  behind it, no reason to reset when switching profiles. */
   lastFmSidebarVisible: boolean;
   setLastFmSidebarVisible: (v: boolean) => void;
+
+  /** Settings > Appearance > Left Panel's "Show Playlists" toggle — same
+   *  purely-visual, no-account, global (not per-server) flag as
+   *  lastFmSidebarVisible above, just with no connection gate since
+   *  playlists need nothing beyond the active server itself. */
+  leftPanelPlaylistsVisible: boolean;
+  setLeftPanelPlaylistsVisible: (v: boolean) => void;
 
   // "Scrobble to Last.fm" (Settings > Integrations) — independent of both
   // the read-only fields above and the Navidrome-relayed `scrobble` module
@@ -378,6 +392,17 @@ function loadLastFmSidebarVisible(): boolean {
   }
 }
 
+const LS_LEFT_PANEL_PLAYLISTS_VISIBLE_KEY = "icosahedron_left_panel_playlists_visible";
+
+function loadLeftPanelPlaylistsVisible(): boolean {
+  try {
+    const raw = localStorage.getItem(LS_LEFT_PANEL_PLAYLISTS_VISIBLE_KEY);
+    return raw === null ? true : raw === "true";
+  } catch {
+    return true;
+  }
+}
+
 export const useStore = create<AppStore>((set, get) => ({
   connected: false,
   serverUrl: "",
@@ -424,6 +449,12 @@ export const useStore = create<AppStore>((set, get) => ({
   setLastFmSidebarVisible: (v) => {
     try { localStorage.setItem(LS_LASTFM_SIDEBAR_VISIBLE_KEY, String(v)); } catch { /* best-effort */ }
     set({ lastFmSidebarVisible: v });
+  },
+
+  leftPanelPlaylistsVisible: loadLeftPanelPlaylistsVisible(),
+  setLeftPanelPlaylistsVisible: (v) => {
+    try { localStorage.setItem(LS_LEFT_PANEL_PLAYLISTS_VISIBLE_KEY, String(v)); } catch { /* best-effort */ }
+    set({ leftPanelPlaylistsVisible: v });
   },
 
   lastfmScrobbleEnabled: false,

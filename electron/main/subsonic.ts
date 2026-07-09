@@ -187,9 +187,20 @@ export class SubsonicClient {
     await this.get("deletePlaylist", { id: playlistId });
   }
 
-  /** Removes a single track by its 0-based playlist position. */
+  /** Removes a single track by its 0-based playlist position — a real POST,
+   *  same reason as addTracksToPlaylist/reorderPlaylistTracks below: the
+   *  flat-Record `get()` GET helper doesn't reliably apply updatePlaylist
+   *  mutations. */
   async removeTrackFromPlaylist(playlistId: string, songIndex: number): Promise<void> {
-    await this.get("updatePlaylist", { playlistId, songIndexToRemove: String(songIndex) });
+    const params = new URLSearchParams(this.authParams());
+    params.set("playlistId", playlistId);
+    params.append("songIndexToRemove", String(songIndex));
+    const resp = await fetch(`${this.baseUrl}/rest/updatePlaylist`, { method: "POST", body: params });
+    const body = await resp.json();
+    const root = body?.["subsonic-response"];
+    if (!root || root.status !== "ok") {
+      throw new SubsonicApiError(root?.error?.code ?? 0, root?.error?.message ?? "updatePlaylist failed");
+    }
   }
 
   /** Appends tracks to an existing playlist — uses songIdToAdd only, doesn't touch existing entries.

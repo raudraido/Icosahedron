@@ -207,6 +207,7 @@ function Toggle({ checked, onChange, title }: { checked: boolean; onChange: () =
 }
 
 function PlaylistDetail({ playlist }: { playlist: Playlist }) {
+  const qc = useQueryClient();
   const playTrack = useStore((s) => s.playTrack);
   const navigateTo = useStore((s) => s.navigateTo);
   const coverUrl = useStore((s) => s.coverUrl);
@@ -268,7 +269,20 @@ function PlaylistDetail({ playlist }: { playlist: Playlist }) {
     const index = tracks.findIndex((t) => t.id === track.id);
     if (index === -1) return;
     setTracks((prev) => prev.filter((_, i) => i !== index));
-    try { await api.removeTrackFromPlaylist(playlist.id, index); } catch { /* best-effort */ }
+    try {
+      await api.removeTrackFromPlaylist(playlist.id, index);
+      // Same invalidation addToExistingPlaylist (TrackTable.tsx) does after
+      // adding — the ["playlists"] grid/left-panel song_count and this
+      // playlist's own ["playlist-tracks"] cache both need to drop the
+      // stale pre-removal data, otherwise a later refetch (tab revisit,
+      // window refocus) overwrites this local edit with the old cached list.
+      qc.invalidateQueries({ queryKey: ["playlists"] });
+      qc.invalidateQueries({ queryKey: ["playlist-tracks", playlist.id] });
+    } catch {
+      // Server-side removal failed — put it back rather than leaving the UI
+      // showing a removal that didn't actually persist.
+      setTracks((prev) => [...prev.slice(0, index), track, ...prev.slice(index)]);
+    }
   }
 
   return (

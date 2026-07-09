@@ -3,6 +3,7 @@ import { createWriteStream } from "node:fs";
 import { rename } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
+import { spawn } from "node:child_process";
 import path from "node:path";
 
 // Lightweight "a new version is out" check — not a full electron-updater
@@ -122,14 +123,14 @@ export async function downloadAndInstallUpdate(
   });
   await pipeline(nodeStream, createWriteStream(targetPath, { mode: 0o755 }));
 
-  // shell.openPath (not child_process.execFile) — Electron/Chromium puts
-  // itself in a Windows Job Object that kills *all* child processes when
-  // the parent exits, and Node's `detached: true` isn't enough to escape
-  // that on Windows (it only detaches the console, not the job). The
-  // installer was getting killed by app.quit() below before it could fully
-  // start. shell.openPath launches the file the same way double-clicking
-  // it in Explorer would (via the OS shell), which sits entirely outside
-  // Electron's process tree and survives the app quitting.
+  // shell.openPath (not child_process.execFile) on Windows — Electron/
+  // Chromium puts itself in a Windows Job Object that kills *all* child
+  // processes when the parent exits, and Node's `detached: true` isn't
+  // enough to escape that on Windows (it only detaches the console, not the
+  // job). The installer was getting killed by app.quit() below before it
+  // could fully start. shell.openPath launches the file the same way
+  // double-clicking it in Explorer would (via the OS shell), which sits
+  // entirely outside Electron's process tree and survives the app quitting.
   // shell.openPath resolves to an error message string on failure (not a
   // throw) — surface it as a real rejection so the renderer's error state
   // reflects a launch failure instead of quietly "succeeding".
@@ -140,7 +141,24 @@ export async function downloadAndInstallUpdate(
     // path. Replace it in place so that shortcut picks up the new version
     // too, not just this one relaunch.
     await rename(targetPath, runningAppImage);
-    openError = await shell.openPath(runningAppImage);
+    // NOT shell.openPath here, unlike the Windows branch below — that
+    // launches a file via the desktop's file-*association* mechanism
+    // (effectively xdg-open on Linux), which is right for "open this
+    // installer with its default app" but wrong for an AppImage: there's
+    // usually no "run" association wired up for an arbitrary executable
+    // (most file managers deliberately don't do that, for the obvious
+    // security reason), so this was failing immediately after a fully
+    // successful download — surfacing as a misleading "download failed"
+    // when the download itself was fine. AppImages are meant to be
+    // executed directly. The Windows Job Object problem shell.openPath was
+    // introduced to dodge doesn't apply on Linux, so plain
+    // child_process.spawn with `detached: true` + `.unref()` is enough to
+    // outlive this process quitting.
+    openError = await new Promise<string>((resolve) => {
+      const child = spawn(runningAppImage, [], { detached: true, stdio: "ignore" });
+      child.once("error", (e) => resolve(e.message));
+      child.once("spawn", () => { child.unref(); resolve(""); });
+    });
   } else {
     // Windows: hand off to the installer, which does the actual "replace
     // the app" work itself — NSIS is configured as an assisted wizard (not

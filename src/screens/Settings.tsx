@@ -90,7 +90,9 @@ function formatBytes(n: number): string {
 // a user who dismissed (or never saw, e.g. it fired before this tab existed)
 // the boot-time banner still has a way to check for and install an update.
 function UpdateRow() {
-  const [status, setStatus] = useState<"checking" | "upToDate" | "available" | "downloading" | "launching" | "error">("checking");
+  const [status, setStatus] = useState<
+    "checking" | "upToDate" | "available" | "downloading" | "launching" | "error" | "installError"
+  >("checking");
   const [info, setInfo] = useState<UpdateInfo | null>(null);
   const [progress, setProgress] = useState<UpdateDownloadProgress | null>(null);
   const unsubRef = useRef<(() => void) | null>(null);
@@ -117,7 +119,11 @@ function UpdateRow() {
     try {
       await api.downloadAndInstallUpdate(info!.downloadUrl);
     } catch {
-      setStatus("error");
+      // Distinct from "error" (a failed *check*) — this can fail after a
+      // fully successful 100% download (e.g. the installer/AppImage failing
+      // to launch), so reusing "Couldn't check for updates" here would be
+      // actively misleading about what actually went wrong.
+      setStatus("installError");
     } finally {
       unsubRef.current?.(); unsubRef.current = null;
       unsubLaunchingRef.current?.(); unsubLaunchingRef.current = null;
@@ -143,8 +149,9 @@ function UpdateRow() {
           )}
           {status === "launching" && "Installer launching — this app will close now."}
           {status === "error" && "Couldn't check for updates."}
+          {status === "installError" && "Download or install failed — try again."}
         </span>
-        {status === "available" && (
+        {(status === "available" || status === "installError") && (
           <button
             onClick={installNow}
             style={{
@@ -152,7 +159,7 @@ function UpdateRow() {
               background: "var(--accent)", color: "#111", fontSize: "var(--fs-secondary)", fontWeight: 700,
             }}
           >
-            Update
+            {status === "installError" ? "Try Again" : "Update"}
           </button>
         )}
         {(status === "upToDate" || status === "error") && (

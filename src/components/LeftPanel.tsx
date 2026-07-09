@@ -218,7 +218,10 @@ function RecentlyPlayed() {
     <>
       <div className="flex flex-col" style={{ height: collapsed ? "auto" : height, flexShrink: 0, minHeight: 0, padding: "8px 8px 0" }}>
         <div ref={labelRef} className="flex items-center justify-between" style={{ padding: "0 2px 6px" }}>
-          <span style={{ color: "var(--text-secondary)", fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>
+          <span
+            onClick={toggleCollapsed}
+            style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", cursor: "pointer" }}
+          >
             Recently Played
           </span>
           <button
@@ -408,7 +411,10 @@ function PlaylistsPanel() {
     <>
       <div className="flex flex-col" style={{ height: collapsed ? "auto" : height, flexShrink: 0, minHeight: 0, padding: "8px 8px 0" }}>
         <div ref={labelRef} className="flex items-center justify-between" style={{ padding: "0 2px 6px" }}>
-          <span style={{ color: "var(--text-secondary)", fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>
+          <span
+            onClick={toggleCollapsed}
+            style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", cursor: "pointer" }}
+          >
             Playlists
           </span>
           <button

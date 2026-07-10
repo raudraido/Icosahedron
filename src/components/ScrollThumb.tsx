@@ -17,6 +17,11 @@ import { useEffect, useRef, RefObject } from "react";
 // style/ref untouched) and render `<ScrollThumb scrollRef={ref} />` as its
 // sibling.
 const MIN_THUMB_PX = 48;
+// Caps the thumb at a third of the track's height — without this, a list
+// that's only slightly taller than its viewport (e.g. Home's whole page)
+// produces a thumb nearly as tall as the track itself, which reads as "the
+// scrollbar is broken/stuck" rather than "there's a little more to scroll".
+const MAX_THUMB_RATIO = (1 / 3) * 0.7;
 const HIDE_DELAY_MS = 500;
 const TRACK_WIDTH = 12;
 
@@ -44,7 +49,7 @@ export function ScrollThumb({ scrollRef }: { scrollRef: RefObject<HTMLElement | 
       }
       thumb!.style.display = "block";
       const trackH = clientHeight;
-      const thumbH = Math.max(MIN_THUMB_PX, (clientHeight / scrollHeight) * trackH);
+      const thumbH = Math.min(trackH * MAX_THUMB_RATIO, Math.max(MIN_THUMB_PX, (clientHeight / scrollHeight) * trackH));
       const maxScroll = scrollHeight - clientHeight;
       const maxTop = trackH - thumbH;
       const ratio = maxScroll > 0 ? scrollTop / maxScroll : 0;

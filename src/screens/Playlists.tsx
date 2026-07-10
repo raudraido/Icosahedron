@@ -117,7 +117,7 @@ function PlaylistCard({ playlist, onOpen, onContextMenu }: { playlist: Playlist;
         </div>
       </div>
       <div className="flex flex-col" style={{ marginTop: 8, gap: 2 }}>
-        <p className="truncate font-bold" style={{ color: hovered ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-primary)" }}>{playlist.name}</p>
+        <p className="truncate" style={{ color: hovered ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)" }}>{playlist.name}</p>
         <p className="truncate" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>
           {playlist.song_count} track{playlist.song_count === 1 ? "" : "s"}
         </p>
@@ -126,20 +126,24 @@ function PlaylistCard({ playlist, onOpen, onContextMenu }: { playlist: Playlist;
   );
 }
 
-function NewPlaylistDialog({ onCreate, onCancel }: { onCreate: (name: string, isPublic: boolean) => void; onCancel: () => void }) {
+export function NewPlaylistDialog({ onCreate, onCancel }: { onCreate: (name: string, isPublic: boolean) => void; onCancel: () => void }) {
   const [name, setName] = useState("");
   const [isPublic, setIsPublic] = useState(false);
 
   return (
     <div
       onClick={onCancel}
-      style={{ position: "fixed", inset: 0, zIndex: 2000, background: "color-mix(in srgb, black 40%, transparent)", display: "flex", alignItems: "center", justifyContent: "center" }}
+      style={{
+        position: "fixed", inset: 0, zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center",
+        backdropFilter: "blur(2px)", WebkitBackdropFilter: "blur(2px)",
+        background: "color-mix(in srgb, var(--panel-bg) 55%, transparent)",
+      }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
         style={{ background: "var(--main-bg)", border: "1px solid var(--border)", borderRadius: 10, padding: 20, width: 320, boxShadow: "0 12px 32px color-mix(in srgb, black 30%, transparent)" }}
       >
-        <h3 style={{ color: "var(--text-primary)", fontSize: "var(--fs-heading)", fontWeight: 700, marginBottom: 12 }}>New Playlist</h3>
+        <h3 style={{ color: "var(--text-primary)", fontSize: "var(--fs-heading)", fontWeight: "var(--fw-emphasis)", marginBottom: 12 }}>New Playlist</h3>
         <input
           autoFocus
           value={name}
@@ -158,7 +162,7 @@ function NewPlaylistDialog({ onCreate, onCancel }: { onCreate: (name: string, is
           <button
             onClick={() => name.trim() && onCreate(name.trim(), isPublic)}
             disabled={!name.trim()}
-            style={{ padding: "6px 14px", borderRadius: 6, border: "none", cursor: name.trim() ? "pointer" : "default", background: "var(--accent)", color: PLAY_ICON_DARK, fontSize: "var(--fs-secondary)", fontWeight: 600, opacity: name.trim() ? 1 : 0.5 }}
+            style={{ padding: "6px 14px", borderRadius: 6, border: "none", cursor: name.trim() ? "pointer" : "default", background: "var(--accent)", color: PLAY_ICON_DARK, fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)", opacity: name.trim() ? 1 : 0.5 }}
           >
             Create
           </button>
@@ -324,11 +328,11 @@ function PlaylistDetail({ playlist }: { playlist: Playlist }) {
             </div>
 
             <div className="flex flex-col" style={{ flex: 1, minWidth: 0, justifyContent: "flex-start", paddingTop: 16, gap: 6 }}>
-              <p style={{ color: "var(--text-secondary)", fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>Playlist</p>
-              <h1 className="truncate" style={{ fontSize: "var(--fs-hero)", fontWeight: 700, color: "var(--text-primary)" }}>{playlist.name}</h1>
-              {playlist.owner && <p style={{ color: "var(--accent)", fontSize: "var(--fs-secondary)", fontWeight: 600 }}>By {playlist.owner}</p>}
+              <p style={{ color: "var(--text-secondary)", fontSize: 11, fontWeight: "var(--fw-emphasis)", letterSpacing: 1.5, textTransform: "uppercase" }}>Playlist</p>
+              <h1 className="truncate" style={{ fontSize: "var(--fs-hero)", fontWeight: "var(--fw-emphasis)", color: "var(--text-primary)" }}>{playlist.name}</h1>
+              {playlist.owner && <p style={{ color: "var(--accent)", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)" }}>By {playlist.owner}</p>}
               {playlist.comment && <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>{playlist.comment}</p>}
-              <p style={{ color: "var(--text-secondary)", fontWeight: 700, fontSize: "var(--fs-secondary)" }}>
+              <p style={{ color: "var(--text-secondary)", fontWeight: "var(--fw-emphasis)", fontSize: "var(--fs-secondary)" }}>
                 {isLoading ? "Loading…" : `${playlist.song_count} songs  ·  ${fmtDuration(playlist.duration_secs)}`}
               </p>
 
@@ -337,7 +341,7 @@ function PlaylistDetail({ playlist }: { playlist: Playlist }) {
                 <ActionIconButton icon="img/shuffle.png" onClick={handleShuffle} title="Shuffle" />
                 <div className="flex items-center" style={{ gap: 8 }}>
                   <Toggle checked={isPublic} onChange={togglePublic} title={isPublic ? "Public — click to make private" : "Private — click to make public"} />
-                  <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)", fontWeight: 600 }}>
+                  <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)" }}>
                     {isPublic ? "Public" : "Private"}
                   </span>
                 </div>
@@ -452,7 +456,7 @@ export function Playlists() {
       onContextMenu={(e) => { e.preventDefault(); setBgMenu({ x: e.clientX, y: e.clientY }); }}
     >
       <div className="flex items-center shrink-0 px-6" style={{ height: 58, gap: 6 }}>
-        <h2 className="font-semibold" style={{ flex: 1, color: "var(--text-secondary)", fontSize: "var(--fs-primary)" }}>
+        <h2 style={{ flex: 1, color: "var(--text-secondary)", fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)" }}>
           {isLoading
             ? "Loading playlists…"
             : searchText

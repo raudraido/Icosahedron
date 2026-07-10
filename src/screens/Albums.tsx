@@ -159,7 +159,7 @@ export const AlbumCard = React.memo(function AlbumCard({ album, onOpen }: { albu
         </div>
       </div>
       <div className="flex flex-col" style={{ marginTop: 8, gap: 2 }}>
-        <p className="truncate font-bold" style={{ color: hovered ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-primary)" }}>{album.name}</p>
+        <p className="truncate" style={{ color: hovered ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)" }}>{album.name}</p>
         <ArtistTokens name={album.artist} artistId={album.artist_id} />
         <p className="truncate" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>
           {[album.song_count && `${album.song_count} tracks`, album.year].filter(Boolean).join(" · ")}
@@ -355,9 +355,9 @@ function AlbumDetail({ album }: { album: Album }) {
           </div>
 
           <div className="flex flex-col" style={{ flex: 1, minWidth: 0, justifyContent: "flex-start", paddingTop: 16, gap: 6 }}>
-            <h1 style={{ fontSize: "var(--fs-hero)", fontWeight: 700, color: "var(--text-primary)" }}>{album.name}</h1>
+            <h1 style={{ fontSize: "var(--fs-hero)", fontWeight: "var(--fw-emphasis)", color: "var(--text-primary)" }}>{album.name}</h1>
             <ArtistTokens name={album.artist} artistId={album.artist_id} fontSize="var(--fs-primary)" alwaysAccent />
-            <p style={{ color: "var(--text-secondary)", fontWeight: 700, fontSize: "var(--fs-secondary)" }}>
+            <p style={{ color: "var(--text-secondary)", fontWeight: "var(--fw-emphasis)", fontSize: "var(--fs-secondary)" }}>
               {tracksLoading && !meta ? "Loading…" : meta}
             </p>
 
@@ -515,7 +515,7 @@ export function Albums() {
     <div className="flex flex-col h-full page-fade-in">
       {/* ── Toolbar ── */}
       <div className="flex items-center shrink-0 px-6" style={{ height: 58, gap: 6 }}>
-        <h2 className="font-semibold" style={{ flex: 1, color: "var(--text-secondary)", fontSize: "var(--fs-primary)" }}>
+        <h2 style={{ flex: 1, color: "var(--text-secondary)", fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)" }}>
           {loading
             ? "Loading albums…"
             : searchText
@@ -560,7 +560,7 @@ export function Albums() {
                     width: "100%", margin: 0, padding: "5px 20px 5px 12px", textAlign: "left",
                     background: "transparent", border: "none", cursor: "pointer",
                     color: "var(--text-secondary)",
-                    fontSize: "var(--fs-primary)", fontWeight: 400,
+                    fontSize: "var(--fs-primary)", fontWeight: "var(--fw-primary)",
                     borderRadius: 4,
                     boxSizing: "border-box",
                   }}

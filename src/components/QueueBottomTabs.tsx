@@ -25,7 +25,7 @@ function TabButton({ icon, label, active, onClick }: { icon: string; label: stri
       style={{ background: "transparent", border: "none", cursor: "pointer", gap: 2, paddingTop: 6, paddingBottom: 4 }}
     >
       <Icon src={icon} size={18} style={{ background: color }} />
-      <span style={{ color, fontSize: 10, fontWeight: 700 }}>{label}</span>
+      <span style={{ color, fontSize: 10, fontWeight: "var(--fw-emphasis)" }}>{label}</span>
     </button>
   );
 }

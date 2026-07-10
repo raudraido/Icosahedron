@@ -91,7 +91,7 @@ export function LyricsSearchDialog({ artist, title, activeSource, activeSid, onA
         }}
       >
         <div className="flex items-center">
-          <h3 style={{ color: "var(--text-primary)", fontSize: "var(--fs-heading)", fontWeight: 700 }}>Search Lyrics</h3>
+          <h3 style={{ color: "var(--text-primary)", fontSize: "var(--fs-heading)", fontWeight: "var(--fw-emphasis)" }}>Search Lyrics</h3>
           <div className="flex-1" />
           <button
             onClick={onClose}
@@ -140,7 +140,7 @@ export function LyricsSearchDialog({ artist, title, activeSource, activeSid, onA
                   style={{
                     display: "block", padding: "8px 10px", background: selected === r ? "var(--hover-bg)" : "transparent",
                     border: "none", cursor: "pointer", color: isActive ? "var(--accent)" : "var(--text-primary)",
-                    fontWeight: isActive ? 700 : 400, fontSize: "var(--fs-secondary)",
+                    fontWeight: isActive ? "var(--fw-emphasis)" : "var(--fw-secondary)", fontSize: "var(--fs-secondary)",
                   }}
                 >
                   {r.synced ? "⏱ " : "  "}{r.title} — {r.artist}  [{r.source}]
@@ -179,7 +179,7 @@ export function LyricsSearchDialog({ artist, title, activeSource, activeSid, onA
             disabled={!previewRaw}
             style={{
               padding: "6px 14px", borderRadius: 6, border: "none", cursor: previewRaw ? "pointer" : "default",
-              background: "var(--accent)", color: PLAY_ICON_DARK, fontSize: "var(--fs-secondary)", fontWeight: 600,
+              background: "var(--accent)", color: PLAY_ICON_DARK, fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)",
               opacity: previewRaw ? 1 : 0.5,
             }}
           >

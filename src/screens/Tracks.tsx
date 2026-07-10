@@ -319,7 +319,7 @@ export function Tracks() {
                 <ToolbarIconButton src="img/filter_off-2.png" title="Clear filters" onClick={handleClearAllFilters} />
               </>
             )}
-            <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-primary)", fontWeight: 600, marginLeft: filtersActive ? 4 : 0 }}>
+            <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)", marginLeft: filtersActive ? 4 : 0 }}>
               {total.toLocaleString("fr-FR")} tracks
             </span>
           </div>

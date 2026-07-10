@@ -114,7 +114,7 @@ function Card({ children, style }: { children: React.ReactNode; style?: React.CS
 function SectionLabel({ text, count }: { text: string; count?: number }) {
   return (
     <div className="flex items-center" style={{ gap: 10 }}>
-      <h2 style={{ color: "var(--text-primary)", fontSize: "var(--fs-title)", fontWeight: 700 }}>
+      <h2 style={{ color: "var(--text-primary)", fontSize: "var(--fs-title)", fontWeight: "var(--fw-emphasis)" }}>
         {text}
       </h2>
       {count != null && (
@@ -122,7 +122,7 @@ function SectionLabel({ text, count }: { text: string; count?: number }) {
           className="flex items-center justify-center"
           style={{ height: 22, padding: "0 8px", borderRadius: 4, border: "1px solid var(--border)" }}
         >
-          <span style={{ color: "var(--text-primary)", fontSize: 12, fontWeight: 700 }}>{count}</span>
+          <span style={{ color: "var(--text-primary)", fontSize: 12, fontWeight: "var(--fw-emphasis)" }}>{count}</span>
         </div>
       )}
     </div>
@@ -268,7 +268,7 @@ function RelatedArtistCard({ artist, onOpen }: { artist: { id: string; name: str
           <Icon src="img/play.png" size={16} style={{ background: PLAY_ICON_DARK, marginLeft: 1 }} />
         </div>
       </div>
-      <p className="truncate text-center" style={{ marginTop: 10, color: hov ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-secondary)", fontWeight: 600 }}>
+      <p className="truncate text-center" style={{ marginTop: 10, color: hov ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)" }}>
         {artist.name}
       </p>
     </button>
@@ -571,8 +571,8 @@ export function ArtistDetail({ artistId }: Props) {
               </div>
             </div>
             <div className="flex flex-col" style={{ paddingTop: 16, gap: 8, minWidth: 0 }}>
-              <h1 className="truncate" style={{ color: "var(--text-primary)", fontSize: "var(--fs-hero)", fontWeight: 700 }}>{data.artist.name}</h1>
-              <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)", fontWeight: 600 }}>{statsLine}</p>
+              <h1 className="truncate" style={{ color: "var(--text-primary)", fontSize: "var(--fs-hero)", fontWeight: "var(--fw-emphasis)" }}>{data.artist.name}</h1>
+              <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)" }}>{statsLine}</p>
               <div className="flex items-center" style={{ gap: 6, marginTop: 8 }}>
                 <PlayRingButton icon="img/play.png" onClick={handlePlayAll} onHoldShuffle={handleShuffleAll} title="Play" />
                 <ActionButton

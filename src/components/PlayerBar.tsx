@@ -305,9 +305,9 @@ export function PlayerBar() {
             onContextMenu={(e) => { if (track) { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }); } }}
             onMouseEnter={() => track && setTitleHov(true)}
             onMouseLeave={() => setTitleHov(false)}
-            className="font-semibold leading-snug whitespace-nowrap overflow-hidden text-ellipsis"
+            className="leading-snug whitespace-nowrap overflow-hidden text-ellipsis"
             style={{
-              fontSize: "var(--fs-primary)", color: "var(--accent)",
+              fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)", color: "var(--accent)",
               width: titleMaxWidth != null ? Math.max(titleMaxWidth, 0) : undefined,
               maxWidth: titleMaxWidth == null ? "100%" : undefined,
               cursor: track ? "pointer" : "default",
@@ -379,7 +379,7 @@ export function PlayerBar() {
             artificial cap; a leftover 580px max from the pre-waveform plain
             slider was making the bars render much shorter than they should. */}
         <div className="flex items-center w-full" style={{ gap: 15, pointerEvents: "auto" }}>
-          <span className="tabular-nums text-right shrink-0" style={{ minWidth: 56, fontSize: "var(--fs-secondary)", fontWeight: 700, color: "var(--accent)" }}>
+          <span className="tabular-nums text-right shrink-0" style={{ minWidth: 56, fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)", color: "var(--accent)" }}>
             {fmtDuration(currentTime)}
           </span>
           {track ? (
@@ -396,7 +396,7 @@ export function PlayerBar() {
             onClick={toggleShowRemaining}
             title={showRemaining ? "Show total duration" : "Show remaining time"}
             className="tabular-nums shrink-0"
-            style={{ minWidth: 56, fontSize: "var(--fs-secondary)", fontWeight: 700, color: "var(--accent)", cursor: "pointer" }}
+            style={{ minWidth: 56, fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)", color: "var(--accent)", cursor: "pointer" }}
           >
             {showRemaining
               ? (duration > 0 ? `-${fmtDuration(remaining)}` : fmtDuration(0))

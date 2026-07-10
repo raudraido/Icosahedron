@@ -32,7 +32,7 @@ export function ConfirmDialog({ title, message, confirmLabel = "Confirm", danger
           padding: 20, width: 320, boxShadow: "0 12px 32px color-mix(in srgb, black 30%, transparent)",
         }}
       >
-        <h3 style={{ color: "var(--text-primary)", fontSize: "var(--fs-heading)", fontWeight: 700, marginBottom: 8 }}>{title}</h3>
+        <h3 style={{ color: "var(--text-primary)", fontSize: "var(--fs-heading)", fontWeight: "var(--fw-emphasis)", marginBottom: 8 }}>{title}</h3>
         <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)", lineHeight: 1.5 }}>{message}</p>
         <div className="flex justify-end" style={{ gap: 8, marginTop: 16 }}>
           <button
@@ -49,7 +49,7 @@ export function ConfirmDialog({ title, message, confirmLabel = "Confirm", danger
             style={{
               padding: "6px 14px", borderRadius: 6, border: "none", cursor: "pointer",
               background: danger ? "#E53935" : "var(--accent)", color: danger ? "#ffffff" : PLAY_ICON_DARK,
-              fontSize: "var(--fs-secondary)", fontWeight: 600,
+              fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)",
             }}
           >
             {confirmLabel}

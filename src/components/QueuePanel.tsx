@@ -15,8 +15,16 @@ import { QueueBottomTabs } from "./QueueBottomTabs";
 import { LyricsPanel } from "./LyricsPanel";
 import { ScrollThumb } from "./ScrollThumb";
 import { ArtistInfoPanel } from "./ArtistInfoPanel";
+import { SearchBox } from "./SearchBox";
+import { ResizeHandle } from "./ResizeHandle";
+import { loadJSON, saveJSON } from "./TrackTable";
 
 export const ROW_HEIGHT = 53;
+
+const LS_QUEUE_PANEL_WIDTH = "icosahedron_queue_panel_width";
+const QUEUE_PANEL_DEFAULT_WIDTH = 360;
+const QUEUE_PANEL_MIN_WIDTH = QUEUE_PANEL_DEFAULT_WIDTH * 0.8;
+const QUEUE_PANEL_MAX_WIDTH = QUEUE_PANEL_DEFAULT_WIDTH * 1.2;
 
 // 2×3 dot grip — matches queue_list.qml's drag handle, shown in the #/index
 // column in place of the track number, on row hover (or while dragging).
@@ -100,7 +108,7 @@ export function GhostRow({ track, y }: { track: Track; y: number }) {
       }}
     >
       <div className="min-w-0 flex-1">
-        <p className="truncate" style={{ fontSize: "var(--fs-primary)", color: "var(--text-primary)", fontWeight: 700 }}>{track.title}</p>
+        <p className="truncate" style={{ fontSize: "var(--fs-primary)", color: "var(--text-primary)", fontWeight: "var(--fw-emphasis)" }}>{track.title}</p>
         <p className="truncate" style={{ fontSize: "var(--fs-secondary)", color: "var(--text-secondary)" }}>{track.artist}</p>
       </div>
     </div>
@@ -179,7 +187,7 @@ function QueueRow({ track: t, index: i, isCurrent, isPast, playing, dragging, on
               fontSize: "var(--fs-small)",
               color: isCurrent ? "var(--accent)" : "var(--text-primary)",
               opacity: isPast ? 0.4 : (isCurrent ? 1 : 0.5),
-              fontWeight: isCurrent ? 700 : 400,
+              fontWeight: isCurrent ? "var(--fw-emphasis)" : "var(--fw-small)",
             }}
           >
             {i + 1}
@@ -192,7 +200,7 @@ function QueueRow({ track: t, index: i, isCurrent, isPast, playing, dragging, on
           as everywhere else), alwaysAccent when this row is the current track
           (all tokens go accent-colored while playing, not just on hover). */}
       <div className="flex-1 min-w-0 px-2" style={{ opacity: isPast ? 0.4 : 1 }}>
-        <p className="truncate" style={{ fontSize: "var(--fs-primary)", color: isCurrent ? "var(--accent)" : "var(--text-primary)", fontWeight: isCurrent ? 700 : 400 }}>
+        <p className="truncate" style={{ fontSize: "var(--fs-primary)", color: isCurrent ? "var(--accent)" : "var(--text-primary)", fontWeight: isCurrent ? "var(--fw-emphasis)" : "var(--fw-primary)" }}>
           {t.title}
         </p>
         <ArtistTokens name={t.artist} artistId={t.artist_id} fontSize="var(--fs-secondary)" alwaysAccent={isCurrent} />
@@ -237,6 +245,8 @@ export function QueuePanel() {
   const [ghostY, setGhostY] = useState<number | null>(null);
   const activeTab    = useStore((s) => s.queuePanelTab);
   const setActiveTab = useStore((s) => s.setQueuePanelTab);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Right-click menu — same shared ContextMenu/PromptDialog/TrackInfoDialog
   // components as TrackTable.tsx, but a queue-specific item list/order (no
@@ -320,15 +330,39 @@ export function QueuePanel() {
       : `${m}:${String(s).padStart(2,"0")}`;
   }, [queue]);
 
+  // Search filters by original queue index rather than producing a
+  // sub-array — isCurrent/isPast/row numbering and drag-reorder all key off
+  // the track's real position in the queue, which a filtered copy would lose.
+  const filteredIndices = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return queue.map((_, i) => i);
+    return queue.reduce<number[]>((acc, t, i) => {
+      if (t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q)) acc.push(i);
+      return acc;
+    }, []);
+  }, [queue, searchQuery]);
+
   // Virtualized — the queue can hold thousands of tracks; rendering every
   // row as a real DOM node made this always-mounted panel re-reconcile all
   // of them on every unrelated store update (e.g. simply switching tabs).
   const virtualizer = useVirtualizer({
-    count: queue.length,
+    count: filteredIndices.length,
     getScrollElement: () => listRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 8,
   });
+
+  // Auto-center the now-playing row whenever the track changes (skip, addNext,
+  // radio advancing, etc.) — track-change driven, not queue-length-driven, so
+  // reordering/adding tracks elsewhere in the queue doesn't yank the user's
+  // scroll position around while they're just browsing it.
+  useEffect(() => {
+    if (currentIndex < 0) return;
+    const row = filteredIndices.indexOf(currentIndex);
+    if (row === -1) return;
+    virtualizer.scrollToIndex(row, { align: "center" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIndex]);
 
   // Manual mousedown/mousemove/mouseup drag instead of native HTML5
   // draggable — native `dragover` only fires at a throttled, low frequency
@@ -373,11 +407,37 @@ export function QueuePanel() {
 
   const draggedTrack = dragId ? queue.find((t) => t.id === dragId) ?? null : null;
 
+  const [panelWidth, setPanelWidth] = useState(() => loadJSON(LS_QUEUE_PANEL_WIDTH, QUEUE_PANEL_DEFAULT_WIDTH));
+  const [panelResizing, setPanelResizing] = useState(false);
+
+  function onPanelResizeStart(e: React.MouseEvent) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = panelWidth;
+    let current = startWidth;
+    setPanelResizing(true);
+    function onMove(ev: MouseEvent) {
+      // Dragging left (toward the queue panel) should grow it — subtract
+      // the delta since this handle sits on the panel's *left* edge.
+      current = Math.max(QUEUE_PANEL_MIN_WIDTH, Math.min(QUEUE_PANEL_MAX_WIDTH, startWidth - (ev.clientX - startX)));
+      setPanelWidth(current);
+    }
+    function onUp() {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      setPanelResizing(false);
+      saveJSON(LS_QUEUE_PANEL_WIDTH, current);
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
   return (
     <div
       className="flex flex-col shrink-0"
-      style={{ width: 360, background: "var(--panel-bg)", borderLeft: "1px solid var(--border)" }}
+      style={{ position: "relative", width: panelWidth, background: "var(--panel-bg)", borderLeft: "1px solid var(--border)" }}
     >
+      <ResizeHandle placement="left" dragging={panelResizing} onMouseDown={onPanelResizeStart} />
       {/* Header — matches queue_panel.py:480-525/698-716 exactly: "Queue" is
           title case (not all-caps/letter-spaced), bold, full opacity; position
           ("3/12") is text-secondary; duration is tinted to the *accent* color,
@@ -389,7 +449,7 @@ export function QueuePanel() {
         className="flex items-center shrink-0"
         style={{ height: 62, paddingLeft: 14, paddingRight: 8, borderBottom: "1px solid var(--border)" }}
       >
-        <span style={{ color: "var(--text-primary)", fontSize: "var(--fs-primary)", fontWeight: 700 }}>
+        <span style={{ color: "var(--text-primary)", fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)" }}>
           Queue
         </span>
         {queue.length > 0 && (
@@ -404,16 +464,25 @@ export function QueuePanel() {
         )}
         <div className="flex-1" />
         {queue.length > 0 && (
-          <button
-            onClick={clearQueue}
-            title="Clear Queue"
-            className="flex items-center justify-center"
-            style={{ width: 28, height: 28, color: "#555555" }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "#aaaaaa")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "#555555")}
-          >
-            <Icon src="img/trash.png" size={18} />
-          </button>
+          <>
+            <SearchBox
+              open={searchOpen}
+              onToggle={() => setSearchOpen((v) => !v)}
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="Search queue…"
+            />
+            <button
+              onClick={clearQueue}
+              title="Clear Queue"
+              className="flex items-center justify-center"
+              style={{ width: 28, height: 28, color: "#555555" }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "#aaaaaa")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "#555555")}
+            >
+              <Icon src="img/trash.png" size={18} />
+            </button>
+          </>
         )}
       </div>
 
@@ -449,9 +518,15 @@ export function QueuePanel() {
           </p>
         )}
 
+        {queue.length > 0 && filteredIndices.length === 0 && (
+          <p className="p-4" style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)", opacity: 0.3 }}>
+            No matches
+          </p>
+        )}
+
         <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
           {virtualizer.getVirtualItems().map((vRow) => {
-            const i = vRow.index;
+            const i = filteredIndices[vRow.index];
             const t = queue[i];
             return (
               <div key={`${t.id}-${i}`} style={{ position: "absolute", top: vRow.start, left: 0, right: 0 }}>

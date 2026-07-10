@@ -95,7 +95,7 @@ export function UpdateBanner() {
               onClick={installNow}
               style={{
                 padding: "5px 12px", borderRadius: 5, border: "none", cursor: "pointer",
-                background: "var(--accent)", color: "#111", fontSize: "var(--fs-secondary)", fontWeight: 700,
+                background: "var(--accent)", color: "#111", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)",
               }}
             >
               Download &amp; Install

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useStore } from "../store";
 import { api, Playlist } from "../lib/api";
 import { getRecentTracks, formatRelativeTime, LastFmTrack } from "../lib/lastfm";
+import { NewPlaylistDialog } from "../screens/Playlists";
 import { ArtistTokens, matchesArtistCredit } from "./ArtistTokens";
 import { CoverArt } from "./CoverArt";
 import { Icon } from "./Icon";
@@ -13,7 +14,13 @@ import { BreakoutWidget } from "./BreakoutWidget";
 import { XonixWidget } from "./XonixWidget";
 import { ContextMenu } from "./ContextMenu";
 import { ScrollThumb } from "./ScrollThumb";
+import { ResizeHandle } from "./ResizeHandle";
 import { loadJSON, saveJSON } from "./TrackTable";
+
+const LS_LEFT_PANEL_WIDTH = "icosahedron_left_panel_width";
+const LEFT_PANEL_DEFAULT_WIDTH = 297;
+const LEFT_PANEL_MIN_WIDTH = LEFT_PANEL_DEFAULT_WIDTH * 0.8;
+const LEFT_PANEL_MAX_WIDTH = LEFT_PANEL_DEFAULT_WIDTH * 1.2;
 
 const LS_RECENTLY_PLAYED_HEIGHT = "icosahedron_recently_played_height";
 const LS_RECENTLY_PLAYED_COLLAPSED = "icosahedron_recently_played_collapsed";
@@ -217,23 +224,24 @@ function RecentlyPlayed() {
   return (
     <>
       <div className="flex flex-col" style={{ height: collapsed ? "auto" : height, flexShrink: 0, minHeight: 0, padding: "8px 8px 0" }}>
-        <div ref={labelRef} className="flex items-center justify-between" style={{ padding: "0 2px 6px" }}>
+        <div
+          ref={labelRef}
+          onClick={toggleCollapsed}
+          className="flex items-center justify-between"
+          style={{ padding: "0 2px 6px", cursor: "pointer" }}
+        >
           <span
-            onClick={toggleCollapsed}
-            style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", cursor: "pointer" }}
+            style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)", letterSpacing: 1, textTransform: "uppercase" }}
           >
             Recently Played
           </span>
-          <button
-            onClick={toggleCollapsed}
+          <div
             title={collapsed ? "Expand" : "Collapse"}
             className="flex items-center justify-center"
-            style={{ width: 18, height: 18, background: "transparent", border: "none", cursor: "pointer", borderRadius: 4 }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--hover-bg)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+            style={{ width: 18, height: 18, borderRadius: 4 }}
           >
             <Icon src={collapsed ? "img/down_arrow.png" : "img/up_arrow.png"} size={10} style={{ background: "var(--text-secondary)" }} />
-          </button>
+          </div>
         </div>
         {!collapsed && (
         <div className="flex-1" style={{ position: "relative", minHeight: 0 }}>
@@ -260,7 +268,7 @@ function RecentlyPlayed() {
                   {t.nowPlaying && (
                     <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent)", flexShrink: 0 }} />
                   )}
-                  <span className="truncate" style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)", fontWeight: 600 }}>
+                  <span className="truncate" style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)" }}>
                     {t.name}
                   </span>
                 </div>
@@ -335,10 +343,21 @@ function PlaylistsPanel() {
   const [menu, setMenu] = useState<{ x: number; y: number; playlist: Playlist } | null>(null);
   const [height, setHeight] = useState(() => loadJSON(LS_PLAYLISTS_HEIGHT, PLAYLISTS_DEFAULT_HEIGHT));
   const [collapsed, setCollapsed] = useState(() => loadJSON(LS_PLAYLISTS_COLLAPSED, false));
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const labelRef = useRef<HTMLDivElement>(null);
   const firstRowRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [maxHeight, setMaxHeight] = useState(PLAYLISTS_MAX_HEIGHT_FALLBACK);
+  const holdTimerRef = useRef<number | null>(null);
+  const heldRef = useRef(false);
+  const qc = useQueryClient();
+
+  async function handleCreate(name: string, isPublic: boolean) {
+    await api.createPlaylist(name, isPublic);
+    qc.invalidateQueries({ queryKey: ["playlists"] });
+    setCreateOpen(false);
+  }
 
   const { data: playlists = [] } = useQuery({
     queryKey: ["playlists"],
@@ -405,29 +424,75 @@ function PlaylistsPanel() {
     else playTrack(tracks[0], tracks);
   }
 
+  async function shufflePlaylist(p: Playlist) {
+    const tracks = await api.getPlaylistTracks(p.id).catch(() => []);
+    if (!tracks.length) return;
+    const shuffled = [...tracks];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    playTrack(shuffled[0], shuffled);
+  }
+
+  function clearHoldTimer() {
+    if (holdTimerRef.current !== null) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+  }
+
+  function handlePlayIconMouseDown(e: React.MouseEvent, p: Playlist) {
+    e.stopPropagation();
+    heldRef.current = false;
+    holdTimerRef.current = window.setTimeout(() => {
+      heldRef.current = true;
+      holdTimerRef.current = null;
+      shufflePlaylist(p);
+    }, 600);
+  }
+  function handlePlayIconMouseUp(e: React.MouseEvent, p: Playlist) {
+    e.stopPropagation();
+    const held = holdTimerRef.current === null && heldRef.current;
+    clearHoldTimer();
+    if (!held) playPlaylist(p);
+  }
+
   if (!visible || !playlists.length) return null;
 
   return (
     <>
       <div className="flex flex-col" style={{ height: collapsed ? "auto" : height, flexShrink: 0, minHeight: 0, padding: "8px 8px 0" }}>
-        <div ref={labelRef} className="flex items-center justify-between" style={{ padding: "0 2px 6px" }}>
+        <div
+          ref={labelRef}
+          onClick={toggleCollapsed}
+          className="flex items-center justify-between"
+          style={{ padding: "0 2px 6px", cursor: "pointer" }}
+        >
           <span
-            onClick={toggleCollapsed}
-            style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", cursor: "pointer" }}
+            style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)", letterSpacing: 1, textTransform: "uppercase" }}
           >
             Playlists
           </span>
-          <button
-            onClick={toggleCollapsed}
-            title={collapsed ? "Expand" : "Collapse"}
-            className="flex items-center justify-center"
-            style={{ width: 18, height: 18, background: "transparent", border: "none", cursor: "pointer", borderRadius: 4 }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--hover-bg)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-          >
-            <Icon src={collapsed ? "img/down_arrow.png" : "img/up_arrow.png"} size={10} style={{ background: "var(--text-secondary)" }} />
-          </button>
+          <div className="flex items-center" style={{ gap: 4 }}>
+            <div
+              title="New Playlist"
+              onClick={(e) => { e.stopPropagation(); setCreateOpen(true); }}
+              className="flex items-center justify-center"
+              style={{ width: 18, height: 18, borderRadius: 4 }}
+            >
+              <Icon src="img/add.png" size={11} style={{ background: "var(--text-secondary)" }} />
+            </div>
+            <div
+              title={collapsed ? "Expand" : "Collapse"}
+              className="flex items-center justify-center"
+              style={{ width: 18, height: 18, borderRadius: 4 }}
+            >
+              <Icon src={collapsed ? "img/down_arrow.png" : "img/up_arrow.png"} size={10} style={{ background: "var(--text-secondary)" }} />
+            </div>
+          </div>
         </div>
+        {createOpen && <NewPlaylistDialog onCreate={handleCreate} onCancel={() => setCreateOpen(false)} />}
         {!collapsed && (
         <div className="flex-1" style={{ position: "relative", minHeight: 0 }}>
         <div ref={listRef} className="h-full overflow-y-auto scroll-clean" style={{ minHeight: 0 }}>
@@ -439,18 +504,46 @@ function PlaylistsPanel() {
               onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, playlist: p }); }}
               className="flex items-center w-full text-left"
               style={{ gap: 8, padding: "6px 8px", borderRadius: 6, cursor: "pointer", background: "transparent" }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--hover-bg)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--hover-bg)"; setHoveredId(p.id); }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; setHoveredId((cur) => (cur === p.id ? null : cur)); clearHoldTimer(); }}
             >
-              <CoverArt coverId={p.cover_id} size={32} className="shrink-0" style={{ width: 32, height: 32, borderRadius: 4 }} />
+              <CoverArt coverId={p.cover_id} size={44} className="shrink-0" style={{ width: 44, height: 44, borderRadius: 4 }} />
               <div className="flex flex-col min-w-0 flex-1">
-                <span className="truncate" style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)", fontWeight: 600 }}>
+                <span className="truncate" style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)" }}>
                   {p.name}
                 </span>
                 <span className="truncate" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
                   {p.song_count} track{p.song_count === 1 ? "" : "s"}
                 </span>
               </div>
+              {hoveredId === p.id && (
+                <div
+                  role="button"
+                  title="Play (hold to shuffle)"
+                  onMouseDown={(e) => handlePlayIconMouseDown(e, p)}
+                  onMouseUp={(e) => handlePlayIconMouseUp(e, p)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex items-center justify-center shrink-0"
+                  style={{ width: 22, height: 22, borderRadius: 4, cursor: "pointer", transition: "transform 120ms" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = "scale(1.35)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
+                >
+                  <Icon src="img/sub_play.png" size={17} style={{ background: "var(--accent)" }} />
+                </div>
+              )}
+              {hoveredId === p.id && (
+                <div
+                  role="button"
+                  title="Add to Queue"
+                  onClick={(e) => { e.stopPropagation(); playPlaylist(p, (tracks) => addTrackToQueue(tracks)); }}
+                  className="flex items-center justify-center shrink-0"
+                  style={{ width: 22, height: 22, borderRadius: 4, cursor: "pointer", marginRight: 6, transition: "transform 120ms" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = "scale(1.35)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
+                >
+                  <Icon src="img/add_list.png" size={17} style={{ background: "var(--accent)" }} />
+                </div>
+              )}
             </button>
           ))}
         </div>
@@ -490,9 +583,9 @@ function PlaylistsPanel() {
 type GameId = "tetris" | "pong" | "spaceInvaders" | "breakout" | "xonix";
 
 // Matches left_panel.qml's artTargetSize = leftPanel.width() - 16 (8px margin
-// each side) — our left panel is a fixed 297px, so this is a constant rather
-// than something that needs measuring.
-const ART_SIZE = 297 - 8 * 2;
+// each side) — now derived from the panel's own (resizable) width instead of
+// a fixed constant, so the art keeps filling the panel edge-to-edge at any
+// width the user's dragged it to.
 
 // 30×30 button matching the old app's ArrowButton (player/widgets.py:1988):
 // chevron is 6px wide × 12px tall with a 2px stroke (drawn via QPainter.drawLine
@@ -538,6 +631,29 @@ export function LeftPanel() {
   const [closeHov, setCloseHov] = useState(false);
   const [logoHovered, setLogoHovered] = useState(false);
   const [searchHandoff, setSearchHandoff] = useState("");
+  const [panelWidth, setPanelWidth] = useState(() => loadJSON(LS_LEFT_PANEL_WIDTH, LEFT_PANEL_DEFAULT_WIDTH));
+  const [panelResizing, setPanelResizing] = useState(false);
+  const artSize = panelWidth - 8 * 2;
+
+  function onPanelResizeStart(e: React.MouseEvent) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = panelWidth;
+    let current = startWidth;
+    setPanelResizing(true);
+    function onMove(ev: MouseEvent) {
+      current = Math.max(LEFT_PANEL_MIN_WIDTH, Math.min(LEFT_PANEL_MAX_WIDTH, startWidth + (ev.clientX - startX)));
+      setPanelWidth(current);
+    }
+    function onUp() {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      setPanelResizing(false);
+      saveJSON(LS_LEFT_PANEL_WIDTH, current);
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
 
   // Server switcher — click opens a menu (see render below); the active
   // server, its saved siblings, and the switch/navigate actions all come
@@ -560,6 +676,18 @@ export function LeftPanel() {
   const [gameMenuPos, setGameMenuPos] = useState<{ x: number; y: number } | null>(null);
   const logoClickCountRef = useRef(0);
   const logoClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ContextMenu closes itself on any outside `mousedown` (see ContextMenu.tsx),
+  // which fires on the logo *before* this click handler's own `click` event
+  // does — so by the time this runs, serverMenuPos has often already been
+  // reset to null by that same click-to-close-again gesture, and toggling off
+  // the (now stale) state would just reopen it. This mousedown captures
+  // whether the menu was open *before* that same-click close happens, so the
+  // click handler below can tell "was already open, this click is a close"
+  // apart from "was closed, this click is an open".
+  const menuWasOpenRef = useRef(false);
+  function handleLogoMouseDown() {
+    menuWasOpenRef.current = serverMenuPos !== null;
+  }
   function handleLogoClick(e: React.MouseEvent<HTMLDivElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
     // A plain click always toggles the server menu immediately (no delay —
@@ -567,12 +695,12 @@ export function LeftPanel() {
     // rapid-triple-click game-picker egg below rides along on the same
     // click stream; overlapping both menus on an intentional triple-click
     // is a harmless, rare edge case next to keeping the common case snappy.
-    setServerMenuPos((prev) => (prev ? null : { x: rect.left, y: rect.bottom + 6 }));
+    if (!menuWasOpenRef.current) setServerMenuPos({ x: rect.left, y: rect.bottom + 6 });
 
     logoClickCountRef.current += 1;
     if (logoClickTimerRef.current) clearTimeout(logoClickTimerRef.current);
     logoClickTimerRef.current = setTimeout(() => { logoClickCountRef.current = 0; }, 600);
-    if (logoClickCountRef.current >= 3) {
+    if (logoClickCountRef.current >= 4) {
       logoClickCountRef.current = 0;
       clearTimeout(logoClickTimerRef.current);
       setGameMenuPos({ x: rect.right + 8, y: rect.top });
@@ -582,8 +710,10 @@ export function LeftPanel() {
   return (
     <div
       className="flex flex-col shrink-0"
-      style={{ width: 297, background: "var(--panel-bg)", borderRight: "1px solid var(--border)" }}
+      style={{ position: "relative", width: panelWidth, background: "var(--panel-bg)", borderRight: "1px solid var(--border)" }}
     >
+      <ResizeHandle placement="right" dragging={panelResizing} onMouseDown={onPanelResizeStart} />
+
       {/* Header: just the logo now — nav arrows moved to the tab bar's left
           corner (App.tsx) so the tab row itself stays centered on the whole
           window instead of the remaining space next to these buttons.
@@ -597,6 +727,7 @@ export function LeftPanel() {
             scales up slightly on hover so it reads as clickable (triple-click
             opens the game picker, see handleLogoClick above). */}
         <div
+          onMouseDown={handleLogoMouseDown}
           onClick={handleLogoClick}
           onMouseEnter={() => setLogoHovered(true)}
           onMouseLeave={() => setLogoHovered(false)}
@@ -670,31 +801,49 @@ export function LeftPanel() {
             both since each now renders only its own fixed-height content. */}
         <div className="flex-1" />
 
-        {/* Art section — collapsed (height 0) by default, expands upward when the
-            footer thumbnail's expand button is clicked. Matches left_panel.qml's
-            artSection: same 250ms InOutCubic on height, driven by the same shared
-            toggle as the footer thumbnail's width animation, so they move in lockstep
-            as a handoff (no cross-fade between the two). */}
-        <div style={{ padding: 8, flexShrink: 0 }}>
+        {/* Art section — collapsed (height 0, taking no layout space) by default.
+            When expanded, it detaches from the flex flow and overlays the widgets
+            above (Recently Played / Playlists) instead of being squeezed into
+            whatever leftover space the flex-1 spacer above didn't use, with a
+            scrim behind it so it reads as "temporarily on top" rather than a
+            layout glitch. Collapsing (X button or footer thumbnail) removes both
+            instantly. */}
+        <div style={{ padding: expanded ? 0 : 8, flexShrink: 0, height: expanded ? 0 : undefined }}>
+          {expanded && (
+            <div
+              onClick={() => { setCloseHov(false); toggleSidebarArt(); }}
+              style={{
+                position: "absolute", inset: 0,
+                backdropFilter: "blur(2px)", WebkitBackdropFilter: "blur(2px)",
+                background: "color-mix(in srgb, var(--panel-bg) 55%, transparent)",
+                zIndex: 20, cursor: "pointer",
+              }}
+            />
+          )}
           <div
             style={{
-              position: "relative", width: ART_SIZE,
-              height: expanded ? ART_SIZE : 0,
+              position: expanded ? "absolute" : "relative",
+              left: expanded ? 8 : undefined,
+              bottom: expanded ? 8 : undefined,
+              zIndex: 21,
+              width: artSize,
+              height: expanded ? artSize : 0,
               overflow: "hidden", borderRadius: 5, background: "#121212",
+              boxShadow: expanded ? "0 8px 24px rgba(0,0,0,0.5)" : "none",
               transition: "height 250ms cubic-bezier(0.65, 0, 0.35, 1)",
             }}
           >
             {track?.cover_id ? (
-              <CoverArt coverId={track.cover_id} size={ART_SIZE} className="w-full h-full" />
+              <CoverArt coverId={track.cover_id} size={artSize} className="w-full h-full" />
             ) : (
-              <div className="flex items-center justify-center w-full h-full" style={{ fontSize: Math.max(20, ART_SIZE * 0.3), color: "#333333" }}>
+              <div className="flex items-center justify-center w-full h-full" style={{ fontSize: Math.max(20, artSize * 0.3), color: "#333333" }}>
                 💿
               </div>
             )}
 
             {expanded && (
               <button
-                onClick={() => { setCloseHov(false); toggleSidebarArt(); }}
+                onClick={(e) => { e.stopPropagation(); setCloseHov(false); toggleSidebarArt(); }}
                 onMouseEnter={() => setCloseHov(true)}
                 onMouseLeave={() => setCloseHov(false)}
                 title="Collapse"

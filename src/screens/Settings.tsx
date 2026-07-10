@@ -43,7 +43,7 @@ function SideTabButton({ label, active, onClick }: { label: string; active: bool
         padding: "10px 16px", borderRadius: 8, border: "none", cursor: "pointer",
         background: active ? "var(--hover-bg)" : hov ? "color-mix(in srgb, var(--hover-bg) 50%, transparent)" : "transparent",
         color: active ? "var(--accent)" : "var(--text-primary)",
-        fontSize: "var(--fs-primary)", fontWeight: active ? 700 : 500,
+        fontSize: "var(--fs-primary)", fontWeight: active ? "var(--fw-emphasis)" : "var(--fw-primary)",
       }}
     >
       {label}
@@ -54,7 +54,7 @@ function SideTabButton({ label, active, onClick }: { label: string; active: bool
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col" style={{ gap: 10 }}>
-      <span style={{ color: "var(--text-secondary)", fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>
+      <span style={{ color: "var(--text-secondary)", fontSize: 11, fontWeight: "var(--fw-emphasis)", letterSpacing: 1, textTransform: "uppercase" }}>
         {title}
       </span>
       {children}
@@ -66,7 +66,7 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center" style={{ gap: 12, padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
       <span style={{ width: 140, flexShrink: 0, color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>{label}</span>
-      <span className="truncate" style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)", fontWeight: 600 }}>{value || "—"}</span>
+      <span className="truncate" style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)" }}>{value || "—"}</span>
     </div>
   );
 }
@@ -138,7 +138,7 @@ function UpdateRow() {
     <div className="flex flex-col" style={{ gap: 8, padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
       <div className="flex items-center" style={{ gap: 12 }}>
         <span style={{ width: 140, flexShrink: 0, color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>Updates</span>
-        <span className="flex-1" style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)", fontWeight: 600 }}>
+        <span className="flex-1" style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)" }}>
           {status === "checking" && "Checking for updates…"}
           {status === "upToDate" && "You're up to date."}
           {status === "available" && `Version ${info!.version} is available.`}
@@ -156,7 +156,7 @@ function UpdateRow() {
             onClick={installNow}
             style={{
               padding: "5px 12px", borderRadius: 5, border: "none", cursor: "pointer",
-              background: "var(--accent)", color: "#111", fontSize: "var(--fs-secondary)", fontWeight: 700,
+              background: "var(--accent)", color: "#111", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)",
             }}
           >
             {status === "installError" ? "Try Again" : "Update"}
@@ -167,7 +167,7 @@ function UpdateRow() {
             onClick={check}
             style={{
               padding: "5px 12px", borderRadius: 5, border: "1px solid var(--border)", cursor: "pointer",
-              background: "transparent", color: "var(--text-secondary)", fontSize: "var(--fs-secondary)", fontWeight: 600,
+              background: "transparent", color: "var(--text-secondary)", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)",
             }}
           >
             Check Again
@@ -226,7 +226,7 @@ function ToggleRow({ label, description, checked, onChange, disabled }: { label:
   return (
     <div className="flex items-center justify-between" style={{ gap: 12, padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
       <div className="flex flex-col" style={{ opacity: disabled ? 0.5 : 1 }}>
-        <span style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)", fontWeight: 600 }}>{label}</span>
+        <span style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)" }}>{label}</span>
         {description && <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>{description}</span>}
       </div>
       <ToggleSwitch checked={checked} onChange={onChange} disabled={disabled} />
@@ -372,7 +372,7 @@ function LastFmSection() {
               style={{
                 background: "transparent", border: "1px solid var(--border)", borderRadius: 4,
                 padding: "6px 14px", cursor: "pointer", color: "var(--text-primary)",
-                fontSize: "var(--fs-secondary)", fontWeight: 700,
+                fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)",
               }}
             >
               Disconnect
@@ -405,7 +405,7 @@ function LastFmSection() {
             style={{
               alignSelf: "flex-start", background: "transparent", border: "1px solid var(--border)", borderRadius: 4,
               padding: "6px 14px", color: "var(--text-primary)",
-              fontSize: "var(--fs-secondary)", fontWeight: 700,
+              fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)",
               cursor: status === "waiting" ? "default" : "pointer",
               opacity: status === "waiting" ? 0.5 : 1,
             }}
@@ -509,7 +509,7 @@ function SystemTab() {
           style={{
             alignSelf: "flex-start", marginTop: 4, background: "transparent", color: "var(--error)",
             border: "1px solid var(--error)", borderRadius: 4, padding: "7px 16px", cursor: "pointer",
-            fontSize: "var(--fs-secondary)", fontWeight: 700,
+            fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)",
           }}
         >
           Log Out
@@ -587,7 +587,7 @@ function AddServerDialog({
         className="flex flex-col"
         style={{ background: "var(--main-bg)", border: "1px solid var(--border)", borderRadius: 10, padding: 20, width: 360, gap: 10, boxShadow: "0 12px 32px color-mix(in srgb, black 30%, transparent)" }}
       >
-        <h3 style={{ color: "var(--text-primary)", fontSize: "var(--fs-heading)", fontWeight: 700 }}>Add Server</h3>
+        <h3 style={{ color: "var(--text-primary)", fontSize: "var(--fs-heading)", fontWeight: "var(--fw-emphasis)" }}>Add Server</h3>
         <input autoFocus placeholder="Name (optional)" value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
         <input placeholder="Server URL (e.g. server.domain.com)" value={url} onChange={(e) => handleUrlChange(e.target.value)} style={inputStyle} />
         <div className="flex items-center justify-end" style={{ gap: 4 }}>
@@ -598,9 +598,9 @@ function AddServerDialog({
                 key={proto}
                 type="button"
                 onClick={() => setSecure(proto === "https")}
-                className="uppercase font-medium"
+                className="uppercase"
                 style={{
-                  borderRadius: 6, padding: "4px 8px", fontSize: "var(--fs-small)",
+                  borderRadius: 6, padding: "4px 8px", fontSize: "var(--fs-small)", fontWeight: "var(--fw-small)",
                   background: active ? "color-mix(in srgb, var(--accent) 20%, transparent)" : "transparent",
                   color: active ? "var(--accent)" : "var(--text-primary)",
                   opacity: active ? 1 : 0.5,
@@ -628,7 +628,7 @@ function AddServerDialog({
             disabled={disabled}
             style={{
               padding: "6px 14px", borderRadius: 6, border: "none", cursor: disabled ? "default" : "pointer",
-              background: "var(--accent)", color: "#111", fontSize: "var(--fs-secondary)", fontWeight: 700,
+              background: "var(--accent)", color: "#111", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)",
               opacity: disabled ? 0.5 : 1,
             }}
           >
@@ -698,7 +698,7 @@ function ServersTab() {
                 }}
               >
                 <div className="flex flex-col min-w-0">
-                  <span className="truncate" style={{ color: "var(--text-primary)", fontWeight: 700, fontSize: "var(--fs-primary)" }}>{s.name}</span>
+                  <span className="truncate" style={{ color: "var(--text-primary)", fontWeight: "var(--fw-emphasis)", fontSize: "var(--fs-primary)" }}>{s.name}</span>
                   <span className="truncate" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>{s.username}@{s.url}</span>
                   {status && (
                     <span style={{ color: status === "ok" ? "var(--accent)" : status === "fail" ? "var(--error)" : "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
@@ -710,19 +710,19 @@ function ServersTab() {
                   <button
                     onClick={() => handleTest(s.id)}
                     disabled={status === "testing"}
-                    style={{ background: "transparent", border: "1px solid var(--border)", borderRadius: 4, padding: "6px 12px", cursor: "pointer", color: "var(--text-primary)", fontSize: "var(--fs-secondary)", fontWeight: 600 }}
+                    style={{ background: "transparent", border: "1px solid var(--border)", borderRadius: 4, padding: "6px 12px", cursor: "pointer", color: "var(--text-primary)", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)" }}
                   >
                     Test Connection
                   </button>
                   {active ? (
-                    <span style={{ padding: "6px 12px", borderRadius: 4, background: "color-mix(in srgb, var(--accent) 20%, transparent)", color: "var(--accent)", fontSize: "var(--fs-secondary)", fontWeight: 700 }}>
+                    <span style={{ padding: "6px 12px", borderRadius: 4, background: "color-mix(in srgb, var(--accent) 20%, transparent)", color: "var(--accent)", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)" }}>
                       Active
                     </span>
                   ) : (
                     <button
                       onClick={() => handleUse(s.id)}
                       disabled={switchingId === s.id}
-                      style={{ background: "var(--accent)", border: "none", borderRadius: 4, padding: "6px 12px", cursor: "pointer", color: "#111", fontSize: "var(--fs-secondary)", fontWeight: 700 }}
+                      style={{ background: "var(--accent)", border: "none", borderRadius: 4, padding: "6px 12px", cursor: "pointer", color: "#111", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)" }}
                     >
                       {switchingId === s.id ? "Connecting…" : "Use"}
                     </button>
@@ -748,7 +748,7 @@ function ServersTab() {
 
         <button
           onClick={() => setAddOpen(true)}
-          style={{ alignSelf: "flex-start", marginTop: 4, background: "transparent", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: 4, padding: "7px 16px", cursor: "pointer", fontSize: "var(--fs-secondary)", fontWeight: 700 }}
+          style={{ alignSelf: "flex-start", marginTop: 4, background: "transparent", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: 4, padding: "7px 16px", cursor: "pointer", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)" }}
         >
           + Add Server
         </button>
@@ -825,7 +825,7 @@ function ThemesTab() {
                       <div style={{ width: 20, height: 20, borderRadius: "50%", background: t.accent }} />
                     </div>
                   </div>
-                  <span style={{ color: active ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-secondary)", fontWeight: 600 }}>
+                  <span style={{ color: active ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)" }}>
                     {t.name}
                   </span>
                 </button>
@@ -885,8 +885,27 @@ function BuilderRow({ label, children }: { label: string; children: React.ReactN
   );
 }
 
+// Electron bundles Chromium, which exposes the real EyeDropper API — unlike
+// the plain <input type="color"> below (a palette popup confined to the
+// window), this opens an OS-level magnifier that can sample any pixel on the
+// screen, including other applications' windows. Feature-detected since it's
+// still a fairly recent Chromium addition; the button just doesn't render
+// on a build old enough not to have it.
+const hasEyeDropper = typeof window !== "undefined" && "EyeDropper" in window;
+
 function ColorDial({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const hex = toHex(value);
+
+  async function pickFromScreen() {
+    try {
+      // @ts-expect-error — EyeDropper isn't in lib.dom.d.ts yet.
+      const result = await new window.EyeDropper().open();
+      if (result?.sRGBHex) onChange(fromHex(result.sRGBHex, value));
+    } catch {
+      // User pressed Escape / cancelled the pick — nothing to do.
+    }
+  }
+
   return (
     <div className="flex items-center" style={{ gap: 8 }}>
       <input
@@ -895,7 +914,85 @@ function ColorDial({ value, onChange }: { value: string; onChange: (v: string) =
         onChange={(e) => onChange(fromHex(e.target.value, value))}
         style={{ width: 36, height: 28, padding: 0, border: "1px solid var(--border)", borderRadius: 4, background: "none", cursor: "pointer" }}
       />
+      {hasEyeDropper && (
+        <button
+          onClick={pickFromScreen}
+          title="Pick color from screen"
+          className="flex items-center justify-center"
+          style={{ width: 28, height: 28, border: "1px solid var(--border)", borderRadius: 4, background: "none", cursor: "pointer", fontSize: 14 }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--hover-bg)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+        >
+          💧
+        </button>
+      )}
       <span className="tabular-nums" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)", width: 76 }}>{hex.toUpperCase()}</span>
+    </div>
+  );
+}
+
+// Only fonts actually bundled with the app (@font-face in index.css) —
+// anything else (Arial, Segoe UI, etc.) would depend on what's installed on
+// the user's OS and might not render the same, or at all, elsewhere.
+const FONT_CHOICES = ["Inter Variable"];
+
+// Dropdown-only — deliberately not a text input. A native <select> renders
+// its popup via the OS/Chromium (same restyling problem <datalist> had), so
+// this is our own themed button + absolute panel instead, matching the
+// pattern already used for ContextMenu/SearchBox's scope dropdown.
+function FontFamilyPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  return (
+    <div ref={containerRef} style={{ position: "relative", flex: 1 }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center justify-between w-full"
+        style={{ background: "transparent", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: 4, padding: "4px 8px", fontSize: "var(--fs-secondary)", cursor: "pointer" }}
+      >
+        <span className="truncate">{value}</span>
+        <span style={{ opacity: 0.5, marginLeft: 8 }}>▾</span>
+      </button>
+      {open && (
+        <div
+          className="flex flex-col scroll-clean"
+          style={{
+            position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 50,
+            maxHeight: 220, overflowY: "auto",
+            background: "var(--main-bg)", border: "1px solid var(--border)", borderRadius: 6, padding: 4, gap: 1,
+            boxShadow: "0 4px 16px color-mix(in srgb, var(--text-primary) 15%, transparent)",
+          }}
+        >
+          {FONT_CHOICES.map((f) => (
+            <button
+              key={f}
+              onClick={() => { onChange(f); setOpen(false); }}
+              className="w-full text-left truncate shrink-0"
+              style={{
+                padding: "6px 8px", borderRadius: 4, border: "none", cursor: "pointer",
+                background: f === value ? "var(--hover-bg)" : "transparent",
+                color: f === value ? "var(--accent)" : "var(--text-primary)",
+                fontSize: "var(--fs-secondary)", fontWeight: f === value ? "var(--fw-emphasis)" : "var(--fw-secondary)",
+                lineHeight: 1.4, boxSizing: "border-box",
+              }}
+              onMouseEnter={(e) => { if (f !== value) e.currentTarget.style.background = "var(--hover-bg)"; }}
+              onMouseLeave={(e) => { if (f !== value) e.currentTarget.style.background = "transparent"; }}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -909,6 +1006,25 @@ function NumberDial({ value, min, max, onChange }: { value: number; min: number;
       value={value}
       onChange={(e) => onChange(Math.max(min, Math.min(max, Number(e.target.value) || min)))}
       style={{ width: 70, background: "transparent", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: 4, padding: "4px 8px", fontSize: "var(--fs-secondary)" }}
+    />
+  );
+}
+
+// Font weight is a continuous 100–900 dial (matches Inter Variable's own
+// weight axis, see index.css's @font-face `font-weight: 100 900`) rather
+// than a fixed Regular/Bold/Italic choice — the variable font can render any
+// value on that axis, not just the two endpoints.
+function WeightDial({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <input
+      type="number"
+      min={100}
+      max={900}
+      step={100}
+      value={value}
+      onChange={(e) => onChange(Math.max(100, Math.min(900, Number(e.target.value) || 400)))}
+      title="Font weight (100–900)"
+      style={{ width: 60, background: "transparent", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: 4, padding: "4px 8px", fontSize: "var(--fs-secondary)" }}
     />
   );
 }
@@ -963,20 +1079,41 @@ function ThemeBuilderTab() {
 
       <Section title="Typography">
         <BuilderRow label="Font Family">
-          <input
-            value={draft.fontFamily}
-            onChange={(e) => set("fontFamily", e.target.value)}
-            style={{ flex: 1, background: "transparent", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: 4, padding: "4px 8px", fontSize: "var(--fs-secondary)" }}
-          />
+          <FontFamilyPicker value={draft.fontFamily} onChange={(v) => set("fontFamily", v)} />
         </BuilderRow>
         <BuilderRow label="Primary Text Color"><ColorDial value={draft.textPrimary} onChange={(v) => set("textPrimary", v)} /></BuilderRow>
         <BuilderRow label="Secondary Text Color"><ColorDial value={draft.textSecondary} onChange={(v) => set("textSecondary", v)} /></BuilderRow>
-        <BuilderRow label="Small Font Size"><NumberDial value={draft.fontSizeSmall} min={8} max={24} onChange={(v) => set("fontSizeSmall", v)} /></BuilderRow>
-        <BuilderRow label="Secondary Font Size"><NumberDial value={draft.fontSizeSecondary} min={8} max={24} onChange={(v) => set("fontSizeSecondary", v)} /></BuilderRow>
-        <BuilderRow label="Primary Font Size"><NumberDial value={draft.fontSizePrimary} min={8} max={28} onChange={(v) => set("fontSizePrimary", v)} /></BuilderRow>
-        <BuilderRow label="Heading Font Size"><NumberDial value={draft.fontSizeHeading} min={10} max={32} onChange={(v) => set("fontSizeHeading", v)} /></BuilderRow>
-        <BuilderRow label="Title Font Size"><NumberDial value={draft.fontSizeTitle} min={12} max={40} onChange={(v) => set("fontSizeTitle", v)} /></BuilderRow>
-        <BuilderRow label="Hero Font Size"><NumberDial value={draft.fontSizeHero} min={14} max={48} onChange={(v) => set("fontSizeHero", v)} /></BuilderRow>
+        <BuilderRow label="Small Font Size">
+          <NumberDial value={draft.fontSizeSmall} min={8} max={24} onChange={(v) => set("fontSizeSmall", v)} />
+          <WeightDial value={draft.fontWeightSmall} onChange={(v) => set("fontWeightSmall", v)} />
+        </BuilderRow>
+        <BuilderRow label="Secondary Font Size">
+          <NumberDial value={draft.fontSizeSecondary} min={8} max={24} onChange={(v) => set("fontSizeSecondary", v)} />
+          <WeightDial value={draft.fontWeightSecondary} onChange={(v) => set("fontWeightSecondary", v)} />
+        </BuilderRow>
+        <BuilderRow label="Primary Font Size">
+          <NumberDial value={draft.fontSizePrimary} min={8} max={28} onChange={(v) => set("fontSizePrimary", v)} />
+          <WeightDial value={draft.fontWeightPrimary} onChange={(v) => set("fontWeightPrimary", v)} />
+        </BuilderRow>
+        <BuilderRow label="Heading Font Size">
+          <NumberDial value={draft.fontSizeHeading} min={10} max={32} onChange={(v) => set("fontSizeHeading", v)} />
+          <WeightDial value={draft.fontWeightHeading} onChange={(v) => set("fontWeightHeading", v)} />
+        </BuilderRow>
+        <BuilderRow label="Title Font Size">
+          <NumberDial value={draft.fontSizeTitle} min={12} max={40} onChange={(v) => set("fontSizeTitle", v)} />
+          <WeightDial value={draft.fontWeightTitle} onChange={(v) => set("fontWeightTitle", v)} />
+        </BuilderRow>
+        <BuilderRow label="Hero Font Size">
+          <NumberDial value={draft.fontSizeHero} min={14} max={48} onChange={(v) => set("fontSizeHero", v)} />
+          <WeightDial value={draft.fontWeightHero} onChange={(v) => set("fontWeightHero", v)} />
+        </BuilderRow>
+        <BuilderRow label="Emphasis Weight">
+          {/* Not tied to a size — used wherever text is meant to stand out
+              regardless of its tier (track titles, active/current-track
+              rows, button labels), so it needs its own control rather than
+              living next to one particular size row. */}
+          <WeightDial value={draft.fontWeightEmphasis} onChange={(v) => set("fontWeightEmphasis", v)} />
+        </BuilderRow>
       </Section>
 
       <Section title="Border & Hover">
@@ -993,7 +1130,7 @@ function ThemeBuilderTab() {
                 key={label}
                 onClick={() => set("titleBarDark", isDark)}
                 style={{
-                  padding: "6px 14px", borderRadius: 4, cursor: "pointer", fontSize: "var(--fs-secondary)", fontWeight: 700,
+                  padding: "6px 14px", borderRadius: 4, cursor: "pointer", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)",
                   border: `1px solid ${draft.titleBarDark === isDark ? "var(--accent)" : "var(--border)"}`,
                   color: draft.titleBarDark === isDark ? "var(--accent)" : "var(--text-secondary)",
                   background: "transparent",
@@ -1013,7 +1150,7 @@ function ThemeBuilderTab() {
           title={isBuiltInThemeName(draft.name) ? "Cream/Dark can't be overwritten — use Save as Preset" : `Overwrite "${draft.name}"`}
           style={{
             background: "transparent", border: "1px solid var(--border)", borderRadius: 4, padding: "7px 16px",
-            fontSize: "var(--fs-secondary)", fontWeight: 700,
+            fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)",
             color: isBuiltInThemeName(draft.name) ? "var(--text-secondary)" : "var(--text-primary)",
             opacity: isBuiltInThemeName(draft.name) ? 0.4 : 1,
             cursor: isBuiltInThemeName(draft.name) ? "default" : "pointer",
@@ -1023,13 +1160,13 @@ function ThemeBuilderTab() {
         </button>
         <button
           onClick={() => setSavePromptOpen(true)}
-          style={{ background: "transparent", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: 4, padding: "7px 16px", cursor: "pointer", fontSize: "var(--fs-secondary)", fontWeight: 700 }}
+          style={{ background: "transparent", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: 4, padding: "7px 16px", cursor: "pointer", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)" }}
         >
           Save as Preset
         </button>
         <button
           onClick={handleReset}
-          style={{ background: "transparent", color: "var(--text-secondary)", border: "1px solid var(--border)", borderRadius: 4, padding: "7px 16px", cursor: "pointer", fontSize: "var(--fs-secondary)", fontWeight: 700 }}
+          style={{ background: "transparent", color: "var(--text-secondary)", border: "1px solid var(--border)", borderRadius: 4, padding: "7px 16px", cursor: "pointer", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)" }}
         >
           Reset
         </button>
@@ -1069,7 +1206,7 @@ function HotkeyRow({
           background: recording ? "color-mix(in srgb, var(--accent) 20%, transparent)" : "var(--card-bg)",
           border: `1px solid ${recording ? "var(--accent)" : "var(--border)"}`,
           color: recording ? "var(--accent)" : "var(--text-primary)",
-          fontSize: "var(--fs-secondary)", fontWeight: 600,
+          fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)",
         }}
       >
         {recording ? "Press a key…" : binding}
@@ -1148,7 +1285,7 @@ function HotkeysTab() {
           style={{
             alignSelf: "flex-start", marginTop: 8, background: "transparent", color: "var(--text-secondary)",
             border: "1px solid var(--border)", borderRadius: 4, padding: "7px 16px", cursor: "pointer",
-            fontSize: "var(--fs-secondary)", fontWeight: 700,
+            fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)",
           }}
         >
           Reset All
@@ -1175,7 +1312,7 @@ export function Settings() {
   return (
     <div className="h-full flex flex-col page-fade-in">
       <div className="flex items-center shrink-0 px-6" style={{ height: 58, borderBottom: "1px solid var(--border)" }}>
-        <h2 className="font-semibold" style={{ color: "var(--text-primary)", fontSize: "var(--fs-heading)" }}>Settings</h2>
+        <h2 style={{ color: "var(--text-primary)", fontSize: "var(--fs-heading)", fontWeight: "var(--fw-emphasis)" }}>Settings</h2>
       </div>
       <div className="flex flex-1" style={{ minHeight: 0 }}>
         <div className="flex flex-col shrink-0" style={{ width: 200, padding: 16, gap: 4, borderRight: "1px solid var(--border)" }}>

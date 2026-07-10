@@ -153,7 +153,7 @@ function MenuRow({ item, onSelect }: { item: MenuItem; onSelect: (item: MenuItem
           background: hover && !item.disabled ? "var(--hover-bg)" : "transparent",
           border: "none", borderRadius: 4, cursor: item.disabled ? "default" : "pointer",
           color: item.color ?? "var(--text-secondary)", opacity: item.disabled ? 0.4 : 1,
-          fontSize: "var(--fs-primary)", fontWeight: 400,
+          fontSize: "var(--fs-primary)", fontWeight: "var(--fw-primary)",
         }}
       >
         {item.icon && (
@@ -205,7 +205,7 @@ function SubmenuRow({ item, onSelect }: { item: MenuItem; onSelect: (item: MenuI
         background: hover && !item.disabled ? "var(--hover-bg)" : "transparent",
         border: "none", borderRadius: 4, cursor: item.disabled ? "default" : "pointer",
         color: item.color ?? "var(--text-secondary)", opacity: item.disabled ? 0.4 : 1,
-        fontSize: "var(--fs-primary)", fontWeight: 400,
+        fontSize: "var(--fs-primary)", fontWeight: "var(--fw-primary)",
       }}
     >
       {item.icon && (

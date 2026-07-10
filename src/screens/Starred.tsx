@@ -75,9 +75,9 @@ function ToolbarIconButton({ icon, onClick, title, active }: { icon: string; onC
 function SectionLabel({ text, count }: { text: string; count: number }) {
   return (
     <div className="flex items-center" style={{ gap: 10 }}>
-      <h2 style={{ color: "var(--text-primary)", fontSize: "var(--fs-title)", fontWeight: 700 }}>{text}</h2>
+      <h2 style={{ color: "var(--text-primary)", fontSize: "var(--fs-title)", fontWeight: "var(--fw-emphasis)" }}>{text}</h2>
       <div className="flex items-center justify-center" style={{ height: 22, padding: "0 8px", borderRadius: 4, border: "1px solid var(--border)" }}>
-        <span style={{ color: "var(--text-primary)", fontSize: 12, fontWeight: 700 }}>{count}</span>
+        <span style={{ color: "var(--text-primary)", fontSize: 12, fontWeight: "var(--fw-emphasis)" }}>{count}</span>
       </div>
     </div>
   );
@@ -245,7 +245,7 @@ function TopArtistCard({ entry, selected, onClick }: { entry: TopArtistEntry; se
         />
       </div>
       <div className="flex flex-col" style={{ marginTop: 8, gap: 2 }}>
-        <p className="truncate font-bold" style={{ color: selected || hov ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-primary)" }}>{entry.name}</p>
+        <p className="truncate" style={{ color: selected || hov ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)" }}>{entry.name}</p>
         <p className="truncate" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>
           {entry.count} song{entry.count === 1 ? "" : "s"}
         </p>

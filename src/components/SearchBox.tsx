@@ -144,7 +144,7 @@ export function SearchBox({
                     padding: "6px 8px", borderRadius: 4, border: "none", cursor: "pointer",
                     background: active ? "var(--hover-bg)" : "transparent",
                     color: active ? "var(--accent)" : "var(--text-primary)",
-                    fontSize: "var(--fs-secondary)", fontWeight: active ? 700 : 400,
+                    fontSize: "var(--fs-secondary)", fontWeight: active ? "var(--fw-emphasis)" : "var(--fw-secondary)",
                   }}
                 >
                   {opt.label}

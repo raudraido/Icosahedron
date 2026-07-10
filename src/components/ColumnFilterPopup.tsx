@@ -238,7 +238,7 @@ function CheckRow({ label, checked, onToggle, bold = false }: { label: string; c
   return (
     <label
       className="flex items-center"
-      style={{ gap: 6, padding: "3px 6px", borderRadius: 3, cursor: "pointer", color: "var(--text-secondary)", fontWeight: bold ? 700 : 400 }}
+      style={{ gap: 6, padding: "3px 6px", borderRadius: 3, cursor: "pointer", color: "var(--text-secondary)", fontWeight: bold ? "var(--fw-emphasis)" : "var(--fw-secondary)" }}
       onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
     >

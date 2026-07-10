@@ -56,8 +56,8 @@ function TourEventRow({ event }: { event: TourEvent }) {
         className="flex flex-col items-center justify-center shrink-0"
         style={{ width: 38, height: 42, borderRadius: 6, background: "var(--card-bg)" }}
       >
-        <span style={{ color: "var(--accent)", fontSize: 9, fontWeight: 700 }}>{month}</span>
-        <span style={{ color: "var(--text-primary)", fontSize: 15, fontWeight: 700 }}>{day}</span>
+        <span style={{ color: "var(--accent)", fontSize: 9, fontWeight: "var(--fw-emphasis)" }}>{month}</span>
+        <span style={{ color: "var(--text-primary)", fontSize: 15, fontWeight: "var(--fw-emphasis)" }}>{day}</span>
       </div>
       <div className="min-w-0" style={{ flex: 1 }}>
         <p className="truncate" style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)" }}>
@@ -194,7 +194,7 @@ export function ArtistInfoPanel({ active }: { active: boolean }) {
           )}
 
           <div className="flex items-center" style={{ marginBottom: 4 }}>
-            <span style={{ color: "var(--text-secondary)", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>Artist</span>
+            <span style={{ color: "var(--text-secondary)", fontSize: 10, fontWeight: "var(--fw-emphasis)", letterSpacing: 1, textTransform: "uppercase" }}>Artist</span>
             {pages.length > 1 && (
               <div className="flex items-center" style={{ marginLeft: "auto", gap: 2 }}>
                 <button
@@ -204,7 +204,7 @@ export function ArtistInfoPanel({ active }: { active: boolean }) {
                 >
                   ‹
                 </button>
-                <span style={{ color: "var(--text-secondary)", fontSize: 12, fontWeight: 700, lineHeight: 1 }}>{pageIdx + 1}/{pages.length}</span>
+                <span style={{ color: "var(--text-secondary)", fontSize: 12, fontWeight: "var(--fw-emphasis)", lineHeight: 1 }}>{pageIdx + 1}/{pages.length}</span>
                 <button
                   onClick={() => goToPage(pageIdx + 1)}
                   disabled={pageIdx === pages.length - 1}
@@ -216,7 +216,7 @@ export function ArtistInfoPanel({ active }: { active: boolean }) {
             )}
           </div>
 
-          <h3 style={{ color: "var(--text-primary)", fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
+          <h3 style={{ color: "var(--text-primary)", fontSize: 18, fontWeight: "var(--fw-emphasis)", marginBottom: 8 }}>
             {page?.name || "Unknown Artist"}
           </h3>
 
@@ -236,7 +236,7 @@ export function ArtistInfoPanel({ active }: { active: boolean }) {
 
           <div style={{ height: 1, background: "var(--border)", margin: "12px 0" }} />
 
-          <span style={{ color: "var(--text-secondary)", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>On Tour</span>
+          <span style={{ color: "var(--text-secondary)", fontSize: 10, fontWeight: "var(--fw-emphasis)", letterSpacing: 1, textTransform: "uppercase" }}>On Tour</span>
 
           {!bitEnabled ? (
             <div style={{ marginTop: 6 }}>
@@ -244,7 +244,7 @@ export function ArtistInfoPanel({ active }: { active: boolean }) {
               <p style={{ color: "var(--text-secondary)", opacity: 0.6, fontSize: 10, marginBottom: 8 }}>Optional. Loads concerts via Bandsintown.</p>
               <button
                 onClick={enableBandsintown}
-                style={{ height: 30, width: "100%", background: "var(--accent)", color: "#111111", fontWeight: 700, fontSize: "calc(var(--fs-secondary) - 1px)", border: "none", borderRadius: 4, cursor: "pointer" }}
+                style={{ height: 30, width: "100%", background: "var(--accent)", color: "#111111", fontWeight: "var(--fw-emphasis)", fontSize: "calc(var(--fs-secondary) - 1px)", border: "none", borderRadius: 4, cursor: "pointer" }}
               >
                 Enable
               </button>

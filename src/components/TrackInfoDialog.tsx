@@ -32,7 +32,7 @@ function ArtistRow({ label, name, artistId, onNavigate }: { label: string; name:
   return (
     <div className="flex" style={{ padding: "6px 0", borderBottom: "1px solid var(--border)" }}>
       <span style={{ width: 110, flexShrink: 0, color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>{label}</span>
-      <div style={{ fontWeight: 700 }}>
+      <div style={{ fontWeight: "var(--fw-emphasis)" }}>
         <ArtistTokens name={name} artistId={artistId} fontSize="var(--fs-secondary)" alwaysAccent onNavigate={onNavigate} />
       </div>
     </div>
@@ -44,7 +44,7 @@ function AlbumRow({ name, albumId, onNavigate }: { name: string | null | undefin
   return (
     <div className="flex" style={{ padding: "6px 0", borderBottom: "1px solid var(--border)" }}>
       <span style={{ width: 110, flexShrink: 0, color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>Album</span>
-      <div style={{ fontWeight: 700, wordBreak: "break-word" }}>
+      <div style={{ fontWeight: "var(--fw-emphasis)", wordBreak: "break-word" }}>
         <AlbumLink name={name} albumId={albumId} alwaysAccent onNavigate={onNavigate} />
       </div>
     </div>
@@ -119,7 +119,7 @@ export function TrackInfoDialog({ track, onClose }: Props) {
         }}
       >
         <div className="flex items-center" style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
-          <h3 style={{ flex: 1, color: "var(--text-primary)", fontSize: "var(--fs-heading)", fontWeight: 700 }}>{track.title}</h3>
+          <h3 style={{ flex: 1, color: "var(--text-primary)", fontSize: "var(--fs-heading)", fontWeight: "var(--fw-emphasis)" }}>{track.title}</h3>
           <button
             onClick={onClose}
             style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}

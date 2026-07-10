@@ -18,6 +18,21 @@ export interface AppTheme {
   fontSizeHeading: number;
   fontSizeTitle: number;
   fontSizeHero: number;
+  // One weight per size tier (replaces what used to be ~100 individually
+  // hardcoded `fontWeight: ...` values scattered across every screen/
+  // component), plus a separate `fontWeightEmphasis` for text that's meant
+  // to stand out regardless of its size tier — a track title, an active/
+  // current-track row, a button label. Without that second value, "Primary"
+  // text could never look bolder than other "Primary" text, which the old
+  // hardcoded styles very much relied on (e.g. a queue row's title at 700
+  // next to a same-size menu item at 400).
+  fontWeightSmall: number;
+  fontWeightSecondary: number;
+  fontWeightPrimary: number;
+  fontWeightHeading: number;
+  fontWeightTitle: number;
+  fontWeightHero: number;
+  fontWeightEmphasis: number;
   fontFamily: string;
   /** Native OS window-frame/titlebar dark mode — ports the old app's
    *  enable_dark_title_bar, which independently toggled the *system*
@@ -46,7 +61,14 @@ export const DARK: AppTheme = {
   fontSizeHeading:   18,
   fontSizeTitle:     24,
   fontSizeHero:      28,
-  fontFamily:        "'Inter Variable', system-ui, -apple-system, sans-serif",
+  fontWeightSmall:     400,
+  fontWeightSecondary: 400,
+  fontWeightPrimary:   400,
+  fontWeightHeading:   400,
+  fontWeightTitle:     400,
+  fontWeightHero:      400,
+  fontWeightEmphasis:  700,
+  fontFamily:        "Inter Variable",
   titleBarDark:      true,
 };
 
@@ -68,15 +90,51 @@ export const CREAM: AppTheme = {
   fontSizeHeading:   17,
   fontSizeTitle:     22,
   fontSizeHero:      26,
-  fontFamily:        "'Inter Variable', system-ui, -apple-system, sans-serif",
+  fontWeightSmall:     400,
+  fontWeightSecondary: 400,
+  fontWeightPrimary:   400,
+  fontWeightHeading:   400,
+  fontWeightTitle:     400,
+  fontWeightHero:      400,
+  fontWeightEmphasis:  700,
+  fontFamily:        "Inter Variable",
   titleBarDark:      false,
+};
+
+export const GREED: AppTheme = {
+  name: "Greed",
+  accent:            "#1ed760",
+  panelBg:           "rgb(10,10,10)",
+  mainBg:            "rgb(20,20,20)",
+  cardBg:            "#181818",
+  textPrimary:       "#ffffff",
+  textSecondary:     "#707474",
+  border:            "#171c18",
+  hoverBg:           "#2a2a2a",
+  skeleton:          "#4e4b4b",
+  error:             "#c0392b",
+  fontSizeSmall:     12,
+  fontSizeSecondary: 13,
+  fontSizePrimary:   15,
+  fontSizeHeading:   17,
+  fontSizeTitle:     22,
+  fontSizeHero:      26,
+  fontWeightSmall:     400,
+  fontWeightSecondary: 400,
+  fontWeightPrimary:   400,
+  fontWeightHeading:   400,
+  fontWeightTitle:     400,
+  fontWeightHero:      400,
+  fontWeightEmphasis:  500,
+  fontFamily:        "Inter Variable",
+  titleBarDark:      true,
 };
 
 // All selectable built-in presets, and the persisted "which one is active"
 // choice — used by both App.tsx's boot-time applyTheme call and
 // Settings.tsx's Themes tab, so a chosen theme survives a relaunch instead
 // of always resetting to CREAM.
-export const THEMES: AppTheme[] = [CREAM, DARK];
+export const THEMES: AppTheme[] = [CREAM, DARK, GREED];
 const LS_THEME_KEY = "icosahedron_theme";
 const LS_CUSTOM_THEMES_KEY = "icosahedron_custom_themes";
 
@@ -154,6 +212,14 @@ export function applyTheme(t: AppTheme) {
   r.style.setProperty("--fs-heading",     t.fontSizeHeading   + "px");
   r.style.setProperty("--fs-title",       t.fontSizeTitle     + "px");
   r.style.setProperty("--fs-hero",        t.fontSizeHero      + "px");
+  // Weight scale
+  r.style.setProperty("--fw-small",       String(t.fontWeightSmall));
+  r.style.setProperty("--fw-secondary",   String(t.fontWeightSecondary));
+  r.style.setProperty("--fw-primary",     String(t.fontWeightPrimary));
+  r.style.setProperty("--fw-heading",     String(t.fontWeightHeading));
+  r.style.setProperty("--fw-title",       String(t.fontWeightTitle));
+  r.style.setProperty("--fw-hero",        String(t.fontWeightHero));
+  r.style.setProperty("--fw-emphasis",    String(t.fontWeightEmphasis));
   // Wire Tailwind text-* utilities to the live theme scale
   r.style.setProperty("--text-xs",        t.fontSizeSmall     + "px");
   r.style.setProperty("--text-sm",        t.fontSizeSecondary + "px");

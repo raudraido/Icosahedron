@@ -75,7 +75,7 @@ function Card({ children, style }: { children: React.ReactNode; style?: React.CS
 
 function SectionLabel({ text }: { text: string }) {
   return (
-    <span style={{ color: "var(--accent)", fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>
+    <span style={{ color: "var(--accent)", fontSize: 10, fontWeight: "var(--fw-emphasis)", letterSpacing: 1.5, textTransform: "uppercase" }}>
       {text}
     </span>
   );
@@ -109,7 +109,7 @@ function PageNav({ idx, count, onNav }: { idx: number; count: number; onNav: (i:
         disabled={idx === 0}
         style={{ width: 20, height: 18, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "none", cursor: idx === 0 ? "default" : "pointer", color: idx === 0 ? "#444444" : "var(--accent)", fontSize: 14, lineHeight: 1 }}
       >‹</button>
-      <span style={{ color: "var(--text-secondary)", fontSize: 11, fontWeight: 700, lineHeight: 1 }}>{idx + 1}/{count}</span>
+      <span style={{ color: "var(--text-secondary)", fontSize: 11, fontWeight: "var(--fw-emphasis)", lineHeight: 1 }}>{idx + 1}/{count}</span>
       <button
         onClick={() => onNav(idx + 1)}
         disabled={idx === count - 1}
@@ -186,10 +186,10 @@ function TrackHeroCard({ track, active, onCoverClick }: { track: Track; active: 
       </div>
 
       <div className="flex flex-col" style={{ flex: 1, minWidth: 0, paddingTop: 16, gap: 6 }}>
-        <h1 style={{ color: "var(--accent)", fontSize: "var(--fs-hero)", fontWeight: 700 }}>{track.title}</h1>
+        <h1 style={{ color: "var(--accent)", fontSize: "var(--fs-hero)", fontWeight: "var(--fw-emphasis)" }}>{track.title}</h1>
 
         {(track.album || track.year) && (
-          <div className="flex items-center" style={{ gap: 6, fontSize: "var(--fs-primary)", fontWeight: 700 }}>
+          <div className="flex items-center" style={{ gap: 6, fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)" }}>
             {track.album && <LinkText text={track.album} onClick={openAlbum} />}
             {track.album && track.year && <span style={{ color: "var(--text-secondary)" }}>•</span>}
             {track.year && <span style={{ color: "var(--text-secondary)" }}>{track.year}</span>}
@@ -338,8 +338,8 @@ function AlbumTrackRow({ track, num, isCurrent, onClick }: { track: Track; num: 
       className="flex items-center"
       style={{ height: 34, borderRadius: 4, cursor: "pointer", background: hov ? "var(--hover-bg)" : "transparent", padding: "0 8px 0 6px", gap: 6 }}
     >
-      <span style={{ width: 22, textAlign: "center", color: isCurrent ? "var(--accent)" : "var(--text-secondary)", fontWeight: isCurrent ? 700 : 400, fontSize: "var(--fs-secondary)" }}>{num}</span>
-      <span className="truncate" style={{ flex: 1, color: isCurrent || hov ? "var(--accent)" : "var(--text-secondary)", fontWeight: isCurrent ? 700 : 400, fontSize: "var(--fs-secondary)" }}>{track.title}</span>
+      <span style={{ width: 22, textAlign: "center", color: isCurrent ? "var(--accent)" : "var(--text-secondary)", fontWeight: isCurrent ? "var(--fw-emphasis)" : "var(--fw-secondary)", fontSize: "var(--fs-secondary)" }}>{num}</span>
+      <span className="truncate" style={{ flex: 1, color: isCurrent || hov ? "var(--accent)" : "var(--text-secondary)", fontWeight: isCurrent ? "var(--fw-emphasis)" : "var(--fw-secondary)", fontSize: "var(--fs-secondary)" }}>{track.title}</span>
       <span style={{ width: 38, textAlign: "right", color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>{fmtDuration(track.duration_secs)}</span>
     </div>
   );
@@ -407,9 +407,9 @@ function TopSongRow({ track, index, isCurrent, onClick }: { track: Track; index:
       className="flex items-center"
       style={{ minHeight: 46, borderRadius: 4, cursor: "pointer", background: hov ? "var(--hover-bg)" : "transparent", padding: "4px 8px 4px 6px", gap: 6 }}
     >
-      <span style={{ width: 22, textAlign: "center", color: isCurrent ? "var(--accent)" : "var(--text-secondary)", fontWeight: isCurrent ? 700 : 400, fontSize: "var(--fs-secondary)" }}>{index + 1}</span>
+      <span style={{ width: 22, textAlign: "center", color: isCurrent ? "var(--accent)" : "var(--text-secondary)", fontWeight: isCurrent ? "var(--fw-emphasis)" : "var(--fw-secondary)", fontSize: "var(--fs-secondary)" }}>{index + 1}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p className="truncate" style={{ color: isCurrent || hov ? "var(--accent)" : "var(--text-primary)", fontWeight: isCurrent ? 700 : 400, fontSize: "var(--fs-secondary)" }}>{track.title}</p>
+        <p className="truncate" style={{ color: isCurrent || hov ? "var(--accent)" : "var(--text-primary)", fontWeight: isCurrent ? "var(--fw-emphasis)" : "var(--fw-secondary)", fontSize: "var(--fs-secondary)" }}>{track.title}</p>
         {track.album && <p className="truncate" style={{ color: "var(--text-secondary)", fontSize: "calc(var(--fs-secondary) - 2px)" }}>{track.album}</p>}
       </div>
       <span style={{ width: 38, textAlign: "right", color: "var(--text-secondary)", fontSize: "calc(var(--fs-secondary) - 2px)" }}>{fmtDuration(track.duration_secs)}</span>
@@ -451,7 +451,7 @@ function ArtistCard({ pages, pageIdx, onNav, imageUrl, bio, similar, loading }: 
         <div style={{ width: 88, height: 88, borderRadius: 44, overflow: "hidden", flexShrink: 0, background: "var(--skeleton)" }}>
           {imageUrl && <img src={imageUrl} style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
         </div>
-        <p style={{ color: "var(--text-primary)", fontSize: 14, fontWeight: 700 }}>{name || "Unknown Artist"}</p>
+        <p style={{ color: "var(--text-primary)", fontSize: 14, fontWeight: "var(--fw-emphasis)" }}>{name || "Unknown Artist"}</p>
       </div>
 
       {loading ? (
@@ -519,11 +519,11 @@ function TourCard({ pageIdx, events, loading }: { pageIdx: number; events: TourE
       <SectionLabel text="On Tour" />
       {!bitEnabled ? (
         <div style={{ marginTop: 6 }}>
-          <p style={{ color: "var(--text-primary)", fontSize: 12, fontWeight: 700 }}>See upcoming shows?</p>
+          <p style={{ color: "var(--text-primary)", fontSize: 12, fontWeight: "var(--fw-emphasis)" }}>See upcoming shows?</p>
           <p style={{ color: "var(--text-secondary)", fontSize: 11, marginTop: 2 }}>Loads tour dates from Bandsintown. Only the artist name leaves your device.</p>
           <button
             onClick={enable}
-            style={{ marginTop: 8, height: 30, padding: "0 16px", background: "var(--accent)", color: PLAY_ICON_DARK, fontWeight: 700, fontSize: 12, border: "none", borderRadius: 6, cursor: "pointer" }}
+            style={{ marginTop: 8, height: 30, padding: "0 16px", background: "var(--accent)", color: PLAY_ICON_DARK, fontWeight: "var(--fw-emphasis)", fontSize: 12, border: "none", borderRadius: 6, cursor: "pointer" }}
           >
             Enable tour dates
           </button>
@@ -568,8 +568,8 @@ function TourEventRow({ event }: { event: TourEvent }) {
       style={{ gap: 10, padding: "4px 6px", borderRadius: 6, cursor: event.url ? "pointer" : "default", background: hov ? "var(--hover-bg)" : "transparent" }}
     >
       <div className="flex flex-col items-center justify-center shrink-0" style={{ width: 38, height: 42, borderRadius: 6, background: "var(--panel-bg)" }}>
-        <span style={{ color: "var(--accent)", fontSize: 9, fontWeight: 700 }}>{month}</span>
-        <span style={{ color: "var(--text-primary)", fontSize: 14, fontWeight: 700 }}>{day}</span>
+        <span style={{ color: "var(--accent)", fontSize: 9, fontWeight: "var(--fw-emphasis)" }}>{month}</span>
+        <span style={{ color: "var(--text-primary)", fontSize: 14, fontWeight: "var(--fw-emphasis)" }}>{day}</span>
       </div>
       <div className="min-w-0" style={{ flex: 1 }}>
         <p className="truncate" style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)" }}>{event.venue.name || "TBA"}</p>

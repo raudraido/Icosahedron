@@ -243,11 +243,26 @@ export function SpotlightSearch() {
   return (
     <div
       className="flex items-start justify-center"
-      style={{ position: "fixed", inset: 0, zIndex: 2000, background: "rgba(0,0,0,0.55)", paddingTop: "5vh" }}
+      style={{
+        position: "fixed", inset: 0, zIndex: 2000,
+        // Centered-ish (~35vh) while there's nothing to show yet (empty
+        // query, no results) — reads as a focused, deliberate dialog rather
+        // than a bar stuck near the top of an otherwise-empty screen. Once
+        // results populate, animate up to a fixed 5vh anchor so the box
+        // grows downward from a stable point instead of re-centering (and
+        // potentially jumping) as its own height changes with every
+        // keystroke. `paddingTop` (unlike `alignItems`) can be transitioned,
+        // which is what makes this reposition read as a slide rather than a
+        // jump-cut.
+        paddingTop: rows.length > 0 ? "5vh" : "35vh",
+        transition: "padding-top 220ms cubic-bezier(0.25, 1, 0.5, 1)",
+        backdropFilter: "blur(2px)", WebkitBackdropFilter: "blur(2px)",
+        background: "color-mix(in srgb, var(--panel-bg) 55%, transparent)",
+      }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}
     >
       <div
-        className="flex flex-col"
+        className="flex flex-col spotlight-pop"
         style={{
           width: 640, maxWidth: "90vw", maxHeight: "90vh",
           background: "var(--panel-bg)", border: "1px solid var(--border)", borderRadius: 10,
@@ -273,7 +288,7 @@ export function SpotlightSearch() {
               if (row.kind === "header") {
                 return (
                   <div key={`h-${row.label}`} style={{ padding: "10px 10px 4px" }}>
-                    <span style={{ color: "var(--text-secondary)", fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>
+                    <span style={{ color: "var(--text-secondary)", fontSize: 11, fontWeight: "var(--fw-emphasis)", letterSpacing: 1, textTransform: "uppercase" }}>
                       {row.label}
                     </span>
                   </div>
@@ -291,7 +306,7 @@ export function SpotlightSearch() {
                       background: active ? "var(--hover-bg)" : "transparent",
                     }}
                   >
-                    <span style={{ color: "var(--accent)", fontSize: "var(--fs-secondary)", fontWeight: 700 }}>
+                    <span style={{ color: "var(--accent)", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)" }}>
                       Show all {row.count}{row.capped ? "+" : ""} result{row.count === 1 && !row.capped ? "" : "s"} →
                     </span>
                   </div>
@@ -314,7 +329,7 @@ export function SpotlightSearch() {
                 >
                   <CoverArt coverId={coverId} size={48} className="shrink-0" style={{ width: 44, height: 44, borderRadius: row.kind === "artist" ? "50%" : 4 }} />
                   <div className="flex flex-col min-w-0 flex-1">
-                    <span className="truncate" style={{ color: "var(--text-primary)", fontWeight: 700, fontSize: "var(--fs-primary)" }}>{title}</span>
+                    <span className="truncate" style={{ color: "var(--text-primary)", fontWeight: "var(--fw-emphasis)", fontSize: "var(--fs-primary)" }}>{title}</span>
                     {(row.kind === "track" || row.kind === "album") ? (
                       <ArtistTokens
                         name={row.item.artist || (row.kind === "track" ? "Unknown Artist" : "Various Artists")}

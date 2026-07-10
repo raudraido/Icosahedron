@@ -237,7 +237,7 @@ export function LyricsPanel({ active }: { active: boolean }) {
           // their own 2px padding between them instead of 16px apart.
           <div className="flex flex-col" style={{ gap: 16 }}>
             {activeSource && (
-              <p className="text-center" style={{ color: "var(--accent)", fontSize: 10, fontWeight: 700, letterSpacing: 1, padding: "0 12px 8px", textTransform: "uppercase" }}>
+              <p className="text-center" style={{ color: "var(--accent)", fontSize: 10, fontWeight: "var(--fw-emphasis)", letterSpacing: 1, padding: "0 12px 8px", textTransform: "uppercase" }}>
                 {activeSource}
               </p>
             )}
@@ -257,7 +257,7 @@ export function LyricsPanel({ active }: { active: boolean }) {
                       cursor: "pointer", padding: "2px 12px",
                       color: i === activeIdx ? "var(--accent)" : "var(--text-secondary)",
                       fontSize: i === activeIdx ? "calc(var(--fs-primary) + 2px)" : "var(--fs-primary)",
-                      fontWeight: i === activeIdx ? 700 : 400,
+                      fontWeight: i === activeIdx ? "var(--fw-emphasis)" : "var(--fw-secondary)",
                     }}
                   >
                     {line.text || "♪"}

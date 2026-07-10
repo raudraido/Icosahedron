@@ -746,13 +746,13 @@ export function TrackTable({
           <div className="flex items-center min-w-0" style={{ gap: 12, flex: 1 }}>
             <CoverArt coverId={t.cover_id} size={52} className="shrink-0 w-[52px] h-[52px] rounded-[3px]" />
             <div className="min-w-0 flex-1">
-              <p className="truncate" style={{ color: isPlaying ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-primary)", fontWeight: 700 }}>{t.title}</p>
+              <p className="truncate" style={{ color: isPlaying ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)" }}>{t.title}</p>
               <ArtistTokens name={t.artist} artistId={t.artist_id} fontSize="var(--fs-secondary)" />
             </div>
           </div>
         );
       case "title":
-        return <span className="truncate" style={{ color: isPlaying ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-primary)", fontWeight: 700 }}>{t.title}</span>;
+        return <span className="truncate" style={{ color: isPlaying ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)" }}>{t.title}</span>;
       case "artist":
         return <ArtistTokens name={t.artist} artistId={t.artist_id} />;
       case "album":
@@ -858,7 +858,7 @@ export function TrackTable({
                     display: "flex", alignItems: "center", gap: 8,
                     width: "100%", margin: 0, padding: "5px 20px 5px 12px", textAlign: "left",
                     background: "transparent", border: "none", cursor: "pointer",
-                    color: "var(--text-secondary)", fontSize: "var(--fs-primary)", fontWeight: 400,
+                    color: "var(--text-secondary)", fontSize: "var(--fs-primary)", fontWeight: "var(--fw-primary)",
                     borderRadius: 4, boxSizing: "border-box",
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
@@ -876,7 +876,7 @@ export function TrackTable({
       {/* Column headers */}
       <div className="flex items-center shrink-0" style={{ height: 36, padding: "0 24px", gap: 12 }}>
         <div style={{ flex: `0 0 ${NUM_COL_WIDTH}px`, marginLeft: -NUM_COL_SHIFT, marginRight: NUM_COL_SHIFT, display: "flex", justifyContent: "center" }}>
-          <span style={{ fontSize: "var(--fs-small)", fontWeight: 700, letterSpacing: 0.8, color: "var(--text-secondary)" }}>#</span>
+          <span style={{ fontSize: "var(--fs-small)", fontWeight: "var(--fw-emphasis)", letterSpacing: 0.8, color: "var(--text-secondary)" }}>#</span>
         </div>
         {visibleCols.map((id) => {
           const col = COLUMNS[id];
@@ -899,7 +899,7 @@ export function TrackTable({
                 userSelect: "none",
               }}
             >
-              <span className="truncate" style={{ fontSize: "var(--fs-small)", fontWeight: 700, letterSpacing: 0.8, color: "var(--text-secondary)" }}>
+              <span className="truncate" style={{ fontSize: "var(--fs-small)", fontWeight: "var(--fw-emphasis)", letterSpacing: 0.8, color: "var(--text-secondary)" }}>
                 {col.label}
               </span>
               {sortState?.col === id && (
@@ -963,7 +963,7 @@ export function TrackTable({
                     display: "flex", alignItems: "center", padding: "0 24px",
                   }}
                 >
-                  <span style={{ marginLeft: NUM_COL_WIDTH, color: "var(--text-secondary)", fontWeight: 700, fontSize: "var(--fs-secondary)" }}>
+                  <span style={{ marginLeft: NUM_COL_WIDTH, color: "var(--text-secondary)", fontWeight: "var(--fw-emphasis)", fontSize: "var(--fs-secondary)" }}>
                     Disc {displayRow.discNumber}
                   </span>
                 </div>
@@ -1151,7 +1151,7 @@ function PageBtn({ children, onClick, active, disabled, arrow = false }: { child
         background: hov && !disabled && !active ? "var(--hover-bg)" : "transparent",
         color: disabled ? "var(--text-secondary)" : active ? "var(--accent)" : "var(--text-primary)",
         opacity: disabled ? 0.4 : 1,
-        fontWeight: active ? 700 : 400,
+        fontWeight: active ? "var(--fw-emphasis)" : "var(--fw-secondary)",
         fontSize: arrow ? "calc(var(--fs-primary) + 2px)" : "var(--fs-primary)",
         cursor: disabled ? "default" : "pointer",
       }}

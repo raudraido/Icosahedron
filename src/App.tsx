@@ -98,7 +98,7 @@ function NavTab({
         minWidth: compact ? COMPACT_TAB_WIDTH : FULL_TAB_WIDTH,
         borderRadius: 6,
         fontSize:   "var(--fs-primary)",
-        fontWeight: 700,
+        fontWeight: "var(--fw-emphasis)",
         background: active ? "color-mix(in srgb, var(--accent) 17.6%, transparent)" : "transparent",
         opacity: dragging ? 0.4 : 1,
         cursor: "pointer",

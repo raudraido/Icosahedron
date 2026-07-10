@@ -181,7 +181,7 @@ function AlbumRow({
         >
           <GripDots />
         </div>
-        <h2 style={{ color: "var(--text-primary)", fontSize: "var(--fs-title)", fontWeight: 700 }}>{title}</h2>
+        <h2 style={{ color: "var(--text-primary)", fontSize: "var(--fs-title)", fontWeight: "var(--fw-emphasis)" }}>{title}</h2>
         <div className="flex items-center" style={{ marginLeft: "auto", gap: 2 }}>
           {refreshable && (
             <button

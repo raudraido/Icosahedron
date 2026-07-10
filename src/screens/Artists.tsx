@@ -152,7 +152,7 @@ export const ArtistCard = React.memo(function ArtistCard({ artist, onOpen }: { a
         </div>
       </div>
       <div className="flex flex-col" style={{ marginTop: 8, gap: 2 }}>
-        <p className="truncate font-bold" style={{ color: hovered ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-primary)" }}>{artist.name}</p>
+        <p className="truncate" style={{ color: hovered ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)" }}>{artist.name}</p>
         <p className="truncate" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>
           {artist.album_count} album{artist.album_count === 1 ? "" : "s"}
         </p>
@@ -334,7 +334,7 @@ export function Artists() {
     <div className="flex flex-col h-full page-fade-in">
       {/* ── Toolbar ── */}
       <div className="flex items-center shrink-0 px-6" style={{ height: 58, gap: 6 }}>
-        <h2 className="font-semibold" style={{ flex: 1, color: "var(--text-secondary)", fontSize: "var(--fs-primary)" }}>
+        <h2 style={{ flex: 1, color: "var(--text-secondary)", fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)" }}>
           {loading
             ? "Loading artists…"
             : searchText
@@ -379,7 +379,7 @@ export function Artists() {
                     width: "100%", margin: 0, padding: "5px 20px 5px 12px", textAlign: "left",
                     background: "transparent", border: "none", cursor: "pointer",
                     color: "var(--text-secondary)",
-                    fontSize: "var(--fs-primary)", fontWeight: 400,
+                    fontSize: "var(--fs-primary)", fontWeight: "var(--fw-primary)",
                     borderRadius: 4,
                     boxSizing: "border-box",
                   }}

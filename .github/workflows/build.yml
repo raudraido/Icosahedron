@@ -1,10 +1,10 @@
 name: Build
 
-# Builds the Linux AppImage and Windows installer on their native runners
-# (the native/audio-engine Rust addon links against a platform audio API —
-# ALSA/PipeWire on Linux, WASAPI on Windows — so each is built on a real
-# host of that OS rather than cross-compiled). Push a `v*` tag to also
-# publish a GitHub Release with both artifacts attached.
+# Builds the Linux AppImage/.deb and Windows installer on their native
+# runners (the native/audio-engine Rust addon links against a platform audio
+# API — ALSA/PipeWire on Linux, WASAPI on Windows — so each is built on a
+# real host of that OS rather than cross-compiled). Push a `v*` tag to also
+# publish a GitHub Release with all artifacts attached.
 on:
   push:
     tags:
@@ -18,7 +18,9 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact-glob: dist/*.AppImage
+            artifact-glob: |
+              dist/*.AppImage
+              dist/*.deb
           - os: windows-latest
             artifact-glob: dist/*.exe
     runs-on: ${{ matrix.os }}

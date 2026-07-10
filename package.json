@@ -61,7 +61,8 @@
         "deb"
       ],
       "icon": "build/icon.png",
-      "category": "Audio"
+      "category": "Audio",
+      "maintainer": "raudraido <raudraido@gmail.com>"
     },
     "deb": {
       "depends": [

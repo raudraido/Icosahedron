@@ -47,12 +47,15 @@ function isNewer(latest: string, current: string): boolean {
   return false;
 }
 
-// Matches build.yml's two release artifacts (dist/*.exe, dist/*.AppImage) —
-// no asset means no supported update path on this platform (e.g. macOS,
-// which this project doesn't build for at all).
+// Matches build.yml's three release artifacts (dist/*.exe, dist/*.AppImage,
+// dist/*.deb) — no asset means no supported update path on this platform
+// (e.g. macOS, which this project doesn't build for at all). Linux ships two
+// package formats, so pick the one matching how this instance is actually
+// running rather than assuming — $APPIMAGE is only set by the AppImage
+// runtime, so its absence on Linux means a .deb install.
 function assetSuffixForPlatform(): string | null {
   if (process.platform === "win32") return ".exe";
-  if (process.platform === "linux") return ".AppImage";
+  if (process.platform === "linux") return process.env.APPIMAGE ? ".AppImage" : ".deb";
   return null;
 }
 
@@ -84,15 +87,19 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
 // overwrite files the app currently has open). NSIS is configured as an
 // assisted wizard (not one-click, see package.json's build.nsis), so the
 // user still walks through the normal install steps — this just gets them
-// to that point without manually finding and opening the download.
+// to that point without manually finding and opening the download. .deb is
+// the same story: opening the downloaded package hands off to whatever the
+// desktop wires up for that (GNOME Software, gdebi, etc.), which — same as
+// NSIS — owns the actual privileged install step and its own auth prompt;
+// this code has no business doing `pkexec dpkg -i` itself.
 //
 // AppImage has no separate install step — the file *is* the app, and
 // whatever desktop shortcut/launcher the user has points at a fixed path
-// (exposed at runtime as $APPIMAGE). So unlike the Windows installer,
-// downloading to a temp dir and running it there wouldn't update anything
-// permanent: the shortcut would still point at the old file next launch,
-// leaving the new one orphaned in temp. Instead, replace the AppImage in
-// place (same directory, atomic rename) before relaunching.
+// (exposed at runtime as $APPIMAGE). So unlike the installer/package cases
+// above, downloading to a temp dir and running it there wouldn't update
+// anything permanent: the shortcut would still point at the old file next
+// launch, leaving the new one orphaned in temp. Instead, replace the
+// AppImage in place (same directory, atomic rename) before relaunching.
 export async function downloadAndInstallUpdate(
   downloadUrl: string,
   onProgress?: (progress: UpdateDownloadProgress) => void,
@@ -123,17 +130,29 @@ export async function downloadAndInstallUpdate(
   });
   await pipeline(nodeStream, createWriteStream(targetPath, { mode: 0o755 }));
 
-  // shell.openPath (not child_process.execFile) on Windows — Electron/
-  // Chromium puts itself in a Windows Job Object that kills *all* child
-  // processes when the parent exits, and Node's `detached: true` isn't
-  // enough to escape that on Windows (it only detaches the console, not the
-  // job). The installer was getting killed by app.quit() below before it
-  // could fully start. shell.openPath launches the file the same way
-  // double-clicking it in Explorer would (via the OS shell), which sits
-  // entirely outside Electron's process tree and survives the app quitting.
-  // shell.openPath resolves to an error message string on failure (not a
-  // throw) — surface it as a real rejection so the renderer's error state
-  // reflects a launch failure instead of quietly "succeeding".
+  // This process is still alive at this point (it doesn't quit until after
+  // the handoff below), and it's holding the single-instance lock (see
+  // index.ts's requestSingleInstanceLock). The relaunched AppImage below is
+  // a second copy of this same app starting up while that lock is still
+  // held — it would lose the lock race, quit itself immediately, and by the
+  // time this process's own delayed app.quit() runs a moment later, nothing
+  // would be left running at all. Release the lock first so the new process
+  // can actually acquire it.
+  app.releaseSingleInstanceLock();
+
+  // shell.openPath (not child_process.execFile) for the Windows .exe / Linux
+  // .deb branch below — on Windows, Electron/Chromium puts itself in a
+  // Windows Job Object that kills *all* child processes when the parent
+  // exits, and Node's `detached: true` isn't enough to escape that (it only
+  // detaches the console, not the job); the installer was getting killed by
+  // app.quit() below before it could fully start. shell.openPath launches
+  // the file the same way double-clicking it in a file manager would (via
+  // the OS shell), which sits entirely outside Electron's process tree and
+  // survives the app quitting — true on Linux too, so it does double duty
+  // for the .deb handoff. shell.openPath resolves to an error message string
+  // on failure (not a throw) — surface it as a real rejection so the
+  // renderer's error state reflects a launch failure instead of quietly
+  // "succeeding".
   let openError: string;
   if (runningAppImage) {
     // AppImage has no separate install step — the file *is* the app, and
@@ -141,8 +160,8 @@ export async function downloadAndInstallUpdate(
     // path. Replace it in place so that shortcut picks up the new version
     // too, not just this one relaunch.
     await rename(targetPath, runningAppImage);
-    // NOT shell.openPath here, unlike the Windows branch below — that
-    // launches a file via the desktop's file-*association* mechanism
+    // NOT shell.openPath here, unlike the installer/package branch below —
+    // that launches a file via the desktop's file-*association* mechanism
     // (effectively xdg-open on Linux), which is right for "open this
     // installer with its default app" but wrong for an AppImage: there's
     // usually no "run" association wired up for an arbitrary executable
@@ -160,10 +179,13 @@ export async function downloadAndInstallUpdate(
       child.once("spawn", () => { child.unref(); resolve(""); });
     });
   } else {
-    // Windows: hand off to the installer, which does the actual "replace
-    // the app" work itself — NSIS is configured as an assisted wizard (not
-    // one-click, see package.json's build.nsis), so the user still walks
-    // through the normal install steps from here.
+    // Windows .exe or Linux .deb: hand off to the installer/package handler
+    // via the desktop's default file association (same as double-clicking
+    // the download in a file manager), which does the actual "replace the
+    // app" work itself — NSIS is an assisted wizard (not one-click, see
+    // package.json's build.nsis) and a .deb typically opens a GUI installer
+    // (GNOME Software, gdebi, etc.) that prompts for its own auth — either
+    // way the user walks through the normal install steps from here.
     openError = await shell.openPath(targetPath);
   }
   if (openError) throw new Error(`Failed to launch installer: ${openError}`);

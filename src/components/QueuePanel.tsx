@@ -64,6 +64,10 @@ export function QueueFavoriteHeart({ track }: { track: Track }) {
   return (
     <button
       onClick={toggle}
+      // The row itself is now a drag handle wherever the grip shows (see
+      // QueueRow above) — without this, a mousedown here would bubble up
+      // and start a drag before this button's own onClick ever runs.
+      onMouseDown={(e) => e.stopPropagation()}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{ width: 28, background: "none", border: "none", cursor: "pointer", display: "flex", justifyContent: "center", padding: 0, flexShrink: 0 }}
@@ -123,14 +127,17 @@ interface RowProps {
   playing: boolean;
   dragging: boolean;
   onPlay: () => void;
-  onGripMouseDown: (e: React.MouseEvent<HTMLDivElement>) => void;
+  onGripMouseDown: (e: React.MouseEvent) => void;
   onContextMenu: (e: React.MouseEvent) => void;
 }
 
-// Drag is confined to the grip in the #/index column, not the whole row —
-// matches the old app's reasoning: the row already has click/double-click
-// handling (double-click to play), so only the grip column is draggable to
-// avoid the two interactions fighting each other.
+// The grip icon only appears on hover, but once it's showing, the whole row
+// is a drag handle, not just the grip's own small column — the grip is just
+// the affordance/indicator, not the only place a drag can start from. Plain
+// clicks/double-clicks still work fine alongside this: a mousedown+mouseup
+// with no real pointer movement never sets dropIndexRef (see
+// handleGripMouseDown below), so it doesn't trigger a reorder, and
+// onDoubleClick fires independently of the mousedown/mouseup pair either way.
 function QueueRow({ track: t, index: i, isCurrent, isPast, playing, dragging, onPlay, onGripMouseDown, onContextMenu }: RowProps) {
   const [hov, setHov] = useState(false);
   const showGrip = hov || dragging;
@@ -141,8 +148,9 @@ function QueueRow({ track: t, index: i, isCurrent, isPast, playing, dragging, on
       onContextMenu={onContextMenu}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
+      onMouseDown={showGrip ? onGripMouseDown : undefined}
       className="w-full flex items-center text-left relative transition-colors"
-      style={{ height: ROW_HEIGHT, opacity: dragging ? 0.3 : 1 }}
+      style={{ height: ROW_HEIGHT, opacity: dragging ? 0.3 : 1, cursor: showGrip ? "grab" : "default" }}
     >
       {/* Same inset/rounded-rect halo shape for both states — was previously a
           plain full-bleed background on the row itself for hover (no inset, no
@@ -171,11 +179,11 @@ function QueueRow({ track: t, index: i, isCurrent, isPast, playing, dragging, on
 
       {/* Index / bars / grip — numW=32 in queue_list.qml (x:6, width:32), was
           38 here, plus the width mismatch shifted where the title column
-          started. */}
+          started. The drag mousedown now lives on the row itself (above),
+          not here — this is just the visual grip indicator. */}
       <div
-        onMouseDown={showGrip ? onGripMouseDown : undefined}
         className="flex items-center justify-center shrink-0"
-        style={{ width: 32, marginLeft: 6, cursor: showGrip ? "grab" : "default" }}
+        style={{ width: 32, marginLeft: 6 }}
       >
         {showGrip ? (
           <GripDots />
@@ -395,6 +403,10 @@ export function QueuePanel() {
   // events fire at full rate, so the ghost/indicator can update every frame.
   function handleGripMouseDown(trackId: string) {
     return (e: React.MouseEvent) => {
+      // Now that this listens on the whole row (not just the small grip
+      // column), a right-click anywhere on it would otherwise also start a
+      // drag alongside opening the context menu — left-click only.
+      if (e.button !== 0) return;
       e.preventDefault();
       setDragId(trackId);
       dropIndexRef.current = null;

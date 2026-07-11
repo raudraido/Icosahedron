@@ -84,6 +84,10 @@ html, body, #root {
 .track-num-plain { transition: opacity 120ms; }
 .reorder-row:hover .track-num-grip { opacity: 1; }
 .reorder-row:hover .track-num-plain { opacity: 0; }
+/* Cursor on hover is set imperatively in TrackTable.tsx's onMouseEnter/Leave
+ * instead of here — an inline style (the row already sets cursor:"pointer")
+ * always beats a CSS rule's specificity, so a .reorder-row:hover rule here
+ * would never actually take effect. */
 
 /* Promote scroll containers to their own GPU compositor layer for smooth 144Hz scrolling */
 .scroll-overlay { will-change: transform; }

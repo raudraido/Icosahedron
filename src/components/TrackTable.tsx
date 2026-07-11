@@ -287,6 +287,11 @@ function FavoriteHeart({ track }: { track: Track }) {
   return (
     <button
       onClick={toggle}
+      // The row itself is a drag handle in reorderable views (e.g.
+      // Playlists) once the grip shows — without this, a mousedown here
+      // would bubble up and start a drag before this button's own onClick
+      // ever runs.
+      onMouseDown={(e) => e.stopPropagation()}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{ background: "none", border: "none", cursor: "pointer", display: "flex", padding: 0 }}
@@ -448,6 +453,10 @@ export function TrackTable({
 
   function handleGripMouseDown(trackId: string) {
     return (e: React.MouseEvent) => {
+      // Now that this listens on the whole row (not just the grip column),
+      // a right-click anywhere on it would otherwise also start a drag
+      // alongside opening the context menu — left-click only.
+      if (e.button !== 0) return;
       e.preventDefault();
       e.stopPropagation();
       setDragId(trackId);
@@ -981,6 +990,15 @@ export function TrackTable({
                 onClick={(e) => handleRowClick(e, t, trackIndex)}
                 onDoubleClick={() => handleRowDoubleClick(t)}
                 onContextMenu={(e) => handleRowContextMenu(e, t)}
+                // The grip icon (.track-num-grip below) only appears on
+                // hover via CSS, but once it's showing, the whole row is a
+                // drag handle, not just its own small column — same as
+                // QueuePanel.tsx's row. Plain clicks/double-clicks still
+                // work fine alongside this: a mousedown+mouseup with no
+                // real pointer movement never sets dropIndexRef (see
+                // handleGripMouseDown above), so it doesn't trigger a
+                // reorder.
+                onMouseDown={reorderActive ? handleGripMouseDown(t.id) : undefined}
                 className={reorderActive ? "reorder-row" : undefined}
                 style={{
                   position: "absolute", top: row.start, left: 0, right: 0, height: 58,
@@ -992,12 +1010,24 @@ export function TrackTable({
                       ? "var(--hover-bg)"
                       : "transparent",
                 }}
-                onMouseEnter={(e) => { if (!isPlaying && !isSelected) e.currentTarget.style.background = "var(--hover-bg)"; }}
-                onMouseLeave={(e) => { if (!isPlaying && !isSelected) e.currentTarget.style.background = "transparent"; }}
+                onMouseEnter={(e) => {
+                  if (!isPlaying && !isSelected) e.currentTarget.style.background = "var(--hover-bg)";
+                  // Inline styles beat CSS regardless of specificity, so the
+                  // unconditional cursor:"pointer" above would otherwise
+                  // permanently shadow a .reorder-row:hover CSS rule — has
+                  // to be set imperatively here instead, same reason the
+                  // hover background above is too (this row is virtualized;
+                  // React state here would re-render the whole list on
+                  // every hover change).
+                  if (reorderActive) e.currentTarget.style.cursor = "grab";
+                }}
+                onMouseLeave={(e) => {
+                  if (!isPlaying && !isSelected) e.currentTarget.style.background = "transparent";
+                  if (reorderActive) e.currentTarget.style.cursor = "pointer";
+                }}
               >
                 <div
-                  onMouseDown={reorderActive ? handleGripMouseDown(t.id) : undefined}
-                  style={{ flex: `0 0 ${NUM_COL_WIDTH}px`, marginLeft: -NUM_COL_SHIFT, marginRight: NUM_COL_SHIFT, position: "relative", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", cursor: reorderActive ? "grab" : "default" }}
+                  style={{ flex: `0 0 ${NUM_COL_WIDTH}px`, marginLeft: -NUM_COL_SHIFT, marginRight: NUM_COL_SHIFT, position: "relative", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}
                 >
                   {reorderActive && (
                     <div className="track-num-grip" style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>

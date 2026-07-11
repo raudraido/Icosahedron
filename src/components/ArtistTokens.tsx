@@ -2,8 +2,10 @@ import React, { useState } from "react";
 import { api } from "../lib/api";
 import { useStore } from "../store";
 
-// Same separator regex as the old app's album_grid.qml / TrackListView.qml
-export const ARTIST_SEP_RE = /( \/\/\/ | • | \/ | feat\. | Feat\. | vs\. )/;
+// Same separator regex as the old app's album_grid.qml / TrackListView.qml —
+// case-insensitive so "Vs."/"VS."/"Feat."/"FEAT." split the same as their
+// lowercase forms (Navidrome doesn't normalize tag casing).
+export const ARTIST_SEP_RE = /( \/\/\/ | • | \/ | feat\. | vs\. )/i;
 
 // Exact (not substring) match against one of a track/album's possibly
 // multiple credited artists — a track's `artist` field can be a combined

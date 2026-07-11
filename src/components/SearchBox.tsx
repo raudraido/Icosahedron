@@ -93,7 +93,7 @@ export function SearchBox({
             height: 30,
             boxSizing: "border-box",
             transition: "width 250ms cubic-bezier(0.77,0,0.175,1), opacity 200ms",
-            background: "transparent",
+            background: "var(--card-bg)",
             border: "1px solid var(--border)",
             borderRadius: 4,
             color: "var(--text-primary)",

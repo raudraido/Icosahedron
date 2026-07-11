@@ -8,6 +8,13 @@
 // stores only read it from a /usr/share/metainfo/*.metainfo.xml file. Run at
 // build time (see the `dist` script) rather than checked in, so the release
 // date always matches when the package actually gets built.
+//
+// Installing this file alone isn't enough, though — Debian/Ubuntu only
+// re-scans /usr/share/metainfo into the AppStream cache app stores actually
+// read from on `apt update` (see /etc/apt/apt.conf.d/50appstream), which a
+// locally-installed .deb like ours never triggers. scripts/deb-after-install
+// .tpl (wired up via build.deb.afterInstall) runs `appstreamcli refresh`
+// itself so the store picks this up right after install instead.
 import { writeFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";

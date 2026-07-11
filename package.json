@@ -71,6 +71,7 @@
       "depends": [
         "libasound2"
       ],
+      "afterInstall": "scripts/deb-after-install.tpl",
       "fpm": [
         "build/linux/cloud.raud.icosahedron.metainfo.xml=/usr/share/metainfo/cloud.raud.icosahedron.metainfo.xml"
       ]

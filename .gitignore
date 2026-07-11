@@ -23,6 +23,10 @@ native/**/*.node
 native/audio-engine/index.js
 native/audio-engine/index.d.ts
 
+# AppStream metainfo.xml (scripts/gen-appstream.mjs) — generated at build
+# time so its <release date> always matches when the .deb was actually built.
+build/linux/
+
 # Old PyQt app (kept in the editor workspace for reference during the port,
 # lives as a sibling directory — not actually nested in this repo, but
 # ignored defensively in case it ever ends up copied/symlinked in).

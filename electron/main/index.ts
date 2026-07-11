@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, protocol, shell, Tray } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, protocol, screen, shell, Tray } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { SubsonicClient } from "./subsonic";
@@ -83,6 +83,52 @@ function resolveTrayIconPath(): string {
   return join(__dirname, "../../build/icon.png");
 }
 
+// Captured explicitly on every hide, rather than trusting the window
+// manager to remember the position across the hidden period — hiding via
+// hide() (not a native minimize, see the "minimize" listener below) has
+// been observed pushing some Linux window managers into treating the later
+// show() as placing a "new" window instead of restoring the old one,
+// landing it at some default corner — sometimes on a *different* monitor
+// than it was on — with the title bar off-screen and nothing left to drag
+// it back into view by. hideMainWindow()/showMainWindow() below re-apply
+// this explicitly, sidestepping reliance on the WM's memory of the
+// position entirely.
+let lastGoodBounds: Electron.Rectangle | null = null;
+
+// Falls back to centering on the primary display's work area if the given
+// bounds don't actually reach any currently-connected display (covers both
+// a WM landing the window somewhere bogus, and a monitor that was present
+// when `bounds` was captured but has since been unplugged) — checked
+// against just the top ~40px strip since that's what actually matters:
+// enough of the title bar on-screen to grab and drag the rest back.
+function clampToVisibleDisplay(bounds: Electron.Rectangle): Electron.Rectangle {
+  const reachable = screen.getAllDisplays().some((d) => {
+    const r = d.workArea;
+    return bounds.x < r.x + r.width && bounds.x + bounds.width > r.x
+      && bounds.y < r.y + r.height && bounds.y + 40 > r.y;
+  });
+  if (reachable) return bounds;
+  const primary = screen.getPrimaryDisplay().workArea;
+  return {
+    ...bounds,
+    x: primary.x + Math.round((primary.width - bounds.width) / 2),
+    y: primary.y + Math.round((primary.height - bounds.height) / 2),
+  };
+}
+
+function hideMainWindow(): void {
+  if (!mainWindow) return;
+  lastGoodBounds = mainWindow.getBounds();
+  mainWindow.hide();
+}
+
+function showMainWindow(): void {
+  if (!mainWindow) return;
+  if (lastGoodBounds) mainWindow.setBounds(clampToVisibleDisplay(lastGoodBounds));
+  mainWindow.show();
+  mainWindow.focus();
+}
+
 // Tray icon only exists while at least one of the two settings could
 // actually use it — a user who wants neither behavior shouldn't have a
 // stray icon sitting in their tray for no reason. Re-run on every settings
@@ -103,18 +149,36 @@ function syncTray(): void {
     tray = new Tray(icon);
     tray.setToolTip("Icosahedron");
     tray.setContextMenu(Menu.buildFromTemplate([
-      { label: "Show Icosahedron", click: () => { mainWindow?.show(); mainWindow?.focus(); } },
+      { label: "Show Icosahedron", click: () => showMainWindow() },
       { type: "separator" },
       { label: "Quit", click: () => { isQuitting = true; app.quit(); } },
     ]));
     // Left-click (Windows/Linux — macOS doesn't fire 'click' on tray icons
     // the same way and isn't a build target for this app) toggles the
     // window, matching most tray-icon apps' expected one-click behavior.
+    // Debounced against a real double-click landing as two rapid 'click'
+    // events (some Linux desktop environments emit both, others emit a
+    // distinct 'double-click' below instead) — without this, a double-click
+    // toggles hide/show twice in a row (hide, then immediately show again
+    // before the window manager has settled the first transition), which is
+    // a known way to make X11/Wayland window managers lose track of the
+    // window's proper restore geometry and re-map it at some tiny fallback
+    // size instead.
+    let lastTrayClick = 0;
     tray.on("click", () => {
+      const now = Date.now();
+      if (now - lastTrayClick < 400) return;
+      lastTrayClick = now;
       if (!mainWindow) return;
-      if (mainWindow.isVisible()) mainWindow.hide();
-      else { mainWindow.show(); mainWindow.focus(); }
+      if (mainWindow.isVisible()) hideMainWindow();
+      else showMainWindow();
     });
+    // A genuine double-click event (only emitted distinctly on some
+    // platforms/desktop environments — others just send 'click' twice,
+    // handled by the debounce above) always restores rather than toggling,
+    // matching the de-facto Windows convention users expect from a
+    // tray-icon double-click.
+    tray.on("double-click", () => showMainWindow());
   } else if (!wantsTray && tray) {
     tray.destroy();
     tray = null;
@@ -132,6 +196,15 @@ function createWindow(): void {
     // call after creation isn't subject to that clamp.
     show: false,
     title: "icosahedron",
+    // Without a floor, nothing stops the window from ending up at some
+    // absurd size like 10×10 — seen in practice after a tray-icon
+    // hide/show round-trip confuses a Linux window manager's restore
+    // geometry (see the "minimize" handler below and the tray click
+    // handlers above). A floor doesn't fix the underlying WM confusion,
+    // but it does guarantee it can never manifest as an unusably tiny
+    // window regardless of the cause.
+    minWidth: 640,
+    minHeight: 480,
     // Packaged AppImage/.exe already get their icon baked in via
     // electron-builder's build.linux/build.win config — this just covers
     // `npm run dev`/`npm run preview`, where no .desktop entry exists yet to
@@ -153,7 +226,7 @@ function createWindow(): void {
   // result, just one step removed from intercepting the minimize itself.
   win.on("minimize", () => {
     if (!traySettings.minimizeToTray) return;
-    win.hide();
+    hideMainWindow();
   });
 
   // Only intercept a plain titlebar-X close — an actual quit (tray menu,
@@ -162,7 +235,7 @@ function createWindow(): void {
   win.on("close", (event) => {
     if (isQuitting || !traySettings.exitToTray) return;
     event.preventDefault();
-    win.hide();
+    hideMainWindow();
   });
 
   // Tour-date links (Info tab) and any other window.open() call should go to
@@ -473,8 +546,8 @@ app.whenReady().then(() => {
   app.on("second-instance", () => {
     if (!mainWindow) return;
     if (mainWindow.isMinimized()) mainWindow.restore();
-    if (!mainWindow.isVisible()) mainWindow.show();
-    mainWindow.focus();
+    if (mainWindow.isVisible()) mainWindow.focus();
+    else showMainWindow();
   });
 });
 

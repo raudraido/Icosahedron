@@ -72,11 +72,10 @@ const COLUMNS: Record<string, ColumnDef> = {
 };
 
 // Header label + sort arrow + filter icon, and the cell content below it,
-// are centered rather than left-aligned for these columns — every column
-// except the free-text ones (track/title/artist, always long and variable-
-// length, read better left-aligned) and album (explicitly kept left-aligned
-// even though its values are just as short-and-uniform as, say, year's).
-const MID_COLS = new Set(["fav", "genre", "dur", "plays", "trackno", "year", "date", "bpm"]);
+// are centered rather than left-aligned for these columns — the free-text
+// ones (track/title/artist/album/genre, all variable-length real content)
+// read better left-aligned instead.
+const MID_COLS = new Set(["fav", "dur", "plays", "trackno", "year", "date", "bpm"]);
 
 // Table column order (default) vs. the picker menu's fixed listing order — these differ in the old app.
 const DEFAULT_COL_ORDER = ["track", "title", "artist", "album", "fav", "genre", "dur", "plays", "trackno", "year", "date", "bpm"];
@@ -331,7 +330,7 @@ export function TrackTable({
   searchScope, searchScopeOptions, onSearchScopeChange,
   pagination, toolbarLeft, toolbarRight, numColSource = "trackNumber", numColOffset = 0, viewKey,
   filterableCols = [], colFilters, onFilterChange, colValues,
-  reorderable = false, onReorder, extraMenuItems,
+  reorderable = false, onReorder, extraMenuItems, externalScrollRef,
 }: {
   tracks: Track[];
   loading?: boolean;
@@ -409,6 +408,16 @@ export function TrackTable({
    *  Playlists.tsx's "Remove from Playlist") — a callback rather than a
    *  static list since the entry usually needs the specific track/index. */
   extraMenuItems?: (track: Track) => MenuEntry[];
+  /** Attach the row virtualizer to an ancestor's own scroll container
+   *  instead of giving this table its own internal one — for hosts like
+   *  Starred.tsx, where the tracklist is one section of a single
+   *  continuously-scrolling page (carousels above it) rather than a
+   *  dedicated full-height view. Without this, an embedded TrackTable's
+   *  `h-full` has no bounded ancestor to resolve against, so its "virtualized"
+   *  row list silently renders every row as a real DOM node all the time —
+   *  functionally unvirtualized, and increasingly expensive to re-render
+   *  (e.g. on every drag frame) the larger the list gets. */
+  externalScrollRef?: React.RefObject<HTMLDivElement | null>;
 }) {
   const playTrack = useStore((s) => s.playTrack);
   const navigateTo = useStore((s) => s.navigateTo);
@@ -504,6 +513,12 @@ export function TrackTable({
   const HEADER_PADDING = 6;
   const MEASUREMENT_FUDGE = 6;
   function minWidthFor(id: string): number {
+    // track's own floor isn't about fitting its header word ("TRACK") at
+    // all — its real content is a 52px cover thumbnail plus stacked
+    // title/artist text (see renderCell's "track" case), nothing like
+    // every other column's label-only measurement. COLUMNS.track.minWidth
+    // is a fixed, hand-picked floor for that instead.
+    if (id === "track") return COLUMNS.track.minWidth;
     const label = (measuredLabelWidths[id] ?? COLUMNS[id].minWidth) + MEASUREMENT_FUDGE;
     const iconExtra = filterableCols.includes(id) && colValues ? 4 + 14 : 0;
     return label + iconExtra + HEADER_PADDING * 2;
@@ -542,14 +557,37 @@ export function TrackTable({
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
 
   const clickCountRef = useRef(1);
-  const justResizedRef = useRef(false);
-  const colOrderRef = useRef(colOrder);
+  const justDraggedHeaderRef = useRef(false);
   const colWidthsRef = useRef(colWidths);
-  useEffect(() => { colOrderRef.current = colOrder; }, [colOrder]);
   useEffect(() => { colWidthsRef.current = colWidths; }, [colWidths]);
 
   const pickerRef = useRef<HTMLDivElement>(null);
   const parentRef = useRef<HTMLDivElement>(null);
+
+  // How far parentRef's own top sits below externalScrollRef's scrollable
+  // content top (TanStack Virtual's `scrollMargin`) — needed because the
+  // table isn't flush against the scroll container's top in a host like
+  // Starred.tsx (carousels render above it), so translating scrollTop into
+  // "which rows are visible" has to account for that offset. Measured via
+  // getBoundingClientRect (viewport-relative, so it already reflects
+  // current scroll position) rather than offsetTop, which would need every
+  // intermediate ancestor to share the same offsetParent chain — not
+  // guaranteed through Starred's carousel wrappers.
+  const [scrollMargin, setScrollMargin] = useState(0);
+  useLayoutEffect(() => {
+    const scrollEl = externalScrollRef?.current;
+    const rowsEl = parentRef.current;
+    if (!scrollEl || !rowsEl) return;
+    function measure() {
+      setScrollMargin(rowsEl!.getBoundingClientRect().top - scrollEl!.getBoundingClientRect().top + scrollEl!.scrollTop);
+    }
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(scrollEl);
+    ro.observe(rowsEl);
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalScrollRef, loading, tracks.length]);
 
   // ── Drag-to-reorder (see reorderable/onReorder prop docs above) — natural
   // order only, same manual mousedown/mousemove/mouseup mechanics as the
@@ -650,14 +688,13 @@ export function TrackTable({
   const visibleCols = colOrder.filter((id) => id === "track" || colVisibility[id]);
 
   function handleSort(colId: string) {
-    // A column-resize drag ends with the mouse wherever it happened to be
-    // released — shrinking a column drags the cursor away from the resize
-    // handle (which follows the shrinking right edge) and onto the header's
-    // own body, so the browser's native "click" fires on the header itself
-    // afterward, not just on the handle strip. justResizedRef (set in
-    // onResizeStart's onMove, cleared here) swallows that one spurious click
-    // without needing to guess a distance/time threshold.
-    if (justResizedRef.current) { justResizedRef.current = false; return; }
+    // A column-resize or column-reorder drag ends with the mouse wherever
+    // it happened to be released — the browser's native "click" still
+    // fires on the header itself afterward regardless of which one just
+    // happened. justDraggedHeaderRef (set by both onResizeStart's onMove
+    // and the reorder drag's onMove below, cleared here) swallows that one
+    // spurious click without needing to guess a distance/time threshold.
+    if (justDraggedHeaderRef.current) { justDraggedHeaderRef.current = false; return; }
     const def = COLUMNS[colId];
     if (!def.sortable) return;
     let next: SortState;
@@ -687,11 +724,47 @@ export function TrackTable({
     e.preventDefault();
     e.stopPropagation();
     const startX = e.clientX;
-    const startWidth = colWidthsRef.current[colId] ?? minWidthFor(colId);
+    // Read the column's *actual* rendered width off the DOM rather than
+    // assuming colWidths/minWidthFor matches it — for every other column
+    // those always agree (flex: 0 0 <width>px, no grow involved), but
+    // track is flex-grow:1 (auto-filling leftover space), so its real
+    // on-screen width is usually much larger than minWidthFor's 220px
+    // floor.
+    const headerCell = (e.currentTarget as HTMLElement).closest<HTMLElement>("[data-col-header]");
+    const startWidth = headerCell?.getBoundingClientRect().width ?? colWidthsRef.current[colId] ?? minWidthFor(colId);
+
+    // track never gets its own stored width — it stays permanently
+    // flex-grow:1, silently absorbing whatever space every other
+    // (fixed-width) column doesn't use, which is what keeps the whole row
+    // filling the container exactly, with no gap or overflow, for *every*
+    // column's resize, not just track's. So dragging track's own handle
+    // doesn't set a width on track at all: it resizes its neighbor (the
+    // next visible column) in the opposite direction instead — shrinking
+    // the neighbor hands track that space to grow into; growing the
+    // neighbor takes space away from what's left for track to fill,
+    // shrinking track by the same amount as a pure side effect of
+    // flexbox's own leftover-space math, never set directly.
+    const isTrackResize = colId === "track";
+    const targetId = isTrackResize ? visibleCols[visibleCols.indexOf(colId) + 1] : colId;
+    if (!targetId) return; // track has no neighbor to trade width with
+    const targetStartWidth = isTrackResize ? (colWidthsRef.current[targetId] ?? minWidthFor(targetId)) : startWidth;
+    const trackFloor = isTrackResize ? minWidthFor("track") : 0;
+
     function onMove(ev: MouseEvent) {
-      justResizedRef.current = true;
-      const width = Math.max(minWidthFor(colId), startWidth + (ev.clientX - startX));
-      setColWidths((prev) => ({ ...prev, [colId]: width }));
+      justDraggedHeaderRef.current = true;
+      const rawDelta = ev.clientX - startX;
+      if (isTrackResize) {
+        // Dragging track's handle right grows track (matches the
+        // direction every other column's own handle already works in),
+        // which means its neighbor shrinks by that same amount — the
+        // opposite sign of a normal, direct resize.
+        const maxNeighborWidth = targetStartWidth + (startWidth - trackFloor); // caps how much the neighbor can grow before track would dip below its own floor
+        const width = Math.min(maxNeighborWidth, Math.max(minWidthFor(targetId), targetStartWidth - rawDelta));
+        setColWidths((prev) => ({ ...prev, [targetId]: width }));
+      } else {
+        const width = Math.max(minWidthFor(targetId), targetStartWidth + rawDelta);
+        setColWidths((prev) => ({ ...prev, [targetId]: width }));
+      }
     }
     function onUp() {
       window.removeEventListener("mousemove", onMove);
@@ -703,28 +776,84 @@ export function TrackTable({
   }
 
   // ── Column drag-reorder ──
-  const dragColRef = useRef<string | null>(null);
-  function onHeaderDragStart(e: React.DragEvent, colId: string) {
-    dragColRef.current = colId;
-    e.dataTransfer.effectAllowed = "move";
-  }
-  function onHeaderDragOver(e: React.DragEvent, colId: string) {
-    e.preventDefault();
-    const dragged = dragColRef.current;
-    if (!dragged || dragged === colId) return;
-    setColOrder((prev) => {
-      const from = prev.indexOf(dragged);
-      const to = prev.indexOf(colId);
-      if (from === -1 || to === -1 || from === to) return prev;
-      const next = [...prev];
-      next.splice(from, 1);
-      next.splice(to, 0, dragged);
-      return next;
-    });
-  }
-  function onHeaderDragEnd() {
-    dragColRef.current = null;
-    saveJSON(LS_ORDER(viewKey), colOrderRef.current);
+  // Manual mousedown/mousemove/mouseup instead of native HTML5 draggable —
+  // same reasoning as the row-reorder drag below: native dragover only
+  // fires at a throttled rate, which made the old live column-swap
+  // visibly pop between positions instead of tracking the cursor
+  // smoothly. Locked to the horizontal axis (the ghost only ever follows
+  // cursor X, staying pinned to the header row's own vertical position)
+  // and styled identically to QueuePanel's row-reorder ghost/indicator
+  // (accent border, translucent panel background) — same UX language,
+  // just rotated 90°.
+  const headerRowRef = useRef<HTMLDivElement>(null);
+  const dropColIndexRef = useRef<number | null>(null);
+  const [dragColId, setDragColId] = useState<string | null>(null);
+  const [dropColIndex, setDropColIndex] = useState<number | null>(null);
+  const [ghostX, setGhostX] = useState<number | null>(null);
+  const [indicatorX, setIndicatorX] = useState<number | null>(null);
+
+  function handleHeaderMouseDown(colId: string) {
+    return (e: React.MouseEvent) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setDragColId(colId);
+      dropColIndexRef.current = null;
+      document.body.style.userSelect = "none";
+
+      function onMove(ev: MouseEvent) {
+        justDraggedHeaderRef.current = true;
+        const rowEl = headerRowRef.current;
+        if (!rowEl) return;
+        const rowRect = rowEl.getBoundingClientRect();
+        setGhostX(ev.clientX - rowRect.left);
+
+        // Hit-test real column boundaries (widths vary per column, unlike
+        // the row-reorder's uniform ROW_HEIGHT below, so this can't just
+        // divide position by a constant) — whichever column's midpoint the
+        // cursor hasn't reached yet is the insertion point.
+        const cells = Array.from(rowEl.querySelectorAll<HTMLElement>("[data-col-header]"));
+        let insertIndex = cells.length;
+        let boundaryX = cells.length > 0 ? cells[cells.length - 1].getBoundingClientRect().right - rowRect.left : 0;
+        for (let i = 0; i < cells.length; i++) {
+          const r = cells[i].getBoundingClientRect();
+          if (ev.clientX < r.left + r.width / 2) {
+            insertIndex = i;
+            boundaryX = r.left - rowRect.left;
+            break;
+          }
+        }
+        dropColIndexRef.current = insertIndex;
+        setDropColIndex(insertIndex);
+        setIndicatorX(boundaryX);
+      }
+      function onUp() {
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+        document.body.style.userSelect = "";
+        const target = dropColIndexRef.current;
+        if (target !== null) {
+          setColOrder((prev) => {
+            const from = prev.indexOf(colId);
+            if (from === -1) return prev;
+            const next = [...prev];
+            next.splice(from, 1);
+            // Removing `from` shifts every index after it back by one, so
+            // the target index needs the same adjustment before re-inserting.
+            const adjusted = from < target ? target - 1 : target;
+            next.splice(Math.max(0, Math.min(next.length, adjusted)), 0, colId);
+            saveJSON(LS_ORDER(viewKey), next);
+            return next;
+          });
+        }
+        setDragColId(null);
+        setDropColIndex(null);
+        setGhostX(null);
+        setIndicatorX(null);
+      }
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+    };
   }
 
   // ── Row selection / playback ──
@@ -874,14 +1003,22 @@ export function TrackTable({
       case "artist":
         return <ArtistTokens name={t.artist} artistId={t.artist_id} />;
       case "album":
+        // HoverToken renders a plain <span> — `overflow`/`text-overflow`
+        // (what `truncate` sets) have no clipping effect on an inline
+        // element, only on a block/inline-block one, so passing
+        // className="truncate" straight to it never actually ellipsized
+        // long album names. Wrapping it in a block-level div (which fills
+        // the already width-constrained data cell) gives text-overflow
+        // something it can actually apply to.
         return t.album ? (
-          <HoverToken
-            text={t.album}
-            clickable
-            onClick={() => openAlbum(t)}
-            onHover={() => prefetchAlbum(t)}
-            className="truncate"
-          />
+          <div className="truncate">
+            <HoverToken
+              text={t.album}
+              clickable
+              onClick={() => openAlbum(t)}
+              onHover={() => prefetchAlbum(t)}
+            />
+          </div>
         ) : null;
       case "fav":
         return <FavoriteHeart track={t} />;
@@ -894,15 +1031,18 @@ export function TrackTable({
         const canFilter = filterableCols.includes("genre") && Boolean(onFilterChange);
         const parts = (t.genre ?? "").split(GENRE_SEP_RE).map((s) => s.trim()).filter(Boolean);
         if (!parts.length) return null;
+        // div, not span — same reason as the "album" case above: a plain
+        // inline span never actually clips/ellipsizes regardless of the
+        // truncate class, only a block-level element does.
         return (
-          <span className="truncate">
+          <div className="truncate">
             {parts.map((g, i) => (
               <React.Fragment key={i}>
                 {i > 0 && <span style={{ color: "var(--text-secondary)", opacity: 0.4, fontSize: "var(--fs-secondary)" }}> • </span>}
                 <HoverToken text={g} clickable={canFilter} onClick={() => onFilterChange?.("genre", new Set([g]))} />
               </React.Fragment>
             ))}
-          </span>
+          </div>
         );
       }
       case "dur":
@@ -935,14 +1075,30 @@ export function TrackTable({
 
   const virtualizer = useVirtualizer({
     count: displayRows.length,
-    getScrollElement: () => parentRef.current,
+    getScrollElement: () => externalScrollRef?.current ?? parentRef.current,
     estimateSize: (i) => displayRows[i].kind === "discHeader" ? 36 : 58,
     overscan: 10,
+    scrollMargin: externalScrollRef ? scrollMargin : 0,
   });
+  // virtualItem.start bakes scrollMargin into every offset (it's measured
+  // from the *scroll element's* top) — subtract it back out to get each
+  // row's position local to this table's own row-list container, which
+  // itself already sits scrollMargin px down the page.
+  const rowTopOffset = externalScrollRef ? scrollMargin : 0;
 
   return (
     <>
-    <div className="flex flex-col h-full" style={{ borderRadius: 10, background: "var(--card-bg)", border: "1px solid var(--border)", overflow: "hidden" }}>
+    {/* h-full only when self-scrolling — with an externalScrollRef, this
+        card has no bounded height of its own at all: it just grows to fit
+        its full content (toolbar + header + every row's real total height),
+        the same way the rest of the host page's content does, and the
+        ancestor scroll container handles all the actual scrolling. Without
+        this, h-full has no defined parent height to resolve against inside
+        a host like Starred.tsx, collapses to "auto" all the way down
+        through flex-1/height:100% below, and — more importantly — silently
+        defeats row virtualization entirely (see externalScrollRef's doc
+        comment). */}
+    <div className={externalScrollRef ? "flex flex-col" : "flex flex-col h-full"} style={{ borderRadius: 10, background: "var(--card-bg)", border: "1px solid var(--border)", overflow: "hidden" }}>
       {/* Toolbar */}
       <div className="flex items-center shrink-0" style={{ height: 36, padding: "0 20px", gap: 8, marginTop: 12 }}>
         <div style={{ flex: 1, display: "flex", alignItems: "center" }}>{toolbarLeft}</div>
@@ -1017,7 +1173,7 @@ export function TrackTable({
           how tightly each individual column's own box was sized. Must stay
           in sync with the data rows' own gap below (same reasoning: header
           and data columns need identical pixel boundaries). */}
-      <div className="flex items-center shrink-0" style={{ height: 36, padding: "0 24px", gap: 0 }}>
+      <div ref={headerRowRef} className="flex items-center shrink-0" style={{ position: "relative", height: 36, padding: "0 24px", gap: 0 }}>
         <div style={{ flex: `0 0 ${NUM_COL_WIDTH}px`, marginLeft: -NUM_COL_SHIFT, marginRight: NUM_COL_SHIFT, display: "flex", justifyContent: "center" }}>
           <span style={{ fontSize: "var(--fs-small)", fontWeight: "var(--fw-emphasis)", letterSpacing: 0.8, color: "var(--text-secondary)" }}>#</span>
         </div>
@@ -1028,13 +1184,18 @@ export function TrackTable({
             <div
               key={id}
               data-col-header
-              draggable
-              onDragStart={(e) => onHeaderDragStart(e, id)}
-              onDragOver={(e) => onHeaderDragOver(e, id)}
-              onDragEnd={onHeaderDragEnd}
+              onMouseDown={handleHeaderMouseDown(id)}
               onClick={() => handleSort(id)}
               style={{
                 position: "relative",
+                opacity: dragColId === id ? 0.3 : 1,
+                // track is permanently flex-grow:1 — it always absorbs
+                // whatever space every other (fixed-width) column doesn't
+                // use, which is what keeps the row filling the container
+                // exactly. Its own resize handle doesn't touch this at
+                // all; see onResizeStart's comment — dragging it instead
+                // resizes the neighbor column, and track's rendered width
+                // changes as a side effect of that.
                 flex: isTrack ? 1 : `0 0 ${colBoxWidth(id)}px`,
                 minWidth: 0,
                 boxSizing: "border-box",
@@ -1083,24 +1244,54 @@ export function TrackTable({
                   }}
                 />
               )}
-              {!isTrack && (
-                // right:-4, width:8 (was -6/12, sized for the row's old
-                // 12px gap) — straddles the boundary between this column
-                // and the next now that they sit directly adjacent (gap:0),
-                // extending 4px into each side's own padding rather than
-                // centering in a gap that no longer exists.
-                <div
-                  onMouseDown={(e) => onResizeStart(e, id)}
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex items-center justify-center"
-                  style={{ position: "absolute", right: -4, top: 0, bottom: 0, width: 8, cursor: "col-resize" }}
-                >
-                  <div style={{ width: 1, height: "50%", background: "var(--text-primary)" }} />
-                </div>
-              )}
+              {/* track gets a handle too now that it has a real adjustable
+                  basis width (see the flex comment above), not just every
+                  other column. right:-4, width:8 (was -6/12, sized for the
+                  row's old 12px gap) — straddles the boundary between this
+                  column and the next now that they sit directly adjacent
+                  (gap:0), extending 4px into each side's own padding rather
+                  than centering in a gap that no longer exists. */}
+              <div
+                onMouseDown={(e) => onResizeStart(e, id)}
+                onClick={(e) => e.stopPropagation()}
+                className="flex items-center justify-center"
+                style={{ position: "absolute", right: -4, top: 0, bottom: 0, width: 8, cursor: "col-resize" }}
+              >
+                <div style={{ width: 1, height: "50%", background: "var(--text-primary)" }} />
+              </div>
             </div>
           );
         })}
+        {/* Insertion-point indicator — vertical accent line + dot, the
+            same shape as QueuePanel's InsertionIndicator just rotated 90°
+            for a horizontal column reorder instead of a vertical row one. */}
+        {dragColId && dropColIndex !== null && indicatorX !== null && (
+          <div style={{ position: "absolute", left: indicatorX, top: 4, bottom: 4, width: 0, pointerEvents: "none" }}>
+            <div style={{ position: "absolute", left: -4, top: -4, width: 8, height: 8, borderRadius: "50%", background: "var(--accent)" }} />
+            <div style={{ position: "absolute", left: -1, top: 0, bottom: 0, width: 2, background: "var(--accent)" }} />
+          </div>
+        )}
+        {/* Floating ghost that follows the cursor's X position while
+            dragging — locked to the horizontal axis (only `left` ever
+            changes; it stays pinned to the header row's own height/Y) and
+            styled identically to QueuePanel's GhostRow: lighter panel
+            background, accent border, radius 6, 0.8 opacity. */}
+        {dragColId && ghostX !== null && (
+          <div
+            style={{
+              position: "absolute", top: 0, height: 36,
+              left: ghostX - colBoxWidth(dragColId) / 2, width: colBoxWidth(dragColId),
+              display: "flex", alignItems: "center", justifyContent: "center",
+              background: "color-mix(in srgb, var(--panel-bg) 95%, white)",
+              border: "1px solid var(--accent)", borderRadius: 6, opacity: 0.8,
+              pointerEvents: "none", zIndex: 20,
+            }}
+          >
+            <span style={{ fontSize: "var(--fs-small)", fontWeight: "var(--fw-emphasis)", letterSpacing: 0.8, color: "var(--text-primary)" }}>
+              {COLUMNS[dragColId].label}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Rows */}
@@ -1128,7 +1319,7 @@ export function TrackTable({
                   data-index={row.index}
                   ref={virtualizer.measureElement}
                   style={{
-                    position: "absolute", top: row.start, left: 0, right: 0, height: 36,
+                    position: "absolute", top: row.start - rowTopOffset, left: 0, right: 0, height: 36,
                     display: "flex", alignItems: "center", padding: "0 24px",
                   }}
                 >
@@ -1161,7 +1352,7 @@ export function TrackTable({
                 onMouseDown={reorderActive ? handleGripMouseDown(t.id) : undefined}
                 className={reorderActive ? "reorder-row" : undefined}
                 style={{
-                  position: "absolute", top: row.start, left: 0, right: 0, height: 58,
+                  position: "absolute", top: row.start - rowTopOffset, left: 0, right: 0, height: 58,
                   // gap: 0 — must match the header row's own gap (see its
                   // comment) so header and data columns land on identical
                   // pixel boundaries.
@@ -1209,6 +1400,9 @@ export function TrackTable({
                   <div
                     key={id}
                     style={{
+                      // Must match the header cell's own flex exactly —
+                      // track is permanently flex-grow:1 (see its comment
+                      // there and onResizeStart's).
                       flex: id === "track" ? 1 : `0 0 ${colBoxWidth(id)}px`,
                       minWidth: 0, overflow: "hidden",
                       ...(MID_COLS.has(id) ? { display: "flex", justifyContent: "center" } : {}),
@@ -1231,7 +1425,11 @@ export function TrackTable({
           return draggedTrack ? <GhostRow track={draggedTrack} y={ghostY} /> : null;
         })()}
       </div>
-      <ScrollThumb scrollRef={parentRef} />
+      {/* Not in external-scroll mode — the host already renders its own
+          ScrollThumb for the whole page (e.g. Starred.tsx); parentRef
+          itself never actually scrolls in that mode, so this would just be
+          an inert duplicate. */}
+      {!externalScrollRef && <ScrollThumb scrollRef={parentRef} />}
       </div>
 
       {pagination && (

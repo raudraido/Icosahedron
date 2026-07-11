@@ -410,6 +410,14 @@ export function Starred() {
                 numColSource="position"
                 filterableCols={["genre", "year"]}
                 onFilterChange={handleCellFilterClick}
+                // This tracklist is one section of one continuously-scrolling
+                // page (carousels above it), not its own dedicated scroll
+                // area — without this, the table's row virtualizer silently
+                // renders every favorite as a real DOM row all the time,
+                // which is what made dragging (column reorder, resize) feel
+                // like ~15fps: every drag frame's re-render had to
+                // reconcile the whole list instead of ~25 visible rows.
+                externalScrollRef={scrollRef}
               />
             </div>
           )}

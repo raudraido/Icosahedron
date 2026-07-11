@@ -143,7 +143,15 @@ function QueueRow({ track: t, index: i, isCurrent, isPast, playing, dragging, on
   const showGrip = hov || dragging;
 
   return (
-    <button
+    // Was a <button>, but it wraps QueueFavoriteHeart's own <button> —
+    // nesting <button> inside <button> is invalid HTML (React warns on
+    // hydration: "cannot contain a nested <button>"). This row never had an
+    // onClick anyway (only onDoubleClick/onContextMenu/drag), so native
+    // button semantics weren't buying anything a plain focusable div with
+    // an explicit role doesn't already cover.
+    <div
+      role="button"
+      tabIndex={0}
       onDoubleClick={onPlay}
       onContextMenu={onContextMenu}
       onMouseEnter={() => setHov(true)}
@@ -228,7 +236,7 @@ function QueueRow({ track: t, index: i, isCurrent, isPast, playing, dragging, on
       >
         {fmtDuration(t.duration_secs)}
       </span>
-    </button>
+    </div>
   );
 }
 

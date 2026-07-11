@@ -1,4 +1,4 @@
-import { xmlEscape, buildDidlLite, secondsToHms, hmsToSeconds, type CastTrackForDidl } from "./castDidl";
+import { xmlEscape, buildDidlLite, secondsToHms, type CastTrackForDidl } from "./castDidl";
 import type { CastStatusEvent, CastTrackMetadata } from "./castChromecast";
 
 const AVTRANSPORT_TYPE = "urn:schemas-upnp-org:service:AVTransport:1";
@@ -69,8 +69,23 @@ async function soapCall(
   return out;
 }
 
-const POLL_INTERVAL_MS = 2000;
+// 4s, not 2s — real-world evidence (a Denon receiver's embedded UPnP stack
+// wedging, twice, under normal use) that this app's polling load alone can
+// overwhelm a fragile embedded HTTP server. Doubling the interval halves
+// the steady-state request rate at essentially no UX cost, since none of
+// the polled currentTime/duration is even consumed right now (see poll()'s
+// comment below) — the scrubber stays local-engine-authoritative.
+const POLL_INTERVAL_MS = 4000;
 const MAX_CONSECUTIVE_POLL_ERRORS = 3;
+// Some receivers' network stack answers SOAP calls well before their audio
+// hardware (amp relays, DAC, input switching) has actually finished waking
+// from standby — SetAVTransportURI+Play immediately back-to-back can land
+// while the physical audio path isn't connected yet, so the transport
+// reports PLAYING with no actual sound. Giving the first load of a session
+// this grace period before Play (not every subsequent track change — once
+// truly awake, those already work with no delay) fixes it for receivers
+// that need it, at the cost of a slower first connect for ones that don't.
+const WAKE_GRACE_MS = 2500;
 
 // Hand-rolled AVTransport/RenderingControl client — no GENA event
 // subscriptions (SUBSCRIBE/NOTIFY + a callback HTTP server + resubscribe
@@ -117,7 +132,13 @@ export class DlnaDevice {
       this.lastState = state;
       if (state === "NO_MEDIA_PRESENT") return;
 
-      const pos = await soapCall(this.avTransportUrl, AVTRANSPORT_TYPE, "GetPositionInfo", { InstanceID: 0 });
+      // No GetPositionInfo call here — currentTime/duration in the "status"
+      // event below are never actually read by src/store/index.ts's
+      // handleCastEvent (the scrubber stays local-engine-authoritative in
+      // the dual-playback design; only castVolume is consumed from cast
+      // status). Skipping it cuts a third request out of every poll tick
+      // for data nothing uses — a real device (see POLL_INTERVAL_MS above)
+      // has already shown this app's polling load matters.
       let volume = 1;
       if (this.renderingControlUrl) {
         try {
@@ -129,8 +150,8 @@ export class DlnaDevice {
       this.onStatus({
         kind: "status",
         playing: state === "PLAYING" || state === "TRANSITIONING",
-        currentTime: hmsToSeconds(pos.RelTime),
-        duration: hmsToSeconds(pos.TrackDuration),
+        currentTime: 0,
+        duration: 0,
         volume,
       });
     } catch (err) {
@@ -149,6 +170,7 @@ export class DlnaDevice {
   }
 
   async loadMedia(url: string, contentType: string, metadata: CastTrackMetadata, startPositionSecs: number): Promise<void> {
+    const isFirstLoad = !this.hasLoadedMedia;
     const track: CastTrackForDidl = { title: metadata.title, artist: metadata.subtitle, artUrl: metadata.artUrl };
     const didl = buildDidlLite(track, url, contentType);
     await soapCall(this.avTransportUrl, AVTRANSPORT_TYPE, "SetAVTransportURI", {
@@ -156,6 +178,7 @@ export class DlnaDevice {
     });
     this.stoppedByUs = false;
     this.hasLoadedMedia = true;
+    if (isFirstLoad) await new Promise((r) => setTimeout(r, WAKE_GRACE_MS));
     await soapCall(this.avTransportUrl, AVTRANSPORT_TYPE, "Play", { InstanceID: 0, Speed: "1" });
     if (startPositionSecs > 0) {
       await soapCall(this.avTransportUrl, AVTRANSPORT_TYPE, "Seek", {

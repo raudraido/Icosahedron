@@ -76,12 +76,3 @@ export function secondsToHms(totalSeconds: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
-/** Inverse of secondsToHms — tolerant of the "NOT_IMPLEMENTED" a handful of
- *  renderers return for TrackDuration instead of a real value. */
-export function hmsToSeconds(hms: string | undefined): number {
-  if (!hms) return 0;
-  const parts = hms.split(":").map(Number);
-  if (parts.length !== 3 || parts.some((p) => !Number.isFinite(p))) return 0;
-  const [h, m, s] = parts;
-  return h * 3600 + m * 60 + s;
-}

@@ -87,11 +87,18 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
 // overwrite files the app currently has open). NSIS is configured as an
 // assisted wizard (not one-click, see package.json's build.nsis), so the
 // user still walks through the normal install steps — this just gets them
-// to that point without manually finding and opening the download. .deb is
-// the same story: opening the downloaded package hands off to whatever the
-// desktop wires up for that (GNOME Software, gdebi, etc.), which — same as
-// NSIS — owns the actual privileged install step and its own auth prompt;
-// this code has no business doing `pkexec dpkg -i` itself.
+// to that point without manually finding and opening the download.
+//
+// .deb used to just hand the download off to whatever the desktop
+// associates with .deb files (GNOME Software, App Center, gdebi, ...), on
+// the theory that installer/auth UX wasn't this code's business. In
+// practice that was a dead end on at least one real desktop (Pop!_OS App
+// Center): opening a downloaded .deb that matches an already-installed
+// package's id just shows an inert "Installed" label with no button to
+// press at all — no way to actually trigger the update from there. `apt
+// install <path>` (via pkexec for the auth prompt) installs it directly
+// instead, sidestepping whatever a given desktop's package-viewer chooses
+// to do with a local file.
 //
 // AppImage has no separate install step — the file *is* the app, and
 // whatever desktop shortcut/launcher the user has points at a fixed path
@@ -140,19 +147,6 @@ export async function downloadAndInstallUpdate(
   // can actually acquire it.
   app.releaseSingleInstanceLock();
 
-  // shell.openPath (not child_process.execFile) for the Windows .exe / Linux
-  // .deb branch below — on Windows, Electron/Chromium puts itself in a
-  // Windows Job Object that kills *all* child processes when the parent
-  // exits, and Node's `detached: true` isn't enough to escape that (it only
-  // detaches the console, not the job); the installer was getting killed by
-  // app.quit() below before it could fully start. shell.openPath launches
-  // the file the same way double-clicking it in a file manager would (via
-  // the OS shell), which sits entirely outside Electron's process tree and
-  // survives the app quitting — true on Linux too, so it does double duty
-  // for the .deb handoff. shell.openPath resolves to an error message string
-  // on failure (not a throw) — surface it as a real rejection so the
-  // renderer's error state reflects a launch failure instead of quietly
-  // "succeeding".
   let openError: string;
   if (runningAppImage) {
     // AppImage has no separate install step — the file *is* the app, and
@@ -160,7 +154,7 @@ export async function downloadAndInstallUpdate(
     // path. Replace it in place so that shortcut picks up the new version
     // too, not just this one relaunch.
     await rename(targetPath, runningAppImage);
-    // NOT shell.openPath here, unlike the installer/package branch below —
+    // NOT shell.openPath here, unlike the Windows/.deb branches below —
     // that launches a file via the desktop's file-*association* mechanism
     // (effectively xdg-open on Linux), which is right for "open this
     // installer with its default app" but wrong for an AppImage: there's
@@ -178,14 +172,54 @@ export async function downloadAndInstallUpdate(
       child.once("error", (e) => resolve(e.message));
       child.once("spawn", () => { child.unref(); resolve(""); });
     });
+  } else if (process.platform === "linux") {
+    // .deb — install directly via `apt install <path>` (not `apt-get`,
+    // which doesn't accept local file paths, only repo package names),
+    // through pkexec for the native polkit auth prompt. `-y` is required
+    // since pkexec runs it with no attached terminal to answer apt's own
+    // "Do you want to continue? [Y/n]" — there's nothing to answer it.
+    // Absolute path to apt (not just "apt") since pkexec sanitizes the
+    // environment it hands to the executed command, including PATH.
+    onLaunching?.();
+    const exitCode = await new Promise<number | null>((resolve, reject) => {
+      const child = spawn("pkexec", ["/usr/bin/apt", "install", "-y", targetPath], { stdio: "ignore" });
+      child.once("error", reject);
+      child.once("exit", (code) => resolve(code));
+    }).catch((e: Error) => { throw new Error(`Failed to start installer: ${e.message}`); });
+    if (exitCode !== 0) {
+      // pkexec's own exit codes: 126 = the auth dialog was dismissed/denied,
+      // 127 = the target command couldn't be found/executed. Anything else
+      // is apt's own exit code, meaning the auth prompt was accepted but
+      // the install itself failed (e.g. unmet dependencies, disk full).
+      const reason = exitCode === 126 ? "Installation was cancelled" : `apt install failed (exit code ${exitCode})`;
+      throw new Error(reason);
+    }
+    // Install actually completed (unlike the fire-and-forget AppImage/
+    // Windows branches, this awaited the whole thing) — safe to relaunch
+    // the freshly-installed binary now, same detached-spawn technique as
+    // the AppImage branch above.
+    openError = await new Promise<string>((resolve) => {
+      const child = spawn("icosahedron", [], { detached: true, stdio: "ignore" });
+      child.once("error", (e) => resolve(e.message));
+      child.once("spawn", () => { child.unref(); resolve(""); });
+    });
   } else {
-    // Windows .exe or Linux .deb: hand off to the installer/package handler
-    // via the desktop's default file association (same as double-clicking
-    // the download in a file manager), which does the actual "replace the
-    // app" work itself — NSIS is an assisted wizard (not one-click, see
-    // package.json's build.nsis) and a .deb typically opens a GUI installer
-    // (GNOME Software, gdebi, etc.) that prompts for its own auth — either
-    // way the user walks through the normal install steps from here.
+    // Windows: hand off to the installer via the desktop's default file
+    // association (same as double-clicking the download in a file
+    // manager) — shell.openPath (not child_process.execFile) because
+    // Electron/Chromium puts itself in a Windows Job Object that kills
+    // *all* child processes when the parent exits, and Node's
+    // `detached: true` isn't enough to escape that (it only detaches the
+    // console, not the job); the installer was getting killed by
+    // app.quit() below before it could fully start. shell.openPath
+    // launches the file the same way double-clicking it in Explorer
+    // would, which sits entirely outside Electron's process tree and
+    // survives the app quitting. NSIS is an assisted wizard (not
+    // one-click, see package.json's build.nsis), so the user still walks
+    // through the normal install steps from here. shell.openPath resolves
+    // to an error message string on failure (not a throw) — surface it as
+    // a real rejection so the renderer's error state reflects a launch
+    // failure instead of quietly "succeeding".
     openError = await shell.openPath(targetPath);
   }
   if (openError) throw new Error(`Failed to launch installer: ${openError}`);

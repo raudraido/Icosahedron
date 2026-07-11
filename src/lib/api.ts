@@ -90,6 +90,16 @@ export interface Playlist {
   owner: string | null;
 }
 
+/** Server-side play queue (Subsonic's savePlayQueue/getPlayQueue) — lets the
+ *  queue + position sync across devices/sessions, distinct from the
+ *  local-only localStorage session restore in src/store/index.ts. */
+export interface PlayQueue {
+  tracks: Track[];
+  /** -1 if the server reported no `current` track (or it's no longer in `tracks`). */
+  currentIndex: number;
+  positionSecs: number;
+}
+
 export interface ArtistDetail {
   artist: Artist;
   albums: Album[];
@@ -148,6 +158,27 @@ export interface UpdateDownloadProgress {
   receivedBytes: number;
   totalBytes: number;
 }
+
+/** A discovered Chromecast/DLNA receiver (electron/main/castDiscovery.ts) —
+ *  `id` is opaque to the renderer, only used to pass back to `castConnect`. */
+export interface CastDevice {
+  id: string;
+  name: string;
+  protocol: "chromecast" | "dlna";
+  /** False when a real TCP connectivity probe to the device failed —
+   *  CastPicker.tsx greys these out and disables connecting to them. */
+  reachable: boolean;
+}
+
+/** Pushed from electron/main/castManager.ts via the `onCastStatus` preload
+ *  channel — see src/store/index.ts's `handleCastEvent` for how each kind
+ *  is handled. Mirrors castManager.ts's own `CastPush` union exactly. */
+export type CastPush =
+  | { kind: "connected"; device: CastDevice }
+  | { kind: "status"; playing: boolean; currentTime: number; duration: number; volume: number }
+  | { kind: "ended" }
+  | { kind: "disconnected" }
+  | { kind: "error"; message: string };
 
 /** Pushed from the native gapless audio engine (electron/main/audioEngine.ts)
  *  via the `onAudioEvent` preload channel — see src/store/index.ts's
@@ -250,6 +281,10 @@ export const api = {
   scrobble: (trackId: string, submission: boolean) =>
     invoke<void>("scrobble", { trackId, submission }),
 
+  getPlayQueue: () => invoke<PlayQueue | null>("get_play_queue"),
+  savePlayQueue: (trackIds: string[], currentTrackId: string | null, positionSecs: number) =>
+    invoke<void>("save_play_queue", { trackIds, currentTrackId, positionSecs }),
+
   // Client-side Last.fm scrobbling (independent of the Navidrome-relayed
   // `scrobble` above) — see electron/main/lastfm.ts. The session key never
   // reaches the renderer; these calls only ever carry track metadata. Scoped
@@ -311,6 +346,20 @@ export const api = {
   audioStop: () => invoke<void>("audio_stop"),
   audioSeek: (seconds: number) => invoke<void>("audio_seek", { seconds }),
   audioSetVolume: (volume: number) => invoke<void>("audio_set_volume", { volume }),
+
+  // ── Casting (electron/main/castManager.ts) — Chromecast/DLNA, "send a URL,
+  // the receiver plays it" model, not an audio relay through this app. ──────
+  castDiscover: () => invoke<CastDevice[]>("cast_discover"),
+  castConnect: (deviceId: string) => invoke<void>("cast_connect", { deviceId }),
+  castDisconnect: () => invoke<void>("cast_disconnect"),
+  castPlayTrack: (input: {
+    trackId: string; title: string; artist: string; coverId: string | null; format: string | null; positionSecs: number;
+  }) => invoke<void>("cast_play_track", input),
+  castPause: () => invoke<void>("cast_pause"),
+  castResume: () => invoke<void>("cast_resume"),
+  castStop: () => invoke<void>("cast_stop"),
+  castSeek: (seconds: number) => invoke<void>("cast_seek", { seconds }),
+  castSetVolume: (volume: number) => invoke<void>("cast_set_volume", { volume }),
 
   // ── BPM detection (footer bar) — cache-first; get_bpm runs the native
   // QM-DSP analyzer on a cache miss (can take a few seconds), so callers

@@ -27,4 +27,27 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("update_installer_launching", listener);
     return () => ipcRenderer.removeListener("update_installer_launching", listener);
   },
+  // Pushed after a background rescan (see castManager.ts's discover()/
+  // rescan()) resolves — the picker opens to an instantly-cached list and
+  // live-updates via this channel if that cache was stale.
+  onCastDevices: (cb: (payload: unknown) => void) => {
+    const listener = (_e: Electron.IpcRendererEvent, payload: unknown) => cb(payload);
+    ipcRenderer.on("cast_devices", listener);
+    return () => ipcRenderer.removeListener("cast_devices", listener);
+  },
+  // Connected/status/ended/disconnected/error events for the single active
+  // cast session — see castManager.ts's CastPush union.
+  onCastStatus: (cb: (payload: unknown) => void) => {
+    const listener = (_e: Electron.IpcRendererEvent, payload: unknown) => cb(payload);
+    ipcRenderer.on("cast_status", listener);
+    return () => ipcRenderer.removeListener("cast_status", listener);
+  },
+  // True while castManager.ts's rescan() is in flight — CastPicker.tsx shows
+  // "Scanning…"/"Refreshing…" while this is true instead of leaving the
+  // user staring at an empty or stale-looking list with no feedback.
+  onCastScanning: (cb: (scanning: boolean) => void) => {
+    const listener = (_e: Electron.IpcRendererEvent, scanning: boolean) => cb(scanning);
+    ipcRenderer.on("cast_scanning", listener);
+    return () => ipcRenderer.removeListener("cast_scanning", listener);
+  },
 });

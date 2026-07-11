@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { api, AudioEventPayload, Track, Album, Playlist, ServerProfile } from "../lib/api";
+import { api, AudioEventPayload, Track, Album, Playlist, ServerProfile, CastDevice, CastPush } from "../lib/api";
 import type { QueueTab } from "../components/QueueBottomTabs";
 import { queryClient } from "../lib/queryClient";
 
@@ -234,6 +234,46 @@ interface AppStore {
   persistSession: () => void;
   restoreSession: () => Promise<void>;
   loadRandomTrack: () => Promise<void>;
+
+  // server-side queue sync (QueuePanel's upload/download icons) — distinct
+  // from the local-only persistSession/restoreSession above: this round-trips
+  // through the Subsonic server (savePlayQueue/getPlayQueue) so the queue can
+  // be picked up from a different device/session, not just this app restarting.
+  /** True while either save or restore is in flight — disables both icons so
+   *  a save and a restore can't race each other over `queue`/`currentIndex`. */
+  queueSyncBusy: boolean;
+  saveQueueToServer: () => Promise<void>;
+  restoreQueueFromServer: () => Promise<void>;
+
+  // Casting (Chromecast/DLNA, PlayerBar's cast button + CastPicker.tsx) —
+  // "send a URL, the receiver plays it" model (electron/main/castManager.ts).
+  // Local playback keeps running unchanged while connected — this is a
+  // second, independent output alongside it, not a takeover (matches the old
+  // app's own parallel-pipelines design). While castConnected, playTrack/
+  // playPause/stop/setCurrentTime additionally relay to the receiver on top
+  // of their normal local-engine call; volume stays fully independent per
+  // output (see castVolume/setCastVolume below) since "This device" and each
+  // cast device get their own slider in CastPicker, same as the old app.
+  castDevices: CastDevice[];
+  /** True while castManager.ts's background rescan is in flight — lets
+   *  CastPicker.tsx show "Scanning…"/"Refreshing…" instead of leaving an
+   *  empty or stale-looking list with no feedback. */
+  castScanning: boolean;
+  castConnecting: boolean;
+  /** Set when connectCast's api.castConnect() rejects (e.g. the device is
+   *  unreachable) — cleared at the start of the next attempt. Surfaced in
+   *  CastPicker.tsx so a failure is visible instead of silently doing
+   *  nothing, which otherwise reads as "the app didn't hear my click". */
+  castConnectError: string | null;
+  castConnected: boolean;
+  castDevice: CastDevice | null;
+  /** The connected device's own volume (0-100) — independent of `volume`
+   *  above, which stays local-only. */
+  castVolume: number;
+  setCastVolume: (v: number) => void;
+  discoverCastDevices: () => Promise<void>;
+  connectCast: (deviceId: string) => Promise<void>;
+  disconnectCast: () => Promise<void>;
 }
 
 // Namespaced per server — otherwise switching servers would restore (or
@@ -638,6 +678,14 @@ export const useStore = create<AppStore>((set, get) => ({
   _committedNext: null,
   _committedNextIndex: null,
   _chainedForTrackId: null,
+  queueSyncBusy: false,
+  castDevices: [],
+  castScanning: false,
+  castConnecting: false,
+  castConnectError: null,
+  castConnected: false,
+  castDevice: null,
+  castVolume: 100,
 
   playTrack: (track, queue) => {
     const resolvedQueue = queue ?? [track];
@@ -658,8 +706,18 @@ export const useStore = create<AppStore>((set, get) => ({
 
     // manual=true: bypasses the gapless pre-chain hit and starts immediately
     // (this is always a user-initiated action — auto-advance never calls
-    // playTrack, see handleAudioEvent's "track_switched" case).
+    // playTrack, see handleAudioEvent's "track_switched" case, which has its
+    // own matching cast-relay call since it can't reach this one). Local
+    // playback always gets this call — casting is a second, independent
+    // output alongside it (not a takeover), so a connected cast session
+    // additionally gets the same track relayed, never instead of local.
     api.audioPlay(track.stream_url, volume / 100, track.duration_secs, true, false).catch(() => {});
+    if (get().castConnected) {
+      api.castPlayTrack({
+        trackId: track.id, title: track.title, artist: track.artist,
+        coverId: track.cover_id, format: track.format, positionSecs: 0,
+      }).catch(() => {});
+    }
     scrobble(track, false);
 
     set({
@@ -675,13 +733,15 @@ export const useStore = create<AppStore>((set, get) => ({
   },
 
   playPause: () => {
-    const { playing } = get();
+    const { playing, castConnected } = get();
     if (playing) api.audioPause(); else api.audioResume();
+    if (castConnected) { if (playing) api.castPause(); else api.castResume(); }
     set({ playing: !playing });
   },
 
   stop: () => {
     api.audioStop();
+    if (get().castConnected) api.castStop();
     set({ playing: false, ...positionPatch(0) });
   },
 
@@ -692,9 +752,10 @@ export const useStore = create<AppStore>((set, get) => ({
   },
 
   prev: () => {
-    const { queue, currentIndex, currentTime, playTrack } = get();
+    const { queue, currentIndex, currentTime, castConnected, playTrack } = get();
     if (currentTime > 3) {
       api.audioSeek(0);
+      if (castConnected) api.castSeek(0);
       set(positionPatch(0));
       return;
     }
@@ -704,13 +765,23 @@ export const useStore = create<AppStore>((set, get) => ({
 
   setCurrentTime: (secs) => {
     api.audioSeek(secs);
+    if (get().castConnected) api.castSeek(secs);
     set(positionPatch(secs));
   },
 
+  // Local-only — the connected cast device (if any) has its own independent
+  // volume, setCastVolume below, same as "This device" vs. each device
+  // getting its own slider in CastPicker.tsx.
   setVolume: (v) => {
     const clamped = Math.max(0, Math.min(100, v));
     api.audioSetVolume(clamped / 100);
     set({ volume: clamped });
+  },
+
+  setCastVolume: (v) => {
+    const clamped = Math.max(0, Math.min(100, v));
+    api.castSetVolume(clamped / 100);
+    set({ castVolume: clamped });
   },
 
   toggleShuffle: () => set((s) => ({ shuffle: !s.shuffle })),
@@ -874,6 +945,80 @@ export const useStore = create<AppStore>((set, get) => ({
       await api.audioPlay(track.stream_url, volume / 100, track.duration_secs, true, true).catch(() => {});
     } catch { /* best-effort — an empty queue beats a boot-time error */ }
   },
+
+  saveQueueToServer: async () => {
+    const { queue, currentIndex, currentTime } = get();
+    if (!queue.length) return;
+    set({ queueSyncBusy: true });
+    try {
+      await api.savePlayQueue(queue.map((t) => t.id), queue[currentIndex]?.id ?? null, currentTime);
+    } finally {
+      set({ queueSyncBusy: false });
+    }
+  },
+
+  // Same "primed and ready, paused" landing state as restoreSession/
+  // loadRandomTrack above — start_paused=true then seek, so the engine never
+  // audibly blips through position 0 before jumping to the saved position.
+  restoreQueueFromServer: async () => {
+    set({ queueSyncBusy: true });
+    try {
+      const saved = await api.getPlayQueue();
+      if (!saved || !saved.tracks.length) return;
+      const idx = saved.currentIndex >= 0 && saved.currentIndex < saved.tracks.length ? saved.currentIndex : 0;
+      const track = saved.tracks[idx];
+      const { volume } = get();
+      set({
+        queue: saved.tracks, currentIndex: idx, playing: false,
+        ...positionPatch(saved.positionSecs), duration: track.duration_secs || 0,
+        _committedNext: null, _committedNextIndex: null, _chainedForTrackId: null,
+      });
+      await api.audioPlay(track.stream_url, volume / 100, track.duration_secs, true, true)
+        .then(() => api.audioSeek(saved.positionSecs))
+        .catch(() => {});
+    } finally {
+      set({ queueSyncBusy: false });
+    }
+  },
+
+  discoverCastDevices: async () => {
+    const devices = await api.castDiscover().catch(() => []);
+    set({ castDevices: devices });
+  },
+
+  // castConnected/castDevice flip once handleCastEvent sees the "connected"
+  // push from castManager.ts (below) — not set optimistically here, so the
+  // store never claims a session exists that the main process didn't
+  // actually confirm.
+  connectCast: async (deviceId) => {
+    set({ castConnecting: true, castConnectError: null });
+    try {
+      await api.castConnect(deviceId);
+      const { queue, currentIndex, currentTime } = get();
+      const track = queue[currentIndex];
+      if (track) {
+        await api.castPlayTrack({
+          trackId: track.id, title: track.title, artist: track.artist,
+          coverId: track.cover_id, format: track.format, positionSecs: currentTime,
+        }).catch(() => {});
+      }
+    } catch (err) {
+      // api.castConnect's rejection used to propagate uncaught out of this
+      // action (CastPicker's onConnect={connectCast} has no .catch of its
+      // own) — silent from the user's POV, which just reads as the picker
+      // not responding to the click at all.
+      set({ castConnectError: err instanceof Error ? err.message : "Couldn't connect to that device" });
+    } finally {
+      set({ castConnecting: false });
+    }
+  },
+
+  disconnectCast: async () => {
+    await api.castDisconnect().catch(() => {});
+    // Doesn't touch `playing` — local playback runs independently of the
+    // cast session now, so disconnecting has no effect on it either way.
+    set({ castConnected: false, castDevice: null, castConnectError: null });
+  },
 }));
 
 // ── Native audio engine event handling ──────────────────────────────────────
@@ -941,6 +1086,23 @@ function handleAudioEvent(payload: AudioEventPayload) {
       // a real play, unlike playTrack's threshold-gated manual-switch case.
       if (finishedTrack) scrobble(finishedTrack, true);
       if (committed) scrobble(committed, false);
+      // Gapless auto-advance never goes through playTrack (this event *is*
+      // the advance — local has already started the new track by the time
+      // this fires), so it needs its own cast-relay call to keep a
+      // connected device following along. No gapless equivalent exists on
+      // the cast side (loadMedia is a discrete "load and play" call, not a
+      // preloaded chain), so there's an inherent brief gap here that local
+      // playback doesn't have — same limitation the old app's single-
+      // track-at-a-time relay design already accepted.
+      if (s.castConnected) {
+        const newTrack = s.queue[newIndex];
+        if (newTrack) {
+          api.castPlayTrack({
+            trackId: newTrack.id, title: newTrack.title, artist: newTrack.artist,
+            coverId: newTrack.cover_id, format: newTrack.format, positionSecs: 0,
+          }).catch(() => {});
+        }
+      }
       break;
     }
     case "ended": {
@@ -949,6 +1111,7 @@ function handleAudioEvent(payload: AudioEventPayload) {
       // ended played out in full, so it always counts as a real play.
       const finishedTrack = s.queue[s.currentIndex];
       if (finishedTrack) scrobble(finishedTrack, true);
+      if (s.castConnected) api.castStop();
       useStore.setState({ playing: false });
       break;
     }
@@ -961,6 +1124,47 @@ function handleAudioEvent(payload: AudioEventPayload) {
 }
 
 window.electronAPI.onAudioEvent(handleAudioEvent);
+
+// Reconciles the single active cast session's state, pushed from
+// castManager.ts — structured like handleAudioEvent above (module-scope,
+// reads/writes via useStore directly, since it runs outside any
+// component/action context). `playing`/`currentTime`/`duration` stay
+// local-engine-authoritative throughout (see handleAudioEvent above) — cast
+// is a second, independent output, not a takeover, so its own reported
+// transport state only ever updates castVolume here, never the shared
+// playback-position fields local's own scrubber/play-pause icon reflect.
+function handleCastEvent(payload: CastPush) {
+  switch (payload.kind) {
+    case "connected":
+      useStore.setState({ castConnected: true, castDevice: payload.device });
+      break;
+    case "status":
+      useStore.setState({ castVolume: Math.round(payload.volume * 100) });
+      break;
+    case "ended":
+      // Deliberately a no-op — local's own track_switched/ended handling
+      // (handleAudioEvent above) already drives queue advancement and
+      // relays the next track to cast itself. Reacting to the *device's*
+      // end-of-track here too would double-advance the queue whenever the
+      // two happen to finish within the same tick of each other.
+      break;
+    case "disconnected":
+    case "error":
+      if (payload.kind === "error") console.error("[cast]", payload.message);
+      // Doesn't touch `playing` — local keeps running unaffected by the
+      // cast session dropping.
+      useStore.setState({ castConnected: false, castDevice: null });
+      break;
+  }
+}
+
+window.electronAPI.onCastStatus(handleCastEvent);
+
+// Live-refreshes the picker's device list when castManager.ts's background
+// rescan (triggered by discoverCastDevices finding its cache stale) resolves
+// — the picker itself doesn't need to be open/polling for this.
+window.electronAPI.onCastDevices((devices) => useStore.setState({ castDevices: devices }));
+window.electronAPI.onCastScanning((scanning) => useStore.setState({ castScanning: scanning }));
 
 // ── Window title ─────────────────────────────────────────────────────────
 // Matches the old app's update_window_title (player/mixins/visuals.py):

@@ -96,12 +96,25 @@ export function GlobalTooltip() {
     const el = popRef.current;
     if (!el) return;
     const h = el.offsetHeight;
+    const w = el.offsetWidth;
     const fitsAbove = anchor.aboveY - h >= 4;
-    setPos({
-      left: anchor.cx,
-      top: fitsAbove ? anchor.aboveY : anchor.belowY,
-      anchor: fitsAbove ? "above" : "below",
-    });
+    const anchorSide: "above" | "below" = fitsAbove ? "above" : "below";
+    // `top` is the CSS value the translate(-50%, ±100%) below is relative
+    // to, not the box's own top edge — for "below" that edge is exactly
+    // `top`, so clamp it against the window bottom directly. Previously
+    // unclamped: a tooltip anchored near the bottom of the window (fitsAbove
+    // already false) could still run off *below* too, since only the "flip
+    // to below" fallback existed with no check that below actually fits.
+    const top = anchorSide === "below"
+      ? Math.min(anchor.belowY, window.innerHeight - h - 4)
+      : anchor.aboveY;
+    // Horizontal clamp previously bounded only the center point (anchor.cx),
+    // not the actual rendered box — a wide tooltip (up to 480px) centered
+    // near an edge still overflowed past it. Clamping by half-width instead
+    // keeps the whole box on-screen.
+    const halfW = w / 2;
+    const left = Math.max(4 + halfW, Math.min(anchor.cx, window.innerWidth - 4 - halfW));
+    setPos({ left, top, anchor: anchorSide });
   }, [anchor]);
 
   return (
@@ -109,7 +122,10 @@ export function GlobalTooltip() {
       ref={popRef}
       style={{
         position: "fixed",
-        left: Math.max(4, Math.min(pos?.left ?? anchor?.cx ?? 0, window.innerWidth - 4)),
+        // Already width/height-aware clamped in the layout effect above —
+        // the anchor.cx/aboveY fallbacks below only matter for the first,
+        // still-invisible paint before that effect has run once.
+        left: pos?.left ?? anchor?.cx ?? 0,
         top: pos?.top ?? anchor?.aboveY ?? 0,
         transform: `translate(-50%, ${pos?.anchor === "below" ? "0" : "-100%"})`,
         visibility: anchor && pos ? "visible" : "hidden",

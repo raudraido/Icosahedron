@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { SubsonicClient } from "./subsonic";
 import { AudioEngineClient } from "./audioEngine";
+import { CastManager } from "./castManager";
 import { registerCoverProtocol } from "./coverProtocol";
 import { applyWindowState, loadWindowState } from "./windowState";
 import { loadTraySettings, saveTraySettings, TraySettings } from "./traySettings";
@@ -50,6 +51,7 @@ if (!app.requestSingleInstanceLock()) {
 
 let client: SubsonicClient | null = null;
 let audioEngine: AudioEngineClient | null = null;
+let castManager: CastManager | null = null;
 // Tracked separately from the AudioEngineClient's own copy so the
 // download_and_install_update handler (registered outside createWindow) can
 // push progress events without needing to reach back into that closure.
@@ -143,6 +145,7 @@ function createWindow(): void {
   });
   applyWindowState(win, state);
   audioEngine = new AudioEngineClient(win);
+  castManager = new CastManager(win, () => client);
   mainWindow = win;
 
   // 'minimize' isn't cancelable in current Electron typings — hiding right
@@ -194,6 +197,11 @@ function requireClient(): SubsonicClient {
 function requireAudio(): AudioEngineClient {
   if (!audioEngine) throw new Error("audio engine not ready");
   return audioEngine;
+}
+
+function requireCast(): CastManager {
+  if (!castManager) throw new Error("cast manager not ready");
+  return castManager;
 }
 
 function registerIpcHandlers(): void {
@@ -320,6 +328,10 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle("scrobble", (_e, { trackId, submission }) => requireClient().scrobble(trackId, submission));
 
+  ipcMain.handle("get_play_queue", () => requireClient().getPlayQueue());
+  ipcMain.handle("save_play_queue", (_e, { trackIds, currentTrackId, positionSecs }) =>
+    requireClient().savePlayQueue(trackIds, currentTrackId, positionSecs));
+
   // ── Client-side Last.fm scrobbling (electron/main/lastfm.ts) — independent
   // of the Navidrome-relayed scrobble above, for users without Last.fm
   // configured server-side. Session key never leaves the main process; see
@@ -398,6 +410,17 @@ function registerIpcHandlers(): void {
   ipcMain.handle("audio_seek", (_e, { seconds }) => requireAudio().seek(seconds));
   ipcMain.handle("audio_set_volume", (_e, { volume }) => requireAudio().setVolume(volume));
 
+  // ── Casting (Chromecast/DLNA — see castManager.ts) ──────────────────────
+  ipcMain.handle("cast_discover", () => requireCast().discover());
+  ipcMain.handle("cast_connect", (_e, { deviceId }) => requireCast().connect(deviceId));
+  ipcMain.handle("cast_disconnect", () => requireCast().disconnect());
+  ipcMain.handle("cast_play_track", (_e, input) => requireCast().playTrack(input));
+  ipcMain.handle("cast_pause", () => requireCast().pause());
+  ipcMain.handle("cast_resume", () => requireCast().resume());
+  ipcMain.handle("cast_stop", () => requireCast().stop());
+  ipcMain.handle("cast_seek", (_e, { seconds }) => requireCast().seek(seconds));
+  ipcMain.handle("cast_set_volume", (_e, { volume }) => requireCast().setVolume(volume));
+
   // ── BPM detection (footer bar) — cache-first, falls back to the native
   // QM-DSP analyzer (audio_engine.rs's analyze_bpm) on a cache miss. ────────
   ipcMain.handle("get_bpm", async (_e, { trackId, streamUrl }) => {
@@ -467,4 +490,5 @@ app.on("window-all-closed", () => {
 app.on("before-quit", () => {
   isQuitting = true;
   audioEngine?.stop();
+  castManager?.teardown();
 });

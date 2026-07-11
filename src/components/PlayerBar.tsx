@@ -11,6 +11,7 @@ import { AlbumLink } from "./AlbumLink";
 import { loadJSON, saveJSON } from "./TrackTable";
 import { api, fmtDuration, Track } from "../lib/api";
 import { ContextMenu, MenuEntry } from "./ContextMenu";
+import { CastPicker } from "./CastPicker";
 import { PromptDialog } from "./PromptDialog";
 import { TrackInfoDialog } from "./TrackInfoDialog";
 import { BpmMenu } from "./BpmMenu";
@@ -96,6 +97,18 @@ export function PlayerBar() {
   const playTrack          = useStore((s) => s.playTrack);
   const addTrackNext       = useStore((s) => s.addTrackNext);
   const startRadio         = useStore((s) => s.startRadio);
+  const castConnected      = useStore((s) => s.castConnected);
+  const castConnecting     = useStore((s) => s.castConnecting);
+  const castConnectError   = useStore((s) => s.castConnectError);
+  const castDevice         = useStore((s) => s.castDevice);
+  const castDevices        = useStore((s) => s.castDevices);
+  const castScanning       = useStore((s) => s.castScanning);
+  const discoverCastDevices = useStore((s) => s.discoverCastDevices);
+  const connectCast        = useStore((s) => s.connectCast);
+  const disconnectCast     = useStore((s) => s.disconnectCast);
+  const castVolume         = useStore((s) => s.castVolume);
+  const setCastVolume      = useStore((s) => s.setCastVolume);
+  const [castPicker, setCastPicker] = useState<{ x: number; y: number } | null>(null);
   const [artHov, setArtHov] = useState(false);
   const [expandBtnHov, setExpandBtnHov] = useState(false);
 
@@ -441,17 +454,51 @@ export function PlayerBar() {
           style={{ width: 100, height: 5, accentColor: "var(--accent)" }}
         />
 
-        {/* Cast — no casting feature implemented, so always shows the disconnected
-            muted-gray tint (the old app's connected state uses accent instead) */}
+        {/* Cast — accent when connected, muted-gray (disconnected tint) otherwise,
+            matching Mute's own conditional tint. Opens CastPicker.tsx anchored to
+            this button's own rect, same pattern as TrackTable's filter icon. */}
         <button
+          data-cast-trigger
+          onClick={(e) => {
+            if (castPicker) { setCastPicker(null); return; }
+            const rect = e.currentTarget.getBoundingClientRect();
+            // CastPicker opens upward-and-leftward from this corner — see
+            // its own x/y doc comments for why (bottom-right-corner trigger).
+            setCastPicker({ x: rect.right, y: rect.top - 4 });
+            discoverCastDevices();
+          }}
+          title={castConnected ? `Casting to ${castDevice?.name}` : "Cast"}
           className="flex items-center justify-center shrink-0"
-          style={{ width: 40, height: 40, borderRadius: 20, background: "transparent", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}
+          style={{ width: 40, height: 40, borderRadius: 20, background: "transparent", border: "none", cursor: "pointer", color: castConnected ? "var(--accent)" : "var(--text-secondary)" }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
         >
           <Icon src="img/cast.png" size={22} />
         </button>
       </div>
+
+      {castPicker && (
+        <CastPicker
+          x={castPicker.x}
+          y={castPicker.y}
+          track={track}
+          volume={volume}
+          onVolumeChange={setVolume}
+          castVolume={castVolume}
+          onCastVolumeChange={setCastVolume}
+          devices={castDevices}
+          scanning={castScanning}
+          connectedDevice={castDevice}
+          connecting={castConnecting}
+          connectError={castConnectError}
+          // Stays open across a toggle (matches the old app) — the row's own
+          // checkmark/slider update in place so switching devices or
+          // adjusting volume doesn't require reopening the picker each time.
+          onConnect={connectCast}
+          onDisconnect={disconnectCast}
+          onClose={() => setCastPicker(null)}
+        />
+      )}
 
       {ctxMenu && track && (
         <ContextMenu x={ctxMenu.x} y={ctxMenu.y} items={buildFooterMenu(track)} onClose={() => setCtxMenu(null)} />

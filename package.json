@@ -10,13 +10,15 @@
     "dev": "electron-vite dev",
     "build": "tsc --noEmit && electron-vite build",
     "preview": "electron-vite preview",
-    "dist": "npm run build && electron-builder --publish=never",
+    "dist": "npm run build && node scripts/gen-appstream.mjs && electron-builder --publish=never",
     "build:native": "cd native/audio-engine && napi build --platform --release",
     "postinstall": "npm run build:native"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.2",
     "@tanstack/react-virtual": "^3.14.5",
+    "bonjour-service": "^1.4.3",
+    "castv2-client": "^1.2.0",
     "icosahedron-audio-engine": "file:./native/audio-engine",
     "lucide-react": "^1.23.0",
     "md5": "^2.3.0",
@@ -43,7 +45,8 @@
   },
   "overrides": {
     "glob": "^13.0.6",
-    "rimraf": "^6.1.3"
+    "rimraf": "^6.1.3",
+    "protobufjs": "^8.7.0"
   },
   "build": {
     "appId": "cloud.raud.icosahedron",
@@ -67,6 +70,9 @@
     "deb": {
       "depends": [
         "libasound2"
+      ],
+      "fpm": [
+        "build/linux/cloud.raud.icosahedron.metainfo.xml=/usr/share/metainfo/cloud.raud.icosahedron.metainfo.xml"
       ]
     },
     "win": {

@@ -343,7 +343,15 @@ function MainApp() {
               <NavArrow direction="right" disabled={!canFwd}  onClick={navFwd} />
             </div>
 
-            <div className="flex-1 flex items-center" style={{ gap: tabGap }}>
+            {/* justify-content only matters in icon-only mode: at natural
+                size or while growing, tabs already fill the section edge to
+                edge on their own (see check()'s grow/gap logic), so
+                flex-start vs. center makes no visible difference there —
+                but compact mode's fixed-size icons rarely fill the whole
+                row, and left-aligning them (the default) would otherwise
+                leave them stuck to the left edge instead of centered in the
+                space actually available. */}
+            <div className="flex-1 flex items-center" style={{ gap: tabGap, justifyContent: compact ? "center" : "flex-start" }}>
             {navOrder.map((id) => {
               const n = NAV.find((entry) => entry.id === id);
               if (!n) return null;

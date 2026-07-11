@@ -60,32 +60,90 @@ function loadNavOrder(): Tab[] {
 // opacity fade on inactive tabs (a plain color difference, full opacity both
 // ways), and the active-tab highlight is a hand-painted rounded rect filled
 // with accent at alpha 45/255 (~17.6%), radius 6px, no border stroke — not
-// the app's general var(--hover-bg) token. minWidth gives every tab the same
-// footprint regardless of label length (matches QTabBar's native equal-width
-// tab sizing) — only visible on whichever tab is active (its background pill
-// reveals the reserved space), which is why a short label like "Home" shows
-// noticeably more padding around its icon+text than a long one like
-// "Mix Builder" once it's the active tab.
-// Full-label tab width (used both for layout and for computing the icon-only
-// breakpoint below) and the icon-only mode's tighter width.
-// 2 × 30px NavArrow buttons + 4px gap between them — occupies the tab bar's
-// left corner now (see MainApp), mirrored by an equal-width empty spacer on
-// the right so the tab group still visually centers on the whole row, not
-// just the space left over next to the buttons.
+// the app's general var(--hover-bg) token. Unlike QTabBar's native
+// equal-width tab sizing, tabs here always size to their own icon+label
+// content — a per-tab `maxWidth` cap (computed by MainApp's check() from
+// real measured content widths, not a guessed budget) only ever kicks in
+// once the whole row genuinely can't fit at natural size, and only shrinks
+// the specific tabs wide enough to need it. Any leftover slack goes the
+// other direction instead — a per-tab `grow` pads every tab out evenly so
+// the tabs section fills its space rather than leaving it blank. See
+// waterFillCaps() below.
+// 2 × 30px NavArrow buttons + 4px gap between them — the tab bar's left
+// corner (see MainApp). No matching right-side spacer: the header is two
+// fixed-purpose sections now (this arrows block, then a tabs section that
+// fills 100% of what's left), not a single row centered around its own
+// content — an earlier centered version left a growing dead gap between
+// the last tab and the queue panel on wide windows instead of using it.
 const NAV_ARROWS_WIDTH = 30 * 2 + 4;
 
-const FULL_TAB_WIDTH = 110;
+// The gap between tabs eases from MAX toward MIN as the window narrows
+// (see MainApp's check()), and only once it's already at MIN and tabs still
+// don't fit at their natural content width do per-tab caps kick in. Below
+// that, icon-only is the last resort — FULL_TAB_WIDTH_MIN is the floor per
+// tab check() uses to decide labels genuinely can't be shown at all anymore
+// (not a size actually applied to any tab).
+const FULL_TAB_WIDTH_MIN = 70;
 const COMPACT_TAB_WIDTH = 44;
-const TAB_GAP = 4;
+const TAB_GAP_MAX = 4;
+const TAB_GAP_MIN = 1;
+
+// Fair-share width allocation: give every id its own natural width unless
+// the total doesn't fit `available`, in which case tabs wide enough to
+// exceed the per-tab "share" get capped there while everything under the
+// share keeps its full natural size — repeated because capping a wide tab
+// down to the share frees space that raises the share for whoever's left
+// uncapped. Standard water-filling; O(n^2) is irrelevant at n=9 tabs.
+function waterFillCaps<T extends string>(ids: T[], naturalWidths: number[], available: number): Partial<Record<T, number>> {
+  const n = ids.length;
+  const resolved = new Array(n).fill(false);
+  const result = new Array(n).fill(0);
+  let remaining = available;
+  let unresolvedCount = n;
+  let changed = true;
+  while (changed && unresolvedCount > 0) {
+    changed = false;
+    const share = remaining / unresolvedCount;
+    for (let i = 0; i < n; i++) {
+      if (resolved[i] || naturalWidths[i] > share) continue;
+      result[i] = naturalWidths[i];
+      remaining -= naturalWidths[i];
+      unresolvedCount--;
+      resolved[i] = true;
+      changed = true;
+    }
+  }
+  if (unresolvedCount > 0) {
+    const share = remaining / unresolvedCount;
+    for (let i = 0; i < n; i++) if (!resolved[i]) result[i] = share;
+  }
+  const caps: Partial<Record<T, number>> = {};
+  ids.forEach((id, i) => { caps[id] = result[i]; });
+  return caps;
+}
 
 function NavTab({
-  n, active, dragging, compact, onClick, onDragStart, onDragOver, onDragEnd,
+  n, active, dragging, compact, cap, grow, onClick, onDragStart, onDragOver, onDragEnd,
 }: {
-  n: typeof NAV[0]; active: boolean; dragging: boolean; compact: boolean; onClick: () => void;
+  n: typeof NAV[0]; active: boolean; dragging: boolean; compact: boolean;
+  /** Width ceiling in px, from MainApp's check()/waterFillCaps() — undefined
+   *  means unconstrained (the common case: render at natural content
+   *  width). Only a tab whose natural width actually exceeds `cap` gets
+   *  truncated; anything under it renders at its own smaller natural size
+   *  instead of being padded out to match wider tabs. Mutually exclusive
+   *  with `grow`. */
+  cap?: number;
+  /** Forced width in px, only set when there's more room in the tabs
+   *  section than every tab needs at its own natural size — pads the tab
+   *  out beyond its content so the section fills the row instead of
+   *  leaving the extra space blank. Mutually exclusive with `cap`. */
+  grow?: number;
+  onClick: () => void;
   onDragStart: () => void; onDragOver: () => void; onDragEnd: () => void;
 }) {
   return (
     <button
+      data-nav-id={n.id}
       onClick={onClick}
       draggable
       onDragStart={onDragStart}
@@ -95,7 +153,8 @@ function NavTab({
       className="flex items-center justify-center gap-1.5 shrink-0 transition-colors"
       style={{
         padding: "10px 5px",
-        minWidth: compact ? COMPACT_TAB_WIDTH : FULL_TAB_WIDTH,
+        width: compact ? COMPACT_TAB_WIDTH : grow,
+        maxWidth: compact ? undefined : cap,
         borderRadius: 6,
         fontSize:   "var(--fs-primary)",
         fontWeight: "var(--fw-emphasis)",
@@ -110,8 +169,17 @@ function NavTab({
         if (!active) e.currentTarget.style.background = "transparent";
       }}
     >
-      <Icon src={n.icon} size={compact ? 20 : 16} style={{ background: "var(--accent)" }} />
-      {!compact && <span style={{ color: active ? "var(--accent)" : "var(--text-primary)" }}>{n.label}</span>}
+      <Icon src={n.icon} size={compact ? 20 : 16} style={{ background: "var(--accent)", flexShrink: 0 }} />
+      {!compact && (
+        <span
+          style={{
+            color: active ? "var(--accent)" : "var(--text-primary)",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0,
+          }}
+        >
+          {n.label}
+        </span>
+      )}
     </button>
   );
 }
@@ -138,23 +206,97 @@ function MainApp() {
   // when the tab bar's full-label width no longer fits the header, using the
   // *same* threshold for entering and leaving (no hysteresis gap there either,
   // so a resize sitting right at the boundary can flicker in both apps).
+  // Sizing is driven by each tab's real measured content width (via
+  // measureRef's hidden clone row below), not a guessed uniform budget — an
+  // earlier version assumed every tab needed the same ~134px, which both
+  // triggered shrinking far before the row's actual content required it and
+  // capped long labels ("Now Playing") below their real natural width even
+  // right at that trigger point.
   const headerRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
   const [compact, setCompact] = useState(false);
+  const [tabGap, setTabGap] = useState(TAB_GAP_MAX);
+  const [tabCaps, setTabCaps] = useState<Partial<Record<Tab, number>>>({});
+  // Forced per-tab width, only set when there's *more* room than every tab
+  // needs at its own natural size — the row is two fixed sections now (nav
+  // arrows, then tabs), not centered against a phantom right-side spacer, so
+  // slack has to go somewhere rather than sitting blank between the last
+  // tab and the queue panel: it's split evenly and added to every tab's
+  // natural width. Mutually exclusive with tabCaps (shrinking) — at most one
+  // of the two is ever non-empty.
+  const [tabGrown, setTabGrown] = useState<Partial<Record<Tab, number>>>({});
   useEffect(() => {
     const el = headerRef.current;
-    if (!el) return;
+    const measureEl = measureRef.current;
+    if (!el || !measureEl) return;
+    // Natural widths always come from the hidden, unconstrained clone row —
+    // never from the visible tabs' own offsetWidth, which may already be
+    // sitting under a cap from a previous narrower layout and would then
+    // under-report, sticking the row in shrink mode even after the window
+    // grows back.
+    function measureNatural(): number[] {
+      const byId: Record<string, number> = {};
+      measureEl!.querySelectorAll<HTMLButtonElement>("[data-nav-id]").forEach((btn) => {
+        byId[btn.dataset.navId!] = btn.offsetWidth;
+      });
+      return navOrder.map((id) => byId[id] ?? FULL_TAB_WIDTH_MIN);
+    }
     function check() {
-      const needed = navOrder.length * FULL_TAB_WIDTH + (navOrder.length - 1) * TAB_GAP;
-      // -24 = the row's own px-3 padding; -2×NAV_ARROWS_WIDTH = the left
-      // corner's nav-arrow buttons and their balancing right-side spacer,
-      // both of which eat into the middle segment's actual available width.
-      setCompact(needed > el!.clientWidth - 24 - NAV_ARROWS_WIDTH * 2);
+      // -24 = the row's own px-3 padding; -NAV_ARROWS_WIDTH = the left
+      // corner's nav-arrow buttons, the only other fixed-width section left
+      // in this row now — the tabs section fills 100% of what's left.
+      const available = el!.clientWidth - 24 - NAV_ARROWS_WIDTH;
+      const widths = measureNatural();
+      const naturalSum = widths.reduce((a, b) => a + b, 0);
+      const gapCount = navOrder.length - 1;
+      const neededAtMaxGap = naturalSum + gapCount * TAB_GAP_MAX;
+
+      if (available >= neededAtMaxGap) {
+        // Room to spare even at everyone's natural size and the widest gap
+        // — grow every tab by an equal share of what's left over so the
+        // tabs section fills the row all the way to its right edge instead
+        // of leaving that slack as dead space.
+        const share = (available - neededAtMaxGap) / navOrder.length;
+        const grown: Partial<Record<Tab, number>> = {};
+        navOrder.forEach((id, i) => { grown[id] = widths[i] + share; });
+        setCompact(false);
+        setTabGap(TAB_GAP_MAX);
+        setTabGrown(grown);
+        setTabCaps({});
+        return;
+      }
+      setTabGrown({});
+      if (available >= naturalSum + gapCount * TAB_GAP_MIN) {
+        // Fits at everyone's natural width as long as the gap shrinks —
+        // solve for the exact gap needed rather than capping any tab.
+        const gap = gapCount > 0 ? (available - naturalSum) / gapCount : TAB_GAP_MAX;
+        setCompact(false);
+        setTabGap(Math.max(TAB_GAP_MIN, Math.min(TAB_GAP_MAX, gap)));
+        setTabCaps({});
+        return;
+      }
+      const availableForTabs = available - gapCount * TAB_GAP_MIN;
+      if (availableForTabs < navOrder.length * FULL_TAB_WIDTH_MIN) {
+        // Doesn't fit even at the smallest per-tab floor + smallest gap —
+        // only now does it fall back to icon-only.
+        setCompact(true);
+        setTabGap(TAB_GAP_MAX);
+        setTabCaps({});
+        return;
+      }
+      setCompact(false);
+      setTabGap(TAB_GAP_MIN);
+      setTabCaps(waterFillCaps(navOrder, widths, availableForTabs));
     }
     check();
     const ro = new ResizeObserver(check);
     ro.observe(el);
+    // Re-measure once the webfont finishes loading — text metrics before
+    // that reflect the fallback font, not Inter Variable, and
+    // font-display:swap doesn't fire a layout event of its own to re-trigger this.
+    document.fonts?.ready?.then(check);
     return () => ro.disconnect();
-  }, [navOrder.length]);
+  }, [navOrder]);
 
   function handleDragOver(overId: Tab) {
     if (!dragTab || dragTab === overId) return;
@@ -184,12 +326,13 @@ function MainApp() {
         <LeftPanel />
 
         <div className="flex flex-col flex-1 overflow-hidden" style={{ background: "var(--main-bg)" }}>
-          {/* Tab bar — centered on the whole row (matches the old app's
-              main_header, which puts an addStretch() on both sides of the
-              QTabBar). The nav (back/forward) arrows sit in the left corner
-              — moved here from LeftPanel.tsx's header — balanced by an
-              equal-width empty spacer on the right so they don't throw off
-              that centering. */}
+          {/* Tab bar — two fixed sections, not centered against the old
+              app's main_header addStretch()-on-both-sides model: nav
+              (back/forward) arrows in the left corner (moved here from
+              LeftPanel.tsx's header), then a tabs section that fills 100%
+              of the row's remaining width up to the queue panel, growing
+              every tab evenly to use up any slack instead of leaving it
+              blank on the right. */}
           <div
             ref={headerRef}
             className="flex items-center px-3 shrink-0"
@@ -200,7 +343,7 @@ function MainApp() {
               <NavArrow direction="right" disabled={!canFwd}  onClick={navFwd} />
             </div>
 
-            <div className="flex-1 flex items-center justify-center" style={{ gap: 4 }}>
+            <div className="flex-1 flex items-center" style={{ gap: tabGap }}>
             {navOrder.map((id) => {
               const n = NAV.find((entry) => entry.id === id);
               if (!n) return null;
@@ -209,6 +352,8 @@ function MainApp() {
                   key={n.id}
                   n={n}
                   compact={compact}
+                  cap={tabCaps[n.id]}
+                  grow={tabGrown[n.id]}
                   active={activeTab === n.id}
                   dragging={dragTab === n.id}
                   onClick={() => handleTabClick(n.id)}
@@ -219,8 +364,38 @@ function MainApp() {
               );
             })}
             </div>
+          </div>
 
-            <div className="shrink-0" style={{ width: NAV_ARROWS_WIDTH }} />
+          {/* Hidden, unconstrained clone of the tab row purely for measuring
+              each tab's real natural content width (see check()'s
+              measureNatural()) — off-screen rather than display:none/
+              visibility:hidden alone, since either of those can report 0
+              offsetWidth in some layout paths; absolute positioning well
+              outside the viewport keeps it laid out (so it has real
+              dimensions) without affecting page flow or being visible. */}
+          <div
+            ref={measureRef}
+            aria-hidden
+            className="flex items-center"
+            style={{ position: "absolute", top: -9999, left: -9999, gap: TAB_GAP_MAX, pointerEvents: "none" }}
+          >
+            {navOrder.map((id) => {
+              const n = NAV.find((entry) => entry.id === id);
+              if (!n) return null;
+              return (
+                <NavTab
+                  key={n.id}
+                  n={n}
+                  compact={false}
+                  active={false}
+                  dragging={false}
+                  onClick={() => {}}
+                  onDragStart={() => {}}
+                  onDragOver={() => {}}
+                  onDragEnd={() => {}}
+                />
+              );
+            })}
           </div>
 
           <div className="flex-1 overflow-hidden relative">

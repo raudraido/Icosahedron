@@ -84,6 +84,16 @@ export interface ScanStatus {
   last_scan: string | null;
 }
 
+/** Server-side play queue (Subsonic's savePlayQueue/getPlayQueue) — lets the
+ *  current queue + position sync across devices/sessions, distinct from the
+ *  local-only localStorage session restore in src/store/index.ts. */
+export interface PlayQueue {
+  tracks: Track[];
+  /** -1 if the server reported no `current` track (or it's no longer in `tracks`). */
+  currentIndex: number;
+  positionSecs: number;
+}
+
 /** Extra fields for the "Get Info" dialog — deliberately not part of `Track` since
  *  no list endpoint reliably returns all of these; fetched on demand per-track by
  *  merging Navidrome's native `/api/song/{id}` (has the real filesystem path) with

@@ -10,7 +10,7 @@ export interface SearchScopeOption {
 /** Collapsible toolbar search box — expands from an icon button, with a clear ("x") button once text is entered, matching the old app's SearchBar.qml. */
 export function SearchBox({
   open, onToggle, value, onChange, placeholder = "Search…",
-  scope, scopeOptions, onScopeChange,
+  scope, scopeOptions, onScopeChange, expandedWidth,
 }: {
   open: boolean;
   onToggle: () => void;
@@ -27,6 +27,9 @@ export function SearchBox({
   scope?: string;
   scopeOptions?: SearchScopeOption[];
   onScopeChange?: (v: string) => void;
+  /** Overrides the default open-state width (204px, or 226px with a scope
+   *  dropdown) — e.g. QueuePanel's narrower toolbar. */
+  expandedWidth?: number;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -75,7 +78,7 @@ export function SearchBox({
 
   return (
     <>
-      <div ref={containerRef} style={{ position: "relative", flexShrink: 0 }}>
+      <div ref={containerRef} style={{ position: "relative", flexShrink: 0, marginRight: open ? 6 : 0, transition: "margin-right 250ms cubic-bezier(0.77,0,0.175,1)" }}>
         <input
           ref={ref}
           value={value}
@@ -83,7 +86,7 @@ export function SearchBox({
           onKeyDown={(e) => e.key === "Escape" && onToggle()}
           placeholder={effectivePlaceholder}
           style={{
-            width: open ? (hasScope ? 226 : 204) : 0,
+            width: open ? (expandedWidth ?? (hasScope ? 226 : 204)) : 0,
             opacity: open ? 1 : 0,
             overflow: "hidden",
             padding: open ? `0 ${hasScope ? 44 : 26}px 0 10px` : 0,

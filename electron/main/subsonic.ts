@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type {
-  Artist, Album, Track, Playlist, ArtistDetail, SearchResult, Starred, ScanStatus, TrackFullInfo,
+  Artist, Album, Track, Playlist, ArtistDetail, SearchResult, Starred, ScanStatus, TrackFullInfo, PlayQueue,
 } from "./models";
 
 const API_VERSION = "1.16.1";
@@ -481,6 +481,36 @@ export class SubsonicClient {
 
   async setFavorite(itemId: string, active: boolean, idParam: string): Promise<void> {
     await this.get(active ? "star" : "unstar", { [idParam]: itemId });
+  }
+
+  /** Server-side queue sync (upload/download icons in QueuePanel) — lets the
+   *  queue + position be picked up from another device/session. `null` means
+   *  no queue has ever been saved server-side (Subsonic omits `playQueue`
+   *  entirely rather than returning an empty one). */
+  async getPlayQueue(): Promise<PlayQueue | null> {
+    const root = await this.get("getPlayQueue");
+    const pq = root.playQueue;
+    if (!pq) return null;
+    const tracks = asArray(pq.entry).map((s: any) => this.parseTrack(s));
+    const currentIndex = pq.current ? tracks.findIndex((t) => t.id === String(pq.current)) : -1;
+    const positionMs = typeof pq.position === "number" ? pq.position : 0;
+    return { tracks, currentIndex, positionSecs: positionMs / 1000 };
+  }
+
+  /** Real POST (repeated `id` params, one per queued track) — same reason as
+   *  addTracksToPlaylist/reorderPlaylistTracks above: the flat-Record `get()`
+   *  GET helper can't express repeated keys. */
+  async savePlayQueue(trackIds: string[], currentTrackId: string | null, positionSecs: number): Promise<void> {
+    const params = new URLSearchParams(this.authParams());
+    for (const id of trackIds) params.append("id", id);
+    if (currentTrackId) params.set("current", currentTrackId);
+    params.set("position", String(Math.round(positionSecs * 1000)));
+    const resp = await fetch(`${this.baseUrl}/rest/savePlayQueue`, { method: "POST", body: params });
+    const body = await resp.json();
+    const root = body?.["subsonic-response"];
+    if (!root || root.status !== "ok") {
+      throw new SubsonicApiError(root?.error?.code ?? 0, root?.error?.message ?? "savePlayQueue failed");
+    }
   }
 
   // --- Parsers ---

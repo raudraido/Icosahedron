@@ -224,6 +224,40 @@ function QueueRow({ track: t, index: i, isCurrent, isPast, playing, dragging, on
   );
 }
 
+// Upload/download/clear group in the queue header — same muted-icon +
+// var(--hover-bg) halo + opacity-0.4-when-disabled convention as
+// TrackTable.tsx's PageBtn, so it stays theme-aware (light/dark) instead of
+// the hardcoded greys the old single Clear Queue button used. Deliberately
+// *not* dimmed further via opacity at rest — 0.4 is this app's disabled
+// signal (see the ternary below), so any resting opacity close to that read
+// as "can't click this" instead of "quiet until needed". var(--text-secondary)
+// alone (already dimmer than --text-primary/--accent) carries the muting.
+function QueueToolbarBtn({
+  src, title, onClick, disabled,
+}: { src: string; title: string; onClick: () => void; disabled?: boolean }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      disabled={disabled}
+      className="flex items-center justify-center"
+      style={{
+        width: 32, height: 32, borderRadius: 4,
+        color: "var(--text-secondary)",
+        opacity: disabled ? 0.4 : 1,
+        background: hov && !disabled ? "var(--hover-bg)" : "transparent",
+        transition: "background 150ms",
+        cursor: disabled ? "default" : "pointer",
+      }}
+      onMouseEnter={() => !disabled && setHov(true)}
+      onMouseLeave={() => setHov(false)}
+    >
+      <Icon src={src} size={18} />
+    </button>
+  );
+}
+
 export function QueuePanel() {
   const queue          = useStore((s) => s.queue);
   const currentIndex   = useStore((s) => s.currentIndex);
@@ -236,6 +270,9 @@ export function QueuePanel() {
   const addTrackNext   = useStore((s) => s.addTrackNext);
   const startRadio     = useStore((s) => s.startRadio);
   const navigateTo     = useStore((s) => s.navigateTo);
+  const saveQueueToServer     = useStore((s) => s.saveQueueToServer);
+  const restoreQueueFromServer = useStore((s) => s.restoreQueueFromServer);
+  const queueSyncBusy  = useStore((s) => s.queueSyncBusy);
   const qc = useQueryClient();
 
   const listRef = useRef<HTMLDivElement>(null);
@@ -316,19 +353,6 @@ export function QueuePanel() {
       { label: "Remove from Queue", icon: "img/remove.png", onClick: () => removeFromQueue(track.id) },
     ];
   }
-
-  // Memoized — without this, the reduce over the whole queue re-runs on every
-  // store update (e.g. tab navigation), not just when the queue itself
-  // changes, since this panel is always mounted alongside the player bar.
-  const totalFmt = useMemo(() => {
-    const totalSecs = queue.reduce((acc, t) => acc + t.duration_secs, 0);
-    const h = Math.floor(totalSecs / 3600);
-    const m = Math.floor((totalSecs % 3600) / 60);
-    const s = totalSecs % 60;
-    return h > 0
-      ? `${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`
-      : `${m}:${String(s).padStart(2,"0")}`;
-  }, [queue]);
 
   // Search filters by original queue index rather than producing a
   // sub-array — isCurrent/isPast/row numbering and drag-reorder all key off
@@ -438,52 +462,44 @@ export function QueuePanel() {
       style={{ position: "relative", width: panelWidth, background: "var(--panel-bg)", borderLeft: "1px solid var(--border)" }}
     >
       <ResizeHandle placement="left" dragging={panelResizing} onMouseDown={onPanelResizeStart} />
-      {/* Header — matches queue_panel.py:480-525/698-716 exactly: "Queue" is
-          title case (not all-caps/letter-spaced), bold, full opacity; position
-          ("3/12") is text-secondary; duration is tinted to the *accent* color,
-          not muted gray — none of these three are opacity-faded in the old
-          app, just plain solid colors. Padding is asymmetric (14px left, 8px
-          right), and the two gaps (Queue→position, position→duration) differ
-          (8px, 6px), so this can't use a single uniform flex `gap`. */}
+      {/* Header — icon toolbar instead of the "Queue" title/position/duration
+          text it used to show: upload (save queue to server) → download
+          (restore queue from server) → clear queue on the left, search on
+          the right. Upload/clear disable on an empty queue (nothing to save
+          or clear); download doesn't, since restoring is exactly how you'd
+          fill an empty queue. All three disable during queueSyncBusy so a
+          save and a restore can't race each other. */}
       <div
         className="flex items-center shrink-0"
-        style={{ height: 62, paddingLeft: 14, paddingRight: 8, borderBottom: "1px solid var(--border)" }}
+        style={{ height: 62, paddingLeft: 10, paddingRight: 8, borderBottom: "1px solid var(--border)" }}
       >
-        <span style={{ color: "var(--text-primary)", fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)" }}>
-          Queue
-        </span>
-        {queue.length > 0 && (
-          <>
-            <span style={{ fontSize: "var(--fs-secondary)", color: "var(--text-secondary)", marginLeft: 8 }}>
-              {currentIndex + 1}/{queue.length}
-            </span>
-            <span style={{ fontSize: "var(--fs-secondary)", color: "var(--accent)", marginLeft: 6 }}>
-              {totalFmt}
-            </span>
-          </>
-        )}
+        <QueueToolbarBtn
+          src="img/upload.png"
+          title="Save Queue to Server"
+          onClick={saveQueueToServer}
+          disabled={queueSyncBusy || queue.length === 0}
+        />
+        <QueueToolbarBtn
+          src="img/download.png"
+          title="Restore Queue from Server"
+          onClick={restoreQueueFromServer}
+          disabled={queueSyncBusy}
+        />
+        <QueueToolbarBtn
+          src="img/trash.png"
+          title="Clear Queue"
+          onClick={clearQueue}
+          disabled={queue.length === 0}
+        />
         <div className="flex-1" />
-        {queue.length > 0 && (
-          <>
-            <SearchBox
-              open={searchOpen}
-              onToggle={() => setSearchOpen((v) => !v)}
-              value={searchQuery}
-              onChange={setSearchQuery}
-              placeholder="Search queue…"
-            />
-            <button
-              onClick={clearQueue}
-              title="Clear Queue"
-              className="flex items-center justify-center"
-              style={{ width: 28, height: 28, color: "#555555" }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "#aaaaaa")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "#555555")}
-            >
-              <Icon src="img/trash.png" size={18} />
-            </button>
-          </>
-        )}
+        <SearchBox
+          open={searchOpen}
+          onToggle={() => setSearchOpen((v) => !v)}
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="Search queue…"
+          expandedWidth={122}
+        />
       </div>
 
       {/* All three tabs stay mounted (just hidden via display:none) rather

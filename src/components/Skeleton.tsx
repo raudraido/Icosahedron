@@ -42,7 +42,10 @@ export function SkeletonTrackRow({
   columns: { id: string; width: number; centered?: boolean }[];
 }) {
   return (
-    <div style={{ height: 58, display: "flex", alignItems: "center", gap: 12, padding: "0 24px", pointerEvents: "none" }}>
+    // gap: 0 — matches TrackTable's real header/data row gap, so the
+    // loading skeleton doesn't visibly jump to a tighter layout the instant
+    // real data replaces it.
+    <div style={{ height: 58, display: "flex", alignItems: "center", gap: 0, padding: "0 24px", pointerEvents: "none" }}>
       <div style={{ flex: `0 0 ${numColWidth}px` }} />
       {columns.map((col) =>
         col.id === "track" ? (

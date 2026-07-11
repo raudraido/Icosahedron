@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { api, Track } from "../lib/api";
@@ -60,19 +60,23 @@ const COLUMNS: Record<string, ColumnDef> = {
   album:   { id: "album",   label: "ALBUM",       minWidth: 90,  sortable: true },
   fav:     { id: "fav",     label: "FAVORITE",    minWidth: 68,  sortable: true },
   genre:   { id: "genre",   label: "GENRE",       minWidth: 80,  sortable: false },
-  dur:     { id: "dur",     label: "DURATION",    minWidth: 75,  sortable: true, descFirst: true },
-  plays:   { id: "plays",   label: "PLAYS",       minWidth: 60,  sortable: true, descFirst: true },
-  trackno: { id: "trackno", label: "NO.",         minWidth: 55,  sortable: true },
-  year:    { id: "year",    label: "YEAR",        minWidth: 60,  sortable: true },
+  dur:     { id: "dur",     label: "DURATION",    minWidth: 70,  sortable: true, descFirst: true },
+  plays:   { id: "plays",   label: "PLAYS",       minWidth: 52,  sortable: true, descFirst: true },
+  trackno: { id: "trackno", label: "NO.",         minWidth: 42,  sortable: true },
+  // Wider than its label alone needs — "year" is filterable (see
+  // FILTERABLE_COLS/filterableCols callers), so its header always reserves
+  // room for the filter funnel icon too, not just when actively sorted.
+  year:    { id: "year",    label: "YEAR",        minWidth: 56,  sortable: true },
   date:    { id: "date",    label: "DATE ADDED",  minWidth: 100, sortable: true, descFirst: true },
-  bpm:     { id: "bpm",     label: "BPM",         minWidth: 56,  sortable: true, descFirst: true },
+  bpm:     { id: "bpm",     label: "BPM",         minWidth: 44,  sortable: true, descFirst: true },
 };
 
 // Header label + sort arrow + filter icon, and the cell content below it,
-// are centered rather than left-aligned for these columns — matches
-// TrackListView.qml's header Row `_mid` flag and the AlignHCenter set on
-// each of these columns' own data-cell Text elements.
-const MID_COLS = new Set(["fav", "dur", "plays", "trackno", "year", "bpm"]);
+// are centered rather than left-aligned for these columns — every column
+// except the free-text ones (track/title/artist, always long and variable-
+// length, read better left-aligned) and album (explicitly kept left-aligned
+// even though its values are just as short-and-uniform as, say, year's).
+const MID_COLS = new Set(["fav", "genre", "dur", "plays", "trackno", "year", "date", "bpm"]);
 
 // Table column order (default) vs. the picker menu's fixed listing order — these differ in the old app.
 const DEFAULT_COL_ORDER = ["track", "title", "artist", "album", "fav", "genre", "dur", "plays", "trackno", "year", "date", "bpm"];
@@ -89,9 +93,16 @@ const DEFAULT_COL_VISIBILITY: Record<string, boolean> = {
   title: false, artist: false, album: true, fav: true, genre: true,
   dur: true, plays: true, trackno: true, year: true, date: true, bpm: false,
 };
-const DEFAULT_COL_WIDTHS: Record<string, number> = {
-  title: 200, artist: 200, album: 205, fav: 68, genre: 120, dur: 75, plays: 70, trackno: 55, year: 70, date: 110, bpm: 56,
-};
+// Every column falls through to colBoxWidth()'s real measured minWidthFor()
+// and starts shrunk to fit its header label (text + 3px each side), same as
+// its resize floor — no exceptions, so the header text always sits right up
+// against the separator line rather than floating in a wider box with
+// visible slack. This does mean title/artist/album (real, often-long
+// content) start narrow and truncate hard until manually widened — that's
+// an explicit, repeated user choice: uniform tight-by-default headers,
+// resize-to-widen as an opt-in action per column rather than a few columns
+// guessing at a "probably needs more room" default.
+const DEFAULT_COL_WIDTHS: Record<string, number> = {};
 export type SortState = { col: string; dir: "asc" | "desc" } | null;
 type DisplayRow =
   | { kind: "track"; track: Track; trackIndex: number }
@@ -99,7 +110,14 @@ type DisplayRow =
 export const DEFAULT_SORT: SortState = { col: "date", dir: "desc" };
 
 const LS_ORDER = (viewKey: string) => `${viewKey}_col_order`;
-const LS_WIDTHS = (viewKey: string) => `${viewKey}_col_widths`;
+// _v2: fav/dur/plays/trackno/year/bpm dropped out of DEFAULT_COL_WIDTHS in
+// favor of measured shrink-to-fit (see minWidthFor()) — a versioned key
+// means anyone with pre-existing saved widths (mid-development testing,
+// here) gets the new auto-fit behavior immediately instead of their stale
+// numbers silently winning over colBoxWidth()'s `?? minWidthFor(id)`
+// fallback forever, since that fallback only ever triggers when colWidths
+// has no entry for a given column at all.
+const LS_WIDTHS = (viewKey: string) => `${viewKey}_col_widths_v2`;
 export const LS_SORT = (viewKey: string) => `${viewKey}_sort_state`;
 const LS_VIS = (viewKey: string) => `${viewKey}_col_visibility`;
 
@@ -423,6 +441,97 @@ export function TrackTable({
     () => persistSort ? loadJSON(LS_SORT(viewKey), defaultSort) : defaultSort,
   );
   const sortState = serverDriven ? (controlledSortState ?? null) : internalSortState;
+
+  // Real measured header-label widths (via headerMeasureRef's hidden clone
+  // below) — replaces guessed-at-a-glance minWidth constants with the
+  // column's actual rendered text width at the table's real header font, so
+  // "drag a column down to its minimum" genuinely bottoms out at "just fits
+  // the header label," not some approximation of it. COLUMNS[id].minWidth
+  // is kept as the fallback for the one frame before this first measures.
+  const headerMeasureRef = useRef<HTMLDivElement>(null);
+  const [measuredLabelWidths, setMeasuredLabelWidths] = useState<Record<string, number>>({});
+  useLayoutEffect(() => {
+    const el = headerMeasureRef.current;
+    if (!el) return;
+    function measure() {
+      const widths: Record<string, number> = {};
+      el!.querySelectorAll<HTMLSpanElement>("[data-measure-label]").forEach((span) => {
+        // offsetWidth rounds to the nearest integer, not up — a true
+        // fractional width of e.g. 43.4px can report as 43, reserving
+        // 0.4px too little and tripping text-overflow:ellipsis on that
+        // column alone (a real, observed bug: single-pixel-tight columns
+        // truncating seemingly at random depending on which way a given
+        // label's fractional width happened to round). getBoundingClientRect
+        // gives the true fractional value; Math.ceil guarantees the
+        // reservation always rounds in the safe direction.
+        widths[span.dataset.measureLabel!] = Math.ceil(span.getBoundingClientRect().width);
+      });
+      setMeasuredLabelWidths(widths);
+    }
+    measure();
+    // Text metrics before the webfont finishes loading reflect the
+    // fallback font, not Inter Variable — font-display:swap doesn't fire a
+    // layout event of its own to re-trigger a re-measure.
+    document.fonts?.ready?.then(measure);
+  }, []);
+  // A filterable column (year/genre — see filterableCols) always reserves
+  // room for its funnel icon (14px + 4px gap) even at rest, not just while
+  // actively sorted — the sort arrow's extra room (SORT_ARROW_EXTRA) is
+  // handled separately in colBoxWidth below since it's conditional on
+  // sortState, not a permanent per-column allowance. Gated on `colValues`
+  // too, exactly matching the FilterIcon's own render condition below — a
+  // caller can pass filterableCols without colValues (Albums/Playlists/
+  // Starred all do, for genre/year), in which case the icon never actually
+  // renders at all, and reserving space for it anyway leaves the column
+  // permanently padded out with dead space no content ever occupies.
+  // HEADER_PADDING (6px each side, actual CSS padding on the header cell
+  // below — a real, fixed reservation, not just leftover flex space) is
+  // the floor's own breathing room between the label (or, for a filterable
+  // column, its trailing icon) and the resize-handle divider.
+  //
+  // MEASUREMENT_FUDGE exists because the off-screen measurement clone
+  // (position:absolute, way outside the viewport) measures narrower than
+  // the same text actually renders at on-screen in practice (confirmed via
+  // DevTools on a real build: a "NO." span reserved exactly its measured
+  // 22px still showed "N…") — and critically, that shortfall isn't a fixed
+  // amount, it varies per label, which is exactly what made the padding
+  // look inconsistent (2-6px) column to column: whatever the real overshoot
+  // was for a given label ate directly into its own reserved padding, by a
+  // different amount each time. This needs to be generous enough that it
+  // can never eat into HEADER_PADDING at all, for *any* label — a
+  // consistent, always-fully-visible 6px matters more here than shaving a
+  // few extra px off the reservation.
+  const HEADER_PADDING = 6;
+  const MEASUREMENT_FUDGE = 6;
+  function minWidthFor(id: string): number {
+    const label = (measuredLabelWidths[id] ?? COLUMNS[id].minWidth) + MEASUREMENT_FUDGE;
+    const iconExtra = filterableCols.includes(id) && colValues ? 4 + 14 : 0;
+    return label + iconExtra + HEADER_PADDING * 2;
+  }
+  // Shared by the header row, its data rows, and the loading skeleton so all
+  // three always agree on a column's actual on-screen width — critical since
+  // this is a real spreadsheet-style table where the header and its data
+  // must land at identical pixel boundaries. Widens a column beyond its
+  // stored/minimum width (never shrinks below either) whenever it's the
+  // active sort column, so the ▲/▼ arrow appearing next to a MID_COLS label
+  // doesn't just cram into the existing space (which would either truncate
+  // the label or visibly shift it off the column's true center) — the
+  // column grows to fit, and the whole label+arrow group stays centered
+  // within that wider box.
+  const SORT_ARROW_EXTRA = 16;
+  function colBoxWidth(id: string): number {
+    // Math.max, not `??` — a manual resize saved before minWidthFor()'s
+    // own formula changed (e.g. today's Math.ceil() rounding fix) freezes
+    // in whatever the old, possibly-too-small floor was forever, since
+    // colWidths[id] is then permanently defined and `??` never falls back
+    // to the corrected minWidthFor() again. Clamping up here instead makes
+    // "never below the true current minimum" a real invariant enforced on
+    // every render, not just at the moment of a resize drag — a stale
+    // saved width can only ever get pulled up to the safe floor, never
+    // silently stay under it.
+    const base = Math.max(colWidths[id] ?? 0, minWidthFor(id));
+    return sortState?.col === id ? base + SORT_ARROW_EXTRA : base;
+  }
   function applySortState(next: SortState) {
     if (persistSort) saveJSON(LS_SORT(viewKey), next);
     if (serverDriven) onSortChange?.(next);
@@ -578,10 +687,10 @@ export function TrackTable({
     e.preventDefault();
     e.stopPropagation();
     const startX = e.clientX;
-    const startWidth = colWidthsRef.current[colId] ?? COLUMNS[colId].minWidth;
+    const startWidth = colWidthsRef.current[colId] ?? minWidthFor(colId);
     function onMove(ev: MouseEvent) {
       justResizedRef.current = true;
-      const width = Math.max(COLUMNS[colId].minWidth, startWidth + (ev.clientX - startX));
+      const width = Math.max(minWidthFor(colId), startWidth + (ev.clientX - startX));
       setColWidths((prev) => ({ ...prev, [colId]: width }));
     }
     function onUp() {
@@ -882,8 +991,33 @@ export function TrackTable({
         </div>
       </div>
 
+      {/* Hidden, unconstrained clone of every header label purely for
+          measuring its real rendered width (see minWidthFor()) — off-screen
+          rather than display:none/visibility:hidden alone, since either can
+          report 0 offsetWidth in some layout paths. Uses the exact same
+          span styling as the real headers below so the measurement is
+          pixel-accurate to what's actually on screen. */}
+      <div ref={headerMeasureRef} aria-hidden style={{ position: "absolute", top: -9999, left: -9999 }}>
+        {Object.values(COLUMNS).map((col) => (
+          <span
+            key={col.id}
+            data-measure-label={col.id}
+            style={{ fontSize: "var(--fs-small)", fontWeight: "var(--fw-emphasis)", letterSpacing: 0.8, whiteSpace: "nowrap" }}
+          >
+            {col.label}
+          </span>
+        ))}
+      </div>
+
       {/* Column headers */}
-      <div className="flex items-center shrink-0" style={{ height: 36, padding: "0 24px", gap: 12 }}>
+      {/* gap: 0, not the row's old 12px — each column's own 3px+3px padding
+          (see minWidthFor()) is already the entire promised "3px both sides"
+          spacing; a 12px flex-gap on top of that meant the real distance
+          between two columns' text was 3+12+3=18px, not 3+3=6px, no matter
+          how tightly each individual column's own box was sized. Must stay
+          in sync with the data rows' own gap below (same reasoning: header
+          and data columns need identical pixel boundaries). */}
+      <div className="flex items-center shrink-0" style={{ height: 36, padding: "0 24px", gap: 0 }}>
         <div style={{ flex: `0 0 ${NUM_COL_WIDTH}px`, marginLeft: -NUM_COL_SHIFT, marginRight: NUM_COL_SHIFT, display: "flex", justifyContent: "center" }}>
           <span style={{ fontSize: "var(--fs-small)", fontWeight: "var(--fw-emphasis)", letterSpacing: 0.8, color: "var(--text-secondary)" }}>#</span>
         </div>
@@ -901,8 +1035,29 @@ export function TrackTable({
               onClick={() => handleSort(id)}
               style={{
                 position: "relative",
-                flex: isTrack ? 1 : `0 0 ${colWidths[id] ?? col.minWidth}px`,
+                flex: isTrack ? 1 : `0 0 ${colBoxWidth(id)}px`,
                 minWidth: 0,
+                boxSizing: "border-box",
+                // Explicit padding, not just leftover flex space, is what
+                // actually guarantees "text sits HEADER_PADDING from the
+                // separator on both sides" — justifyContent:"center"
+                // distributes slack evenly on its own, but flex-start
+                // (title/artist/album, left-aligned) shoves content flush
+                // to the box's left edge with zero gap and dumps all the
+                // slack on the right instead. minWidthFor() assumes this
+                // padding is what's consuming its own reserved space;
+                // box-sizing: border-box keeps the flex-basis width (and
+                // therefore the resize-handle divider's position) unchanged
+                // by it.
+                padding: `0 ${HEADER_PADDING}px`,
+                // track/title/artist/album (the free-text columns, i.e.
+                // everything NOT in MID_COLS) are deliberately left-aligned,
+                // matching how their own data cells read below — a left-
+                // aligned column naturally shows more room on the right
+                // than the left whenever the box has any slack at all
+                // (MEASUREMENT_FUDGE's safety margin included); that's just
+                // what left-alignment looks like, not the lopsided-center
+                // bug this used to be before HEADER_PADDING/FUDGE existed.
                 display: "flex", alignItems: "center", justifyContent: MID_COLS.has(id) ? "center" : "flex-start", gap: 4,
                 cursor: col.sortable ? "pointer" : "default",
                 userSelect: "none",
@@ -929,11 +1084,16 @@ export function TrackTable({
                 />
               )}
               {!isTrack && (
+                // right:-4, width:8 (was -6/12, sized for the row's old
+                // 12px gap) — straddles the boundary between this column
+                // and the next now that they sit directly adjacent (gap:0),
+                // extending 4px into each side's own padding rather than
+                // centering in a gap that no longer exists.
                 <div
                   onMouseDown={(e) => onResizeStart(e, id)}
                   onClick={(e) => e.stopPropagation()}
                   className="flex items-center justify-center"
-                  style={{ position: "absolute", right: -6, top: 0, bottom: 0, width: 12, cursor: "col-resize" }}
+                  style={{ position: "absolute", right: -4, top: 0, bottom: 0, width: 8, cursor: "col-resize" }}
                 >
                   <div style={{ width: 1, height: "50%", background: "var(--text-primary)" }} />
                 </div>
@@ -952,7 +1112,7 @@ export function TrackTable({
             numColWidth={NUM_COL_WIDTH}
             columns={visibleCols.map((id) => ({
               id,
-              width: colWidths[id] ?? COLUMNS[id].minWidth,
+              width: colBoxWidth(id),
               centered: MID_COLS.has(id),
             }))}
           />
@@ -1002,7 +1162,10 @@ export function TrackTable({
                 className={reorderActive ? "reorder-row" : undefined}
                 style={{
                   position: "absolute", top: row.start, left: 0, right: 0, height: 58,
-                  display: "flex", alignItems: "center", gap: 12,
+                  // gap: 0 — must match the header row's own gap (see its
+                  // comment) so header and data columns land on identical
+                  // pixel boundaries.
+                  display: "flex", alignItems: "center", gap: 0,
                   padding: "0 24px", cursor: "pointer",
                   background: isPlaying
                     ? "color-mix(in srgb, var(--accent) 15%, transparent)"
@@ -1046,7 +1209,7 @@ export function TrackTable({
                   <div
                     key={id}
                     style={{
-                      flex: id === "track" ? 1 : `0 0 ${colWidths[id] ?? COLUMNS[id].minWidth}px`,
+                      flex: id === "track" ? 1 : `0 0 ${colBoxWidth(id)}px`,
                       minWidth: 0, overflow: "hidden",
                       ...(MID_COLS.has(id) ? { display: "flex", justifyContent: "center" } : {}),
                     }}

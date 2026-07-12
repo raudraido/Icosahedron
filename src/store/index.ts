@@ -195,6 +195,10 @@ interface AppStore {
    *  only fires it once per track rather than on every tick inside the 30s
    *  window. */
   _chainedForTrackId: string | null;
+  /** True once stop() has torn down the native sink entirely (as opposed to
+   *  merely pausing it) — playPause() needs this to know a plain resume()
+   *  call would be a no-op and it must restart playback via playTrack instead. */
+  _stopped: boolean;
 
   playTrack: (track: Track, queue?: Track[]) => void;
   playPause: () => void;
@@ -695,6 +699,10 @@ export const useStore = create<AppStore>((set, get) => ({
   _committedNext: null,
   _committedNextIndex: null,
   _chainedForTrackId: null,
+  // True once stop() has torn down the native sink entirely (as opposed to
+  // merely pausing it) — playPause() needs this to know a plain resume()
+  // call would be a no-op and it must restart playback via playTrack instead.
+  _stopped: false,
   queueSyncBusy: false,
   castDevices: [],
   castScanning: false,
@@ -746,11 +754,20 @@ export const useStore = create<AppStore>((set, get) => ({
       _committedNext: null,
       _committedNextIndex: null,
       _chainedForTrackId: null,
+      _stopped: false,
     });
   },
 
   playPause: () => {
-    const { playing, castConnected } = get();
+    const { playing, castConnected, _stopped, queue, currentIndex, playTrack } = get();
+    // stop() tears down the native sink entirely — resume() is a no-op
+    // against a torn-down sink, so a plain pause/resume toggle here would
+    // silently do nothing after Stop. Restart properly instead.
+    if (!playing && _stopped) {
+      const track = queue[currentIndex];
+      if (track) playTrack(track, queue);
+      return;
+    }
     if (playing) api.audioPause(); else api.audioResume();
     if (castConnected) { if (playing) api.castPause(); else api.castResume(); }
     set({ playing: !playing });
@@ -759,7 +776,7 @@ export const useStore = create<AppStore>((set, get) => ({
   stop: () => {
     api.audioStop();
     if (get().castConnected) api.castStop();
-    set({ playing: false, ...positionPatch(0) });
+    set({ playing: false, _stopped: true, ...positionPatch(0) });
   },
 
   next: () => {
@@ -812,7 +829,7 @@ export const useStore = create<AppStore>((set, get) => ({
     api.audioStop();
     set({
       queue: [], currentIndex: -1, playing: false, ...positionPatch(0), duration: 0,
-      _committedNext: null, _committedNextIndex: null, _chainedForTrackId: null,
+      _committedNext: null, _committedNextIndex: null, _chainedForTrackId: null, _stopped: true,
     });
   },
 
@@ -862,7 +879,7 @@ export const useStore = create<AppStore>((set, get) => ({
       api.audioStop();
       set({
         queue: next, currentIndex: -1, playing: false, ...positionPatch(0), duration: 0,
-        _committedNext: null, _committedNextIndex: null, _chainedForTrackId: null,
+        _committedNext: null, _committedNextIndex: null, _chainedForTrackId: null, _stopped: true,
       });
     } else {
       const newCurrentIndex = currentTrackId ? next.findIndex((t) => t.id === currentTrackId) : -1;
@@ -1140,12 +1157,15 @@ function handleAudioEvent(payload: AudioEventPayload) {
       const finishedTrack = s.queue[s.currentIndex];
       if (finishedTrack) scrobble(finishedTrack, true);
       if (s.castConnected) api.castStop();
-      useStore.setState({ playing: false });
+      // The sink played out its source fully — same "resume() is a no-op"
+      // situation stop() leaves behind, so playPause() must restart via
+      // playTrack rather than resume.
+      useStore.setState({ playing: false, _stopped: true });
       break;
     }
     case "error": {
       console.error("[audio]", payload.message);
-      useStore.setState({ playing: false });
+      useStore.setState({ playing: false, _stopped: true });
       break;
     }
   }

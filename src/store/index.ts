@@ -52,6 +52,19 @@ interface AppStore {
   bpmDetectionEnabled: boolean;
   setBpmDetectionEnabled: (v: boolean) => void;
 
+  // Settings > Integrations' "Lyrics" section — one toggle per external
+  // lookup LyricsPanel.tsx's autoFetch() falls back to (see
+  // loadLyricsSourceEnabled below). The server (Navidrome/OpenSubsonic) and
+  // local disk cache aren't gated here — those aren't third-party services,
+  // same reasoning IntegrationsTab's own doc comment gives for what belongs
+  // in this tab at all.
+  lyricsLrclibEnabled: boolean;
+  setLyricsLrclibEnabled: (v: boolean) => void;
+  lyricsNeteaseEnabled: boolean;
+  setLyricsNeteaseEnabled: (v: boolean) => void;
+  lyricsSimpmusicEnabled: boolean;
+  setLyricsSimpmusicEnabled: (v: boolean) => void;
+
   // Client-side Last.fm integration (Settings > Integrations) — connecting
   // is a one-time browser-approval handshake (see LastFmSection in
   // Settings.tsx). Scoped **per Navidrome server profile**, not global to
@@ -367,6 +380,21 @@ function loadBpmDetectionEnabled(): boolean {
   }
 }
 
+const LS_LYRICS_LRCLIB_ENABLED_KEY = "icosahedron_lyrics_lrclib_enabled";
+const LS_LYRICS_NETEASE_ENABLED_KEY = "icosahedron_lyrics_netease_enabled";
+const LS_LYRICS_SIMPMUSIC_ENABLED_KEY = "icosahedron_lyrics_simpmusic_enabled";
+
+// Defaults to on for all three, same reasoning as loadScrobbleEnabled above
+// — matches the auto-fetch behavior every existing install already had
+// before these toggles existed.
+function loadLyricsSourceEnabled(key: string): boolean {
+  try {
+    return localStorage.getItem(key) !== "false";
+  } catch {
+    return true;
+  }
+}
+
 // Last.fm connection/toggle state (electron/main/lastfmSession.ts) is keyed
 // by Navidrome server profile id — this resolves which key applies right
 // now, falling back to DEFAULT_KEY (must match lastfmSession.ts's own
@@ -480,6 +508,22 @@ export const useStore = create<AppStore>((set, get) => ({
   setBpmDetectionEnabled: (v) => {
     try { localStorage.setItem(LS_BPM_DETECTION_ENABLED_KEY, String(v)); } catch { /* best-effort */ }
     set({ bpmDetectionEnabled: v });
+  },
+
+  lyricsLrclibEnabled: loadLyricsSourceEnabled(LS_LYRICS_LRCLIB_ENABLED_KEY),
+  setLyricsLrclibEnabled: (v) => {
+    try { localStorage.setItem(LS_LYRICS_LRCLIB_ENABLED_KEY, String(v)); } catch { /* best-effort */ }
+    set({ lyricsLrclibEnabled: v });
+  },
+  lyricsNeteaseEnabled: loadLyricsSourceEnabled(LS_LYRICS_NETEASE_ENABLED_KEY),
+  setLyricsNeteaseEnabled: (v) => {
+    try { localStorage.setItem(LS_LYRICS_NETEASE_ENABLED_KEY, String(v)); } catch { /* best-effort */ }
+    set({ lyricsNeteaseEnabled: v });
+  },
+  lyricsSimpmusicEnabled: loadLyricsSourceEnabled(LS_LYRICS_SIMPMUSIC_ENABLED_KEY),
+  setLyricsSimpmusicEnabled: (v) => {
+    try { localStorage.setItem(LS_LYRICS_SIMPMUSIC_ENABLED_KEY, String(v)); } catch { /* best-effort */ }
+    set({ lyricsSimpmusicEnabled: v });
   },
 
   // Real initial values come from tryAutoConnect()/connect()/switchServer()

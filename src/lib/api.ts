@@ -127,6 +127,15 @@ export interface LyricsSearchResult {
   synced: boolean | null;
 }
 
+/** One word/syllable's karaoke timing — OpenSubsonic's `enhanced=true`
+ *  getLyricsBySongId cueLine/cue data (see electron/main/subsonic.ts's
+ *  getServerLyricsById). */
+export interface LyricsWordCue {
+  text: string;
+  startMs: number;
+  endMs: number | null;
+}
+
 export interface TourEvent {
   datetime: string;
   url: string;
@@ -313,6 +322,8 @@ export const api = {
 
   // ── Lyrics (queue panel's Lyrics tab) ──────────────────────────────────
   lyricsServer: (artist: string, title: string) => invoke<string | null>("lyrics_server", { artist, title }),
+  lyricsServerById: (songId: string) =>
+    invoke<{ raw: string; wordsByMs: Record<number, LyricsWordCue[]> | null } | null>("lyrics_server_by_id", { songId }),
   lyricsDirect: (artist: string, title: string, album: string, duration: number) =>
     invoke<string | null>("lyrics_direct", { artist, title, album, duration }),
   lyricsSearch: (artist: string, title: string, sources: string[]) =>

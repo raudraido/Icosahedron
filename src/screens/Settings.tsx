@@ -426,6 +426,50 @@ function LastFmSection() {
   );
 }
 
+// LyricsPanel.tsx's auto-fetch falls through Local → Server (Navidrome/
+// OpenSubsonic) → LRCLib → NetEase → SimpMusic. Only the three external
+// lookups get a toggle here — Local is just disk, Server is the user's own
+// already-trusted Navidrome connection, neither is a third-party service in
+// the sense this tab is otherwise about. Disabling a source here only stops
+// *automatic* use during that fallback chain; the manual "Search" dialog
+// (LyricsSearchDialog.tsx) still shows all three regardless — an explicit,
+// one-off user action isn't the "unwanted background network noise" this
+// exists to let someone turn off.
+function LyricsSection() {
+  const lyricsLrclibEnabled = useStore((s) => s.lyricsLrclibEnabled);
+  const setLyricsLrclibEnabled = useStore((s) => s.setLyricsLrclibEnabled);
+  const lyricsNeteaseEnabled = useStore((s) => s.lyricsNeteaseEnabled);
+  const setLyricsNeteaseEnabled = useStore((s) => s.setLyricsNeteaseEnabled);
+  const lyricsSimpmusicEnabled = useStore((s) => s.lyricsSimpmusicEnabled);
+  const setLyricsSimpmusicEnabled = useStore((s) => s.setLyricsSimpmusicEnabled);
+
+  return (
+    <Section title="Lyrics">
+      <ToggleRow
+        label="LRCLib"
+        description="Auto-fetch fallback when your server has no lyrics for a track."
+        checked={lyricsLrclibEnabled}
+        onChange={setLyricsLrclibEnabled}
+      />
+      <ToggleRow
+        label="NetEase"
+        description="Auto-fetch fallback when your server has no lyrics for a track."
+        checked={lyricsNeteaseEnabled}
+        onChange={setLyricsNeteaseEnabled}
+      />
+      <ToggleRow
+        label="SimpMusic"
+        description="Auto-fetch fallback when your server has no lyrics for a track."
+        checked={lyricsSimpmusicEnabled}
+        onChange={setLyricsSimpmusicEnabled}
+      />
+      <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
+        Manually searching lyrics (the Lyrics tab's "Search" button) always checks all three, regardless of these toggles — they only gate automatic background lookups.
+      </p>
+    </Section>
+  );
+}
+
 function IntegrationsTab() {
   const scrobbleEnabled = useStore((s) => s.scrobbleEnabled);
   const setScrobbleEnabled = useStore((s) => s.setScrobbleEnabled);
@@ -441,6 +485,7 @@ function IntegrationsTab() {
         />
       </Section>
       <LastFmSection />
+      <LyricsSection />
     </div>
   );
 }

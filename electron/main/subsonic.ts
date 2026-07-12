@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type {
-  Artist, Album, Track, Playlist, ArtistDetail, SearchResult, Starred, ScanStatus, TrackFullInfo, PlayQueue,
+  Artist, Album, Track, Playlist, ArtistDetail, SearchResult, Starred, ScanStatus, TrackFullInfo, PlayQueue, LyricsWordCue,
 } from "./models";
 
 const API_VERSION = "1.16.1";
@@ -322,13 +322,84 @@ export class SubsonicClient {
     };
   }
 
-  /** Standard Subsonic getLyrics — tried first (old app's LyricsPanel source
-   *  priority: server, then LRCLib/NetEase/SimpMusic) since Navidrome/Subsonic
-   *  servers can surface embedded or provider-configured lyrics directly. */
+  /** Standard Subsonic getLyrics — old-app-compatible fallback for servers
+   *  that don't implement the OpenSubsonic extension above (non-Navidrome
+   *  Subsonic servers, or Navidrome versions before it existed). */
   async getServerLyrics(artist: string, title: string): Promise<string | null> {
     const root = await this.get("getLyrics", { artist, title }).catch(() => null);
     const value = root?.lyrics?.value;
     return typeof value === "string" && value ? value : null;
+  }
+
+  /** OpenSubsonic's structured getLyricsBySongId — tried before the classic
+   *  getLyrics above now that Navidrome (0.63+) surfaces real per-line
+   *  timestamps and multiple sidecar formats (TTML/ELRC/SRT/YAML/LRC)
+   *  through it, rather than the classic endpoint's single plain-text blob
+   *  which only carries sync data if a provider happens to embed LRC tags
+   *  in it by convention. `raw` is reconstructed as an LRC string (synced)
+   *  or plain text (unsynced) so it flows through the exact same
+   *  parseLrc()-based pipeline everything else already uses, rather than a
+   *  separate code path. A server that doesn't implement this extension at
+   *  all (non-Navidrome, or an older Navidrome) just fails the call, caught
+   *  the same way getServerLyrics is above.
+   *
+   *  Requests `enhanced=true` for word-level karaoke timing too (Navidrome
+   *  0.63+'s `cueLine`/`cue`) — most tracks won't have it (it needs a
+   *  karaoke-capable TTML/ELRC sidecar specifically, not just any synced
+   *  lyrics), in which case `wordsByMs` is just null, same as before this
+   *  was added. Keyed by each line's own start-ms (not array index) since
+   *  parseLrc() can drop/reorder lines relative to the raw API array (e.g.
+   *  a leading empty-text line) — matching on the timestamp instead of
+   *  position is immune to that. Multi-voice tracks (duets, backing
+   *  vocals — `agents`) only ever use the "main" agent's cueLine; rendering
+   *  every layer side-by-side is real scope beyond a single-voice karaoke
+   *  line and isn't attempted here. */
+  async getServerLyricsById(songId: string): Promise<{ raw: string; wordsByMs: Record<number, LyricsWordCue[]> | null } | null> {
+    const root = await this.get("getLyricsBySongId", { id: songId, enhanced: "true" }).catch(() => null);
+    const entries = asArray(root?.lyricsList?.structuredLyrics);
+    if (!entries.length) return null;
+    // Prefer a synced, main-track entry — a server can legitimately return
+    // more than one language/variant (or, with enhanced=true, a separate
+    // translation/pronunciation track) for the same song.
+    const best = entries.find((e: any) => e?.synced && (!e?.kind || e.kind === "main"))
+      ?? entries.find((e: any) => e?.synced) ?? entries[0];
+    const lines = asArray(best?.line);
+    if (!lines.length) return null;
+    if (!best.synced) return { raw: lines.map((l: any) => l?.value ?? "").join("\n"), wordsByMs: null };
+
+    const lineMs = lines.map((l: any) => Math.max(0, Number(l?.start) || 0));
+    const raw = lines
+      .map((l: any, i: number) => {
+        const totalMs = lineMs[i];
+        const m = Math.floor(totalMs / 60_000);
+        const s = Math.floor((totalMs % 60_000) / 1000);
+        const ms = totalMs % 1000;
+        return `[${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(ms).padStart(3, "0")}]${l?.value ?? ""}`;
+      })
+      .join("\n");
+
+    const agents = asArray(best.agents);
+    const mainAgentId = agents.find((a: any) => a?.role === "main")?.id;
+    // First cueLine per index wins if a server ever sent duplicates —
+    // there's exactly one "main" layer per line, so any further entries at
+    // the same index are other voices being deliberately skipped above.
+    const cueLinesByIndex = new Map<number, any>();
+    for (const cl of asArray(best.cueLine)) {
+      if (agents.length && mainAgentId && cl?.agentId && cl.agentId !== mainAgentId) continue;
+      if (!cueLinesByIndex.has(cl.index)) cueLinesByIndex.set(cl.index, cl);
+    }
+    let wordsByMs: Record<number, LyricsWordCue[]> | null = null;
+    for (const [index, cueLine] of cueLinesByIndex) {
+      const cues = asArray(cueLine?.cue);
+      if (!cues.length) continue;
+      const words: LyricsWordCue[] = cues.map((c: any) => ({
+        text: String(c?.value ?? ""),
+        startMs: Math.max(0, Number(c?.start) || 0),
+        endMs: Number.isFinite(c?.end) ? Number(c.end) : null,
+      }));
+      (wordsByMs ??= {})[lineMs[index]] = words;
+    }
+    return { raw, wordsByMs };
   }
 
   async getAlbumTracks(albumId: string): Promise<Track[]> {

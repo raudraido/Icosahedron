@@ -445,6 +445,7 @@ function registerIpcHandlers(): void {
 
   // ── Lyrics + artist tour dates (see lyrics.ts) ──────────────────────────
   ipcMain.handle("lyrics_server", (_e, { artist, title }) => requireClient().getServerLyrics(artist, title));
+  ipcMain.handle("lyrics_server_by_id", (_e, { songId }) => requireClient().getServerLyricsById(songId));
   ipcMain.handle("lyrics_direct", (_e, { artist, title, album, duration }) => lrclibDirect(artist, title, album, duration));
   ipcMain.handle("lyrics_search", (_e, { artist, title, sources }) => searchLyrics(artist, title, sources));
   ipcMain.handle("lyrics_fetch", (_e, { source, id }) => fetchLyrics(source, id));

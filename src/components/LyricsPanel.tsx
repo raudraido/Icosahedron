@@ -1,26 +1,48 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
-import { api, Track } from "../lib/api";
+import { api, Track, LyricsWordCue } from "../lib/api";
 import { parseLrc, ParsedLyrics, extractOffset, withOffset } from "../lib/lrc";
 import { LyricsSearchDialog } from "./LyricsSearchDialog";
 import { ScrollThumb } from "./ScrollThumb";
 
-// Auto-fetch priority, matching the old app's _LyricsFetcher.run() exactly:
-// local cache → server (Subsonic getLyrics) → LRCLib direct → LRCLib search
-// → NetEase search → SimpMusic search, first hit wins. The manual "Search"
-// dialog is different — it aggregates *all* sources at once for the user to
-// browse/pick from (see LyricsSearchDialog).
-async function autoFetch(track: Track): Promise<{ raw: string; source: string; sid: string } | null> {
+// Auto-fetch priority, matching the old app's _LyricsFetcher.run() (local →
+// server → LRCLib direct → LRCLib search → NetEase search → SimpMusic
+// search, first hit wins) with one addition ahead of it: OpenSubsonic's
+// structured getLyricsBySongId, which Navidrome 0.63+ backs with real
+// per-line timestamps, several sidecar formats (TTML/ELRC/SRT/YAML/LRC),
+// and — on a karaoke-capable sidecar — word-level timing (wordsByMs, keyed
+// by each synced line's own start-ms), rather than the classic getLyrics
+// endpoint's single plain-text blob that only carries sync data if a
+// provider happens to embed LRC tags in it by convention, and never
+// word-level data at all. Falls back to classic getLyrics for servers that
+// don't implement the extension (non-Navidrome, or an older Navidrome).
+// Both are still surfaced as "Server" below — the distinction doesn't
+// matter to the user, only which one actually had the track. The manual
+// "Search" dialog is different — it aggregates *all* sources at once for
+// the user to browse/pick from (see LyricsSearchDialog).
+async function autoFetch(
+  track: Track,
+  // Settings > Integrations' "Lyrics" toggles — Local and Server aren't
+  // gated here (see store/index.ts's doc comment on those settings for why:
+  // neither is a third-party service), only the external lookups below.
+  sourcesEnabled: { LRCLib: boolean; NetEase: boolean; SimpMusic: boolean },
+): Promise<{ raw: string; source: string; sid: string; wordsByMs?: Record<number, LyricsWordCue[]> | null } | null> {
   const local = await api.lyricsLocalLoad(track.id);
   if (local) return { raw: local, source: "Local", sid: "" };
+
+  const structured = await api.lyricsServerById(track.id).catch(() => null);
+  if (structured) return { raw: structured.raw, source: "Server", sid: "", wordsByMs: structured.wordsByMs };
 
   const server = await api.lyricsServer(track.artist, track.title).catch(() => null);
   if (server) return { raw: server, source: "Server", sid: "" };
 
-  const direct = await api.lyricsDirect(track.artist, track.title, track.album ?? "", track.duration_secs).catch(() => null);
-  if (direct) return { raw: direct, source: "LRCLib", sid: "" };
+  if (sourcesEnabled.LRCLib) {
+    const direct = await api.lyricsDirect(track.artist, track.title, track.album ?? "", track.duration_secs).catch(() => null);
+    if (direct) return { raw: direct, source: "LRCLib", sid: "" };
+  }
 
   for (const source of ["LRCLib", "NetEase", "SimpMusic"] as const) {
+    if (!sourcesEnabled[source]) continue;
     const results = await api.lyricsSearch(track.artist, track.title, [source]).catch(() => []);
     if (!results.length) continue;
     const raw = await api.lyricsFetch(source, results[0].id).catch(() => null);
@@ -33,6 +55,15 @@ function findActiveIndex(lines: { ms: number; text: string }[], posMs: number): 
   let idx = -1;
   for (let i = 0; i < lines.length; i++) {
     if (posMs >= lines[i].ms) idx = i;
+    else break;
+  }
+  return idx;
+}
+
+function findActiveWordIndex(words: LyricsWordCue[], posMs: number): number {
+  let idx = -1;
+  for (let i = 0; i < words.length; i++) {
+    if (posMs >= words[i].startMs) idx = i;
     else break;
   }
   return idx;
@@ -61,6 +92,9 @@ export function LyricsPanel({ active }: { active: boolean }) {
   const currentIndex = useStore((s) => s.currentIndex);
   const setCurrentTime = useStore((s) => s.setCurrentTime);
   const track = queue[currentIndex] ?? null;
+  const lyricsLrclibEnabled = useStore((s) => s.lyricsLrclibEnabled);
+  const lyricsNeteaseEnabled = useStore((s) => s.lyricsNeteaseEnabled);
+  const lyricsSimpmusicEnabled = useStore((s) => s.lyricsSimpmusicEnabled);
 
   const [status, setStatus] = useState("No track playing");
   const [parsed, setParsed] = useState<ParsedLyrics | null>(null);
@@ -75,6 +109,14 @@ export function LyricsPanel({ active }: { active: boolean }) {
   const [isLocalSaved, setIsLocalSaved] = useState(false);
   const [offsetMs, setOffsetMs] = useState(0);
   const [activeIdx, setActiveIdx] = useState(-1);
+  // Word-level karaoke timing for the current track's synced lines, keyed
+  // by each line's own start-ms — null whenever the source didn't have any
+  // (true for everything except a Server hit backed by a karaoke-capable
+  // sidecar; see autoFetch's doc comment above). activeWordIdx is which
+  // word within the *currently active line* has been reached, -1 before
+  // the first word's own start-ms.
+  const [wordsByMs, setWordsByMs] = useState<Record<number, LyricsWordCue[]> | null>(null);
+  const [activeWordIdx, setActiveWordIdx] = useState(-1);
   const [searchOpen, setSearchOpen] = useState(false);
   const [toolbarHov, setToolbarHov] = useState(false);
 
@@ -97,6 +139,8 @@ export function LyricsPanel({ active }: { active: boolean }) {
     setIsLocalSaved(false);
     setOffsetMs(0);
     setActiveIdx(-1);
+    setWordsByMs(null);
+    setActiveWordIdx(-1);
     lineRefs.current.clear();
   }
 
@@ -105,7 +149,7 @@ export function LyricsPanel({ active }: { active: boolean }) {
     pendingRef.current = null;
     const gen = ++genRef.current;
     reset("Loading lyrics…");
-    autoFetch(t).then((hit) => {
+    autoFetch(t, { LRCLib: lyricsLrclibEnabled, NetEase: lyricsNeteaseEnabled, SimpMusic: lyricsSimpmusicEnabled }).then((hit) => {
       if (gen !== genRef.current) return;
       if (!hit) { setStatus("No lyrics found"); return; }
       // A locally-saved file may carry our own [offset:±ms] tag (see
@@ -118,6 +162,10 @@ export function LyricsPanel({ active }: { active: boolean }) {
       setIsLocalSaved(hit.source === "Local");
       setOffsetMs(savedOffset);
       setParsed(parseLrc(text));
+      // A locally-saved/manually-overridden copy is just a plain LRC
+      // string — never carries word-level timing, matching a fresh Server
+      // hit whose sidecar simply doesn't have any either.
+      setWordsByMs(hit.wordsByMs ?? null);
       setStatus("");
     });
   }
@@ -157,7 +205,8 @@ export function LyricsPanel({ active }: { active: boolean }) {
     function tick() {
       const s = useStore.getState();
       const posSecs = s.playing ? s.currentTimeRaw + (performance.now() - s.currentTimeAnchorMs) / 1000 : s.currentTimeRaw;
-      const idx = findActiveIndex(lines, posSecs * 1000 + offsetMs);
+      const posMs = posSecs * 1000 + offsetMs;
+      const idx = findActiveIndex(lines, posMs);
       setActiveIdx((prev) => {
         if (idx === prev) return prev;
         const el = idx >= 0 ? lineRefs.current.get(idx) : null;
@@ -168,11 +217,18 @@ export function LyricsPanel({ active }: { active: boolean }) {
         }
         return idx;
       });
+      // Word-by-word karaoke progress within whichever line is active —
+      // wordsByMs only ever has an entry for lines a karaoke-capable
+      // sidecar actually covered; every other line just has no word-level
+      // highlight, same as before this existed.
+      const words = idx >= 0 ? wordsByMs?.[lines[idx].ms] : undefined;
+      const wordIdx = words ? findActiveWordIndex(words, posMs) : -1;
+      setActiveWordIdx((prev) => (wordIdx === prev ? prev : wordIdx));
       raf = requestAnimationFrame(tick);
     }
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [offsetMs, parsed]);
+  }, [offsetMs, parsed, wordsByMs]);
 
   async function toggleSave() {
     if (!track) return;
@@ -199,6 +255,9 @@ export function LyricsPanel({ active }: { active: boolean }) {
     setRawLyrics(raw);
     setIsLocalSaved(false);
     setParsed(parseLrc(raw));
+    // Manual search-dialog results (LRCLib/NetEase/SimpMusic) never carry
+    // word-level timing — only a fresh Server hit's own auto-fetch can.
+    setWordsByMs(null);
     setStatus("");
     setSearchOpen(false);
   }
@@ -247,22 +306,41 @@ export function LyricsPanel({ active }: { active: boolean }) {
                     {para || "♪"}
                   </p>
                 ))
-              : parsed.lines.map((line, i) => (
-                  <div
-                    key={i}
-                    ref={(el) => { if (el) lineRefs.current.set(i, el); else lineRefs.current.delete(i); }}
-                    onClick={() => seekTo(line.ms)}
-                    className="text-center"
-                    style={{
-                      cursor: "pointer", padding: "2px 12px",
-                      color: i === activeIdx ? "var(--accent)" : "var(--text-secondary)",
-                      fontSize: i === activeIdx ? "calc(var(--fs-primary) + 2px)" : "var(--fs-primary)",
-                      fontWeight: i === activeIdx ? "var(--fw-emphasis)" : "var(--fw-secondary)",
-                    }}
-                  >
-                    {line.text || "♪"}
-                  </div>
-                ))}
+              : parsed.lines.map((line, i) => {
+                  // Word-level karaoke only ever renders for the currently
+                  // active line — past/future lines have no moment-to-
+                  // moment progress to show, same as every karaoke UI this
+                  // is modeled on (Apple Music, Spotify).
+                  const words = i === activeIdx ? wordsByMs?.[line.ms] : undefined;
+                  return (
+                    <div
+                      key={i}
+                      ref={(el) => { if (el) lineRefs.current.set(i, el); else lineRefs.current.delete(i); }}
+                      onClick={() => seekTo(line.ms)}
+                      className="text-center"
+                      style={{
+                        cursor: "pointer", padding: "2px 12px",
+                        color: i === activeIdx ? "var(--accent)" : "var(--text-secondary)",
+                        fontSize: i === activeIdx ? "calc(var(--fs-primary) + 2px)" : "var(--fs-primary)",
+                        fontWeight: i === activeIdx ? "var(--fw-emphasis)" : "var(--fw-secondary)",
+                      }}
+                    >
+                      {words
+                        ? words.map((w, wi) => (
+                            // Not-yet-sung words stay text-primary rather
+                            // than the line's own accent color — the sung
+                            // ones "catching up" to accent is the whole
+                            // karaoke effect; if every word were already
+                            // accent-colored there'd be nothing left to
+                            // visibly progress.
+                            <span key={wi} style={{ color: wi <= activeWordIdx ? "var(--accent)" : "var(--text-primary)" }}>
+                              {w.text}
+                            </span>
+                          ))
+                        : line.text || "♪"}
+                    </div>
+                  );
+                })}
           </div>
         )}
       </div>

@@ -109,3 +109,11 @@ export interface TrackFullInfo {
   channel_count: number | null;
   size_bytes: number | null;
 }
+
+/** One word/syllable's karaoke timing — OpenSubsonic's `enhanced=true`
+ *  getLyricsBySongId cueLine/cue data (see subsonic.ts's getServerLyricsById). */
+export interface LyricsWordCue {
+  text: string;
+  startMs: number;
+  endMs: number | null;
+}

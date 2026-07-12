@@ -255,7 +255,10 @@ async function fetchDlnaDescription(location: string): Promise<DlnaDescription |
     // Connection: close — same reasoning as castDlna.ts's soapCall(): don't
     // leave a pooled keep-alive connection to an embedded device's HTTP
     // server that it might silently close on us before it's ever reused.
-    const resp = await fetch(location, { headers: { Connection: "close" } });
+    // Same reasoning as castDlna.ts's SOAP_TIMEOUT_MS — a sleeping device
+    // that never answers the SYN at all would otherwise hang this fetch (and
+    // the whole rescan waiting on it) far longer than a quick per-device skip.
+    const resp = await fetch(location, { headers: { Connection: "close" }, signal: AbortSignal.timeout(5000) });
     if (!resp.ok) {
       console.log(`${DEBUG_PREFIX} ${location} — HTTP ${resp.status}, skipped`);
       return null;

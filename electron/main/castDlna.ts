@@ -3,6 +3,16 @@ import type { CastStatusEvent, CastTrackMetadata } from "./castChromecast";
 
 const AVTRANSPORT_TYPE = "urn:schemas-upnp-org:service:AVTransport:1";
 const RENDERING_CONTROL_TYPE = "urn:schemas-upnp-org:service:RenderingControl:1";
+// Every UPnP HTTP call here is over LAN and should complete within a couple
+// seconds if the device is actually listening. Without an explicit timeout,
+// a receiver whose network stack hasn't woken up yet — not actively
+// refusing the connection, just never answering the SYN at all — leaves
+// fetch() hanging for however long the OS's own TCP retransmission window
+// is (which can be tens of seconds to minutes), not a quick rejection.
+// That starves connect()'s retry loop below of ever getting a fast failure
+// to actually retry after, which is indistinguishable from the app just
+// never having sent anything at all.
+const SOAP_TIMEOUT_MS = 5000;
 
 /** Generic AVTransport/RenderingControl SOAP call — one function for every
  *  action (SetAVTransportURI, Play, Pause, Stop, Seek, GetTransportInfo,
@@ -39,6 +49,7 @@ async function soapCall(
         Connection: "close",
       },
       body,
+      signal: AbortSignal.timeout(SOAP_TIMEOUT_MS),
     });
   } catch (err) {
     // Belt-and-suspenders for the same race: Connection: close stops *this*
@@ -76,15 +87,6 @@ async function soapCall(
 // it's now the exception, not the rule.
 const POLL_INTERVAL_MS = 4000;
 const MAX_CONSECUTIVE_POLL_ERRORS = 3;
-// Some receivers' network stack answers SOAP calls well before their audio
-// hardware (amp relays, DAC, input switching) has actually finished waking
-// from standby — SetAVTransportURI+Play immediately back-to-back can land
-// while the physical audio path isn't connected yet, so the transport
-// reports PLAYING with no actual sound. Giving the first load of a session
-// this grace period before Play (not every subsequent track change — once
-// truly awake, those already work with no delay) fixes it for receivers
-// that need it, at the cost of a slower first connect for ones that don't.
-const WAKE_GRACE_MS = 2500;
 // How long after Play to check whether the first track actually started
 // moving — long enough that a receiver which *did* wake up in time has
 // unambiguously made real progress (not just clock/rounding noise on a
@@ -99,6 +101,14 @@ const WAKE_CHECK_DELAY_MS = 4000;
 // without the subscription lapsing in between.
 const SUBSCRIBE_TIMEOUT_S = 1800;
 const RENEW_MARGIN_S = 60;
+// connect()'s initial reachability check can hit a receiver that's still
+// booting its network stack from standby — matches the old PyQt app's own
+// _ensure() retry schedule (there, waiting up to ~25s total for the device
+// description fetch to succeed), same reasoning: a single unforgiving
+// attempt here fails the whole connect before loadMedia()'s own wake
+// handling ever gets a chance to run, which is exactly the "first cast does
+// nothing, closing and immediately retrying works" symptom this fixes.
+const CONNECT_RETRY_DELAYS_MS = [0, 2000, 3000, 4000, 5000, 6000, 5000];
 
 function xmlUnescape(s: string): string {
   return s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&apos;/g, "'").replace(/&amp;/g, "&");
@@ -156,6 +166,24 @@ export class DlnaDevice {
   // seeking/replaying whatever's loaded *now* based on a check that was
   // only ever meant for the track that started this specific wake window.
   private loadGeneration = 0;
+  // Current track's identity/reload material, kept so handleStreamStall()
+  // (called from castProxy.ts, entirely decoupled from loadMedia()'s own
+  // call stack) can redo the exact same load sequence without needing
+  // loadMedia() to thread state through some other channel.
+  private currentTrackId: string | null = null;
+  private currentUrl: string | null = null;
+  private currentDidl: string | null = null;
+  private currentStartPositionSecs = 0;
+  // Caps how many times handleStreamStall() will auto-reload the same
+  // track — every reload's own connection dying re-arms another stall
+  // check (see castProxy.ts), so an unbounded retry loop is possible if a
+  // receiver can genuinely never keep the stream open (wrong network route,
+  // track truly unplayable, etc). Given this exact receiver's proven
+  // fragility under repeated request load, hammering it forever isn't
+  // acceptable just because the failure looks superficially like the one
+  // real fix targets. Reset on every fresh loadMedia() call.
+  private stallRetryCount = 0;
+  private static readonly MAX_STALL_RETRIES = 3;
 
   constructor(
     private avTransportUrl: string,
@@ -174,7 +202,18 @@ export class DlnaDevice {
    *  failure would fail Chromecast's connect()), then subscribes to GENA
    *  events (falling back to polling if that's not supported). */
   async connect(): Promise<void> {
-    await soapCall(this.avTransportUrl, AVTRANSPORT_TYPE, "GetTransportInfo", { InstanceID: 0 });
+    let lastErr: unknown;
+    for (const delay of CONNECT_RETRY_DELAYS_MS) {
+      if (delay) await new Promise((r) => setTimeout(r, delay));
+      try {
+        await soapCall(this.avTransportUrl, AVTRANSPORT_TYPE, "GetTransportInfo", { InstanceID: 0 });
+        lastErr = null;
+        break;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    if (lastErr) throw lastErr;
     if (this.avTransportEventUrl) {
       try {
         await this.subscribe();
@@ -195,7 +234,7 @@ export class DlnaDevice {
     // exclusive per the GENA spec, not just a style choice.
     if (existingSid) headers.SID = existingSid;
     else { headers.CALLBACK = `<${this.callbackUrl}>`; headers.NT = "upnp:event"; }
-    const resp = await fetch(eventUrl, { method: "SUBSCRIBE", headers });
+    const resp = await fetch(eventUrl, { method: "SUBSCRIBE", headers, signal: AbortSignal.timeout(SOAP_TIMEOUT_MS) });
     if (!resp.ok) throw new Error(`SUBSCRIBE failed: HTTP ${resp.status}`);
     const sid = resp.headers.get("sid");
     if (!sid) throw new Error("SUBSCRIBE response missing SID");
@@ -317,53 +356,93 @@ export class DlnaDevice {
     if (this.wakeCheckTimer) { clearTimeout(this.wakeCheckTimer); this.wakeCheckTimer = null; }
     const track: CastTrackForDidl = { title: metadata.title, artist: metadata.subtitle, artUrl: metadata.artUrl };
     const didl = buildDidlLite(track, url, contentType);
+    // Stored so handleStreamStall() below — invoked from castProxy.ts,
+    // entirely outside this call — can redo this exact load without needing
+    // its own copy threaded through some other channel. The URL's last path
+    // segment is always the trackId (see castProxy.ts's audioUrlFor()).
+    this.currentTrackId = decodeURIComponent(url.split("/").pop() ?? "");
+    this.currentUrl = url;
+    this.currentDidl = didl;
+    this.currentStartPositionSecs = startPositionSecs;
+    this.stallRetryCount = 0;
+    // No artificial delay before Play — proven via packet-level tracing
+    // against a Denon receiver that a fixed delay here is actively harmful:
+    // this receiver opens its own short-lived (~250-260ms) validation fetch
+    // of the audio URL immediately upon SetAVTransportURI, on a timer
+    // entirely of its own. If Play (and Seek, when resuming mid-track) land
+    // while that connection is still alive, the receiver's own reaction to
+    // Seek is to cleanly reopen the stream at the correct byte offset via
+    // Range — and that's what actually plays. A prior fixed 2.5s delay here
+    // meant Play/Seek always arrived long after that window had already
+    // expired, with nothing telling the receiver to retry.
+    await this.sendLoadSequence(url, didl, startPositionSecs);
+    this.stoppedByUs = false;
+    this.hasLoadedMedia = true;
+    // Belt-and-suspenders beyond the immediate sequence above and beyond
+    // handleStreamStall() below: GetTransportInfo's RelTime is *not* a
+    // reliable signal on its own (real-world tracing showed it can keep
+    // reporting normal advancing playback even while the receiver's audio
+    // connection is dead and never reopened) — but it's a harmless, cheap
+    // extra check for whatever fraction of failures that IS a real signal
+    // for, so it stays as a secondary net alongside the primary
+    // stall-detection mechanism.
+    if (isFirstLoad) {
+      this.wakeCheckTimer = setTimeout(() => {
+        this.wakeCheckTimer = null;
+        this.verifyWoke(generation);
+      }, WAKE_CHECK_DELAY_MS);
+    }
+  }
+
+  /** Invoked from castProxy.ts (via castManager.ts's wiring) when a
+   *  receiver's audio connection for `trackId` died mid-stream and nothing
+   *  reopened it within STREAM_STALL_GRACE_MS — the reliable signal real-
+   *  world testing found, unlike GetPositionInfo's RelTime (see loadMedia()
+   *  above). Redoes the full load sequence from a fresh SetAVTransportURI,
+   *  exactly matching what a manual close-and-reconnect retry does (proven
+   *  100% reliable in testing) — but automatically, in-session. */
+  handleStreamStall(trackId: string): void {
+    // Explicit stop already in progress/done, or this stall is for a track
+    // that isn't current anymore (superseded by a track change before the
+    // stall grace period elapsed) — nothing to recover.
+    if (this.stoppedByUs || trackId !== this.currentTrackId) return;
+    if (!this.currentUrl || !this.currentDidl) return;
+    if (this.stallRetryCount >= DlnaDevice.MAX_STALL_RETRIES) return;
+    this.stallRetryCount++;
+    // Supersedes any pending RelTime-based check for this same load — it's
+    // about to get its own fresh answer from a real reload, no need for a
+    // second, differently-timed opinion on the same now-stale attempt.
+    if (this.wakeCheckTimer) { clearTimeout(this.wakeCheckTimer); this.wakeCheckTimer = null; }
+    this.sendLoadSequence(this.currentUrl, this.currentDidl, this.currentStartPositionSecs).catch(() => {
+      /* best-effort recovery — a failure here just means it doesn't get the reload */
+    });
+  }
+
+  /** SetAVTransportURI + Play + optional Seek — the core sequence shared by
+   *  loadMedia()'s first attempt and verifyWoke()'s full-reload retry below. */
+  private async sendLoadSequence(url: string, didl: string, startPositionSecs: number): Promise<void> {
     await soapCall(this.avTransportUrl, AVTRANSPORT_TYPE, "SetAVTransportURI", {
       InstanceID: 0, CurrentURI: url, CurrentURIMetaData: didl,
     });
-    this.stoppedByUs = false;
-    this.hasLoadedMedia = true;
-    if (isFirstLoad) await new Promise((r) => setTimeout(r, WAKE_GRACE_MS));
     await soapCall(this.avTransportUrl, AVTRANSPORT_TYPE, "Play", { InstanceID: 0, Speed: "1" });
     if (startPositionSecs > 0) {
       await soapCall(this.avTransportUrl, AVTRANSPORT_TYPE, "Seek", {
         InstanceID: 0, Unit: "REL_TIME", Target: secondsToHms(startPositionSecs),
       }).catch(() => { /* seek-on-load isn't universally supported — the track just starts from 0 instead */ });
     }
-    // WAKE_GRACE_MS is a guess, and evidently not always long enough on its
-    // own — reported in practice as "no sound on the very first track after
-    // waking, only starting to actually work on whatever plays *next*"
-    // (i.e. only once the amp has had however long the whole first track
-    // ran to finish waking, not just WAKE_GRACE_MS). Rather than guess an
-    // even bigger fixed number and risk the same problem on a slower
-    // receiver, this checks real playback *progress* a bit later — if
-    // RelTime hasn't advanced roughly as far as it should have despite the
-    // transport already reporting PLAYING, the amp was almost certainly
-    // still silently waking when Play first landed, so seek back to the
-    // start and re-issue Play now that it's had more real time. A receiver
-    // that didn't need this at all just gets one harmless extra
-    // GetPositionInfo call and no visible effect.
-    if (isFirstLoad) {
-      this.wakeCheckTimer = setTimeout(() => {
-        this.wakeCheckTimer = null;
-        this.verifyWoke(generation, startPositionSecs);
-      }, WAKE_CHECK_DELAY_MS);
-    }
   }
 
-  private async verifyWoke(generation: number, startPositionSecs: number): Promise<void> {
+  private async verifyWoke(generation: number): Promise<void> {
     try {
       const info = await soapCall(this.avTransportUrl, AVTRANSPORT_TYPE, "GetPositionInfo", { InstanceID: 0 });
       // A track change (or disconnect) happened while this check was in
       // flight — whatever's loaded now has nothing to do with the wake
       // window this check was scheduled for.
       if (generation !== this.loadGeneration) return;
+      if (!this.currentUrl || !this.currentDidl) return;
       const relTime = hmsToSeconds(info.RelTime ?? "");
-      if (relTime > startPositionSecs + 1) return; // real progress happened — this receiver didn't need the nudge
-      await soapCall(this.avTransportUrl, AVTRANSPORT_TYPE, "Seek", {
-        InstanceID: 0, Unit: "REL_TIME", Target: secondsToHms(startPositionSecs),
-      });
-      if (generation !== this.loadGeneration) return; // same race, after the Seek's own round-trip
-      await soapCall(this.avTransportUrl, AVTRANSPORT_TYPE, "Play", { InstanceID: 0, Speed: "1" });
+      if (relTime > this.currentStartPositionSecs + 1) return; // real progress happened — this receiver didn't need the nudge
+      await this.sendLoadSequence(this.currentUrl, this.currentDidl, this.currentStartPositionSecs);
     } catch { /* best-effort recovery nudge — a failure here just means it doesn't get the extra kick */ }
   }
 
@@ -409,11 +488,11 @@ export class DlnaDevice {
     // expire on its own at TIMEOUT), and the caller (castManager.ts) needs
     // this to return synchronously.
     if (this.avtSid) {
-      fetch(this.avTransportEventUrl!, { method: "UNSUBSCRIBE", headers: { SID: this.avtSid } }).catch(() => {});
+      fetch(this.avTransportEventUrl!, { method: "UNSUBSCRIBE", headers: { SID: this.avtSid }, signal: AbortSignal.timeout(SOAP_TIMEOUT_MS) }).catch(() => {});
       this.avtSid = null;
     }
     if (this.rcSid) {
-      fetch(this.renderingControlEventUrl!, { method: "UNSUBSCRIBE", headers: { SID: this.rcSid } }).catch(() => {});
+      fetch(this.renderingControlEventUrl!, { method: "UNSUBSCRIBE", headers: { SID: this.rcSid }, signal: AbortSignal.timeout(SOAP_TIMEOUT_MS) }).catch(() => {});
       this.rcSid = null;
     }
   }

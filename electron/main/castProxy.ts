@@ -24,6 +24,16 @@ function lanAddress(): string {
   return "127.0.0.1";
 }
 
+// How long to wait, after a receiver's audio connection dies mid-stream,
+// for it to reopen (typically via a Range request) before concluding it's
+// not coming back. Real-world tracing against a Denon receiver showed a
+// genuine "resume" reopen lands within single-digit milliseconds of the
+// close every time — DLNA renderers reacting to a control command by
+// closing and immediately reopening the stream at a new byte offset is
+// normal, expected behavior, not a fault. 1500ms gives that a very
+// comfortable margin while still being fast to notice a real stall.
+const STREAM_STALL_GRACE_MS = 1500;
+
 export class CastProxyServer {
   private server: Server | null = null;
   private port = 0;
@@ -34,6 +44,18 @@ export class CastProxyServer {
   // castManager.ts can register/unregister the currently-connected DLNA
   // device's handler around each connect/disconnect cycle.
   private notifyHandlers = new Map<string, (body: string) => void>();
+  // Real-world testing against a Denon receiver proved GetTransportInfo's
+  // own RelTime can keep reporting normal advancing playback even while the
+  // receiver's actual audio-fetch connection died and never reopened — the
+  // transport clock and actual data delivery aren't reliably coupled on
+  // this device. This is the one signal that *is* reliable: whether a died
+  // connection for a given trackId gets reopened (see STREAM_STALL_GRACE_MS
+  // above) or not. Keyed by trackId since that's the only identity a
+  // renderer's request carries; at most one track is ever "pending" at a
+  // time in practice (a stale entry for an abandoned track is harmless —
+  // the callback below is generation-checked by the caller).
+  private stallTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private stallHandler: ((trackId: string) => void) | null = null;
 
   constructor(private getClient: () => SubsonicClient | null) {}
 
@@ -45,6 +67,14 @@ export class CastProxyServer {
   }
   unregisterNotify(path: string): void {
     this.notifyHandlers.delete(path);
+  }
+
+  /** Fires when a track's audio connection died mid-stream and nothing
+   *  reopened it within STREAM_STALL_GRACE_MS — see stallTimers above.
+   *  `null` unregisters (matches unregisterNotify's shape, used on
+   *  disconnect so a stale session's stall can't fire after the fact). */
+  onStreamStalled(handler: ((trackId: string) => void) | null): void {
+    this.stallHandler = handler;
   }
 
   async start(): Promise<void> {
@@ -66,6 +96,8 @@ export class CastProxyServer {
   stop(): void {
     this.server?.close();
     this.server = null;
+    for (const timer of this.stallTimers.values()) clearTimeout(timer);
+    this.stallTimers.clear();
   }
 
   audioUrlFor(trackId: string): string {
@@ -112,6 +144,11 @@ export class CastProxyServer {
   }
 
   private async serveAudio(client: SubsonicClient, trackId: string, req: IncomingMessage, res: ServerResponse): Promise<void> {
+    // A new request for this track arriving — whether it's the very first
+    // one or a reopen after a prior connection died — means any pending
+    // stall timer from an earlier death is moot; the stream is back.
+    const pendingStall = this.stallTimers.get(trackId);
+    if (pendingStall) { clearTimeout(pendingStall); this.stallTimers.delete(trackId); }
     const upstream = await fetch(client.streamUrl(trackId), {
       headers: req.headers.range ? { range: req.headers.range } : undefined,
     });
@@ -136,7 +173,25 @@ export class CastProxyServer {
     if (contentRange) headers["Content-Range"] = contentRange;
 
     res.writeHead(upstream.status === 206 ? 206 : 200, headers);
-    await pipeline(Readable.fromWeb(upstream.body as import("node:stream/web").ReadableStream<Uint8Array>), res);
+    const source = Readable.fromWeb(upstream.body as import("node:stream/web").ReadableStream<Uint8Array>);
+    try {
+      await pipeline(source, res);
+    } catch (err) {
+      // Died before finishing — normal if the renderer is about to reopen at
+      // a new byte offset (a Seek reacting exactly this way is expected,
+      // proven to happen within single-digit ms), or if this track was
+      // explicitly stopped (the DlnaDevice-side handler below is
+      // responsible for ignoring that case, not this proxy — it has no way
+      // to know intent, only that the connection died). Either way, arm a
+      // stall check; a genuine reopen cancels it via the guard at the top
+      // of this method before it ever fires.
+      const timer = setTimeout(() => {
+        this.stallTimers.delete(trackId);
+        this.stallHandler?.(trackId);
+      }, STREAM_STALL_GRACE_MS);
+      this.stallTimers.set(trackId, timer);
+      throw err;
+    }
   }
 
   private async serveArt(client: SubsonicClient, coverId: string, res: ServerResponse): Promise<void> {

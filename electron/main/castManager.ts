@@ -21,6 +21,12 @@ interface CastSession {
    *  ChromecastDevice doesn't implement this (its own status push comes
    *  over its persistent CastV2 socket instead). */
   handleNotify?(body: string): void;
+  /** DLNA only — routed here from castProxy.ts's onStreamStalled(), the
+   *  proxy's own view of whether a died audio connection ever reopened.
+   *  ChromecastDevice doesn't implement this — the receiver fetches from
+   *  its own cast SDK cache/buffer rather than a bare HTTP stream we can
+   *  observe the same way. */
+  handleStreamStall?(trackId: string): void;
 }
 
 // Fixed, not per-connection-random — at most one cast session is ever
@@ -136,6 +142,7 @@ export class CastManager {
       // this as the CALLBACK, and the callback URL itself has to already
       // be known to pass into the constructor in the first place.
       const callbackUrl = this.proxy.registerNotify(DLNA_NOTIFY_PATH, (body) => dlnaSession.handleNotify?.(body));
+      this.proxy.onStreamStalled((trackId) => dlnaSession.handleStreamStall?.(trackId));
       const dlnaSession = new DlnaDevice(
         device.avTransportControlUrl, device.renderingControlControlUrl ?? null,
         device.avTransportEventUrl, device.renderingControlEventUrl,
@@ -152,6 +159,7 @@ export class CastManager {
       // each retry piles up another one, eventually tripping Node's
       // MaxListenersExceededWarning on the underlying castv2 socket.
       session.disconnect();
+      this.proxy.onStreamStalled(null);
       this.proxy.stop();
       throw err;
     }
@@ -175,6 +183,7 @@ export class CastManager {
     // under this path) — guards against a stale NOTIFY handler still
     // referencing this now-dead session if UNSUBSCRIBE itself failed.
     this.proxy.unregisterNotify(DLNA_NOTIFY_PATH);
+    this.proxy.onStreamStalled(null);
     this.proxy.stop();
   }
 
@@ -190,6 +199,7 @@ export class CastManager {
       this.session = null;
       this.connectedDevice = null;
       this.proxy.unregisterNotify(DLNA_NOTIFY_PATH);
+      this.proxy.onStreamStalled(null);
       this.proxy.stop();
     }
     this.send(event);

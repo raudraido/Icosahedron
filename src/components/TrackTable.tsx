@@ -836,11 +836,21 @@ export function TrackTable({
           setColOrder((prev) => {
             const from = prev.indexOf(colId);
             if (from === -1) return prev;
+            // `target` is an index into visibleCols — onMove's hit-test
+            // above only ever sees rendered (i.e. visible) header cells —
+            // not into `prev`, which also contains any hidden columns.
+            // Resolve it to the boundary column's real position in the
+            // full order first, rather than reusing the visible-only index
+            // directly against `prev`: with any column hidden, the two
+            // index spaces diverge and drops land in the wrong place.
+            const boundaryId = target < visibleCols.length ? visibleCols[target] : null;
+            if (boundaryId === colId) return prev; // dropped back onto itself — no-op
+            const boundaryIndex = boundaryId ? prev.indexOf(boundaryId) : prev.length;
             const next = [...prev];
             next.splice(from, 1);
             // Removing `from` shifts every index after it back by one, so
-            // the target index needs the same adjustment before re-inserting.
-            const adjusted = from < target ? target - 1 : target;
+            // the boundary index needs the same adjustment before re-inserting.
+            const adjusted = from < boundaryIndex ? boundaryIndex - 1 : boundaryIndex;
             next.splice(Math.max(0, Math.min(next.length, adjusted)), 0, colId);
             saveJSON(LS_ORDER(viewKey), next);
             return next;

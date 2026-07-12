@@ -272,6 +272,10 @@ interface AppStore {
   castVolume: number;
   setCastVolume: (v: number) => void;
   discoverCastDevices: () => Promise<void>;
+  /** Explicit, user-triggered rescan (CastPicker.tsx's refresh button) —
+   *  the only thing that actually sends a network scan; discoverCastDevices
+   *  above just reads the cache now (see castManager.ts's discover()). */
+  rescanCastDevices: () => Promise<void>;
   connectCast: (deviceId: string) => Promise<void>;
   disconnectCast: () => Promise<void>;
 }
@@ -442,6 +446,19 @@ function loadLeftPanelPlaylistsVisible(): boolean {
     return true;
   }
 }
+
+// A <input type="range"> fires onChange on essentially every pixel of
+// movement during a drag — setCastVolume below used to send a fresh SOAP
+// SetVolume call (over its own brand-new TCP connection, DLNA's
+// Connection: close) for every single one of those, which turned one
+// volume-slider drag into a burst of 20-30+ back-to-back requests. That's
+// exactly the kind of load that's already wedged a real receiver's fragile
+// embedded HTTP server (see castDlna.ts's own comments) — trailing-debounce
+// it so a continuous drag sends nothing at all until movement actually
+// pauses, then exactly one call with the final value; local UI state still
+// updates on every event for an instantly-responsive slider.
+let castVolumeSendTimer: ReturnType<typeof setTimeout> | null = null;
+const CAST_VOLUME_DEBOUNCE_MS = 200;
 
 export const useStore = create<AppStore>((set, get) => ({
   connected: false,
@@ -780,8 +797,12 @@ export const useStore = create<AppStore>((set, get) => ({
 
   setCastVolume: (v) => {
     const clamped = Math.max(0, Math.min(100, v));
-    api.castSetVolume(clamped / 100);
     set({ castVolume: clamped });
+    if (castVolumeSendTimer) clearTimeout(castVolumeSendTimer);
+    castVolumeSendTimer = setTimeout(() => {
+      castVolumeSendTimer = null;
+      api.castSetVolume(clamped / 100);
+    }, CAST_VOLUME_DEBOUNCE_MS);
   },
 
   toggleShuffle: () => set((s) => ({ shuffle: !s.shuffle })),
@@ -984,6 +1005,13 @@ export const useStore = create<AppStore>((set, get) => ({
   discoverCastDevices: async () => {
     const devices = await api.castDiscover().catch(() => []);
     set({ castDevices: devices });
+  },
+
+  // Fire-and-forget — the actual result arrives via the existing
+  // onCastDevices push (above) once the scan resolves, same as it already
+  // did for the old auto-rescan-on-open behavior, just user-triggered now.
+  rescanCastDevices: async () => {
+    await api.castRescan().catch(() => {});
   },
 
   // castConnected/castDevice flip once handleCastEvent sees the "connected"

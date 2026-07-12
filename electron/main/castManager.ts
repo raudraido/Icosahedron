@@ -17,7 +17,18 @@ interface CastSession {
   seek(seconds: number): void;
   setVolume(volume: number): void;
   disconnect(): void;
+  /** DLNA only — routed here from castProxy.ts's NOTIFY handling.
+   *  ChromecastDevice doesn't implement this (its own status push comes
+   *  over its persistent CastV2 socket instead). */
+  handleNotify?(body: string): void;
 }
+
+// Fixed, not per-connection-random — at most one cast session is ever
+// active (connect() always disconnects any prior one first), so there's
+// never a collision to avoid, and reusing the same path means disconnect()
+// unregistering it is enough to guarantee no stale handler is ever left
+// reachable, rather than needing to track/clean up a growing set of them.
+const DLNA_NOTIFY_PATH = "dlna-event";
 
 export interface CastDevice {
   id: string;
@@ -77,20 +88,20 @@ export class CastManager {
     this.win.webContents.send("cast_scanning", scanning);
   }
 
-  // Returns the cache instantly so the picker opens without a visible
-  // delay, but always kicks a fresh background scan too (pushing
-  // cast_devices once it resolves) — opening the picker is a deliberate,
-  // infrequent user action, not a hot loop worth gating behind a staleness
-  // timer. A previous 30s-staleness gate here silently skipped rescanning
-  // on a quick reopen, which just reads as "the app can't find my device"
-  // with zero feedback about why — not worth the network traffic it saves.
+  // Just returns the cache — no longer auto-triggers a background rescan on
+  // every open. That used to be the deliberate choice (see rescan()'s own
+  // history), but it means every single picker-open sends a real SSDP
+  // M-SEARCH burst + mDNS query + device-description fetches, which is
+  // exactly the kind of extra chatter worth avoiding now that a real
+  // receiver has proven capable of wedging under load — opening the picker
+  // to glance at connection state shouldn't cost a network scan every
+  // time. Explicit rescan() below is exposed for the user to trigger by
+  // hand (a refresh button in CastPicker.tsx) instead.
   async discover(): Promise<CastDevice[]> {
-    const cached = [...this.deviceCache.values()].map(toPublicDevice);
-    this.rescan();
-    return cached;
+    return [...this.deviceCache.values()].map(toPublicDevice);
   }
 
-  private rescan(): void {
+  rescan(): void {
     if (this.scanning) return;
     this.scanning = true;
     this.sendScanning(true);
@@ -120,7 +131,17 @@ export class CastManager {
       session = new ChromecastDevice(device.host, (event) => this.handleStatus(event));
     } else {
       if (!device.avTransportControlUrl) throw new Error("Missing DLNA control URL — try rescanning");
-      session = new DlnaDevice(device.avTransportControlUrl, device.renderingControlControlUrl ?? null, (event) => this.handleStatus(event));
+      // Registered before constructing the device, not after — it needs to
+      // exist by the time connect() below actually sends SUBSCRIBE with
+      // this as the CALLBACK, and the callback URL itself has to already
+      // be known to pass into the constructor in the first place.
+      const callbackUrl = this.proxy.registerNotify(DLNA_NOTIFY_PATH, (body) => dlnaSession.handleNotify?.(body));
+      const dlnaSession = new DlnaDevice(
+        device.avTransportControlUrl, device.renderingControlControlUrl ?? null,
+        device.avTransportEventUrl, device.renderingControlEventUrl,
+        callbackUrl, (event) => this.handleStatus(event),
+      );
+      session = dlnaSession;
     }
 
     try {
@@ -150,6 +171,10 @@ export class CastManager {
     this.session.disconnect();
     this.session = null;
     this.connectedDevice = null;
+    // Harmless no-op for a Chromecast session (nothing was ever registered
+    // under this path) — guards against a stale NOTIFY handler still
+    // referencing this now-dead session if UNSUBSCRIBE itself failed.
+    this.proxy.unregisterNotify(DLNA_NOTIFY_PATH);
     this.proxy.stop();
   }
 
@@ -164,6 +189,7 @@ export class CastManager {
       this.session?.disconnect();
       this.session = null;
       this.connectedDevice = null;
+      this.proxy.unregisterNotify(DLNA_NOTIFY_PATH);
       this.proxy.stop();
     }
     this.send(event);
@@ -190,6 +216,7 @@ export class CastManager {
   teardown(): void {
     this.session?.disconnect();
     this.session = null;
+    this.proxy.unregisterNotify(DLNA_NOTIFY_PATH);
     this.proxy.stop();
   }
 }

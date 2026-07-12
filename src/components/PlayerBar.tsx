@@ -104,6 +104,7 @@ export function PlayerBar() {
   const castDevices        = useStore((s) => s.castDevices);
   const castScanning       = useStore((s) => s.castScanning);
   const discoverCastDevices = useStore((s) => s.discoverCastDevices);
+  const rescanCastDevices   = useStore((s) => s.rescanCastDevices);
   const connectCast        = useStore((s) => s.connectCast);
   const disconnectCast     = useStore((s) => s.disconnectCast);
   const castVolume         = useStore((s) => s.castVolume);
@@ -496,6 +497,7 @@ export function PlayerBar() {
           // adjusting volume doesn't require reopening the picker each time.
           onConnect={connectCast}
           onDisconnect={disconnectCast}
+          onRescan={rescanCastDevices}
           onClose={() => setCastPicker(null)}
         />
       )}

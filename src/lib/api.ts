@@ -350,6 +350,10 @@ export const api = {
   // ── Casting (electron/main/castManager.ts) — Chromecast/DLNA, "send a URL,
   // the receiver plays it" model, not an audio relay through this app. ──────
   castDiscover: () => invoke<CastDevice[]>("cast_discover"),
+  /** Explicit user-triggered rescan (a refresh button in CastPicker.tsx) —
+   *  unlike castDiscover(), which now just returns the cache, this is the
+   *  only thing that actually sends a network scan burst. */
+  castRescan: () => invoke<void>("cast_rescan"),
   castConnect: (deviceId: string) => invoke<void>("cast_connect", { deviceId }),
   castDisconnect: () => invoke<void>("cast_disconnect"),
   castPlayTrack: (input: {

@@ -45,12 +45,16 @@ interface Props {
   connectError: string | null;
   onConnect: (deviceId: string) => void;
   onDisconnect: () => void;
+  /** Explicit rescan — opening the picker no longer scans automatically
+   *  (see castManager.ts's discover()), so this is the only way to
+   *  actually search for devices again once it's open. */
+  onRescan: () => void;
   onClose: () => void;
 }
 
 export function CastPicker({
   x, y, track, volume, onVolumeChange, castVolume, onCastVolumeChange,
-  devices, scanning, connectedDevice, connecting, connectError, onConnect, onDisconnect, onClose,
+  devices, scanning, connectedDevice, connecting, connectError, onConnect, onDisconnect, onRescan, onClose,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x, y, ready: false });
@@ -81,8 +85,8 @@ export function CastPicker({
     const rect = el.getBoundingClientRect();
     const naturalLeft = x - rect.width;
     const naturalTop = y - rect.height;
-    const clampedX = Math.max(8, Math.min(naturalLeft, window.innerWidth - rect.width - 8));
-    const clampedY = Math.max(8, Math.min(naturalTop, window.innerHeight - rect.height - 8));
+    const clampedX = Math.max(12, Math.min(naturalLeft, window.innerWidth - rect.width - 12));
+    const clampedY = Math.max(12, Math.min(naturalTop, window.innerHeight - rect.height - 12));
     setPos({ x: clampedX, y: clampedY, ready: true });
   }, [x, y]);
 
@@ -104,7 +108,7 @@ export function CastPicker({
         // alone doesn't stop a long device list from growing taller than
         // the window — cap + scroll it too, same as ContextMenu.tsx's
         // submenu (maxHeight: min(..., calc(100vh - 16px))).
-        maxHeight: "calc(100vh - 16px)", overflowY: "auto", overflowX: "hidden",
+        maxHeight: "calc(100vh - 24px)", overflowY: "auto", overflowX: "hidden",
       }}
     >
       {/* Now-playing header */}
@@ -120,6 +124,7 @@ export function CastPicker({
             </p>
           )}
         </div>
+        <RefreshButton onClick={onRescan} spinning={scanning} />
       </div>
       <div style={{ height: 1, background: "var(--border)" }} />
 
@@ -183,12 +188,40 @@ function Row({ children, title }: { children: React.ReactNode; title?: string })
     <div
       className="flex items-center"
       title={title}
-      style={{ gap: 10, padding: "0 14px", height: 44, background: hover ? "var(--hover-bg)" : "transparent" }}
+      style={{ position: "relative", gap: 10, padding: "0 14px", height: 44 }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
       {children}
+      {hover && (
+        <div
+          className="absolute rounded-lg"
+          style={{ inset: "1px 8px", zIndex: -1, background: "var(--hover-bg)", pointerEvents: "none" }}
+        />
+      )}
     </div>
+  );
+}
+
+function RefreshButton({ onClick, spinning }: { onClick: () => void; spinning: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={spinning}
+      title="Refresh devices"
+      className="flex items-center justify-center shrink-0"
+      style={{
+        width: 26, height: 26, borderRadius: 6, cursor: spinning ? "default" : "pointer",
+        background: "transparent", border: "none", color: "var(--text-secondary)",
+        opacity: spinning ? 0.5 : 1,
+      }}
+    >
+      <Icon
+        src="img/refresh.png"
+        size={15}
+        style={{ background: "var(--text-secondary)", animation: spinning ? "spinner-rotate 800ms linear infinite" : undefined }}
+      />
+    </button>
   );
 }
 

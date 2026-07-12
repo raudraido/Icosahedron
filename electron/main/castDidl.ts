@@ -76,3 +76,13 @@ export function secondsToHms(totalSeconds: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
+/** Inverse of secondsToHms — GetPositionInfo's RelTime comes back in the
+ *  same "HH:MM:SS" shape. Returns 0 for anything unparseable (e.g. a
+ *  renderer that returns "NOT_IMPLEMENTED") rather than throwing, since
+ *  callers use this for a best-effort progress check, not a hard fact. */
+export function hmsToSeconds(hms: string): number {
+  const m = hms.match(/^(\d+):(\d{2}):(\d{2})$/);
+  if (!m) return 0;
+  return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]);
+}
+

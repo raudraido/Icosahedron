@@ -28,8 +28,24 @@ export class CastProxyServer {
   private server: Server | null = null;
   private port = 0;
   private host = "127.0.0.1";
+  // GENA (UPnP eventing) NOTIFY callbacks — a DLNA renderer we're
+  // subscribed to POSTs state changes here itself (see castDlna.ts's
+  // subscribe()) instead of us having to poll it. Keyed by path so
+  // castManager.ts can register/unregister the currently-connected DLNA
+  // device's handler around each connect/disconnect cycle.
+  private notifyHandlers = new Map<string, (body: string) => void>();
 
   constructor(private getClient: () => SubsonicClient | null) {}
+
+  /** Registers a NOTIFY body handler under `path` and returns the full
+   *  callback URL to hand a renderer as its GENA subscription CALLBACK. */
+  registerNotify(path: string, handler: (body: string) => void): string {
+    this.notifyHandlers.set(path, handler);
+    return `http://${this.host}:${this.port}/${path}`;
+  }
+  unregisterNotify(path: string): void {
+    this.notifyHandlers.delete(path);
+  }
 
   async start(): Promise<void> {
     if (this.server) return;
@@ -63,6 +79,21 @@ export class CastProxyServer {
   private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
       const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+
+      // GENA NOTIFY — a subscribed renderer pushing a state change, not a
+      // request for a resource; routed by exact path, not the kind/id
+      // scheme below (registerNotify's path is opaque to that scheme).
+      if (req.method === "NOTIFY") {
+        const handler = this.notifyHandlers.get(url.pathname.replace(/^\//, ""));
+        if (!handler) { res.writeHead(404).end(); return; }
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) chunks.push(chunk as Buffer);
+        handler(Buffer.concat(chunks).toString("utf8"));
+        // UPnP eventing expects a bare 200 with no body.
+        res.writeHead(200).end();
+        return;
+      }
+
       const [, kind, rawId] = url.pathname.split("/");
       const id = rawId ? decodeURIComponent(rawId) : "";
       const client = this.getClient();

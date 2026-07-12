@@ -22,26 +22,47 @@ export interface DiscoveredCastDevice {
    *  itself if that's absent). Chromecast devices never set these. */
   avTransportControlUrl?: string;
   renderingControlControlUrl?: string;
+  /** DLNA only — absolute GENA (SUBSCRIBE/NOTIFY) event subscription URLs,
+   *  resolved the same way as the control URLs above. AVTransport eventing
+   *  is what castDlna.ts actually needs (playback state); RenderingControl
+   *  eventing (volume) is a nice-to-have some renderers omit entirely. */
+  avTransportEventUrl?: string;
+  renderingControlEventUrl?: string;
 }
 
 const PROBE_TIMEOUT_MS = 1500;
+const CAST_DEBUG_PREFIX = "[cast]";
 
 function probeReachable(host: string, port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = new Socket();
     let settled = false;
-    function finish(ok: boolean) {
+    function finish(ok: boolean, reason?: string) {
       if (settled) return;
       settled = true;
       socket.destroy();
+      console.log(`${CAST_DEBUG_PREFIX} probe ${host}:${port} — ${ok ? "reachable" : `unreachable (${reason})`}`);
       resolve(ok);
     }
     socket.setTimeout(PROBE_TIMEOUT_MS);
     socket.once("connect", () => finish(true));
-    socket.once("timeout", () => finish(false));
-    socket.once("error", () => finish(false));
+    socket.once("timeout", () => finish(false, "timeout"));
+    socket.once("error", (err) => finish(false, (err as NodeJS.ErrnoException).code ?? err.message));
     socket.connect(port, host);
   });
+}
+
+// mDNS can advertise several addresses per device (IPv4 + IPv6, multiple
+// interfaces) — trying only the first and giving up if that one isn't
+// reachable was marking devices as unreachable when a *different* address
+// in the same list would have actually worked (e.g. the first entry being
+// an IPv6 link-local or a secondary-interface address, with a perfectly
+// reachable IPv4 LAN address sitting right after it). Tries every
+// candidate concurrently and uses whichever one actually connects.
+async function firstReachableHost(addresses: string[], port: number): Promise<string | null> {
+  if (addresses.length === 0) return null;
+  const results = await Promise.all(addresses.map(async (addr) => ({ addr, ok: await probeReachable(addr, port) })));
+  return results.find((r) => r.ok)?.addr ?? null;
 }
 
 // Short-lived Bonjour instance per scan (its own mDNS UDP socket) rather
@@ -51,18 +72,18 @@ function probeReachable(host: string, port: number): Promise<boolean> {
 function scanChromecasts(timeoutMs: number): Promise<DiscoveredCastDevice[]> {
   return new Promise((resolve) => {
     const bonjour = new Bonjour();
-    const found = new Map<string, Omit<DiscoveredCastDevice, "reachable">>();
+    const found = new Map<string, { id: string; name: string; addresses: string[]; port: number }>();
     const browser = bonjour.find({ type: "googlecast", protocol: "tcp" }, (service) => {
-      const host = service.addresses?.[0] ?? service.host;
-      if (!host) return;
+      const addresses = service.addresses?.length ? service.addresses : service.host ? [service.host] : [];
+      console.log(`${CAST_DEBUG_PREFIX} mDNS found "${service.name}" — addresses=[${addresses.join(", ")}] port=${service.port}`);
+      if (!addresses.length) return;
       // fqdn is stable across rescans for the same physical device; a
       // host:port fallback covers the (rare) case a service is missing one.
-      const id = service.fqdn || `${host}:${service.port}`;
+      const id = service.fqdn || `${addresses[0]}:${service.port}`;
       found.set(id, {
         id,
         name: (service.txt?.fn as string | undefined) || service.name,
-        protocol: "chromecast",
-        host,
+        addresses,
         port: service.port,
       });
     });
@@ -70,9 +91,17 @@ function scanChromecasts(timeoutMs: number): Promise<DiscoveredCastDevice[]> {
       browser.stop();
       bonjour.destroy();
       // Probed concurrently, not sequentially — worst case (every device
-      // unreachable) is one PROBE_TIMEOUT_MS wait, not N of them.
+      // has every address unreachable) is one PROBE_TIMEOUT_MS wait, not N
+      // of them.
       Promise.all(
-        [...found.values()].map(async (d) => ({ ...d, reachable: await probeReachable(d.host, d.port) })),
+        [...found.values()].map(async (d) => {
+          const reachableHost = await firstReachableHost(d.addresses, d.port);
+          return {
+            id: d.id, name: d.name, protocol: "chromecast" as const,
+            host: reachableHost ?? d.addresses[0], port: d.port,
+            reachable: reachableHost !== null,
+          };
+        }),
       ).then(resolve);
     }, timeoutMs);
   });
@@ -181,14 +210,26 @@ function hasDeviceType(xml: string, needle: string): boolean {
 // <service>...</service></serviceList> — matching each <service>...</service>
 // block whole and pulling serviceType/controlURL back out of each is simpler
 // and less fragile than trying to correlate two separate flat tag sweeps.
-function extractServiceControlUrls(xml: string): { avTransport?: string; renderingControl?: string } {
-  const result: { avTransport?: string; renderingControl?: string } = {};
+interface ServiceUrls {
+  avTransport?: string;
+  avTransportEvent?: string;
+  renderingControl?: string;
+  renderingControlEvent?: string;
+}
+function extractServiceControlUrls(xml: string): ServiceUrls {
+  const result: ServiceUrls = {};
   for (const block of xml.match(/<service>[\s\S]*?<\/service>/g) ?? []) {
     const serviceType = extractTag(block, "serviceType");
     const controlURL = extractTag(block, "controlURL");
+    const eventSubURL = extractTag(block, "eventSubURL");
     if (!serviceType || !controlURL) continue;
-    if (serviceType.includes(":service:AVTransport:")) result.avTransport = controlURL;
-    else if (serviceType.includes(":service:RenderingControl:")) result.renderingControl = controlURL;
+    if (serviceType.includes(":service:AVTransport:")) {
+      result.avTransport = controlURL;
+      result.avTransportEvent = eventSubURL;
+    } else if (serviceType.includes(":service:RenderingControl:")) {
+      result.renderingControl = controlURL;
+      result.renderingControlEvent = eventSubURL;
+    }
   }
   return result;
 }
@@ -200,6 +241,8 @@ interface DlnaDescription {
   port: number;
   avTransportControlUrl: string;
   renderingControlControlUrl?: string;
+  avTransportEventUrl?: string;
+  renderingControlEventUrl?: string;
 }
 
 // Fetches and parses one SSDP LOCATION's device-description XML — returns
@@ -229,7 +272,7 @@ async function fetchDlnaDescription(location: string): Promise<DlnaDescription |
       console.log(`${DEBUG_PREFIX} ${location} — missing friendlyName or UDN, skipped`);
       return null;
     }
-    const { avTransport, renderingControl } = extractServiceControlUrls(xml);
+    const { avTransport, avTransportEvent, renderingControl, renderingControlEvent } = extractServiceControlUrls(xml);
     if (!avTransport) {
       console.log(`${DEBUG_PREFIX} ${location} — "${friendlyName}" has no AVTransport service, skipped`);
       return null;
@@ -240,17 +283,20 @@ async function fetchDlnaDescription(location: string): Promise<DlnaDescription |
     const baseUrl = extractTag(xml, "URLBase") || location;
     const avTransportControlUrl = new URL(avTransport, baseUrl).toString();
     const renderingControlControlUrl = renderingControl ? new URL(renderingControl, baseUrl).toString() : undefined;
+    const avTransportEventUrl = avTransportEvent ? new URL(avTransportEvent, baseUrl).toString() : undefined;
+    const renderingControlEventUrl = renderingControlEvent ? new URL(renderingControlEvent, baseUrl).toString() : undefined;
     // host/port for the reachability probe below come from the actual SOAP
     // endpoint we're going to call, not the description URL — usually the
     // same, but a device that puts <URLBase> on a different port would
     // otherwise get probed against the wrong one.
     const controlUrl = new URL(avTransportControlUrl);
-    console.log(`${DEBUG_PREFIX} ${location} — accepted "${friendlyName}", AVTransport=${avTransportControlUrl}, RenderingControl=${renderingControlControlUrl ?? "<none>"}`);
+    console.log(`${DEBUG_PREFIX} ${location} — accepted "${friendlyName}", AVTransport=${avTransportControlUrl}, RenderingControl=${renderingControlControlUrl ?? "<none>"}, AVTransportEvent=${avTransportEventUrl ?? "<none>"}`);
     return {
       udn, friendlyName,
       host: controlUrl.hostname,
       port: Number(controlUrl.port) || (controlUrl.protocol === "https:" ? 443 : 80),
       avTransportControlUrl, renderingControlControlUrl,
+      avTransportEventUrl, renderingControlEventUrl,
     };
   } catch (err) {
     console.log(`${DEBUG_PREFIX} ${location} — fetch/parse failed: ${err instanceof Error ? err.message : err}, skipped`);
@@ -270,6 +316,8 @@ async function scanDlna(timeoutMs: number): Promise<DiscoveredCastDevice[]> {
     port: d.port,
     avTransportControlUrl: d.avTransportControlUrl,
     renderingControlControlUrl: d.renderingControlControlUrl,
+    avTransportEventUrl: d.avTransportEventUrl,
+    renderingControlEventUrl: d.renderingControlEventUrl,
     reachable: await probeReachable(d.host, d.port),
   })));
   console.log(`${DEBUG_PREFIX} scan complete — ${devices.length} MediaRenderer(s): ${devices.map((d) => `${d.name} (reachable=${d.reachable})`).join(", ") || "none"}`);

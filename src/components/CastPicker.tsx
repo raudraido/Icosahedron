@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "./Icon";
 import { CoverArt } from "./CoverArt";
@@ -78,17 +78,39 @@ export function CastPicker({
   // natural direction for a bottom-right-corner trigger) before falling
   // back to the same clamp-into-viewport ContextMenu.tsx/BpmMenu.tsx use —
   // that clamp is still here as a safety net (e.g. a very short window),
-  // but shouldn't normally need to do anything now.
-  useLayoutEffect(() => {
+  // but shouldn't normally need to do anything now. Shared with the resize
+  // handler below so both compute a position the exact same way.
+  const reposition = useCallback((anchorX: number, anchorY: number) => {
     const el = ref.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const naturalLeft = x - rect.width;
-    const naturalTop = y - rect.height;
+    const naturalLeft = anchorX - rect.width;
+    const naturalTop = anchorY - rect.height;
     const clampedX = Math.max(12, Math.min(naturalLeft, window.innerWidth - rect.width - 12));
     const clampedY = Math.max(12, Math.min(naturalTop, window.innerHeight - rect.height - 12));
     setPos({ x: clampedX, y: clampedY, ready: true });
-  }, [x, y]);
+  }, []);
+
+  useLayoutEffect(() => {
+    reposition(x, y);
+  }, [x, y, reposition]);
+
+  // The trigger button lives in the window's bottom-right corner, so
+  // resizing the window moves it — without this, the already-open popup
+  // stays pinned to the screen coordinate it opened at and visibly drifts
+  // away from the button. Re-reads the button's own live rect (same -4
+  // offset PlayerBar.tsx's click handler uses) rather than relying on the
+  // x/y props, which only ever reflect the position at open time.
+  useEffect(() => {
+    function onResize() {
+      const trigger = document.querySelector<HTMLElement>("[data-cast-trigger]");
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      reposition(rect.right, rect.top - 4);
+    }
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [reposition]);
 
   function toggle(device: CastDevice) {
     if (connectedDevice?.id === device.id) onDisconnect();

@@ -99,6 +99,15 @@ export function PlayerBar() {
   const addTrackNext       = useStore((s) => s.addTrackNext);
   const openShareDialog    = useStore((s) => s.openShareDialog);
   const [eqAnchor, setEqAnchor] = useState<{ x: number; y: number } | null>(null);
+  // EqualizerPopup closes itself on any outside `mousedown` (see
+  // EqualizerPopup.tsx), which fires on this button *before* its own `click`
+  // event does — so by the time onClick runs, eqAnchor has often already
+  // been reset to null by that same click-to-close-again gesture, and
+  // toggling off the (now stale) state would just reopen it. This mousedown
+  // captures whether the popup was open *before* that same-click close
+  // happens, so onClick can tell "was already open, this click is a close"
+  // apart from "was closed, this click is an open".
+  const eqWasOpenRef = useRef(false);
   const startRadio         = useStore((s) => s.startRadio);
   const castConnected      = useStore((s) => s.castConnected);
   const castConnecting     = useStore((s) => s.castConnecting);
@@ -429,9 +438,11 @@ export function PlayerBar() {
       <div className="flex items-center shrink-0 justify-end" style={{ width: "max(260px, 19%)", gap: 6 }}>
         {/* Equalizer — opens the 10-band EQ popup anchored above this button */}
         <button
+          onMouseDown={() => { eqWasOpenRef.current = eqAnchor !== null; }}
           onClick={(e) => {
+            if (eqWasOpenRef.current) { setEqAnchor(null); return; }
             const rect = e.currentTarget.getBoundingClientRect();
-            setEqAnchor(eqAnchor ? null : { x: rect.left + rect.width / 2, y: rect.top });
+            setEqAnchor({ x: rect.left + rect.width / 2, y: rect.top });
           }}
           title="Equalizer"
           className="flex items-center justify-center shrink-0"

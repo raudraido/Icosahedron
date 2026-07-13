@@ -1,8 +1,7 @@
 # Icosahedron
 
 A desktop client for Subsonic/Navidrome music servers, built with Electron,
-React, and TypeScript. A rewrite of the original Python/Qt "Sonar" app.
-
+React, and TypeScript.
 ## Development
 
 ```bash

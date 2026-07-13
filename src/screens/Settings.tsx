@@ -55,7 +55,7 @@ function SideTabButton({ label, active, onClick }: { label: string; active: bool
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col" style={{ gap: 10 }}>
-      <span style={{ color: "var(--text-secondary)", fontSize: 11, fontWeight: "var(--fw-emphasis)", letterSpacing: 1, textTransform: "uppercase" }}>
+      <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)", letterSpacing: 1, textTransform: "uppercase" }}>
         {title}
       </span>
       {children}
@@ -223,9 +223,9 @@ function ToggleSwitch({ checked, onChange, disabled }: { checked: boolean; onCha
   );
 }
 
-function ToggleRow({ label, description, checked, onChange, disabled }: { label: string; description?: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+function ToggleRow({ label, description, checked, onChange, disabled, divider = true }: { label: string; description?: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; divider?: boolean }) {
   return (
-    <div className="flex items-center justify-between" style={{ gap: 12, padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
+    <div className="flex items-center justify-between" style={{ gap: 12, padding: "8px 0", borderBottom: divider ? "1px solid var(--border)" : "none" }}>
       <div className="flex flex-col" style={{ opacity: disabled ? 0.5 : 1 }}>
         <span style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)" }}>{label}</span>
         {description && <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>{description}</span>}
@@ -364,7 +364,7 @@ function LastFmSection() {
     <Section title="Last.fm">
       {lastfmConnected ? (
         <>
-          <div className="flex items-center justify-between" style={{ gap: 12, padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
+          <div className="flex items-center justify-between" style={{ gap: 12, padding: "8px 0" }}>
             <span style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)" }}>
               Connected as <strong>@{lastfmConnectedUsername}</strong>
             </span>
@@ -384,16 +384,19 @@ function LastFmSection() {
             description="Reads your Last.fm play history for the left panel's list."
             checked={lastFmEnabled}
             onChange={setLastFmEnabled}
+            divider={false}
           />
           <ToggleRow
             label="Scrobble to Last.fm"
             description="Scrobbles at the halfway point (or 4 minutes), same as Last.fm itself."
             checked={lastfmScrobbleEnabled}
             onChange={setLastfmScrobbleEnabled}
+            divider={false}
           />
           <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
             Leave off if your Navidrome server already scrobbles to Last.fm server-side — with both on, every play scrobbles twice.
           </p>
+          <div style={{ height: 1, background: "var(--border)", marginTop: 8 }} />
         </>
       ) : (
         <div className="flex flex-col" style={{ gap: 10 }}>
@@ -451,22 +454,26 @@ function LyricsSection() {
         description="Auto-fetch fallback when your server has no lyrics for a track."
         checked={lyricsLrclibEnabled}
         onChange={setLyricsLrclibEnabled}
+        divider={false}
       />
       <ToggleRow
         label="NetEase"
         description="Auto-fetch fallback when your server has no lyrics for a track."
         checked={lyricsNeteaseEnabled}
         onChange={setLyricsNeteaseEnabled}
+        divider={false}
       />
       <ToggleRow
         label="SimpMusic"
         description="Auto-fetch fallback when your server has no lyrics for a track."
         checked={lyricsSimpmusicEnabled}
         onChange={setLyricsSimpmusicEnabled}
+        divider={false}
       />
       <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
         Manually searching lyrics (the Lyrics tab's "Search" button) always checks all three, regardless of these toggles — they only gate automatic background lookups.
       </p>
+      <div style={{ height: 1, background: "var(--border)", marginTop: 8 }} />
     </Section>
   );
 }

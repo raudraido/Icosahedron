@@ -15,6 +15,7 @@ import { CastPicker } from "./CastPicker";
 import { PromptDialog } from "./PromptDialog";
 import { TrackInfoDialog } from "./TrackInfoDialog";
 import { BpmMenu } from "./BpmMenu";
+import { EqualizerPopup } from "./EqualizerPopup";
 import { FAVORITE_PINK } from "../lib/theme";
 
 const LS_SHOW_REMAINING = "footer_show_remaining_time";
@@ -97,6 +98,7 @@ export function PlayerBar() {
   const playTrack          = useStore((s) => s.playTrack);
   const addTrackNext       = useStore((s) => s.addTrackNext);
   const openShareDialog    = useStore((s) => s.openShareDialog);
+  const [eqAnchor, setEqAnchor] = useState<{ x: number; y: number } | null>(null);
   const startRadio         = useStore((s) => s.startRadio);
   const castConnected      = useStore((s) => s.castConnected);
   const castConnecting     = useStore((s) => s.castConnecting);
@@ -425,6 +427,21 @@ export function PlayerBar() {
           same 19% proportion as leftBlock, floored higher (260px) since this row's
           icon/slider cluster needs more room than leftBlock's compact art+text ── */}
       <div className="flex items-center shrink-0 justify-end" style={{ width: "max(260px, 19%)", gap: 6 }}>
+        {/* Equalizer — opens the 10-band EQ popup anchored above this button */}
+        <button
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            setEqAnchor(eqAnchor ? null : { x: rect.left + rect.width / 2, y: rect.top });
+          }}
+          title="Equalizer"
+          className="flex items-center justify-center shrink-0"
+          style={{ width: 40, height: 40, borderRadius: 20, background: "transparent", border: "none", cursor: "pointer", color: "var(--accent)" }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+        >
+          <Icon src="img/eq.png" size={20} />
+        </button>
+
         {/* Settings */}
         <button
           onClick={() => navigateTo({ tab: "settings" })}
@@ -506,6 +523,9 @@ export function PlayerBar() {
 
       {ctxMenu && track && (
         <ContextMenu x={ctxMenu.x} y={ctxMenu.y} items={buildFooterMenu(track)} onClose={() => setCtxMenu(null)} />
+      )}
+      {eqAnchor && (
+        <EqualizerPopup anchor={eqAnchor} onClose={() => setEqAnchor(null)} />
       )}
       {infoTrack && <TrackInfoDialog track={infoTrack} onClose={() => setInfoTrack(null)} />}
       {newPlaylistFor && (

@@ -14,6 +14,7 @@ mod bpm_analyze;
 mod commands;
 mod decode;
 mod engine;
+mod eq;
 mod events;
 mod helpers;
 mod play_input;
@@ -99,6 +100,16 @@ impl AudioEngine {
     #[napi]
     pub fn set_volume(&self, volume: f64) -> napi::Result<()> {
         transport::set_volume(&self.inner, volume as f32);
+        Ok(())
+    }
+
+    /// 10-band EQ + preamp — applies live to whatever is playing (and to
+    /// every future/gapless-chained source). `bands_db`: 10 gains in dB for
+    /// the ISO octave bands 31 Hz…16 kHz; `preamp_db`: master pre-gain.
+    #[napi]
+    pub fn set_eq(&self, enabled: bool, preamp_db: f64, bands_db: Vec<f64>) -> napi::Result<()> {
+        let bands: Vec<f32> = bands_db.iter().map(|&b| b as f32).collect();
+        self.inner.eq.set(enabled, preamp_db as f32, &bands);
         Ok(())
     }
 

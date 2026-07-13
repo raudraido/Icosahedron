@@ -235,6 +235,17 @@ interface AppStore {
   prev: () => void;
   setCurrentTime: (secs: number) => void;
   setVolume: (v: number) => void;
+
+  // 10-band EQ + preamp (native engine's EqSource, PlayerBar's EqualizerPopup)
+  // — persisted in localStorage and pushed to the engine on every change and
+  // once at boot.
+  eqEnabled: boolean;
+  eqPreampDb: number;
+  eqBandsDb: number[];
+  setEqEnabled: (on: boolean) => void;
+  setEqPreamp: (db: number) => void;
+  setEqBand: (index: number, db: number) => void;
+  resetEq: () => void;
   toggleShuffle: () => void;
   toggleRepeat: () => void;
   clearQueue: () => void;
@@ -506,6 +517,32 @@ function loadLeftPanelPlaylistsVisible(): boolean {
 // updates on every event for an instantly-responsive slider.
 let castVolumeSendTimer: ReturnType<typeof setTimeout> | null = null;
 const CAST_VOLUME_DEBOUNCE_MS = 200;
+
+// ── 10-band EQ persistence ── device-local preference (like volume), not
+// per-server: the same speakers/headphones are behind every profile.
+const LS_EQ = "eq_settings";
+
+function loadEqSettings(): { eqEnabled: boolean; eqPreampDb: number; eqBandsDb: number[] } {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LS_EQ) ?? "");
+    const bands = Array.isArray(raw.bandsDb) ? raw.bandsDb.map((b: unknown) => Number(b) || 0) : [];
+    return {
+      eqEnabled: !!raw.enabled,
+      eqPreampDb: Number(raw.preampDb) || 0,
+      eqBandsDb: Array.from({ length: 10 }, (_, i) => bands[i] ?? 0),
+    };
+  } catch {
+    return { eqEnabled: false, eqPreampDb: 0, eqBandsDb: Array(10).fill(0) };
+  }
+}
+
+/** Push the current EQ state to the native engine and persist it — every
+ *  setter funnels through here so the two can't drift apart. */
+function pushEq(get: () => AppStore): void {
+  const { eqEnabled, eqPreampDb, eqBandsDb } = get();
+  api.audioSetEq(eqEnabled, eqPreampDb, eqBandsDb).catch(() => {});
+  localStorage.setItem(LS_EQ, JSON.stringify({ enabled: eqEnabled, preampDb: eqPreampDb, bandsDb: eqBandsDb }));
+}
 
 export const useStore = create<AppStore>((set, get) => ({
   connected: false,
@@ -884,6 +921,15 @@ export const useStore = create<AppStore>((set, get) => ({
     api.audioSetVolume(clamped / 100);
     set({ volume: clamped });
   },
+
+  ...loadEqSettings(),
+  setEqEnabled: (on) => { set({ eqEnabled: on }); pushEq(get); },
+  setEqPreamp: (db) => { set({ eqPreampDb: Math.max(-12, Math.min(6, db)) }); pushEq(get); },
+  setEqBand: (index, db) => {
+    set((s) => ({ eqBandsDb: s.eqBandsDb.map((b, i) => i === index ? Math.max(-12, Math.min(12, db)) : b) }));
+    pushEq(get);
+  },
+  resetEq: () => { set({ eqPreampDb: 0, eqBandsDb: Array(10).fill(0) }); pushEq(get); },
 
   setCastVolume: (v) => {
     const clamped = Math.max(0, Math.min(100, v));
@@ -1343,6 +1389,9 @@ window.addEventListener("beforeunload", () => useStore.getState().persistSession
 export async function tryAutoConnect() {
   await useStore.getState().loadServers();
   api.lastfmPublicApiKey().then((key) => useStore.setState({ lastfmPublicApiKey: key })).catch(() => {});
+  // Re-arm the engine with the persisted EQ settings — the engine process
+  // starts flat every launch, the renderer owns the saved state.
+  pushEq(useStore.getState);
   // Last.fm is scoped per server profile (electron/main/lastfmSession.ts) —
   // hydrate as soon as the active profile id is known, independent of
   // tryAutoConnectSaved's slower network ping to Navidrome below (that one

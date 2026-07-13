@@ -55,6 +55,11 @@ export class AudioEngineClient {
     this.engine.setVolume(volume);
   }
 
+  /** 10-band EQ + preamp (dB) — applies live to current and future sources. */
+  setEq(enabled: boolean, preampDb: number, bandsDb: number[]): void {
+    this.engine.setEq(enabled, preampDb, bandsDb);
+  }
+
   analyzeBpm(url: string): Promise<number> {
     return this.engine.analyzeBpm(url);
   }

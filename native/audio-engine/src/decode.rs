@@ -18,6 +18,7 @@ use symphonia::core::{
     units::{self, Time},
 };
 
+use crate::eq::{EqParams, EqSource};
 use crate::sources::*;
 
 // ─── SizedCursorSource — correct byte_len for seekable in-memory sources ──────
@@ -359,7 +360,7 @@ pub(crate) fn parse_gapless_info(data: &[u8]) -> GaplessInfo {
     GaplessInfo { delay_samples: delay, total_valid_samples: total_valid }
 }
 
-pub(crate) type BuiltSourceStack = PriorityBoostSource<CountingSource<NotifyingSource<EqualPowerFadeIn<DynSource>>>>;
+pub(crate) type BuiltSourceStack = PriorityBoostSource<CountingSource<NotifyingSource<EqSource<EqualPowerFadeIn<DynSource>>>>>;
 
 pub(crate) struct BuiltSource {
     pub(crate) source: BuiltSourceStack,
@@ -368,7 +369,7 @@ pub(crate) struct BuiltSource {
     pub(crate) output_channels: u16,
 }
 
-/// Build a fully-prepared playback source: decode → trim → fade-in → notify → count → boost.
+/// Build a fully-prepared playback source: decode → trim → fade-in → EQ → notify → count → boost.
 ///
 /// `fade_in_dur`: `Duration::ZERO` for gapless chain (unity gain, no click);
 /// `Duration::from_millis(5)` micro-fade for manual/first play (anti-click).
@@ -379,6 +380,7 @@ pub(crate) fn build_source(
     fade_in_dur: Duration,
     sample_counter: Arc<AtomicU64>,
     format_hint: Option<&str>,
+    eq: Arc<EqParams>,
 ) -> Result<BuiltSource, String> {
     let gapless = parse_gapless_info(&data);
     let decoder = SizedDecoder::new(data, format_hint)?;
@@ -405,7 +407,8 @@ pub(crate) fn build_source(
     };
 
     let fade_in = EqualPowerFadeIn::new(dyn_src, fade_in_dur);
-    let notifying = NotifyingSource::new(fade_in, done_flag);
+    let equalized = EqSource::new(fade_in, eq);
+    let notifying = NotifyingSource::new(equalized, done_flag);
     let counting = CountingSource::new(notifying, sample_counter);
     let boosted = PriorityBoostSource::new(counting);
 
@@ -425,6 +428,7 @@ pub(crate) fn build_streaming_source(
     done_flag: Arc<AtomicBool>,
     fade_in_dur: Duration,
     sample_counter: Arc<AtomicU64>,
+    eq: Arc<EqParams>,
 ) -> Result<BuiltSource, String> {
     let sample_rate = decoder.sample_rate();
     let channels = decoder.channels();
@@ -437,7 +441,8 @@ pub(crate) fn build_streaming_source(
 
     let dyn_src = DynSource::new(decoder);
     let fade_in = EqualPowerFadeIn::new(dyn_src, fade_in_dur);
-    let notifying = NotifyingSource::new(fade_in, done_flag);
+    let equalized = EqSource::new(fade_in, eq);
+    let notifying = NotifyingSource::new(equalized, done_flag);
     let counting = CountingSource::new(notifying, sample_counter);
     let boosted = PriorityBoostSource::new(counting);
 

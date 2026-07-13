@@ -231,7 +231,7 @@ pub(crate) async fn chain_preload(
     let format_hint = url_format_hint(&url);
 
     let built = build_source(
-        (*raw_bytes).clone(), duration_hint, done_next.clone(), Duration::ZERO, chain_counter.clone(), format_hint.as_deref(),
+        (*raw_bytes).clone(), duration_hint, done_next.clone(), Duration::ZERO, chain_counter.clone(), format_hint.as_deref(), state.eq.clone(),
     )?;
 
     if state.generation.load(Ordering::SeqCst) != snapshot_gen {

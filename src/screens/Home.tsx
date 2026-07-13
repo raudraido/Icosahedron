@@ -50,14 +50,28 @@ const ROWS: RowConfig[] = [
 // addition) or naming one that no longer exists can't crash or silently drop
 // a row.
 const LS_ROW_ORDER = "home_row_order";
+const LS_FORYOU_PROMOTED = "home_row_order_foryou_promoted";
 const DEFAULT_ROW_ORDER = ROWS.map((r) => r.id);
 
 function loadRowOrder(): string[] {
   const saved = loadJSON<string[]>(LS_ROW_ORDER, DEFAULT_ROW_ORDER);
   const valid = new Set(DEFAULT_ROW_ORDER);
-  const filtered = saved.filter((id) => valid.has(id));
-  const missing = DEFAULT_ROW_ORDER.filter((id) => !filtered.includes(id));
-  return [...filtered, ...missing];
+  const merged = saved.filter((id) => valid.has(id));
+  // Rows added since the order was saved slot in at their DEFAULT_ROW_ORDER
+  // position (e.g. "foryou" leads the page by default) instead of being
+  // tacked onto the end.
+  DEFAULT_ROW_ORDER.forEach((id, i) => {
+    if (!merged.includes(id)) merged.splice(Math.min(i, merged.length), 0, id);
+  });
+  // One-time migration: orders saved by the builds where "foryou" was
+  // appended last get it promoted to its intended lead position; the flag
+  // keeps any deliberate re-drag afterwards from being overridden again.
+  if (!localStorage.getItem(LS_FORYOU_PROMOTED)) {
+    localStorage.setItem(LS_FORYOU_PROMOTED, "1");
+    const i = merged.indexOf("foryou");
+    if (i > 0) { merged.splice(i, 1); merged.unshift("foryou"); }
+  }
+  return merged;
 }
 
 function GripDots() {

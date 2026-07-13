@@ -200,7 +200,7 @@ async fn build_source_from_play_input(
     let mut is_seekable = true;
     let built = match play_input {
         PlayInput::Bytes(data) => build_source(
-            data, duration_hint, done_flag, fade_in_dur, state.samples_played.clone(), format_hint,
+            data, duration_hint, done_flag, fade_in_dur, state.samples_played.clone(), format_hint, state.eq.clone(),
         ),
         PlayInput::SeekableMedia { reader, format_hint: media_hint } => {
             let hint = media_hint;
@@ -208,7 +208,7 @@ async fn build_source_from_play_input(
                 .await
                 .map_err(|e| e.to_string())??;
             is_seekable = true;
-            build_streaming_source(decoder, duration_hint, done_flag, fade_in_dur, state.samples_played.clone())
+            build_streaming_source(decoder, duration_hint, done_flag, fade_in_dur, state.samples_played.clone(), state.eq.clone())
         }
     }?;
     Ok(PlaybackSource { built, is_seekable })

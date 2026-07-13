@@ -493,6 +493,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle("audio_stop", () => requireAudio().stop());
   ipcMain.handle("audio_seek", (_e, { seconds }) => requireAudio().seek(seconds));
   ipcMain.handle("audio_set_volume", (_e, { volume }) => requireAudio().setVolume(volume));
+  ipcMain.handle("audio_set_eq", (_e, { enabled, preampDb, bandsDb }) => requireAudio().setEq(enabled, preampDb, bandsDb));
 
   // ── Casting (Chromecast/DLNA — see castManager.ts) ──────────────────────
   ipcMain.handle("cast_discover", () => requireCast().discover());

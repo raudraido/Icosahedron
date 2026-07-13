@@ -36,6 +36,10 @@ pub struct AudioEngine {
     /// racing the sample-accurate switch).
     pub(crate) gapless_switch_at: Arc<AtomicU64>,
     pub(crate) volume: Arc<AtomicU32>,
+    /// Engine-wide 10-band EQ + preamp parameters — shared into every built
+    /// source (see eq.rs), so live UI changes apply mid-playback and persist
+    /// across gapless chaining.
+    pub(crate) eq: Arc<crate::eq::EqParams>,
 }
 
 pub struct AudioCurrent {
@@ -123,5 +127,6 @@ pub fn create_engine() -> AudioEngine {
         current_channels: Arc::new(AtomicU32::new(2)),
         gapless_switch_at: Arc::new(AtomicU64::new(0)),
         volume: Arc::new(AtomicU32::new(1.0f32.to_bits())),
+        eq: Arc::new(crate::eq::EqParams::new()),
     }
 }

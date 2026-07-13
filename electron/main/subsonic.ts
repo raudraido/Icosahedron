@@ -554,6 +554,40 @@ export class SubsonicClient {
     await this.get(active ? "star" : "unstar", { [idParam]: itemId });
   }
 
+  /** Create a public share and return its URL. Requires sharing to be
+   *  enabled server-side (Navidrome 0.63+ defaults EnableSharing to true).
+   *
+   *  Tries Navidrome's native POST /api/share first because the Subsonic
+   *  createShare endpoint has no `downloadable` concept at all — the
+   *  ShareDialog's "allow download" toggle only exists natively. Field names
+   *  match Navidrome's model.Share JSON tags (resourceIds/resourceType/
+   *  expiresAt/downloadable). Falls back to Subsonic createShare (which does
+   *  honor `expires`, ms epoch, but ignores downloadable) for non-Navidrome
+   *  servers. */
+  async createShare(itemId: string, resourceType: "song" | "album" | "playlist", expiresDays: number | null, downloadable: boolean): Promise<string> {
+    const expiresMs = expiresDays ? Date.now() + expiresDays * 86_400_000 : null;
+    try {
+      await this.authenticateNative();
+      const body: Record<string, unknown> = { resourceIds: itemId, resourceType, downloadable };
+      if (expiresMs) body.expiresAt = new Date(expiresMs).toISOString();
+      const resp = await fetch(`${this.baseUrl}/api/share`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-nd-authorization": `Bearer ${this.nativeJwt}` },
+        body: JSON.stringify(body),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data?.id) return `${this.baseUrl}/share/${data.id}`;
+      }
+    } catch { /* not Navidrome (or native auth failed) — fall through */ }
+    const params: Record<string, string> = { id: itemId };
+    if (expiresMs) params.expires = String(expiresMs);
+    const root = await this.get("createShare", params);
+    const url = asArray(root.shares?.share)[0]?.url;
+    if (typeof url !== "string" || !url) throw new Error("Server did not return a share URL — is sharing enabled?");
+    return url;
+  }
+
   /** Server-side queue sync (upload/download icons in QueuePanel) — lets the
    *  queue + position be picked up from another device/session. `null` means
    *  no queue has ever been saved server-side (Subsonic omits `playQueue`

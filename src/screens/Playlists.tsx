@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, Playlist, Track, fmtDuration } from "../lib/api";
 import { CoverArt } from "../components/CoverArt";
@@ -42,13 +42,43 @@ function PlaylistCard({ playlist, onOpen, onContextMenu }: { playlist: Playlist;
   const qc = useQueryClient();
   const playTrack = useStore((s) => s.playTrack);
   const appendToQueue = useStore((s) => s.appendToQueue);
+  const holdTimerRef = useRef<number | null>(null);
+  const heldRef = useRef(false);
 
   function fetchTracks() {
     return qc.fetchQuery({ queryKey: ["playlist-tracks", playlist.id], queryFn: () => api.getPlaylistTracks(playlist.id) });
   }
 
-  async function handlePlay(e: React.MouseEvent) {
+  function clearHoldTimer() {
+    if (holdTimerRef.current !== null) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+  }
+
+  // Click = play the playlist from track 1, press+hold 600ms = shuffle it
+  // instead — same hold-to-shuffle interaction as AlbumCard/ArtistCard.
+  function handlePlayMouseDown(e: React.MouseEvent) {
     e.stopPropagation();
+    heldRef.current = false;
+    holdTimerRef.current = window.setTimeout(async () => {
+      heldRef.current = true;
+      holdTimerRef.current = null;
+      const tracks = await fetchTracks();
+      if (!tracks.length) return;
+      const shuffled = [...tracks];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      playTrack(shuffled[0], shuffled);
+    }, 600);
+  }
+  async function handlePlayMouseUp(e: React.MouseEvent) {
+    e.stopPropagation();
+    const held = holdTimerRef.current === null && heldRef.current;
+    clearHoldTimer();
+    if (held) return;
     const tracks = await fetchTracks();
     if (tracks.length) playTrack(tracks[0], tracks);
   }
@@ -80,10 +110,12 @@ function PlaylistCard({ playlist, onOpen, onContextMenu }: { playlist: Playlist;
           }}
         >
           <div
-            onClick={handlePlay}
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={handlePlayMouseDown}
+            onMouseUp={handlePlayMouseUp}
             onMouseEnter={() => setPlayHovered(true)}
-            onMouseLeave={() => setPlayHovered(false)}
-            title="Play playlist"
+            onMouseLeave={() => { setPlayHovered(false); clearHoldTimer(); }}
+            title="Play playlist (hold to shuffle)"
             style={{
               width: "100%", aspectRatio: "1",
               transform: `scale(${playHovered ? 1 : 0.8})`,
@@ -414,6 +446,7 @@ export function Playlists() {
   const [searchText, setSearchText] = useState("");
   const [bgMenu, setBgMenu] = useState<{ x: number; y: number } | null>(null);
   const [itemMenu, setItemMenu] = useState<{ x: number; y: number; playlist: Playlist } | null>(null);
+  const openShareDialog = useStore((s) => s.openShareDialog);
   const [renameTarget, setRenameTarget] = useState<Playlist | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Playlist | null>(null);
 
@@ -496,6 +529,7 @@ export function Playlists() {
         <ContextMenu
           x={itemMenu.x} y={itemMenu.y}
           items={[
+            { label: "Share", icon: "img/share.png", onClick: () => openShareDialog({ id: itemMenu.playlist.id, type: "playlist", name: itemMenu.playlist.name }) },
             { label: "Rename Playlist", icon: "img/info.png", onClick: () => setRenameTarget(itemMenu.playlist) },
             { label: "Delete Playlist", icon: "img/remove.png", color: "#E53935", onClick: () => setDeleteTarget(itemMenu.playlist) },
           ]}

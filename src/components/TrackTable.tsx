@@ -422,6 +422,7 @@ export function TrackTable({
   const playTrack = useStore((s) => s.playTrack);
   const navigateTo = useStore((s) => s.navigateTo);
   const addTrackNext = useStore((s) => s.addTrackNext);
+  const openShareDialog = useStore((s) => s.openShareDialog);
   const addTrackToQueue = useStore((s) => s.addTrackToQueue);
   const startRadio = useStore((s) => s.startRadio);
   const currentId = useStore((s) => s.queue[s.currentIndex]?.id);
@@ -972,6 +973,7 @@ export function TrackTable({
         color: FAVORITE_PINK,
         onClick: () => toggleFavoriteFromMenu(track),
       },
+      { label: "Share", icon: "img/share.png", onClick: () => openShareDialog({ id: track.id, type: "song", name: track.title }) },
       ...(extraMenuItems ? extraMenuItems(track) : []),
     ];
   }

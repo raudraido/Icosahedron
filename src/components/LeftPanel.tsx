@@ -67,6 +67,7 @@ function RecentlyPlayed() {
   const addTrackNext = useStore((s) => s.addTrackNext);
   const addTrackToQueue = useStore((s) => s.addTrackToQueue);
   const navigateTo = useStore((s) => s.navigateTo);
+  const openShareDialog = useStore((s) => s.openShareDialog);
   const [resolvingKey, setResolvingKey] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; entry: LastFmTrack } | null>(null);
   const [height, setHeight] = useState(() => loadJSON(LS_RECENTLY_PLAYED_HEIGHT, RECENTLY_PLAYED_DEFAULT_HEIGHT));
@@ -321,6 +322,7 @@ function RecentlyPlayed() {
             { label: "Add to Queue", icon: "img/queue.png", onClick: () => withResolvedTrack(menu.entry, `${menu.entry.name}|${menu.entry.artist}`, (t) => t && addTrackToQueue(t)) },
             "separator",
             { label: "Go to Artist", icon: "img/sub_artist.png", onClick: () => goToArtist(menu.entry, `${menu.entry.name}|${menu.entry.artist}`) },
+            { label: "Share", icon: "img/share.png", onClick: () => withResolvedTrack(menu.entry, `${menu.entry.name}|${menu.entry.artist}`, (t) => t && openShareDialog({ id: t.id, type: "song", name: t.title })) },
           ]}
           onClose={() => setMenu(null)}
         />
@@ -339,6 +341,7 @@ function PlaylistsPanel() {
   const navigateTo = useStore((s) => s.navigateTo);
   const playTrack = useStore((s) => s.playTrack);
   const addTrackNext = useStore((s) => s.addTrackNext);
+  const openShareDialog = useStore((s) => s.openShareDialog);
   const addTrackToQueue = useStore((s) => s.appendToQueue);
   const [menu, setMenu] = useState<{ x: number; y: number; playlist: Playlist } | null>(null);
   const [height, setHeight] = useState(() => loadJSON(LS_PLAYLISTS_HEIGHT, PLAYLISTS_DEFAULT_HEIGHT));
@@ -572,6 +575,7 @@ function PlaylistsPanel() {
             { label: "Add to Queue", icon: "img/queue.png", onClick: () => playPlaylist(menu.playlist, (tracks) => addTrackToQueue(tracks)) },
             "separator",
             { label: "Open Playlist", icon: "img/sub_artist.png", onClick: () => openPlaylist(menu.playlist) },
+            { label: "Share", icon: "img/share.png", onClick: () => openShareDialog({ id: menu.playlist.id, type: "playlist", name: menu.playlist.name }) },
           ]}
           onClose={() => setMenu(null)}
         />

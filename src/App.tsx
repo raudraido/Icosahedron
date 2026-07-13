@@ -21,6 +21,7 @@ import { Icon } from "./components/Icon";
 import { GlobalTooltip } from "./components/GlobalTooltip";
 import { GlobalHotkeys } from "./components/GlobalHotkeys";
 import { SpotlightSearch } from "./components/SpotlightSearch";
+import { ShareDialog } from "./components/ShareDialog";
 import { UpdateBanner } from "./components/UpdateBanner";
 
 // Full old-app nav order (window.py's addTab sequence) — Home, Now Playing,
@@ -312,7 +313,7 @@ function MainApp() {
   }
 
   function handleTabClick(tab: Tab) {
-    const inDetail = !!(currentEntry?.album || currentEntry?.artistId || currentEntry?.playlist);
+    const inDetail = !!(currentEntry?.album || currentEntry?.artistId || currentEntry?.playlist || currentEntry?.mix);
     if (tab === activeTab && inDetail) {
       pushNav(); // push clean entry (no detail) → jumps to grid top
     } else {
@@ -471,6 +472,7 @@ function AppInner() {
       {connected ? <MainApp /> : <Login />}
       {connected && <GlobalHotkeys />}
       {connected && <SpotlightSearch />}
+      {connected && <ShareDialog />}
       <GlobalTooltip />
       <UpdateBanner />
     </>

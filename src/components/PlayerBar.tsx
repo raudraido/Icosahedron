@@ -96,6 +96,7 @@ export function PlayerBar() {
   const navigateTo         = useStore((s) => s.navigateTo);
   const playTrack          = useStore((s) => s.playTrack);
   const addTrackNext       = useStore((s) => s.addTrackNext);
+  const openShareDialog    = useStore((s) => s.openShareDialog);
   const startRadio         = useStore((s) => s.startRadio);
   const castConnected      = useStore((s) => s.castConnected);
   const castConnecting     = useStore((s) => s.castConnecting);
@@ -257,6 +258,7 @@ export function PlayerBar() {
         color: FAVORITE_PINK,
         onClick: () => toggleFavoriteFromMenu(t),
       },
+      { label: "Share", icon: "img/share.png", onClick: () => openShareDialog({ id: t.id, type: "song", name: t.title }) },
     ];
   }
 

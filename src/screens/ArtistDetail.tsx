@@ -331,6 +331,7 @@ export function ArtistDetail({ artistId }: Props) {
   const coverUrl = useStore((s) => s.coverUrl);
   const playTrack = useStore((s) => s.playTrack);
   const addTrackNext = useStore((s) => s.addTrackNext);
+  const openShareDialog = useStore((s) => s.openShareDialog);
   const addTrackToQueue = useStore((s) => s.addTrackToQueue);
   const startRadio = useStore((s) => s.startRadio);
   const qc = useQueryClient();
@@ -470,6 +471,7 @@ export function ArtistDetail({ artistId }: Props) {
         color: FAVORITE_PINK,
         onClick: () => toggleTrackFavorite(track),
       },
+      { label: "Share", icon: "img/share.png", onClick: () => openShareDialog({ id: track.id, type: "song", name: track.title }) },
     ];
   }
 

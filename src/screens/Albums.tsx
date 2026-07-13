@@ -274,6 +274,8 @@ function AlbumDetail({ album }: { album: Album }) {
   const [coverZoomOpen, setCoverZoomOpen] = useState(false);
   const [shuffleHovered, setShuffleHovered] = useState(false);
   const [likeHovered, setLikeHovered] = useState(false);
+  const [shareHovered, setShareHovered] = useState(false);
+  const openShareDialog = useStore((s) => s.openShareDialog);
 
   useEffect(() => setStarred(album.starred), [album.id, album.starred]);
 
@@ -392,6 +394,21 @@ function AlbumDetail({ album }: { album: Album }) {
                 }}
               >
                 <Icon src={starred ? "img/heart_filled.png" : "img/heart.png"} size={22} style={{ background: starred ? FAVORITE_PINK : "var(--text-secondary)" }} />
+              </button>
+
+              <button
+                onClick={() => openShareDialog({ id: album.id, type: "album", name: album.name })}
+                onMouseEnter={() => setShareHovered(true)}
+                onMouseLeave={() => setShareHovered(false)}
+                title="Share album"
+                style={{
+                  width: 40, height: 40, borderRadius: 8, border: "none", cursor: "pointer",
+                  background: shareHovered ? "var(--hover-bg)" : "transparent",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  transition: "background 150ms",
+                }}
+              >
+                <Icon src="img/share.png" size={20} style={{ background: "var(--text-secondary)" }} />
               </button>
             </div>
           </div>

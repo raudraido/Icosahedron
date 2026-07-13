@@ -7,6 +7,7 @@ import { SkeletonCard } from "../components/Skeleton";
 import { Icon } from "../components/Icon";
 import { loadJSON, saveJSON } from "../components/TrackTable";
 import { ScrollThumb } from "../components/ScrollThumb";
+import { ForYouRow, MixDetail } from "./ForYou";
 
 // Ported from home.qml/home.py — three album rows (Recently Added / Random
 // Mix / Most Played), each backed by the same get_album_list_sorted call the
@@ -34,8 +35,12 @@ interface RowConfig {
 }
 
 const ROWS: RowConfig[] = [
+  // "foryou" is rendered by ForYouRow (daily mixes), not AlbumRow — its
+  // sortType is unused; it's listed here so it participates in the same
+  // drag-to-reorder/persisted-order machinery as the album rows.
+  { id: "foryou", title: "Daily Mix", sortType: "", refreshable: true },
   { id: "recent", title: "Recently Added", sortType: "newest", refreshable: true },
-  { id: "random", title: "Random Mix", sortType: "random", refreshable: true },
+  { id: "random", title: "Explore", sortType: "random", refreshable: true },
   { id: "most_played", title: "Most Played", sortType: "frequent", refreshable: false },
 ];
 
@@ -65,7 +70,7 @@ function GripDots() {
   );
 }
 
-function PageArrow({ dir, disabled, onClick }: { dir: "left" | "right"; disabled: boolean; onClick: () => void }) {
+export function PageArrow({ dir, disabled, onClick }: { dir: "left" | "right"; disabled: boolean; onClick: () => void }) {
   const [hov, setHov] = useState(false);
   return (
     <button
@@ -235,6 +240,10 @@ export function Home() {
   const active = useStore((s) => s.activeTab === "home");
   const [rowOrder, setRowOrder] = useState<string[]>(loadRowOrder);
   const [dragRowId, setDragRowId] = useState<string | null>(null);
+  // Mix detail lives in the nav history (same as Albums' selected album), so
+  // the global back/forward buttons walk in and out of it.
+  const openMix = useStore((s) => s.navHistory[s.navPos]?.mix ?? null);
+  const navigateTo = useStore((s) => s.navigateTo);
   const orderRef = useRef(rowOrder);
   orderRef.current = rowOrder;
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -289,18 +298,32 @@ export function Home() {
 
   const rows = rowOrder.map((id) => ROWS.find((r) => r.id === id)).filter((r): r is RowConfig => !!r);
 
+  if (openMix) {
+    return <MixDetail mix={openMix} />;
+  }
+
   return (
     <div className="flex-1" style={{ position: "relative", minHeight: 0 }}>
       <div ref={scrollRef} className="h-full overflow-y-auto scroll-clean" style={{ padding: 12 }}>
         <div className="flex flex-col" style={{ gap: 28 }}>
           {rows.map((row) => (
             <div key={row.id} ref={(el) => { rowRefs.current[row.id] = el; }}>
-              <AlbumRow
-                {...row}
-                active={active}
-                dragging={dragRowId === row.id}
-                onGripMouseDown={handleGripMouseDown(row.id)}
-              />
+              {row.id === "foryou" ? (
+                <ForYouRow
+                  active={active}
+                  dragging={dragRowId === row.id}
+                  onGripMouseDown={handleGripMouseDown(row.id)}
+                  gripDots={<GripDots />}
+                  onOpenMix={(mix) => navigateTo({ tab: "home", mix })}
+                />
+              ) : (
+                <AlbumRow
+                  {...row}
+                  active={active}
+                  dragging={dragRowId === row.id}
+                  onGripMouseDown={handleGripMouseDown(row.id)}
+                />
+              )}
             </div>
           ))}
         </div>

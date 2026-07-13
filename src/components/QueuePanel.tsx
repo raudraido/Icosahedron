@@ -286,6 +286,7 @@ export function QueuePanel() {
   const addTrackNext   = useStore((s) => s.addTrackNext);
   const startRadio     = useStore((s) => s.startRadio);
   const navigateTo     = useStore((s) => s.navigateTo);
+  const openShareDialog = useStore((s) => s.openShareDialog);
   const saveQueueToServer     = useStore((s) => s.saveQueueToServer);
   const restoreQueueFromServer = useStore((s) => s.restoreQueueFromServer);
   const queueSyncBusy  = useStore((s) => s.queueSyncBusy);
@@ -366,6 +367,7 @@ export function QueuePanel() {
         color: FAVORITE_PINK,
         onClick: () => toggleFavoriteFromMenu(track),
       },
+      { label: "Share", icon: "img/share.png", onClick: () => openShareDialog({ id: track.id, type: "song", name: track.title }) },
       { label: "Remove from Queue", icon: "img/remove.png", onClick: () => removeFromQueue(track.id) },
     ];
   }

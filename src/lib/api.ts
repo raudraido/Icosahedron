@@ -286,6 +286,8 @@ export const api = {
   getStarred: () => invoke<Starred>("get_starred"),
   setFavorite: (itemId: string, active: boolean, idParam: string) =>
     invoke<void>("set_favorite", { itemId, active, idParam }),
+  createShare: (itemId: string, resourceType: "song" | "album" | "playlist", expiresDays: number | null, downloadable: boolean) =>
+    invoke<string>("create_share", { itemId, resourceType, expiresDays, downloadable }),
 
   scrobble: (trackId: string, submission: boolean) =>
     invoke<void>("scrobble", { trackId, submission }),

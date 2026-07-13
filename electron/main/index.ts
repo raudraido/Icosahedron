@@ -398,6 +398,8 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle("get_starred", () => requireClient().getStarred());
   ipcMain.handle("set_favorite", (_e, { itemId, active, idParam }) => requireClient().setFavorite(itemId, active, idParam));
+  ipcMain.handle("create_share", (_e, { itemId, resourceType, expiresDays, downloadable }) =>
+    requireClient().createShare(itemId, resourceType, expiresDays, downloadable));
 
   ipcMain.handle("scrobble", (_e, { trackId, submission }) => requireClient().scrobble(trackId, submission));
 

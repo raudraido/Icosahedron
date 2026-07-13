@@ -9,6 +9,10 @@ export type Tab =
 
 export type NavEntry = {
   tab: Tab; album?: Album; artistId?: string; artistQuery?: string; playlist?: Playlist;
+  /** Open Home showing this daily mix's tracklist (ForYou.tsx's MixDetail) —
+   *  same pattern as `album`/`playlist` above, so the global back/forward
+   *  buttons traverse in/out of a mix like any other detail view. */
+  mix?: import("../screens/ForYou").Mix;
   /** Cross-tab "open Tracks pre-filtered to this value" intent — set by a
    *  genre/year cell click elsewhere (e.g. a playlist's tracklist) and
    *  consumed once by Tracks.tsx on mount, the same way artistQuery is
@@ -171,6 +175,13 @@ interface AppStore {
   spotlightInitial: string;
   openSpotlight: (initialChar?: string) => void;
   closeSpotlight: () => void;
+
+  // Share dialog (components/ShareDialog.tsx) — every "Share" context-menu
+  // entry and the album header's share button open this instead of creating
+  // the share directly, so expiry/download options can be picked first.
+  shareTarget: { id: string; type: "song" | "album" | "playlist"; name: string } | null;
+  openShareDialog: (target: { id: string; type: "song" | "album" | "playlist"; name: string }) => void;
+  closeShareDialog: () => void;
 
   // left-panel art expand/collapse — mirrors the footer's small thumbnail
   // shrinking to 0 in lockstep (both driven by this one flag), matching the
@@ -584,6 +595,10 @@ export const useStore = create<AppStore>((set, get) => ({
   spotlightInitial: "",
   openSpotlight: (initialChar = "") => set({ spotlightOpen: true, spotlightInitial: initialChar }),
   closeSpotlight: () => set({ spotlightOpen: false, spotlightInitial: "" }),
+
+  shareTarget: null,
+  openShareDialog: (target) => set({ shareTarget: target }),
+  closeShareDialog: () => set({ shareTarget: null }),
 
   // `remember` matches the old app's "Remember my credentials" checkbox
   // (login_dialog.py/main.py): url+username are non-secret, but the

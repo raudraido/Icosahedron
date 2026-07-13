@@ -16,6 +16,13 @@ export interface ServerProfile {
   name: string;
   url: string;
   username: string;
+  /** Selected Subsonic music folders (Navidrome libraries) to browse —
+   *  empty means all libraries. Set from Settings > Servers, applied by
+   *  SubsonicClient as `musicFolderId`/`library_id` on list endpoints. */
+  musicFolderIds: string[];
+  /** Display names matching musicFolderIds — stored alongside the ids so
+   *  the Servers list can label non-active servers without connecting. */
+  musicFolderNames: string[];
 }
 
 interface StoredProfile extends ServerProfile {
@@ -77,8 +84,24 @@ async function writeData(data: StoredData): Promise<void> {
   await writeFile(dataPath(), JSON.stringify(data), "utf-8");
 }
 
+// Migration note: one release stored a single `musicFolderId`/`musicFolderName`
+// pair; fold that into today's arrays when reading an old profile.
+function folderIdsOf(p: StoredProfile): string[] {
+  if (Array.isArray(p.musicFolderIds)) return p.musicFolderIds;
+  const legacy = (p as unknown as { musicFolderId?: string | null }).musicFolderId;
+  return legacy ? [legacy] : [];
+}
+function folderNamesOf(p: StoredProfile): string[] {
+  if (Array.isArray(p.musicFolderNames)) return p.musicFolderNames;
+  const legacy = (p as unknown as { musicFolderName?: string | null }).musicFolderName;
+  return legacy ? [legacy] : [];
+}
+
 function toPublic(p: StoredProfile): ServerProfile {
-  return { id: p.id, name: p.name, url: p.url, username: p.username };
+  return {
+    id: p.id, name: p.name, url: p.url, username: p.username,
+    musicFolderIds: folderIdsOf(p), musicFolderNames: folderNamesOf(p),
+  };
 }
 
 export async function listServers(): Promise<ServerProfile[]> {
@@ -110,10 +133,26 @@ export async function saveServer(input: {
   const data = await readData();
   const encrypted = safeStorage.encryptString(input.password).toString("base64");
   const id = input.id ?? randomUUID();
-  const profile: StoredProfile = { id, name: input.name, url: input.url, username: input.username, password: encrypted };
+  const existing = data.servers.find((s) => s.id === id);
+  const profile: StoredProfile = {
+    id, name: input.name, url: input.url, username: input.username, password: encrypted,
+    musicFolderIds: existing ? folderIdsOf(existing) : [],
+    musicFolderNames: existing ? folderNamesOf(existing) : [],
+  };
   data.servers = [...data.servers.filter((s) => s.id !== id), profile];
   await writeData(data);
   return toPublic(profile);
+}
+
+/** Persist the library (music folder) selection for one saved server —
+ *  empty arrays mean "all libraries". */
+export async function updateServerLibrary(id: string, folderIds: string[], folderNames: string[]): Promise<void> {
+  const data = await readData();
+  const profile = data.servers.find((s) => s.id === id);
+  if (!profile) throw new Error("unknown server id");
+  profile.musicFolderIds = folderIds;
+  profile.musicFolderNames = folderNames;
+  await writeData(data);
 }
 
 export async function deleteServer(id: string): Promise<void> {
@@ -123,10 +162,10 @@ export async function deleteServer(id: string): Promise<void> {
   await writeData(data);
 }
 
-export async function loadServerCredentials(id: string): Promise<{ url: string; username: string; password: string } | null> {
+export async function loadServerCredentials(id: string): Promise<{ url: string; username: string; password: string; musicFolderIds: string[] } | null> {
   const profile = (await readData()).servers.find((s) => s.id === id);
   if (!profile) return null;
   if (!safeStorage.isEncryptionAvailable()) return null;
   const password = safeStorage.decryptString(Buffer.from(profile.password, "base64"));
-  return { url: profile.url, username: profile.username, password };
+  return { url: profile.url, username: profile.username, password, musicFolderIds: folderIdsOf(profile) };
 }

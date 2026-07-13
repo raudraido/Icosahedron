@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 import { useStore, activeLastfmKey } from "../store";
 import { api, UpdateInfo, UpdateDownloadProgress, TraySettings } from "../lib/api";
@@ -686,6 +687,77 @@ function AddServerDialog({
   );
 }
 
+// Multi-select library dropdown for the active server row: each library is
+// checked/unchecked individually (accent ✓ on selected), "All libraries"
+// clears the selection. Stays open while toggling; closes on outside click.
+function LibraryPicker({ folders, selectedIds, onChange }: {
+  folders: { id: string; name: string }[];
+  selectedIds: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDocMouseDown(e: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, [open]);
+
+  function toggle(id: string) {
+    onChange(selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]);
+  }
+
+  const label = selectedIds.length
+    ? folders.filter((f) => selectedIds.includes(f.id)).map((f) => f.name).join(", ")
+    : "All libraries";
+
+  const rowStyle: React.CSSProperties = {
+    display: "flex", alignItems: "center", gap: 8, width: "100%",
+    padding: "6px 10px", background: "transparent", border: "none", cursor: "pointer",
+    color: "var(--text-primary)", fontSize: "var(--fs-secondary)", textAlign: "left",
+  };
+
+  return (
+    <div ref={rootRef} className="flex items-center" style={{ gap: 6, marginTop: 4, position: "relative" }}>
+      <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>Library:</span>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          background: "var(--card-bg)", color: "var(--text-primary)", fontSize: "var(--fs-secondary)",
+          border: "1px solid var(--border)", borderRadius: 4, padding: "2px 8px", cursor: "pointer",
+          maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}
+      >
+        {label} ▾
+      </button>
+      {open && (
+        <div
+          style={{
+            position: "absolute", top: "100%", left: 52, marginTop: 4, zIndex: 100, minWidth: 200,
+            background: "var(--main-bg)", border: "1px solid var(--border)", borderRadius: 8,
+            boxShadow: "0 8px 24px color-mix(in srgb, black 30%, transparent)", padding: "4px 0",
+          }}
+        >
+          <button onClick={() => onChange([])} style={rowStyle}>
+            <span style={{ width: 14, color: "var(--accent)", fontWeight: "var(--fw-emphasis)" }}>{selectedIds.length === 0 ? "✓" : ""}</span>
+            All libraries
+          </button>
+          {folders.map((f) => (
+            <button key={f.id} onClick={() => toggle(f.id)} style={rowStyle}>
+              <span style={{ width: 14, color: "var(--accent)", fontWeight: "var(--fw-emphasis)" }}>{selectedIds.includes(f.id) ? "✓" : ""}</span>
+              <span className="truncate">{f.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ServersTab() {
   const servers = useStore((s) => s.servers);
   const activeServerId = useStore((s) => s.activeServerId);
@@ -693,6 +765,16 @@ function ServersTab() {
   const addServer = useStore((s) => s.addServer);
   const switchServer = useStore((s) => s.switchServer);
   const removeServer = useStore((s) => s.removeServer);
+  const setServerLibrary = useStore((s) => s.setServerLibrary);
+
+  // Library picker choices — only fetchable for the active server (the main
+  // process holds one live connection); other servers just display their
+  // saved selection as text.
+  const { data: musicFolders = [] } = useQuery({
+    queryKey: ["music-folders", activeServerId],
+    queryFn: () => api.getMusicFolders(),
+    enabled: !!activeServerId,
+  });
 
   const [addOpen, setAddOpen] = useState(false);
   const [testStatus, setTestStatus] = useState<Record<string, "testing" | "ok" | "fail">>({});
@@ -745,6 +827,20 @@ function ServersTab() {
                 <div className="flex flex-col min-w-0">
                   <span className="truncate" style={{ color: "var(--text-primary)", fontWeight: "var(--fw-emphasis)", fontSize: "var(--fs-primary)" }}>{s.name}</span>
                   <span className="truncate" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>{s.username}@{s.url}</span>
+                  {active && musicFolders.length > 1 ? (
+                    <LibraryPicker
+                      folders={musicFolders}
+                      selectedIds={s.musicFolderIds}
+                      onChange={(ids) => {
+                        const names = ids.map((id) => musicFolders.find((f) => f.id === id)?.name ?? id);
+                        setServerLibrary(s.id, ids, names);
+                      }}
+                    />
+                  ) : (
+                    <span className="truncate" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>
+                      Library: {s.musicFolderNames.length ? s.musicFolderNames.join(", ") : "All libraries"}
+                    </span>
+                  )}
                   {status && (
                     <span style={{ color: status === "ok" ? "var(--accent)" : status === "fail" ? "var(--error)" : "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
                       {status === "testing" ? "Testing…" : status === "ok" ? "Connection OK" : "Connection failed"}

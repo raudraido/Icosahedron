@@ -670,6 +670,23 @@ export function LeftPanel() {
   const username = useStore((s) => s.username);
   const [serverMenuPos, setServerMenuPos] = useState<{ x: number; y: number } | null>(null);
   const activeServer = servers.find((s) => s.id === activeServerId);
+  const setServerLibrary = useStore((s) => s.setServerLibrary);
+  // Library checklist for the active server's submenu — same source and
+  // query key as Settings > Servers' LibraryPicker, so the two stay in sync.
+  const { data: musicFolders = [] } = useQuery({
+    queryKey: ["music-folders", activeServerId],
+    queryFn: () => api.getMusicFolders(),
+    enabled: !!activeServerId,
+  });
+
+  function toggleLibrary(folderId: string) {
+    if (!activeServer) return;
+    const ids = activeServer.musicFolderIds.includes(folderId)
+      ? activeServer.musicFolderIds.filter((x) => x !== folderId)
+      : [...activeServer.musicFolderIds, folderId];
+    const names = ids.map((id) => musicFolders.find((f) => f.id === id)?.name ?? id);
+    setServerLibrary(activeServer.id, ids, names);
+  }
 
   // Easter egg — ported from the old app's 7-rapid-clicks-on-Home-tab
   // Tetris trigger (window.py:1066-1082), retargeted to 3 clicks on the
@@ -895,6 +912,13 @@ export function LeftPanel() {
           items={[
             {
               label: activeServer?.name ?? username ?? "Not connected",
+              // Which of this server's libraries are being browsed — set in
+              // Settings > Servers; this is just the readout.
+              subtitle: activeServer
+                ? (activeServer.musicFolderNames.length === 0 ? "All libraries"
+                  : activeServer.musicFolderNames.length === 1 ? activeServer.musicFolderNames[0]
+                  : "Multiple libraries")
+                : undefined,
               icon: "img/navidrome.png",
               rawIcon: true,
               iconSize: 32,
@@ -906,6 +930,25 @@ export function LeftPanel() {
                   rawIcon: true,
                   color: s.id === activeServerId ? "var(--accent)" : undefined,
                   onClick: () => { if (s.id !== activeServerId) switchServer(s.id).catch(() => {}); },
+                  // Active server (and only it — the others would need their
+                  // own live connection to list folders): a library checklist
+                  // submenu with the same toggle logic as Settings > Servers.
+                  ...(s.id === activeServerId && musicFolders.length > 1 ? {
+                    submenu: [
+                      {
+                        label: "All libraries",
+                        checked: s.musicFolderIds.length === 0,
+                        keepOpen: true,
+                        onClick: () => setServerLibrary(s.id, [], []),
+                      },
+                      ...musicFolders.map((f) => ({
+                        label: f.name,
+                        checked: s.musicFolderIds.includes(f.id),
+                        keepOpen: true,
+                        onClick: () => toggleLibrary(f.id),
+                      })),
+                    ],
+                  } : {}),
                 })),
                 "separator" as const,
                 {

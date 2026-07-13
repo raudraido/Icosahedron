@@ -34,17 +34,43 @@ export class SubsonicApiError extends Error {
   }
 }
 
+// Subsonic endpoints that accept a musicFolderId filter (per the spec /
+// OpenSubsonic) — the per-server library selection is injected into exactly
+// these in get(); anything else (detail lookups by id, playlists, scrobble…)
+// is id-addressed and unaffected by the folder.
+const MUSIC_FOLDER_ENDPOINTS = new Set([
+  "getArtists", "getIndexes", "getAlbumList2", "search3", "getStarred2", "getRandomSongs",
+]);
+
 export class SubsonicClient {
   private baseUrl: string;
   private username: string;
   private password: string;
   private nativeJwt: string | null = null;
   private nativeJwtPromise: Promise<void> | null = null;
+  /** Selected libraries (Subsonic music folders / Navidrome library ids),
+   *  empty = all — set from the server profile, changeable live via
+   *  setMusicFolders. */
+  private musicFolderIds: string[];
 
-  constructor(baseUrl: string, username: string, password: string) {
+  constructor(baseUrl: string, username: string, password: string, musicFolderIds: string[] = []) {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
     this.username = username;
     this.password = password;
+    this.musicFolderIds = musicFolderIds;
+  }
+
+  setMusicFolders(ids: string[]): void {
+    this.musicFolderIds = ids;
+  }
+
+  /** Navidrome's native API expresses the same filter as `library_id` —
+   *  appended (repeated per selected library, which Navidrome resolves to
+   *  an IN clause) to the native list endpoints the same way get() injects
+   *  musicFolderId. */
+  private applyNativeLibrary(params: URLSearchParams): URLSearchParams {
+    for (const id of this.musicFolderIds) params.append("library_id", id);
+    return params;
   }
 
   // --- Auth ---
@@ -104,6 +130,11 @@ export class SubsonicClient {
 
   private async get(endpoint: string, extra: Record<string, string> = {}): Promise<any> {
     const params = { ...this.authParams(), ...extra };
+    // The Subsonic param only carries a single folder — applied when exactly
+    // one library is selected. A multi-library subset can only be filtered
+    // on the native endpoints (see applyNativeLibrary); Subsonic endpoints
+    // then fall back to all libraries rather than picking one arbitrarily.
+    if (this.musicFolderIds.length === 1 && MUSIC_FOLDER_ENDPOINTS.has(endpoint)) params.musicFolderId = this.musicFolderIds[0];
     const qs = new URLSearchParams(params).toString();
     const resp = await fetch(`${this.baseUrl}/rest/${endpoint}?${qs}`);
     const body = await resp.json();
@@ -141,6 +172,13 @@ export class SubsonicClient {
   async ping(): Promise<boolean> {
     await this.get("ping");
     return true;
+  }
+
+  /** Subsonic getMusicFolders — Navidrome exposes its libraries here, so
+   *  this backs the per-server library picker in Settings > Servers. */
+  async getMusicFolders(): Promise<{ id: string; name: string }[]> {
+    const root = await this.get("getMusicFolders");
+    return asArray(root.musicFolders?.musicFolder).map((f: any) => ({ id: String(f.id), name: String(f.name ?? f.id) }));
   }
 
   async getScanStatus(): Promise<ScanStatus> {
@@ -258,9 +296,9 @@ export class SubsonicClient {
     const nativeSort = sortType === "albums_count" ? "albumCount" : sortType === "most_played" ? "playCount" : "name";
     await this.authenticateNative();
     const resp = await fetch(
-      `${this.baseUrl}/api/artist?${new URLSearchParams({
+      `${this.baseUrl}/api/artist?${this.applyNativeLibrary(new URLSearchParams({
         _start: "0", _end: "100000", _sort: nativeSort, _order: "ASC",
-      })}`,
+      }))}`,
       { headers: { "x-nd-authorization": `Bearer ${this.nativeJwt}` } },
     );
     const data = await resp.json();
@@ -284,9 +322,9 @@ export class SubsonicClient {
   async getCompilations(): Promise<Album[]> {
     await this.authenticateNative();
     const resp = await fetch(
-      `${this.baseUrl}/api/album?${new URLSearchParams({
+      `${this.baseUrl}/api/album?${this.applyNativeLibrary(new URLSearchParams({
         _start: "0", _end: "100000", _sort: "name", _order: "ASC", compilation: "true",
-      })}`,
+      }))}`,
       { headers: { "x-nd-authorization": `Bearer ${this.nativeJwt}` } },
     );
     const data = await resp.json();
@@ -450,6 +488,7 @@ export class SubsonicClient {
     if (filters?.genreIds) for (const id of filters.genreIds) params.append("genre_id", id);
     if (filters?.year) params.set("year", filters.year);
     if (filters?.starred !== undefined) params.set("starred", filters.starred ? "true" : "false");
+    this.applyNativeLibrary(params);
     const resp = await fetch(`${this.baseUrl}/api/song?${params}`, {
       headers: { "x-nd-authorization": `Bearer ${this.nativeJwt}` },
     });
@@ -466,6 +505,7 @@ export class SubsonicClient {
   private async nativeIdMap(endpoint: "artist" | "album" | "genre"): Promise<Record<string, string>> {
     await this.authenticateNative();
     const params = new URLSearchParams({ _start: "0", _end: "100000", _sort: "name", _order: "ASC" });
+    this.applyNativeLibrary(params);
     const resp = await fetch(`${this.baseUrl}/api/${endpoint}?${params}`, {
       headers: { "x-nd-authorization": `Bearer ${this.nativeJwt}` },
     });

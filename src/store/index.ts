@@ -135,6 +135,10 @@ interface AppStore {
    *  shouldn't linger), and restores/seeds that server's own session. */
   switchServer: (id: string) => Promise<void>;
   removeServer: (id: string) => Promise<void>;
+  /** Persist which libraries (music folders) a saved server browses —
+   *  empty = all libraries. Changing it on the active server flushes every
+   *  cached query so the whole app refetches within the new selection. */
+  setServerLibrary: (id: string, folderIds: string[], folderNames: string[]) => Promise<void>;
 
   // cover URL — synchronous, no IPC, computed once at connect
   coverUrl: (coverId: string | null, size?: number) => string;
@@ -687,6 +691,16 @@ export const useStore = create<AppStore>((set, get) => ({
     await api.deleteServer(id);
     localStorage.removeItem(sessionKey(id));
     set((s) => ({ servers: s.servers.filter((x) => x.id !== id) }));
+  },
+
+  setServerLibrary: async (id, folderIds, folderNames) => {
+    await api.setServerLibrary(id, folderIds, folderNames);
+    set((s) => ({
+      servers: s.servers.map((x) => x.id === id ? { ...x, musicFolderIds: folderIds, musicFolderNames: folderNames } : x),
+    }));
+    // Active server: the main-process client already switched folders —
+    // every cached list is now from the wrong library, so refetch it all.
+    if (get().activeServerId === id) queryClient.clear();
   },
 
   // Stops playback and drops back to connected:false — App.tsx renders

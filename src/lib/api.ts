@@ -205,6 +205,9 @@ export interface ServerProfile {
   name: string;
   url: string;
   username: string;
+  /** Selected libraries (Subsonic music folders) to browse — empty means all. */
+  musicFolderIds: string[];
+  musicFolderNames: string[];
 }
 
 export const api = {
@@ -229,6 +232,9 @@ export const api = {
   connectServer: (id: string) => invoke<{ url: string; username: string } | null>("connect_server", { id }),
   testServer: (id: string) => invoke<boolean>("test_server", { id }),
   tryAutoConnectSaved: () => invoke<{ url: string; username: string } | null>("try_auto_connect"),
+  getMusicFolders: () => invoke<{ id: string; name: string }[]>("get_music_folders"),
+  setServerLibrary: (id: string, folderIds: string[], folderNames: string[]) =>
+    invoke<void>("set_server_library", { id, folderIds, folderNames }),
 
   getArtists: () => invoke<Artist[]>("get_artists"),
   getAllArtists: () => invoke<Artist[]>("get_all_artists"),

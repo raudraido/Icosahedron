@@ -12,7 +12,7 @@ import {
   removeLocalLyrics, getBandsintownEvents,
 } from "./lyrics";
 import {
-  listServers, saveServer, deleteServer, getActiveServerId, setActiveServerId, loadServerCredentials,
+  listServers, saveServer, deleteServer, getActiveServerId, setActiveServerId, loadServerCredentials, updateServerLibrary,
 } from "./credentials";
 import { getCachedBpm, setCachedBpm, getAllCachedBpm } from "./bpmCache";
 import { checkForUpdate, downloadAndInstallUpdate } from "./updater";
@@ -309,6 +309,14 @@ function registerIpcHandlers(): void {
   ipcMain.handle("delete_server", (_e, { id }) => deleteServer(id));
   ipcMain.handle("set_active_server", (_e, { id }) => setActiveServerId(id));
 
+  ipcMain.handle("get_music_folders", () => requireClient().getMusicFolders());
+  // Persist the per-server library choice; when it's the active server, the
+  // live client switches immediately (renderer refetches everything after).
+  ipcMain.handle("set_server_library", async (_e, { id, folderIds, folderNames }) => {
+    await updateServerLibrary(id, folderIds, folderNames);
+    if ((await getActiveServerId()) === id && client) client.setMusicFolders(folderIds);
+  });
+
   // Connects using a saved profile's stored (decrypted) credentials —
   // powers both "Use" in Settings > Servers and the boot-time auto-connect
   // below. Marks the profile active on success so next launch picks it back
@@ -317,7 +325,7 @@ function registerIpcHandlers(): void {
     const creds = await loadServerCredentials(id);
     if (!creds) return null;
     try {
-      const c = new SubsonicClient(creds.url, creds.username, creds.password);
+      const c = new SubsonicClient(creds.url, creds.username, creds.password, creds.musicFolderIds);
       await c.ping();
       client = c;
       await setActiveServerId(id);
@@ -347,7 +355,7 @@ function registerIpcHandlers(): void {
     const creds = await loadServerCredentials(activeId);
     if (!creds) return null;
     try {
-      const c = new SubsonicClient(creds.url, creds.username, creds.password);
+      const c = new SubsonicClient(creds.url, creds.username, creds.password, creds.musicFolderIds);
       await c.ping();
       client = c;
       return { url: creds.url, username: creds.username };

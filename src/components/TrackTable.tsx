@@ -826,9 +826,24 @@ export function TrackTable({
     const el = headerRowRef.current;
     if (!el) return;
     function measure() {
+      // This table stays mounted but goes `display: none` while its tab
+      // is inactive (App.tsx's `mounted` set) — that collapses
+      // headerRowRef to 0×0, and ResizeObserver *does* fire an entry for
+      // it, reporting that bogus near-zero width. Without this guard, the
+      // reconcile effect below would treat "tab just got hidden" as a
+      // real resize to ~0px and collapse every column's stored width
+      // toward its floor right then — not when the tab reopens, but the
+      // instant you navigate away — permanently destroying whatever
+      // proportions were actually set, since there's no way to recover
+      // the original relative widths once they've all been flattened to
+      // their floor. 100 is well below any real usable table width but
+      // comfortably above what a genuine 0-from-display:none reading
+      // could ever report.
+      const width = el!.getBoundingClientRect().width;
+      if (width < 100) return;
       // padding: "0 24px" on this row (see its own style below) — subtract
       // both sides to get the actual content width columns lay out within.
-      setRowContentWidth(el!.getBoundingClientRect().width - 48);
+      setRowContentWidth(width - 48);
     }
     measure();
     const ro = new ResizeObserver(measure);
@@ -1146,15 +1161,23 @@ export function TrackTable({
       case "artist":
         return <ArtistTokens name={t.artist} artistId={t.artist_id} />;
       case "album":
-        // HoverToken renders a plain <span> — `overflow`/`text-overflow`
-        // (what `truncate` sets) have no clipping effect on an inline
-        // element, only on a block/inline-block one, so passing
-        // className="truncate" straight to it never actually ellipsized
-        // long album names. Wrapping it in a block-level div (which fills
-        // the already width-constrained data cell) gives text-overflow
-        // something it can actually apply to.
+        // Wraps onto a 2nd line rather than truncating to 1 when a long
+        // album name doesn't fit on one — same reasoning as the "genre"
+        // case below: TRACK_ROW_HEIGHT (58px) has plenty of headroom above
+        // 2 lines of fs-secondary text. -webkit-line-clamp (not the
+        // "truncate" class, which forces single-line nowrap and — being
+        // built for a block element — never actually ellipsized
+        // HoverToken's plain inline <span> anyway) caps it at exactly 2
+        // lines and ellipsizes anything beyond that; it needs
+        // `display: -webkit-box` to apply to the normal wrapping inline
+        // flow, same as it would to plain text.
         return t.album ? (
-          <div className="truncate">
+          <div
+            style={{
+              display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+              overflow: "hidden", lineHeight: 1.4,
+            }}
+          >
             <HoverToken
               text={t.album}
               clickable

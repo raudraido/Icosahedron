@@ -381,9 +381,9 @@ function registerIpcHandlers(): void {
     requireClient().getTracksNativePage(sortBy, order, start, end, query, filters));
 
   // ── Column-filter id maps (Tracks tab's Excel-style filters) ────────────
-  ipcMain.handle("get_artist_id_map", () => requireClient().getArtistIdMap());
-  ipcMain.handle("get_album_id_map", () => requireClient().getAlbumIdMap());
-  ipcMain.handle("get_genre_id_map", () => requireClient().getGenreIdMap());
+  ipcMain.handle("get_artist_id_map", (_e, filters) => requireClient().getArtistIdMap(filters));
+  ipcMain.handle("get_album_id_map", (_e, filters) => requireClient().getAlbumIdMap(filters));
+  ipcMain.handle("get_genre_id_map", (_e, filters) => requireClient().getGenreIdMap(filters));
   ipcMain.handle("start_scan", () => requireClient().startScan());
   ipcMain.handle("get_track_info", (_e, { id }) => requireClient().getTrackInfo(id));
 

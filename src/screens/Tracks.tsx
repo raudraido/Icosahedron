@@ -8,7 +8,11 @@ import { Icon } from "../components/Icon";
 import { useStore } from "../store";
 
 const PAGE_SIZE = 200;
-const FILTERABLE_COLS = ["artist", "album", "genre", "year"];
+const FILTERABLE_COLS = ["artist", "album", "genre", "year", "fav"];
+// Fav has no id-list endpoint (it's a plain boolean, not a many-valued
+// relation like artist/album/genre) — its popup always offers exactly these
+// two fixed values, same idea as year's checklist but without a server fetch.
+const FAV_VALUES = ["True", "False"];
 const SEARCH_SCOPE_OPTIONS: SearchScopeOption[] = [
   { value: "title", label: "Title" },
   { value: "artist", label: "Artist" },
@@ -76,6 +80,12 @@ export function Tracks() {
     if (navEntry?.trackQuery === undefined) return;
     setQuery(navEntry.trackQuery);
     setSearchScope(navEntry.trackQueryScope ?? "all");
+    // A fresh Spotlight search should search the whole library, not
+    // whatever column filters happened to be left over from prior Tracks
+    // tab browsing — otherwise "Show all N results" silently returns fewer
+    // than N because it's ANDed with stale Artist/Album/Genre/Year/Fav
+    // filters the user can't see were still active.
+    setColFilters({});
     setPage(1);
   }, [navEntry]);
 
@@ -91,21 +101,91 @@ export function Tracks() {
   const sortField = SORT_FIELD[sortCol.col] ?? "createdAt";
   const order = sortCol.dir === "asc" ? "ASC" : "DESC";
 
+  // Deterministic, serializable key for react-query (a Set-valued object
+  // would just stringify to "{}" and never bust the cache on change).
+  const filterKey = useMemo(
+    () => JSON.stringify(Object.entries(colFilters).map(([c, v]) => [c, [...v].sort()]).sort()),
+    [colFilters],
+  );
+
+  // A single checked year is sent server-side like any other filter; when
+  // more than one is checked it can't be expressed server-side (see the
+  // `multiYear` comment below), so it's simply omitted here too.
+  const yearValuesSelected = useMemo(() => [...(colFilters.year ?? [])], [colFilters]);
+
+  // Fav only resolves to a server-side filter when exactly one of the two
+  // fixed values is checked — both (or neither) checked means "show
+  // everything", same as any other column with no active filter.
+  const favSelected = useMemo(() => [...(colFilters.fav ?? [])], [colFilters]);
+  const favStarred = favSelected.length === 1 ? favSelected[0] === "True" : undefined;
+
   // Name→id maps back the filter popup's checklist for Artist/Album/Genre —
   // fetched once up front (matches _start_filter_values_worker firing right
   // after the first page loads, so they're ready by the time a filter icon
   // is clicked) rather than lazily on first click.
-  const { data: artistMap = {} } = useQuery({ queryKey: ["tracks-artist-map"], queryFn: api.getArtistIdMap, staleTime: 10 * 60_000 });
-  const { data: albumMap = {} } = useQuery({ queryKey: ["tracks-album-map"], queryFn: api.getAlbumIdMap, staleTime: 10 * 60_000 });
-  const { data: genreMap = {} } = useQuery({ queryKey: ["tracks-genre-map"], queryFn: api.getGenreIdMap, staleTime: 10 * 60_000 });
+  //
+  // Cascading (faceted) behavior: each map is narrowed server-side by
+  // whatever *other* columns already have an active filter (e.g. checking a
+  // Genre narrows the Album popup's own option list to just the albums that
+  // actually occur under that genre), mirroring getTracksNativePage's own
+  // filters and _build_server_filters. Without this, a column's popup would
+  // only ever offer the full library-wide list regardless of other active
+  // filters, which doesn't reflect what's actually reachable.
+  const filtersExcluding = (excludeCol: string, artistMap: Record<string, string>, albumMap: Record<string, string>, genreMap: Record<string, string>): TrackFilters | undefined => {
+    const filters: TrackFilters = {};
+    if (excludeCol !== "artist") {
+      const ids = [...(colFilters.artist ?? [])].map((n) => artistMap[n]).filter(Boolean);
+      if (ids.length) filters.artistIds = ids;
+    }
+    if (excludeCol !== "album") {
+      const ids = [...(colFilters.album ?? [])].map((n) => albumMap[n]).filter(Boolean);
+      if (ids.length) filters.albumIds = ids;
+    }
+    if (excludeCol !== "genre") {
+      const ids = [...(colFilters.genre ?? [])].map((n) => genreMap[n]).filter(Boolean);
+      if (ids.length) filters.genreIds = ids;
+    }
+    if (excludeCol !== "year" && yearValuesSelected.length === 1) filters.year = yearValuesSelected[0];
+    if (excludeCol !== "fav" && favStarred !== undefined) filters.starred = favStarred;
+    return Object.keys(filters).length ? filters : undefined;
+  };
+
+  const { data: artistMap = {} } = useQuery({ queryKey: ["tracks-artist-map"], queryFn: () => api.getArtistIdMap(), staleTime: 10 * 60_000 });
+  const { data: albumMap = {} } = useQuery({ queryKey: ["tracks-album-map"], queryFn: () => api.getAlbumIdMap(), staleTime: 10 * 60_000 });
+  const { data: genreMap = {} } = useQuery({ queryKey: ["tracks-genre-map"], queryFn: () => api.getGenreIdMap(), staleTime: 10 * 60_000 });
+
+  const artistMapFilters = filtersExcluding("artist", artistMap, albumMap, genreMap);
+  const albumMapFilters = filtersExcluding("album", artistMap, albumMap, genreMap);
+  const genreMapFilters = filtersExcluding("genre", artistMap, albumMap, genreMap);
+
+  const { data: filteredArtistMap } = useQuery<Record<string, string>>({
+    queryKey: ["tracks-artist-map", JSON.stringify(artistMapFilters)],
+    queryFn: () => api.getArtistIdMap(artistMapFilters),
+    enabled: !!artistMapFilters,
+    staleTime: 10 * 60_000,
+  });
+  const { data: filteredAlbumMap } = useQuery<Record<string, string>>({
+    queryKey: ["tracks-album-map", JSON.stringify(albumMapFilters)],
+    queryFn: () => api.getAlbumIdMap(albumMapFilters),
+    enabled: !!albumMapFilters,
+    staleTime: 10 * 60_000,
+  });
+  const { data: filteredGenreMap } = useQuery<Record<string, string>>({
+    queryKey: ["tracks-genre-map", JSON.stringify(genreMapFilters)],
+    queryFn: () => api.getGenreIdMap(genreMapFilters),
+    enabled: !!genreMapFilters,
+    staleTime: 10 * 60_000,
+  });
 
   // Year has no dedicated id-list endpoint, so (matching FilterValuesWorker)
   // its value list comes from a sample of up to 500 tracks matching the
-  // current search — re-sampled only when the query changes, not on every
-  // filter apply (matches invalidate_filter_cache's query-only trigger).
+  // current search and other active filters — re-sampled when the query or
+  // other filters change, not on every filter apply (matches
+  // invalidate_filter_cache's query-only trigger, extended to filters).
+  const yearSampleFilters = filtersExcluding("year", artistMap, albumMap, genreMap);
   const { data: yearSample } = useQuery({
-    queryKey: ["tracks-year-sample", debouncedQuery],
-    queryFn: () => api.getTracksNativePage("title", "ASC", 0, 500, debouncedQuery || undefined),
+    queryKey: ["tracks-year-sample", debouncedQuery, JSON.stringify(yearSampleFilters)],
+    queryFn: () => api.getTracksNativePage("title", "ASC", 0, 500, debouncedQuery || undefined, yearSampleFilters),
   });
   const yearValues = useMemo(() => {
     const set = new Set<string>();
@@ -114,15 +194,12 @@ export function Tracks() {
   }, [yearSample]);
 
   const colValues = useMemo(() => ({
-    artist: Object.keys(artistMap), album: Object.keys(albumMap), genre: Object.keys(genreMap), year: yearValues,
-  }), [artistMap, albumMap, genreMap, yearValues]);
-
-  // Deterministic, serializable key for react-query (a Set-valued object
-  // would just stringify to "{}" and never bust the cache on change).
-  const filterKey = useMemo(
-    () => JSON.stringify(Object.entries(colFilters).map(([c, v]) => [c, [...v].sort()]).sort()),
-    [colFilters],
-  );
+    artist: Object.keys(filteredArtistMap ?? artistMap),
+    album: Object.keys(filteredAlbumMap ?? albumMap),
+    genre: Object.keys(filteredGenreMap ?? genreMap),
+    year: yearValues,
+    fav: FAV_VALUES,
+  }), [artistMap, albumMap, genreMap, filteredArtistMap, filteredAlbumMap, filteredGenreMap, yearValues]);
 
   // Year is a plain scalar column, not a many-valued relation like
   // artist/album/genre — repeated `year` params were tried and confirmed to
@@ -133,7 +210,6 @@ export function Tracks() {
   // fetched in one shot and filtered/paginated in memory instead — matches
   // the "fetch everything, slice client-side" fallback discussed for cases
   // the server API can't express, same idea as yearSample's client sampling.
-  const yearValuesSelected = useMemo(() => [...(colFilters.year ?? [])], [colFilters]);
   const multiYear = yearValuesSelected.length > 1;
 
   // Converts display-value filters to Navidrome's native id-list params —
@@ -149,8 +225,9 @@ export function Tracks() {
     const genreIds = [...(colFilters.genre ?? [])].map((n) => genreMap[n]).filter(Boolean);
     if (genreIds.length) filters.genreIds = genreIds;
     if (yearValuesSelected.length === 1) filters.year = yearValuesSelected[0];
+    if (favStarred !== undefined) filters.starred = favStarred;
     return filters;
-  }, [colFilters, artistMap, albumMap, genreMap, yearValuesSelected]);
+  }, [colFilters, artistMap, albumMap, genreMap, yearValuesSelected, favStarred]);
 
   // Client-side fallback mode: either multiple years are checked, or a
   // narrower-than-"all" search scope is selected *and there's actually a

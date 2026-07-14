@@ -100,7 +100,12 @@ const DEFAULT_COL_VISIBILITY: Record<string, boolean> = {
 // content) start narrow and truncate hard until manually widened — that's
 // an explicit, repeated user choice: uniform tight-by-default headers,
 // resize-to-widen as an opt-in action per column rather than a few columns
-// guessing at a "probably needs more room" default.
+// guessing at a "probably needs more room" default. `track` is the one
+// exception in practice, not because of anything here but because its
+// first-mount seeding effect (see the comment by rowContentWidth's
+// useLayoutEffect further down) fills colWidths.track with real leftover
+// space the moment the row's width is first known, before this fallback
+// ever gets a chance to apply to it.
 const DEFAULT_COL_WIDTHS: Record<string, number> = {};
 export type SortState = { col: string; dir: "asc" | "desc" } | null;
 type DisplayRow =
@@ -172,38 +177,6 @@ function fmtDate(iso: string | null): string {
 // never split native-path tracks at all — "Rock • Pop" has none of those
 // characters, so it rendered as one single clickable blob instead of two.
 const GENRE_SEP_RE = /[;/|,•]+/;
-
-// Cascading filter values — when another column already has an active
-// filter, the popup derives its own value list from the currently-loaded
-// (already-filtered) tracks instead of the full global list, matching
-// tracks_browser.py's _values_from_tree: only show values that actually
-// occur in the current result set. Artist splits multi-artist cells the
-// same way ArtistTokens does everywhere else in this app (the old app used
-// a separately-defined, slightly different separator list just for this
-// one cascading case — standardizing on one separator set is more
-// consistent than reproducing that discrepancy, same call made for
-// ArtistInfoPanel's paging split).
-function deriveFilterValues(tracks: Track[], col: string): string[] {
-  const vals = new Set<string>();
-  for (const t of tracks) {
-    if (col === "artist") {
-      for (const part of t.artist.split(ARTIST_SEP_RE)) {
-        const trimmed = part.trim();
-        if (trimmed && !ARTIST_SEP_RE.test(part)) vals.add(trimmed);
-      }
-    } else if (col === "album") {
-      if (t.album) vals.add(t.album);
-    } else if (col === "genre") {
-      for (const part of (t.genre ?? "").split(GENRE_SEP_RE)) {
-        const trimmed = part.trim();
-        if (trimmed) vals.add(trimmed);
-      }
-    } else if (col === "year") {
-      if (t.year) vals.add(String(t.year));
-    }
-  }
-  return [...vals].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
-}
 
 function sortKey(t: Track, col: string, bpmCache?: Record<string, number>): string | number {
   switch (col) {
@@ -548,6 +521,72 @@ export function TrackTable({
     const base = Math.max(colWidths[id] ?? 0, minWidthFor(id));
     return sortState?.col === id ? base + SORT_ARROW_EXTRA : base;
   }
+  // Distributes `delta` px across `ids` proportionally to each one's own
+  // *current* share of the total, clamping each column at its own
+  // minWidthFor floor, iteratively: whichever columns would breach their
+  // floor this pass get pinned there instead, and whatever fraction of
+  // `delta` they couldn't absorb (because they had little or no room left
+  // to begin with) carries over to the *next* pass, redistributed only
+  // among the columns that still have room — repeating until nothing new
+  // gets pinned.
+  //
+  // A single non-iterative pass under-corrects badly once several columns
+  // are already sitting at (or near) their floor: proportionally, each of
+  // them is asked to give up a share of `delta` it doesn't have, that
+  // share gets clamped away to nothing, and — critically — a single pass
+  // has nowhere left to put that lost fraction, so the total ends up short
+  // of `delta` by however much those floored columns couldn't contribute.
+  // E.g. dragging one column very wide against four others already at
+  // their floor, then releasing: reconcileColWidths needs to shrink the
+  // dragged column back down by *the full amount*, not just its
+  // proportional 4/5 share of the correction while the floored four
+  // silently absorb none of it and the dragged column keeps the leftover
+  // — that leftover is exactly what was reported as "only one column
+  // snaps back, the others stay pushed outside the view" (in that report
+  // it was actually the dragged column itself that didn't fully return,
+  // since the four already at floor were never the problem).
+  function distributeDelta(ids: string[], base: Record<string, number>, delta: number): Record<string, number> {
+    if (ids.length === 0) return {};
+    const next: Record<string, number> = {};
+    for (const id of ids) next[id] = base[id];
+    let flexible = [...ids];
+    let remaining = delta;
+    for (let pass = 0; pass < ids.length + 1 && flexible.length > 0 && remaining !== 0; pass++) {
+      const total = flexible.reduce((sum, id) => sum + next[id], 0);
+      if (total <= 0) break;
+      const proposed: Record<string, number> = {};
+      for (const id of flexible) proposed[id] = next[id] + remaining * (next[id] / total);
+      const newlyFloored = flexible.filter((id) => proposed[id] < minWidthFor(id));
+      if (newlyFloored.length === 0) {
+        for (const id of flexible) next[id] = Math.round(proposed[id]);
+        remaining = 0;
+        break;
+      }
+      let consumed = 0;
+      for (const id of newlyFloored) {
+        const floor = minWidthFor(id);
+        consumed += floor - next[id];
+        next[id] = floor;
+      }
+      remaining -= consumed;
+      flexible = flexible.filter((id) => !newlyFloored.includes(id));
+    }
+    // Any `remaining` left here means every column is already pinned at
+    // its floor and there's still more to shrink than physically
+    // possible — genuinely not enough room even at everyone's minimum.
+    // Leave everyone at their floor rather than breaching it further; the
+    // rounding-correction pass below only closes out leftover fractional
+    // px, not a shortfall of this kind.
+    const target = Math.round(ids.reduce((sum, id) => sum + base[id], 0) + delta);
+    const actual = ids.reduce((sum, id) => sum + next[id], 0);
+    const diff = target - actual;
+    if (diff !== 0 && flexible.length > 0) {
+      const order = [...flexible].sort((a, b) => next[b] - next[a]);
+      const step = Math.sign(diff);
+      for (let k = 0; k < Math.abs(diff) && k < order.length; k++) next[order[k]] += step;
+    }
+    return next;
+  }
   function applySortState(next: SortState) {
     if (persistSort) saveJSON(LS_SORT(viewKey), next);
     if (serverDriven) onSortChange?.(next);
@@ -721,56 +760,42 @@ export function TrackTable({
   }
 
   // ── Column resize ──
+  // While actively dragging, *only* the column under the cursor moves — a
+  // lightweight, direct preview, following the mouse 1:1 with no other
+  // column reacting at all. Every other column's width is completely
+  // frozen for the duration of the drag, so the row is very often wider or
+  // narrower than the table while dragging — expected, not a bug. Only on
+  // mouse release does reconcileColWidths run, once, recomputing every
+  // visible column's width together (including the one just dragged) so
+  // the whole row snaps back to an exact fit in a single frame.
+  //
+  // An earlier version redistributed to every *other* column live, on
+  // every mousemove tick, which doesn't match the intended feel: the
+  // column-width model should be a pure function of the whole
+  // stored-widths set + container width, recomputed only when either
+  // actually changes — a manual drag updates just the one dragged
+  // column's stored width until it's committed on mouseup, so nothing
+  // else has a reason to move until then.
   function onResizeStart(e: React.MouseEvent, colId: string) {
     e.preventDefault();
     e.stopPropagation();
     const startX = e.clientX;
-    // Read the column's *actual* rendered width off the DOM rather than
-    // assuming colWidths/minWidthFor matches it — for every other column
-    // those always agree (flex: 0 0 <width>px, no grow involved), but
-    // track is flex-grow:1 (auto-filling leftover space), so its real
-    // on-screen width is usually much larger than minWidthFor's 220px
-    // floor.
-    const headerCell = (e.currentTarget as HTMLElement).closest<HTMLElement>("[data-col-header]");
-    const startWidth = headerCell?.getBoundingClientRect().width ?? colWidthsRef.current[colId] ?? minWidthFor(colId);
-
-    // track never gets its own stored width — it stays permanently
-    // flex-grow:1, silently absorbing whatever space every other
-    // (fixed-width) column doesn't use, which is what keeps the whole row
-    // filling the container exactly, with no gap or overflow, for *every*
-    // column's resize, not just track's. So dragging track's own handle
-    // doesn't set a width on track at all: it resizes its neighbor (the
-    // next visible column) in the opposite direction instead — shrinking
-    // the neighbor hands track that space to grow into; growing the
-    // neighbor takes space away from what's left for track to fill,
-    // shrinking track by the same amount as a pure side effect of
-    // flexbox's own leftover-space math, never set directly.
-    const isTrackResize = colId === "track";
-    const targetId = isTrackResize ? visibleCols[visibleCols.indexOf(colId) + 1] : colId;
-    if (!targetId) return; // track has no neighbor to trade width with
-    const targetStartWidth = isTrackResize ? (colWidthsRef.current[targetId] ?? minWidthFor(targetId)) : startWidth;
-    const trackFloor = isTrackResize ? minWidthFor("track") : 0;
+    const startWidth = colBoxWidth(colId);
 
     function onMove(ev: MouseEvent) {
       justDraggedHeaderRef.current = true;
       const rawDelta = ev.clientX - startX;
-      if (isTrackResize) {
-        // Dragging track's handle right grows track (matches the
-        // direction every other column's own handle already works in),
-        // which means its neighbor shrinks by that same amount — the
-        // opposite sign of a normal, direct resize.
-        const maxNeighborWidth = targetStartWidth + (startWidth - trackFloor); // caps how much the neighbor can grow before track would dip below its own floor
-        const width = Math.min(maxNeighborWidth, Math.max(minWidthFor(targetId), targetStartWidth - rawDelta));
-        setColWidths((prev) => ({ ...prev, [targetId]: width }));
-      } else {
-        const width = Math.max(minWidthFor(targetId), targetStartWidth + rawDelta);
-        setColWidths((prev) => ({ ...prev, [targetId]: width }));
-      }
+      const desired = Math.max(minWidthFor(colId), startWidth + rawDelta);
+      setColWidths((prev) => ({ ...prev, [colId]: desired }));
     }
     function onUp() {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
-      saveJSON(LS_WIDTHS(viewKey), colWidthsRef.current);
+      setColWidths((current) => {
+        const next = reconcileColWidths(current);
+        saveJSON(LS_WIDTHS(viewKey), next);
+        return next;
+      });
     }
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -787,6 +812,112 @@ export function TrackTable({
   // (accent border, translucent panel background) — same UX language,
   // just rotated 90°.
   const headerRowRef = useRef<HTMLDivElement>(null);
+
+  // Every column's own stored base width is treated as a *proportion*,
+  // and on every container resize all of them are scaled by one shared
+  // factor = available width / sum of every column's base width, so the
+  // whole row always exactly fills the container — growing together when
+  // the window widens, shrinking together when it narrows. No column is
+  // special-cased; `track` is a normal column like any other (see the
+  // seeding effect below for how it gets a real base width in the first
+  // place, since it used to be a bare flex:1 filler with none).
+  const [rowContentWidth, setRowContentWidth] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = headerRowRef.current;
+    if (!el) return;
+    function measure() {
+      // padding: "0 24px" on this row (see its own style below) — subtract
+      // both sides to get the actual content width columns lay out within.
+      setRowContentWidth(el!.getBoundingClientRect().width - 48);
+    }
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  // Recomputes every visible column's stored width from scratch so they
+  // sum to *exactly* the row's real available width. Used two ways: by the
+  // layout effect below (container width, visible-column set, or sort
+  // state changes), and directly by onResizeStart's onUp above to snap the
+  // row back to an exact fit the instant a drag ends — that second use is
+  // why this always recomputes fully from `target` rather than nudging by
+  // a remembered delta: onMove is allowed to leave the row temporarily
+  // wider than the container while actively dragging (see its own
+  // comment), so there's no valid "previous exact-fit state" to nudge from
+  // at that point, only the true target to reconcile back to.
+  //
+  // minWidthFor, not colBoxWidth, for the fallback base — colBoxWidth adds
+  // SORT_ARROW_EXTRA on top of whatever's stored for the actively sorted
+  // column, dynamically, at render time; that's never itself persisted
+  // into colWidths. Mixing that dynamic +16 into this base would
+  // double-count it: distributeDelta's own total-matching correction
+  // always forces the *stored* total to hit `target` exactly regardless,
+  // but then colBoxWidth adds +16 back on top of that at render time for
+  // the sorted column — a real, if small, permanent 16px overflow this
+  // couldn't otherwise see or correct for, any time a column happened to
+  // be actively sorted. Subtracting sortExtra from `target` up front
+  // reserves that same 16px so the actual *displayed* total (post-arrow-
+  // extra) is what ends up matching the row's real available width.
+  function reconcileColWidths(current: Record<string, number>): Record<string, number> {
+    if (rowContentWidth == null) return current;
+    // Only reserve the arrow allowance if the sorted column is actually
+    // visible right now — colBoxWidth only ever adds it to a column that's
+    // genuinely rendered (sortState?.col === id), so reserving it
+    // unconditionally whenever *any* column is sorted (including a
+    // currently-hidden one, e.g. the default sort on "date" when Date
+    // Added isn't a shown column) held back 16px nothing ever actually
+    // used — a standing trailing gap with a completely ordinary column
+    // set.
+    const sortExtra = sortState && visibleCols.includes(sortState.col) ? SORT_ARROW_EXTRA : 0;
+    const base: Record<string, number> = {};
+    for (const id of visibleCols) base[id] = current[id] ?? minWidthFor(id);
+    const currentTotal = visibleCols.reduce((sum, id) => sum + base[id], 0);
+    const target = rowContentWidth - NUM_COL_WIDTH - sortExtra;
+    const delta = target - currentTotal;
+    if (Math.abs(delta) < 1) return current; // already an exact (or near-exact) fit
+    return { ...current, ...distributeDelta(visibleCols, base, delta) };
+  }
+  // Fires whenever the container's measured width changes (a window
+  // resize), which columns are visible changes (toggling one on/off), or
+  // sort state changes (the +16 arrow-extra reservation above needs to
+  // move) — never as a side effect of colWidths itself changing (see
+  // onResizeStart's own live redistribution for that — a manual drag only
+  // ever touches columns directly via its own setColWidths calls, this
+  // effect doesn't react to those, so there's no fighting between the
+  // two).
+  //
+  // An earlier version only nudged colWidths by (newWidth − prevWidth),
+  // which is correct *only* as long as the row was already an exact fit
+  // going into that resize. It wasn't reliably — track used to be a bare
+  // flex:1 filler with no stored width of its own at all, and headerRowRef
+  // briefly lacked `minWidth: 0` (see its own comment), letting the row
+  // silently overflow past its true container width and feed that
+  // inflated reading back into the next resize's math — reported as
+  // columns getting pushed outside the visible table, worse with every
+  // resize. reconcileColWidths recomputing the *actual* shortfall/surplus
+  // from scratch every time, rather than trusting a remembered delta,
+  // makes every firing self-correcting: even a badly out-of-sync stored
+  // width (stale localStorage from before either of those two bugs, a
+  // column just toggled visible, anything) gets pulled back to an exact
+  // fit on the very next resize instead of the error persisting or
+  // compounding.
+  useLayoutEffect(() => {
+    if (rowContentWidth == null) return;
+    setColWidths((current) => {
+      const next = reconcileColWidths(current);
+      if (next === current) return current;
+      saveJSON(LS_WIDTHS(viewKey), next);
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowContentWidth, visibleCols.join(","), sortState]);
+  // What each column actually renders at — colBoxWidth already reflects
+  // whatever onResizeStart's live redistribution or the window-resize
+  // rescale above last committed to colWidths.
+  function displayColWidth(id: string): number {
+    return colBoxWidth(id);
+  }
+
   const dropColIndexRef = useRef<number | null>(null);
   const [dragColId, setDragColId] = useState<string | null>(null);
   const [dropColIndex, setDropColIndex] = useState<number | null>(null);
@@ -1043,11 +1174,21 @@ export function TrackTable({
         const canFilter = filterableCols.includes("genre") && Boolean(onFilterChange);
         const parts = (t.genre ?? "").split(GENRE_SEP_RE).map((s) => s.trim()).filter(Boolean);
         if (!parts.length) return null;
-        // div, not span — same reason as the "album" case above: a plain
-        // inline span never actually clips/ellipsizes regardless of the
-        // truncate class, only a block-level element does.
+        // Wraps onto a 2nd line rather than truncating to 1 when a track has
+        // enough genres that they don't all fit on one — TRACK_ROW_HEIGHT
+        // (58px) has plenty of headroom above 2 lines of fs-secondary text,
+        // so this doesn't need to touch row height. -webkit-line-clamp (not
+        // the "truncate" class, which forces single-line nowrap) caps it at
+        // exactly 2 lines and ellipsizes anything beyond that; it needs
+        // `display: -webkit-box` to apply to the normal wrapping inline flow
+        // of tokens + separators below, same as it would to plain text.
         return (
-          <div className="truncate">
+          <div
+            style={{
+              display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+              overflow: "hidden", lineHeight: 1.4,
+            }}
+          >
             {parts.map((g, i) => (
               <React.Fragment key={i}>
                 {i > 0 && <span style={{ color: "var(--text-secondary)", opacity: 0.4, fontSize: "var(--fs-secondary)" }}> • </span>}
@@ -1185,13 +1326,26 @@ export function TrackTable({
           how tightly each individual column's own box was sized. Must stay
           in sync with the data rows' own gap below (same reasoning: header
           and data columns need identical pixel boundaries). */}
-      <div ref={headerRowRef} className="flex items-center shrink-0" style={{ position: "relative", height: 36, padding: "0 24px", gap: 0 }}>
+      {/* minWidth: 0 + overflow: hidden — without them this is the classic
+          flexbox min-content trap: as a flex item in the table's own
+          flex-col layout, this row stretches to its parent's width by
+          default, but a flex item never shrinks below its own content's
+          natural size unless minWidth:0 overrides that. Now that every
+          column (track included) is a fixed flex:0 0 Npx basis with no
+          flex:1 column left to absorb slack, the sum of their widths *is*
+          this row's natural content size — so without minWidth:0, the row
+          would just silently grow past its actual available width instead
+          of ever being constrained by it, and since headerRowRef's own
+          measured width feeds the resize-rescale math above, that inflated
+          reading would compound on every resize tick, pushing columns
+          further outside the visible table each time (reported as columns
+          "pushed outside the view" with runaway gaps between them). */}
+      <div ref={headerRowRef} className="flex items-center shrink-0" style={{ position: "relative", height: 36, padding: "0 24px", gap: 0, minWidth: 0, overflow: "hidden" }}>
         <div style={{ flex: `0 0 ${NUM_COL_WIDTH}px`, marginLeft: -NUM_COL_SHIFT, marginRight: NUM_COL_SHIFT, display: "flex", justifyContent: "center" }}>
           <span style={{ fontSize: "var(--fs-small)", fontWeight: "var(--fw-emphasis)", letterSpacing: 0.8, color: "var(--text-secondary)" }}>#</span>
         </div>
         {visibleCols.map((id) => {
           const col = COLUMNS[id];
-          const isTrack = id === "track";
           return (
             <div
               key={id}
@@ -1201,14 +1355,10 @@ export function TrackTable({
               style={{
                 position: "relative",
                 opacity: dragColId === id ? 0.3 : 1,
-                // track is permanently flex-grow:1 — it always absorbs
-                // whatever space every other (fixed-width) column doesn't
-                // use, which is what keeps the row filling the container
-                // exactly. Its own resize handle doesn't touch this at
-                // all; see onResizeStart's comment — dragging it instead
-                // resizes the neighbor column, and track's rendered width
-                // changes as a side effect of that.
-                flex: isTrack ? 1 : `0 0 ${colBoxWidth(id)}px`,
+                // track is a normal fixed-flex-basis column like every
+                // other one now (see scaledColWidths/displayColWidth
+                // above) — no more flex-grow special case.
+                flex: `0 0 ${displayColWidth(id)}px`,
                 minWidth: 0,
                 boxSizing: "border-box",
                 // Explicit padding, not just leftover flex space, is what
@@ -1292,7 +1442,7 @@ export function TrackTable({
           <div
             style={{
               position: "absolute", top: 0, height: 36,
-              left: ghostX - colBoxWidth(dragColId) / 2, width: colBoxWidth(dragColId),
+              left: ghostX - displayColWidth(dragColId) / 2, width: displayColWidth(dragColId),
               display: "flex", alignItems: "center", justifyContent: "center",
               background: "color-mix(in srgb, var(--panel-bg) 95%, white)",
               border: "1px solid var(--accent)", borderRadius: 6, opacity: 0.8,
@@ -1315,7 +1465,7 @@ export function TrackTable({
             numColWidth={NUM_COL_WIDTH}
             columns={visibleCols.map((id) => ({
               id,
-              width: colBoxWidth(id),
+              width: displayColWidth(id),
               centered: MID_COLS.has(id),
             }))}
           />
@@ -1412,10 +1562,8 @@ export function TrackTable({
                   <div
                     key={id}
                     style={{
-                      // Must match the header cell's own flex exactly —
-                      // track is permanently flex-grow:1 (see its comment
-                      // there and onResizeStart's).
-                      flex: id === "track" ? 1 : `0 0 ${colBoxWidth(id)}px`,
+                      // Must match the header cell's own flex exactly.
+                      flex: `0 0 ${displayColWidth(id)}px`,
                       minWidth: 0, overflow: "hidden",
                       ...(MID_COLS.has(id) ? { display: "flex", justifyContent: "center" } : {}),
                     }}
@@ -1470,20 +1618,21 @@ export function TrackTable({
       />
     )}
     {filterPopup && (() => {
-      // Cascading: once some *other* column already has an active filter,
-      // this popup's own value list narrows to whatever actually occurs in
-      // the currently-loaded (already server-filtered) tracks instead of
-      // the full library-wide list — matches _open_filter_popup's
-      // other_filters_active check.
-      const otherActive = Object.entries(colFilters ?? {}).some(([c, v]) => c !== filterPopup.col && v.size > 0);
-      const values = otherActive ? deriveFilterValues(tracks, filterPopup.col) : (colValues?.[filterPopup.col] ?? []);
+      // Cascading: colValues is fetched server-side already narrowed by
+      // whatever *other* columns have an active filter (see Tracks.tsx's
+      // filtersExcluding), so this popup's own value list reflects the
+      // entire filtered result set — not just the currently-loaded page of
+      // tracks — matching _open_filter_popup's other_filters_active intent
+      // without the staleness a client-side page scan would have.
+      const values = colValues?.[filterPopup.col] ?? [];
       return (
         <ColumnFilterPopup
           x={filterPopup.x}
           y={filterPopup.y}
           allValues={values}
           activeValues={colFilters?.[filterPopup.col] ?? new Set()}
-          isIdBased={filterPopup.col !== "year"}
+          isIdBased={filterPopup.col !== "year" && filterPopup.col !== "fav"}
+          exclusive={filterPopup.col === "fav"}
           onApply={(values) => onFilterChange?.(filterPopup.col, values)}
           onSort={(dir) => { clickCountRef.current = 1; applySortState({ col: filterPopup.col, dir }); }}
           onClose={() => setFilterPopup(null)}

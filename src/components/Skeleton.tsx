@@ -49,7 +49,7 @@ export function SkeletonTrackRow({
       <div style={{ flex: `0 0 ${numColWidth}px` }} />
       {columns.map((col) =>
         col.id === "track" ? (
-          <div key={col.id} className="flex items-center min-w-0" style={{ gap: 12, flex: 1 }}>
+          <div key={col.id} className="flex items-center min-w-0" style={{ gap: 12, flex: `0 0 ${col.width}px` }}>
             <div className="shimmer-sweep shrink-0" style={{ width: 52, height: 52, borderRadius: 3 }} />
             <div className="flex flex-col" style={{ gap: 6, flex: 1, minWidth: 0 }}>
               <div className="shimmer-sweep" style={{ width: 170, maxWidth: "60%", height: 11, borderRadius: 5 }} />

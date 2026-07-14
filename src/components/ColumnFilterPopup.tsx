@@ -28,19 +28,27 @@ interface Props {
   allValues: string[];
   activeValues: Set<string>;
   isIdBased: boolean; // artist/album/genre → show the >10-selected server warning; year → no warning
+  // Fav (true/false — mutually exclusive, not a multi-value relation like
+  // artist/album/genre/year): radio-style single pick instead of a
+  // checkbox checklist, no Select-All/search/add-to-filter rows.
+  exclusive?: boolean;
   onApply: (values: Set<string>) => void;
   onSort: (dir: "asc" | "desc") => void;
   onClose: () => void;
 }
 
-export function ColumnFilterPopup({ x, y, allValues, activeValues, isIdBased, onApply, onSort, onClose }: Props) {
+export function ColumnFilterPopup({ x, y, allValues, activeValues, isIdBased, exclusive = false, onApply, onSort, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x, y, ready: false });
   const hasActiveFilter = activeValues.size > 0;
 
   const [search, setSearch] = useState("");
-  const [checked, setChecked] = useState<Set<string>>(() => new Set(hasActiveFilter ? activeValues : allValues));
+  // Exclusive (fav): no active filter starts with nothing picked (i.e. "All"),
+  // not "everything checked" — checking both values at once isn't a
+  // meaningful state for a true/false column the way it is for a
+  // multi-value one.
+  const [checked, setChecked] = useState<Set<string>>(() => new Set(hasActiveFilter ? activeValues : exclusive ? [] : allValues));
   const [addToFilter, setAddToFilter] = useState(false);
 
   useEffect(() => {
@@ -97,6 +105,12 @@ export function ColumnFilterPopup({ x, y, allValues, activeValues, isIdBased, on
   const showWarning = isIdBased && checked.size > MAX_ID_FILTER_VALUES && checked.size !== allValues.length;
 
   function toggleValue(v: string) {
+    if (exclusive) {
+      // Radio behavior: picking a value replaces the selection; picking the
+      // already-selected value clears it back to "All".
+      setChecked((prev) => (prev.has(v) ? new Set() : new Set([v])));
+      return;
+    }
     setChecked((prev) => {
       const next = new Set(prev);
       if (next.has(v)) next.delete(v); else next.add(v);
@@ -109,7 +123,9 @@ export function ColumnFilterPopup({ x, y, allValues, activeValues, isIdBased, on
   }
 
   function apply() {
-    if (addToFilter) {
+    if (exclusive) {
+      onApply(new Set(checked)); // empty == "All", one value == that filter
+    } else if (addToFilter) {
       onApply(new Set([...activeValues, ...visible.filter((v) => checked.has(v))]));
     } else if (q) {
       onApply(new Set(visible.filter((v) => checked.has(v))));
@@ -159,36 +175,46 @@ export function ColumnFilterPopup({ x, y, allValues, activeValues, isIdBased, on
 
       <div style={{ height: 1, background: "var(--border)", margin: "4px 0" }} />
 
-      <input
-        autoFocus
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") apply(); }}
-        placeholder="Search…"
-        className="outline-none"
-        style={{
-          background: "var(--card-bg)", color: "var(--text-secondary)", border: "1px solid var(--border)",
-          borderRadius: 4, padding: "4px 8px", fontSize: "var(--fs-secondary)",
-        }}
-      />
+      {!exclusive && (
+        <input
+          autoFocus
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") apply(); }}
+          placeholder="Search…"
+          className="outline-none"
+          style={{
+            background: "var(--card-bg)", color: "var(--text-secondary)", border: "1px solid var(--border)",
+            borderRadius: 4, padding: "4px 8px", fontSize: "var(--fs-secondary)",
+          }}
+        />
+      )}
 
-      <div style={{ height: 200, position: "relative" }}>
-        <div ref={listRef} className="scroll-clean" style={{ height: "100%", overflowY: "auto", display: "flex", flexDirection: "column" }}>
-          <CheckRow label="(Select All)" bold checked={allChecked} onToggle={toggleSelectAll} />
-          {showAddToFilter && (
-            <CheckRow
-              label="(Add current selection to filter)"
-              bold
-              checked={addToFilter}
-              onToggle={() => setAddToFilter((v) => !v)}
-            />
-          )}
-          {visible.map((v) => (
-            <CheckRow key={v} label={v} checked={checked.has(v)} onToggle={() => toggleValue(v)} />
+      {exclusive ? (
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {allValues.map((v) => (
+            <RadioRow key={v} label={v} checked={checked.has(v)} onToggle={() => toggleValue(v)} />
           ))}
         </div>
-        <ScrollThumb scrollRef={listRef} />
-      </div>
+      ) : (
+        <div style={{ height: 200, position: "relative" }}>
+          <div ref={listRef} className="scroll-clean" style={{ height: "100%", overflowY: "auto", display: "flex", flexDirection: "column" }}>
+            <CheckRow label="(Select All)" bold checked={allChecked} onToggle={toggleSelectAll} />
+            {showAddToFilter && (
+              <CheckRow
+                label="(Add current selection to filter)"
+                bold
+                checked={addToFilter}
+                onToggle={() => setAddToFilter((v) => !v)}
+              />
+            )}
+            {visible.map((v) => (
+              <CheckRow key={v} label={v} checked={checked.has(v)} onToggle={() => toggleValue(v)} />
+            ))}
+          </div>
+          <ScrollThumb scrollRef={listRef} />
+        </div>
+      )}
 
       {showWarning && (
         <p style={{ color: "#f0a030", fontSize: 11, padding: "2px 4px", margin: 0 }}>
@@ -243,6 +269,24 @@ function CheckRow({ label, checked, onToggle, bold = false }: { label: string; c
       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
     >
       <input type="checkbox" checked={checked} onChange={onToggle} style={{ accentColor: "var(--accent)" }} />
+      <span className="truncate">{label}</span>
+    </label>
+  );
+}
+
+// Exclusive columns (fav): a real radio's browser-native semantics (only
+// one can ever be checked) would make clicking the already-selected value
+// to clear it back to "All" awkward, so this reuses the checkbox toggle
+// behavior of CheckRow but renders as radio circles to signal "pick one".
+function RadioRow({ label, checked, onToggle }: { label: string; checked: boolean; onToggle: () => void }) {
+  return (
+    <label
+      className="flex items-center"
+      style={{ gap: 6, padding: "3px 6px", borderRadius: 3, cursor: "pointer", color: "var(--text-secondary)", fontWeight: "var(--fw-secondary)" }}
+      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
+      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+    >
+      <input type="checkbox" role="radio" aria-checked={checked} checked={checked} onChange={onToggle} style={{ accentColor: "var(--accent)", appearance: "radio" as const, WebkitAppearance: "radio" as const }} />
       <span className="truncate">{label}</span>
     </label>
   );

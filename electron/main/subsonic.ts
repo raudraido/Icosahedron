@@ -501,10 +501,22 @@ export class SubsonicClient {
   /** name→id maps backing the filter popup's checklist for Artist/Album/Genre columns
    *  (tracks_browser.py's get_all_artists_native/get_all_albums_native/get_genres_native) —
    *  display values come from the track list itself, but applying the filter server-side
-   *  needs each checked name resolved back to Navidrome's internal id. */
-  private async nativeIdMap(endpoint: "artist" | "album" | "genre"): Promise<Record<string, string>> {
+   *  needs each checked name resolved back to Navidrome's internal id.
+   *  `filters` narrows the map to what's reachable under another column's already-active
+   *  filter (e.g. Album options when Genre is filtered) — Navidrome's /api/artist,
+   *  /api/album, /api/genre accept the same artist_id/album_id/genre_id/year params as
+   *  /api/song, so this reuses getTracksNativePage's filter-building convention instead of
+   *  scanning only the currently-loaded page of tracks client-side. */
+  private async nativeIdMap(
+    endpoint: "artist" | "album" | "genre",
+    filters?: { artistIds?: string[]; albumIds?: string[]; genreIds?: string[]; year?: string },
+  ): Promise<Record<string, string>> {
     await this.authenticateNative();
     const params = new URLSearchParams({ _start: "0", _end: "100000", _sort: "name", _order: "ASC" });
+    if (filters?.artistIds) for (const id of filters.artistIds) params.append("artist_id", id);
+    if (filters?.albumIds) for (const id of filters.albumIds) params.append("album_id", id);
+    if (filters?.genreIds) for (const id of filters.genreIds) params.append("genre_id", id);
+    if (filters?.year) params.set("year", filters.year);
     this.applyNativeLibrary(params);
     const resp = await fetch(`${this.baseUrl}/api/${endpoint}?${params}`, {
       headers: { "x-nd-authorization": `Bearer ${this.nativeJwt}` },
@@ -517,9 +529,9 @@ export class SubsonicClient {
     }
     return out;
   }
-  getArtistIdMap(): Promise<Record<string, string>> { return this.nativeIdMap("artist"); }
-  getAlbumIdMap(): Promise<Record<string, string>> { return this.nativeIdMap("album"); }
-  getGenreIdMap(): Promise<Record<string, string>> { return this.nativeIdMap("genre"); }
+  getArtistIdMap(filters?: { artistIds?: string[]; albumIds?: string[]; genreIds?: string[]; year?: string }): Promise<Record<string, string>> { return this.nativeIdMap("artist", filters); }
+  getAlbumIdMap(filters?: { artistIds?: string[]; albumIds?: string[]; genreIds?: string[]; year?: string }): Promise<Record<string, string>> { return this.nativeIdMap("album", filters); }
+  getGenreIdMap(filters?: { artistIds?: string[]; albumIds?: string[]; genreIds?: string[]; year?: string }): Promise<Record<string, string>> { return this.nativeIdMap("genre", filters); }
 
   /** For the "Get Info" dialog: no single endpoint has everything — the standard Subsonic
    *  `getSong` has extra audio fields, Navidrome's native `/api/song/{id}` has the real

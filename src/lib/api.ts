@@ -117,6 +117,7 @@ export interface TrackFilters {
   albumIds?: string[];
   genreIds?: string[];
   year?: string;
+  starred?: boolean;
 }
 
 export interface LyricsSearchResult {
@@ -257,9 +258,9 @@ export const api = {
     invoke<{ tracks: Track[]; total: number }>("get_tracks_native_page", { sortBy, order, start, end, query, filters }),
 
   // ── Tracks tab's Excel-style column filters (Artist/Album/Genre/Year) ──
-  getArtistIdMap: () => invoke<Record<string, string>>("get_artist_id_map"),
-  getAlbumIdMap: () => invoke<Record<string, string>>("get_album_id_map"),
-  getGenreIdMap: () => invoke<Record<string, string>>("get_genre_id_map"),
+  getArtistIdMap: (filters?: TrackFilters) => invoke<Record<string, string>>("get_artist_id_map", filters as Record<string, unknown> | undefined),
+  getAlbumIdMap: (filters?: TrackFilters) => invoke<Record<string, string>>("get_album_id_map", filters as Record<string, unknown> | undefined),
+  getGenreIdMap: (filters?: TrackFilters) => invoke<Record<string, string>>("get_genre_id_map", filters as Record<string, unknown> | undefined),
 
   startScan: () => invoke<void>("start_scan"),
   getScanStatus: () => invoke<ScanStatus>("get_scan_status"),

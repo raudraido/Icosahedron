@@ -224,13 +224,21 @@ function ToggleSwitch({ checked, onChange, disabled }: { checked: boolean; onCha
 }
 
 function ToggleRow({ label, description, checked, onChange, disabled, divider = true }: { label: string; description?: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; divider?: boolean }) {
+  // The switch centers against just the label row (not the label+description
+  // block as a whole) — see UI_MANIFEST.md's "ToggleRow: description text
+  // must fit on one line" entry: centering against the combined block used
+  // to put the switch at a different vertical spot on any row whose
+  // description happened to wrap to 2 lines, reported as the toggle looking
+  // "funky". Nesting the switch in its own row with only the label keeps it
+  // pinned to the label's line regardless of how long the description is or
+  // how many lines it wraps to.
   return (
-    <div className="flex items-center justify-between" style={{ gap: 12, padding: "8px 0", borderBottom: divider ? "1px solid var(--border)" : "none" }}>
-      <div className="flex flex-col" style={{ opacity: disabled ? 0.5 : 1 }}>
+    <div className="flex flex-col" style={{ gap: 4, padding: "8px 0", borderBottom: divider ? "1px solid var(--border)" : "none", opacity: disabled ? 0.5 : 1 }}>
+      <div className="flex items-center justify-between" style={{ gap: 12 }}>
         <span style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)" }}>{label}</span>
-        {description && <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>{description}</span>}
+        <ToggleSwitch checked={checked} onChange={onChange} disabled={disabled} />
       </div>
-      <ToggleSwitch checked={checked} onChange={onChange} disabled={disabled} />
+      {description && <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>{description}</span>}
     </div>
   );
 }
@@ -381,7 +389,7 @@ function LastFmSection() {
           </div>
           <ToggleRow
             label="Recently Played"
-            description="Reads your Last.fm play history for the left panel's list."
+            description="Reads your Last.fm play history for the left panel's list. Visibility can be toggled in Settings > Appearance."
             checked={lastFmEnabled}
             onChange={setLastFmEnabled}
             divider={false}
@@ -519,9 +527,10 @@ function AppearanceTab() {
           checked={lastFmSidebarVisible}
           onChange={setLastFmSidebarVisible}
           disabled={!historyAvailable}
+          divider={historyAvailable}
         />
         {!historyAvailable && (
-          <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
+          <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)", paddingBottom: 8, borderBottom: "1px solid var(--border)" }}>
             {lastfmConnected
               ? "Enable \"Recently Played\" in Settings > Integrations first."
               : "Connect to Last.fm and enable \"Recently Played\" in Settings > Integrations first."}

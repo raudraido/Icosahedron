@@ -103,7 +103,7 @@ function artistLine(tracks: Track[]): string {
 // ~a dozen API calls, so this one is worth persisting. The date key and
 // reroll nonce are part of the stored value: a stale entry (yesterday's, or
 // pre-reroll) simply misses and falls through to a rebuild.
-const LS_MIXES = "foryou_mixes_v3"; // v2: coverId → coverIds collage; v3: + tagline
+const LS_MIXES = "foryou_mixes_v4"; // v2: coverId → coverIds collage; v3: + tagline; v4: backfill thin artist mixes
 
 function loadCachedMixes(dateKey: string, nonce: number): Mix[] | null {
   const saved = loadJSON<{ dateKey: string; nonce: number; mixes: Mix[] } | null>(LS_MIXES, null);
@@ -125,9 +125,14 @@ async function buildMixes(dateKey: string, nonce: number): Promise<Mix[]> {
       byArtist.set(a.artist_id, { name: a.artist, coverId: a.cover_id });
     }
   }
-  const seeds = seededShuffle([...byArtist.entries()], rand).slice(0, ARTIST_MIX_COUNT);
+  // Pull a larger candidate pool than we need — some seed artists turn out
+  // to have too little similar/top-song material (a thin catalog entry,
+  // an API hiccup) and get dropped below, so slicing to exactly
+  // ARTIST_MIX_COUNT up front meant a single dud silently left the row one
+  // mix short instead of backfilling from the next candidate.
+  const candidates = seededShuffle([...byArtist.entries()], rand).slice(0, ARTIST_MIX_COUNT * 2);
 
-  const artistMixes = Promise.all(seeds.map(async ([artistId, info], i): Promise<Mix | null> => {
+  const artistMixes = Promise.all(candidates.map(async ([artistId, info]): Promise<Mix | null> => {
     const [similar, top] = await Promise.all([
       api.getSimilarSongs(artistId, 40).catch(() => []),
       api.getTopSongs(info.name, 10).catch(() => []),
@@ -137,14 +142,19 @@ async function buildMixes(dateKey: string, nonce: number): Promise<Mix[]> {
     const coverIds = coversFrom(tracks);
     if (!coverIds.length && info.coverId) coverIds.push(info.coverId);
     return {
-      id: `daily-${i}`,
-      title: `Daily Mix ${i + 1}`,
+      id: `daily-${artistId}`,
+      title: "",
       tagline: `Inspired by ${info.name}`,
       subtitle: artistLine(tracks),
       coverIds,
       tracks,
     };
-  }));
+  })).then((results) =>
+    results
+      .filter((m): m is Mix => m !== null)
+      .slice(0, ARTIST_MIX_COUNT)
+      .map((m, i) => ({ ...m, title: `Daily Mix ${i + 1}` }))
+  );
 
   const discoveryMix = api.getRandomSongs(MIX_SIZE + 10).catch(() => [] as Track[]).then((songs): Mix | null => {
     const tracks = dedupe(songs).slice(0, MIX_SIZE);

@@ -36,6 +36,16 @@ const UNCLAIMED = 0, CLAIMED = 1, TRAIL = 2;
 
 function idx(x: number, y: number) { return y * GRID_COLS + x; }
 
+// The outer ring makeGrid() marks CLAIMED so the player has walkable ground
+// to start on and trails have somewhere to reconnect to — but it's not
+// something the player actually earned, so draw() keeps it visually fogged
+// (same as genuinely unclaimed cells) until real interior territory gets
+// claimed around it. Otherwise the picture's edges are visible from frame
+// one, before any territory has actually been cleared.
+function isBorderCell(x: number, y: number): boolean {
+  return x === 0 || x === GRID_COLS - 1 || y === 0 || y === GRID_ROWS - 1;
+}
+
 function makeGrid(): Uint8Array {
   const grid = new Uint8Array(GRID_COLS * GRID_ROWS).fill(UNCLAIMED);
   for (let x = 0; x < GRID_COLS; x++) { grid[idx(x, 0)] = CLAIMED; grid[idx(x, GRID_ROWS - 1)] = CLAIMED; }
@@ -43,7 +53,12 @@ function makeGrid(): Uint8Array {
   return grid;
 }
 
-interface Monster { x: number; y: number; dx: number; dy: number }
+interface Monster { x: number; y: number; dx: number; dy: number; prevX: number; prevY: number }
+
+// Player/monster step cadence as a function of level — pulled out of step()
+// so draw() can compute the same interval to derive its interpolation alpha.
+function playerInterval(level: number) { return Math.max(0.05, 0.13 - (level - 1) * 0.008); }
+function monsterInterval(level: number) { return Math.max(0.05, 0.15 - (level - 1) * 0.01); }
 
 export function XonixWidget({ onClose }: { onClose: () => void }) {
   const coverUrlFn = useStore((s) => s.coverUrl);
@@ -65,6 +80,15 @@ export function XonixWidget({ onClose }: { onClose: () => void }) {
 
   const gridRef = useRef<Uint8Array>(makeGrid());
   const playerRef = useRef({ x: Math.floor(GRID_COLS / 2), y: 0 });
+  // Render-only "where it was before the in-progress step" — draw() lerps
+  // from here to playerRef.current using the step accumulator's progress,
+  // so movement reads as continuous even though stepPlayer() itself still
+  // hops a whole grid cell at a time (the claim/flood-fill logic needs
+  // that discreteness). Always resynced to the current position at the
+  // start of every stepPlayer() call, including no-op ones (blocked/no
+  // direction), so a stalled player doesn't visually drift toward a stale
+  // target.
+  const playerPrevRef = useRef({ x: Math.floor(GRID_COLS / 2), y: 0 });
   const dirRef = useRef({ dx: 0, dy: 0 });
   const drawingRef = useRef(false);
   const trailCellsRef = useRef<{ x: number; y: number }[]>([]);
@@ -147,7 +171,7 @@ export function XonixWidget({ onClose }: { onClose: () => void }) {
       const y = 1 + Math.floor(Math.random() * (GRID_ROWS - 2));
       if (gridRef.current[idx(x, y)] !== UNCLAIMED) continue;
       if (Math.hypot(x - playerRef.current.x, y - playerRef.current.y) < 4) continue;
-      monsters.push({ x, y, dx: Math.random() < 0.5 ? 1 : -1, dy: Math.random() < 0.5 ? 1 : -1 });
+      monsters.push({ x, y, prevX: x, prevY: y, dx: Math.random() < 0.5 ? 1 : -1, dy: Math.random() < 0.5 ? 1 : -1 });
     }
     monstersRef.current = monsters;
   }
@@ -161,6 +185,7 @@ export function XonixWidget({ onClose }: { onClose: () => void }) {
   function startLevel() {
     gridRef.current = makeGrid();
     playerRef.current = { x: Math.floor(GRID_COLS / 2), y: 0 };
+    playerPrevRef.current = { x: Math.floor(GRID_COLS / 2), y: 0 };
     dirRef.current = { dx: 0, dy: 0 };
     drawingRef.current = false;
     trailCellsRef.current = [];
@@ -236,6 +261,7 @@ export function XonixWidget({ onClose }: { onClose: () => void }) {
     drawingRef.current = false;
     dirRef.current = { dx: 0, dy: 0 };
     playerRef.current = { x: Math.floor(GRID_COLS / 2), y: 0 };
+    playerPrevRef.current = { x: Math.floor(GRID_COLS / 2), y: 0 };
 
     livesRef.current -= 1;
     if (livesRef.current <= 0) {
@@ -254,6 +280,10 @@ export function XonixWidget({ onClose }: { onClose: () => void }) {
   }
 
   function stepPlayer() {
+    // Always resync first — see playerPrevRef's declaration comment for why
+    // a no-op step (blocked/no direction) must collapse prev to current
+    // rather than leaving a stale lerp target.
+    playerPrevRef.current = { ...playerRef.current };
     const dir = dirRef.current;
     if (dir.dx === 0 && dir.dy === 0) return;
     const nx = playerRef.current.x + dir.dx, ny = playerRef.current.y + dir.dy;
@@ -281,6 +311,8 @@ export function XonixWidget({ onClose }: { onClose: () => void }) {
   // same as claimed ground), so "touching the line" has to be detected at
   // the point of deflection, not by checking where the monster ends up.
   function stepMonster(m: Monster): boolean {
+    m.prevX = m.x;
+    m.prevY = m.y;
     const grid = gridRef.current;
     const xCell = grid[idx(m.x + m.dx, m.y)];
     const yCell = grid[idx(m.x, m.y + m.dy)];
@@ -295,20 +327,20 @@ export function XonixWidget({ onClose }: { onClose: () => void }) {
   }
 
   function step(dt: number) {
-    const playerInterval = Math.max(0.05, 0.13 - (levelRef.current - 1) * 0.008);
-    const monsterInterval = Math.max(0.05, 0.15 - (levelRef.current - 1) * 0.01);
+    const pInterval = playerInterval(levelRef.current);
+    const mInterval = monsterInterval(levelRef.current);
 
     playerAccRef.current += dt;
-    while (playerAccRef.current >= playerInterval) {
-      playerAccRef.current -= playerInterval;
+    while (playerAccRef.current >= pInterval) {
+      playerAccRef.current -= pInterval;
       stepPlayer();
       if (gameOverRef.current) return;
     }
 
     let hitTrail = false;
     monsterAccRef.current += dt;
-    while (monsterAccRef.current >= monsterInterval) {
-      monsterAccRef.current -= monsterInterval;
+    while (monsterAccRef.current >= mInterval) {
+      monsterAccRef.current -= mInterval;
       for (const m of monstersRef.current) if (stepMonster(m)) hitTrail = true;
     }
 
@@ -367,13 +399,38 @@ export function XonixWidget({ onClose }: { onClose: () => void }) {
 
     // Fog over anything not yet claimed; the in-progress trail gets a
     // lighter, accent-tinted overlay so the path you've cut is visible.
+    // Each cell is overdrawn by half a pixel on every edge and adjacent
+    // same-color fog cells are merged into wide horizontal spans before
+    // filling — canvas's own antialiasing otherwise leaves faint seams
+    // between abutting fillRect calls once ctx.scale()'s scale factor is
+    // non-integer (any panel size that isn't an exact multiple of
+    // GAME_W×GAME_H), which read as a grid drawn over the covered fog.
     const grid = gridRef.current;
+    const FOG_OVERDRAW = 0.5;
+    // The win-state code below fills the whole grid CLAIMED specifically to
+    // reveal the complete picture, border included — don't fight that.
+    const revealBorder = gameOverRef.current && wonRef.current;
     for (let y = 0; y < GRID_ROWS; y++) {
-      for (let x = 0; x < GRID_COLS; x++) {
+      let x = 0;
+      while (x < GRID_COLS) {
         const cell = grid[idx(x, y)];
-        if (cell === CLAIMED) continue;
-        ctx.fillStyle = cell === TRAIL ? `color-mix(in srgb, ${accent} 55%, ${panelBg})` : panelBg;
-        ctx.fillRect(x * CELL, y * CELL, CELL, CELL);
+        const forcedFog = cell === CLAIMED && isBorderCell(x, y) && !revealBorder;
+        if (cell === CLAIMED && !forcedFog) { x++; continue; }
+        const key = cell === TRAIL ? "trail" : "fog"; // forced-fog border reads as plain fog, same as unclaimed
+        let runEnd = x + 1;
+        while (runEnd < GRID_COLS) {
+          const c2 = grid[idx(runEnd, y)];
+          const forcedFog2 = c2 === CLAIMED && isBorderCell(runEnd, y) && !revealBorder;
+          if (c2 === CLAIMED && !forcedFog2) break;
+          if ((c2 === TRAIL ? "trail" : "fog") !== key) break;
+          runEnd++;
+        }
+        ctx.fillStyle = key === "trail" ? `color-mix(in srgb, ${accent} 55%, ${panelBg})` : panelBg;
+        ctx.fillRect(
+          x * CELL - FOG_OVERDRAW, y * CELL - FOG_OVERDRAW,
+          (runEnd - x) * CELL + FOG_OVERDRAW * 2, CELL + FOG_OVERDRAW * 2,
+        );
+        x = runEnd;
       }
     }
 
@@ -381,10 +438,19 @@ export function XonixWidget({ onClose }: { onClose: () => void }) {
     ctx.lineWidth = 2;
     ctx.strokeRect(0, 0, GAME_W, GAME_H);
 
+    // Render positions lerp from each actor's pre-step cell to its current
+    // one using how far its step accumulator has progressed toward the
+    // next tick — see playerPrevRef's declaration comment. Frozen (alpha 1,
+    // i.e. snapped to the current/final cell) while paused or game-over so
+    // nothing keeps drifting once the sim itself has stopped advancing.
+    const frozen = pausedRef.current || gameOverRef.current;
+    const monsterAlpha = frozen ? 1 : Math.min(1, monsterAccRef.current / monsterInterval(levelRef.current));
     for (const m of monstersRef.current) {
+      const mx = m.prevX + (m.x - m.prevX) * monsterAlpha;
+      const my = m.prevY + (m.y - m.prevY) * monsterAlpha;
       ctx.fillStyle = "#ff5050";
       ctx.beginPath();
-      ctx.arc(m.x * CELL + CELL / 2, m.y * CELL + CELL / 2, CELL * 0.4, 0, Math.PI * 2);
+      ctx.arc(mx * CELL + CELL / 2, my * CELL + CELL / 2, CELL * 0.4, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -392,7 +458,10 @@ export function XonixWidget({ onClose }: { onClose: () => void }) {
       // Outlined halo (dark border + light fill) rather than a flat color —
       // a solid white square disappeared against light cover art/fallback
       // backgrounds, so it needs to read against either light or dark ground.
-      const px = playerRef.current.x * CELL, py = playerRef.current.y * CELL;
+      const playerAlpha = frozen ? 1 : Math.min(1, playerAccRef.current / playerInterval(levelRef.current));
+      const pxCell = playerPrevRef.current.x + (playerRef.current.x - playerPrevRef.current.x) * playerAlpha;
+      const pyCell = playerPrevRef.current.y + (playerRef.current.y - playerPrevRef.current.y) * playerAlpha;
+      const px = pxCell * CELL, py = pyCell * CELL;
       ctx.fillStyle = "#000000";
       ctx.fillRect(px + 2, py + 2, CELL - 4, CELL - 4);
       ctx.fillStyle = "#ffffff";

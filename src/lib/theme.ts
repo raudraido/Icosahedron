@@ -177,7 +177,7 @@ export const GREED: AppTheme = {
   headerBg:          "rgb(20,20,20)",
   mainBg:            "rgb(20,20,20)",
   cardBg:            "#181818",
-  gridCardTextBg:    "#181818",
+  gridCardTextBg:    "#2c2b2b",
   textPrimary:       "#ffffff",
   textSecondary:     "#707474",
   border:            "#171c18",

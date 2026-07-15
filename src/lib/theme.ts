@@ -91,7 +91,7 @@ export const DARK: AppTheme = {
   fontWeightTitle:     400,
   fontWeightHero:      400,
   fontWeightEmphasis:  700,
-  fontFamily:        "Inter Variable",
+  fontFamily:        "'Inter Variable', 'Noto Sans'",
   titleBarDark:      true,
 };
 
@@ -123,7 +123,7 @@ export const CREAM: AppTheme = {
   fontWeightTitle:     400,
   fontWeightHero:      400,
   fontWeightEmphasis:  700,
-  fontFamily:        "Inter Variable",
+  fontFamily:        "'Inter Variable', 'Noto Sans'",
   titleBarDark:      false,
 };
 
@@ -155,7 +155,7 @@ export const GREED: AppTheme = {
   fontWeightTitle:     400,
   fontWeightHero:      400,
   fontWeightEmphasis:  500,
-  fontFamily:        "Inter Variable",
+  fontFamily:        "'Inter Variable', 'Noto Sans'",
   titleBarDark:      true,
 };
 

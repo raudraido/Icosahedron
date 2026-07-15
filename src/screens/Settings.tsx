@@ -1413,7 +1413,22 @@ function ColorDial({ value, onChange }: { value: string; onChange: (v: string) =
 // Only fonts actually bundled with the app (@font-face in index.css) —
 // anything else (Arial, Segoe UI, etc.) would depend on what's installed on
 // the user's OS and might not render the same, or at all, elsewhere.
-const FONT_CHOICES = ["Inter Variable"];
+const FONT_CHOICES = ["Inter Variable", "Noto Sans"];
+
+// The stored fontFamily is the full CSS stack, not just the picked name — the
+// other bundled font is always chained as fallback so a glyph/weight the
+// primary can't cover still resolves to a bundled font, never the OS default.
+function fontStackFor(primary: string): string {
+  const rest = FONT_CHOICES.filter((f) => f !== primary);
+  return [primary, ...rest].map((f) => `'${f}'`).join(", ");
+}
+
+// A stored fontFamily may be a bare name (older saved themes) or a full
+// stack — either way, the picker's selected/highlighted entry is the first
+// font named in it.
+function primaryFontOf(fontFamily: string): string {
+  return fontFamily.split(",")[0].trim().replace(/^['"]|['"]$/g, "");
+}
 
 // Dropdown-only — deliberately not a text input. A native <select> renders
 // its popup via the OS/Chromium (same restyling problem <datalist> had), so
@@ -1422,6 +1437,7 @@ const FONT_CHOICES = ["Inter Variable"];
 function FontFamilyPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const primary = primaryFontOf(value);
 
   useEffect(() => {
     if (!open) return;
@@ -1439,7 +1455,7 @@ function FontFamilyPicker({ value, onChange }: { value: string; onChange: (v: st
         className="flex items-center justify-between w-full"
         style={{ background: "transparent", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: 4, padding: "4px 8px", fontSize: "var(--fs-secondary)", cursor: "pointer" }}
       >
-        <span className="truncate">{value}</span>
+        <span className="truncate">{primary}</span>
         <span style={{ opacity: 0.5, marginLeft: 8 }}>▾</span>
       </button>
       {open && (
@@ -1455,17 +1471,17 @@ function FontFamilyPicker({ value, onChange }: { value: string; onChange: (v: st
           {FONT_CHOICES.map((f) => (
             <button
               key={f}
-              onClick={() => { onChange(f); setOpen(false); }}
+              onClick={() => { onChange(fontStackFor(f)); setOpen(false); }}
               className="w-full text-left truncate shrink-0"
               style={{
                 padding: "6px 8px", borderRadius: 4, border: "none", cursor: "pointer",
-                background: f === value ? "var(--hover-bg)" : "transparent",
-                color: f === value ? "var(--accent)" : "var(--text-primary)",
-                fontSize: "var(--fs-secondary)", fontWeight: f === value ? "var(--fw-emphasis)" : "var(--fw-secondary)",
+                background: f === primary ? "var(--hover-bg)" : "transparent",
+                color: f === primary ? "var(--accent)" : "var(--text-primary)",
+                fontSize: "var(--fs-secondary)", fontWeight: f === primary ? "var(--fw-emphasis)" : "var(--fw-secondary)",
                 lineHeight: 1.4, boxSizing: "border-box",
               }}
-              onMouseEnter={(e) => { if (f !== value) e.currentTarget.style.background = "var(--hover-bg)"; }}
-              onMouseLeave={(e) => { if (f !== value) e.currentTarget.style.background = "transparent"; }}
+              onMouseEnter={(e) => { if (f !== primary) e.currentTarget.style.background = "var(--hover-bg)"; }}
+              onMouseLeave={(e) => { if (f !== primary) e.currentTarget.style.background = "transparent"; }}
             >
               {f}
             </button>

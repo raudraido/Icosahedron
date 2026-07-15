@@ -1,20 +1,27 @@
-import { useEffect, useReducer, useRef } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { useStore } from "../store";
-import { api, Album, Artist } from "../lib/api";
+import { api, Track } from "../lib/api";
 import { FlatButton } from "./TetrisWidget";
+import { Icon } from "./Icon";
+import { CoverArt } from "./CoverArt";
+import { PLAY_ICON_DARK } from "../lib/theme";
+import { CARD_MIN } from "../screens/Albums";
 
 // Fifth entry in the logo's 3-click game picker (see LeftPanel.tsx) — Xonix
 // (aka Superxonix): claim territory by cutting trails through the unclaimed
 // "fog" and reconnecting to already-claimed ground; closing a trail claims
 // every enclosed region that has no monster in it, uncovering a picture
-// underneath — a genuinely random album cover or artist photo from across
-// the whole library each level (not just the currently playing track),
-// falling back to the current track's own art if the library fetch hasn't
-// come back yet, or a generated pattern if nothing's usable at all. Drawn
-// "cover"-fit (cropped, not stretched) so square/portrait art doesn't
-// distort across the panel's tall aspect ratio. Clear WIN_PERCENT of the
-// board to advance a level; a monster touching you or your in-progress
-// trail costs a life.
+// underneath — a genuinely random track's cover art from across the whole
+// library each level (not just the currently playing track), falling back
+// to the current track's own art if the library fetch hasn't come back yet,
+// or a generated pattern if nothing's usable at all. Once a level is won,
+// the revealed picture gets the same hover play button as any other
+// cover-art grid card (Albums/ForYou/etc.) — click to play, hold to queue
+// instead — so clearing a level doubles as a way to discover and jump
+// straight to that track. Drawn "cover"-fit
+// (cropped, not stretched) so square/portrait art doesn't distort across the
+// panel's tall aspect ratio. Clear WIN_PERCENT of the board to advance a
+// level; a monster touching you or your in-progress trail costs a life.
 //
 // Unlike PongWidget/BreakoutWidget's continuous physics, movement here is
 // grid-stepped (closer to TetrisWidget's tick model) since the claim/flood-
@@ -31,6 +38,10 @@ const GAME_H = GRID_ROWS * CELL;
 const WIN_PERCENT = 0.75;
 const LIVES_START = 3;
 const LS_HIGH_SCORE = "xonix_high_score";
+// How long a newly-claimed cell takes to fade from fog to fully revealed —
+// see resolveClaims()/draw()'s revealingCellsRef for why claims don't just
+// pop instantly.
+const REVEAL_MS = 350;
 
 const UNCLAIMED = 0, CLAIMED = 1, TRAIL = 2;
 
@@ -65,8 +76,8 @@ export function XonixWidget({ onClose }: { onClose: () => void }) {
   const queue = useStore((s) => s.queue);
   const currentIndex = useStore((s) => s.currentIndex);
   const track = queue[currentIndex] ?? null;
-  const coverId = track?.cover_id ?? null;
-  const artistId = track?.artist_id ?? null;
+  const playTrack = useStore((s) => s.playTrack);
+  const addTrackToQueue = useStore((s) => s.addTrackToQueue);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -75,10 +86,26 @@ export function XonixWidget({ onClose }: { onClose: () => void }) {
   const imgRef = useRef<HTMLImageElement | null>(null);
   const imgReadyRef = useRef(false);
   const pictureGenRef = useRef(0);
-  const albumPoolRef = useRef<Album[]>([]);
-  const artistPoolRef = useRef<Artist[]>([]);
+  const trackPoolRef = useRef<Track[]>([]);
+  // Whichever track's cover art is currently the hidden picture — set by
+  // loadPicture() below, read by the hover play button once the picture's
+  // fully revealed (a level win).
+  const pictureTrackRef = useRef<Track | null>(null);
+  const [cardHovered, setCardHovered] = useState(false);
+  const [playHovered, setPlayHovered] = useState(false);
+  // Click = play, press+hold 600ms = add to queue instead — same
+  // hold-to-alternate-action pattern as AlbumCard's click-vs-hold-to-shuffle.
+  const holdTimerRef = useRef<number | null>(null);
+  const heldRef = useRef(false);
 
   const gridRef = useRef<Uint8Array>(makeGrid());
+  // Cell index → the performance.now() timestamp it was claimed at — draw()
+  // fades a claimed cell from fog to fully revealed over REVEAL_MS instead
+  // of popping it instantly, so a big claim reads as smoothly "eaten away"
+  // rather than flickering in cell-by-cell in one frame. Entries are removed
+  // once fully faded (or the level restarts); a cell not in here at all
+  // means "already fully revealed, nothing left to animate."
+  const revealingCellsRef = useRef<Map<number, number>>(new Map());
   const playerRef = useRef({ x: Math.floor(GRID_COLS / 2), y: 0 });
   // Render-only "where it was before the in-progress step" — draw() lerps
   // from here to playerRef.current using the step accumulator's progress,
@@ -106,53 +133,34 @@ export function XonixWidget({ onClose }: { onClose: () => void }) {
   const wonRef = useRef(false);
   const [, forceRender] = useReducer((n) => n + 1, 0);
 
-  // Picks a fresh picture — a new coin flip between album art and artist
-  // photo — every time it's called, so each level/stage gets a different
-  // image rather than the same one for the whole session. Called once per
-  // startLevel() rather than reactively off track changes: the picture for
-  // the level in progress shouldn't swap out from under the player just
-  // because the underlying track changed mid-play.
+  // Picks a fresh picture — a random track's cover art from across the whole
+  // library, not just whatever's currently playing — every time it's
+  // called, so each level/stage shows a different image instead of the same
+  // one for the whole session. Called once per startLevel() rather than
+  // reactively off track changes: the picture for the level in progress
+  // shouldn't swap out from under the player just because the underlying
+  // track changed mid-play.
   function loadPicture() {
     const gen = ++pictureGenRef.current;
     imgReadyRef.current = false;
     imgRef.current = null;
+    pictureTrackRef.current = null;
 
-    function loadFrom(url: string) {
-      if (!url || gen !== pictureGenRef.current) return;
-      const img = new Image();
-      img.onload = () => { if (gen === pictureGenRef.current) imgReadyRef.current = true; };
-      img.src = url;
-      imgRef.current = img;
-    }
-
-    // Picks a random album's cover from across the whole library, not just
-    // the currently-playing track — otherwise a long listening session on
-    // one track/album would show the same picture (or the same pair of
-    // pictures) every level.
-    function randomAlbumUrl(): string {
-      const pool = albumPoolRef.current;
-      const withCover = pool.filter((a) => a.cover_id);
-      if (withCover.length) {
-        const pick = withCover[Math.floor(Math.random() * withCover.length)];
-        return coverUrlFn(pick.cover_id, 600);
-      }
-      return coverId ? coverUrlFn(coverId, 600) : "";
-    }
-
-    if (Math.random() < 0.5) {
-      const artistPool = artistPoolRef.current;
-      const targetArtistId = artistPool.length
-        ? artistPool[Math.floor(Math.random() * artistPool.length)].id
-        : artistId;
-      if (targetArtistId) {
-        api.getArtist(targetArtistId).then((detail) => {
-          if (gen !== pictureGenRef.current) return;
-          loadFrom(detail.image_url || randomAlbumUrl());
-        }).catch(() => { if (gen === pictureGenRef.current) loadFrom(randomAlbumUrl()); });
-        return;
-      }
-    }
-    loadFrom(randomAlbumUrl());
+    const pool = trackPoolRef.current;
+    const withCover = pool.filter((t) => t.cover_id);
+    // Falls back to the currently-playing track only until the pool lands
+    // (it's fetched once, on mount) — not a permanent fallback, unlike the
+    // old artist-photo branch this replaced, which could silently keep
+    // reusing the current track for a whole session if its own fetch failed.
+    const picked = withCover.length
+      ? withCover[Math.floor(Math.random() * withCover.length)]
+      : track;
+    if (!picked?.cover_id) return; // nothing usable — draw()'s generated-gradient fallback covers this
+    pictureTrackRef.current = picked;
+    const img = new Image();
+    img.onload = () => { if (gen === pictureGenRef.current) imgReadyRef.current = true; };
+    img.src = coverUrlFn(picked.cover_id, 600);
+    imgRef.current = img;
   }
 
   function updateHighScore() {
@@ -184,6 +192,7 @@ export function XonixWidget({ onClose }: { onClose: () => void }) {
 
   function startLevel() {
     gridRef.current = makeGrid();
+    revealingCellsRef.current.clear();
     playerRef.current = { x: Math.floor(GRID_COLS / 2), y: 0 };
     playerPrevRef.current = { x: Math.floor(GRID_COLS / 2), y: 0 };
     dirRef.current = { dx: 0, dy: 0 };
@@ -204,7 +213,12 @@ export function XonixWidget({ onClose }: { onClose: () => void }) {
   // enclosed, monster-free pockets (including the trail we just closed).
   function resolveClaims() {
     const grid = gridRef.current;
-    for (const c of trailCellsRef.current) grid[idx(c.x, c.y)] = CLAIMED;
+    const now = performance.now();
+    for (const c of trailCellsRef.current) {
+      const ci = idx(c.x, c.y);
+      grid[ci] = CLAIMED;
+      revealingCellsRef.current.set(ci, now);
+    }
     trailCellsRef.current = [];
     drawingRef.current = false;
 
@@ -232,7 +246,7 @@ export function XonixWidget({ onClose }: { onClose: () => void }) {
         }
       }
       if (!hasMonster) {
-        for (const c of component) grid[c] = CLAIMED;
+        for (const c of component) { grid[c] = CLAIMED; revealingCellsRef.current.set(c, now); }
         newlyClaimed += component.length;
       }
     }
@@ -246,7 +260,12 @@ export function XonixWidget({ onClose }: { onClose: () => void }) {
       // clear the monsters off the board for a clean "you did it" moment,
       // then wait for the player to advance — see draw()'s lighter dim for
       // this case so the full picture is actually visible while it waits.
+      // Instant, not faded in like a normal claim — also drops any
+      // still-fading entries from the claim just above so nothing's left
+      // looking transiently foggy while the rest of the picture is already
+      // fully clear.
       grid.fill(CLAIMED);
+      revealingCellsRef.current.clear();
       monstersRef.current = [];
       claimedPctRef.current = 1;
       updateHighScore();
@@ -322,6 +341,33 @@ export function XonixWidget({ onClose }: { onClose: () => void }) {
     if (grid[idx(m.x + m.dx, m.y + m.dy)] === UNCLAIMED) {
       m.x += m.dx;
       m.y += m.dy;
+      return touchedTrail;
+    }
+    // Cornered: both the reflected heading and its diagonal are blocked (a
+    // corner bounce landing on a cell that's boxed in on the far side too).
+    // Left as-is, the next tick reflects right back to the exact same
+    // blocked heading and repeats forever — the monster just sits there
+    // flipping direction with zero net movement instead of visibly bouncing.
+    // Try the other three diagonals and step into whichever (if any) is
+    // open, adopting it as the new heading so normal bounce logic continues
+    // naturally from there next tick. Diagonals only, never a cardinal
+    // (dx=0 or dy=0) direction — every monster is spawned with both dx and
+    // dy nonzero and the reflect logic above assumes that invariant holds
+    // forever: with dy=0 say, "the cell in the dy direction" is just the
+    // monster's own cell (always UNCLAIMED), so `yCell !== UNCLAIMED` can
+    // never trigger again and dy is stuck at 0 permanently — that's exactly
+    // what an earlier version of this fallback did by trying cardinal
+    // escapes, and it visibly trapped monsters bouncing back and forth
+    // along one straight row/column forever instead of diagonally.
+    const escapes: [number, number][] = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
+    for (const [ddx, ddy] of escapes.sort(() => Math.random() - 0.5)) {
+      if (grid[idx(m.x + ddx, m.y + ddy)] === UNCLAIMED) {
+        m.dx = ddx;
+        m.dy = ddy;
+        m.x += ddx;
+        m.y += ddy;
+        break;
+      }
     }
     return touchedTrail;
   }
@@ -410,28 +456,69 @@ export function XonixWidget({ onClose }: { onClose: () => void }) {
     // The win-state code below fills the whole grid CLAIMED specifically to
     // reveal the complete picture, border included — don't fight that.
     const revealBorder = gameOverRef.current && wonRef.current;
+    const revealing = revealingCellsRef.current;
+    const now = performance.now();
+
+    // Cells mid-fade (see revealingCellsRef's declaration) are folded into
+    // this same run-merging scan as their own key, grouped by exact claim
+    // timestamp — cells claimed in the same resolveClaims() call share one
+    // timestamp, so a whole claimed region still merges into one fillRect
+    // per row like plain fog/trail/border do. Giving each cell its own
+    // separate translucent fillRect instead (an earlier version of this)
+    // double-painted every shared edge between same-alpha neighbors (each
+    // cell's antialiasing overdraw margin overlapping the next), which reads
+    // as a faint grid scored across the whole fading region — exactly what
+    // merging into wide spans elsewhere on this board avoids.
+    function keyOf(cx: number, cy: number, cell: number): string {
+      if (cell === TRAIL) return "trail";
+      if (cell === CLAIMED) {
+        if (isBorderCell(cx, cy) && !revealBorder) return "border";
+        const claimedAt = revealing.get(idx(cx, cy));
+        return claimedAt !== undefined ? `reveal:${claimedAt}` : "";
+      }
+      return "fog";
+    }
+
     for (let y = 0; y < GRID_ROWS; y++) {
       let x = 0;
       while (x < GRID_COLS) {
-        const cell = grid[idx(x, y)];
-        const forcedFog = cell === CLAIMED && isBorderCell(x, y) && !revealBorder;
-        if (cell === CLAIMED && !forcedFog) { x++; continue; }
-        const key = cell === TRAIL ? "trail" : "fog"; // forced-fog border reads as plain fog, same as unclaimed
+        const key = keyOf(x, y, grid[idx(x, y)]);
+        if (!key) { x++; continue; } // already-revealed CLAIMED ground — nothing to draw, picture shows through
         let runEnd = x + 1;
-        while (runEnd < GRID_COLS) {
-          const c2 = grid[idx(runEnd, y)];
-          const forcedFog2 = c2 === CLAIMED && isBorderCell(runEnd, y) && !revealBorder;
-          if (c2 === CLAIMED && !forcedFog2) break;
-          if ((c2 === TRAIL ? "trail" : "fog") !== key) break;
-          runEnd++;
+        while (runEnd < GRID_COLS && keyOf(runEnd, y, grid[idx(runEnd, y)]) === key) runEnd++;
+
+        if (key.startsWith("reveal:")) {
+          const claimedAt = Number(key.slice("reveal:".length));
+          const progress = (now - claimedAt) / REVEAL_MS;
+          if (progress >= 1) { x = runEnd; continue; } // fully faded — cleaned up in the sweep below
+          ctx.globalAlpha = Math.max(0, 1 - progress);
+          ctx.fillStyle = `color-mix(in srgb, black 35%, ${panelBg})`;
+        } else {
+          // Both fog and border are panelBg dimmed toward black rather than
+          // a flat panelBg fill — on a light theme (Cream/Sand), plain
+          // panelBg is indistinguishable from the chrome around the board,
+          // so the walkable areas read as nothing at all rather than
+          // fogged-over. The gap between the two has to be large to
+          // actually read at a glance — a few percent apart (what this
+          // originally shipped with) is invisible even zoomed in.
+          ctx.fillStyle = key === "trail" ? `color-mix(in srgb, ${accent} 55%, ${panelBg})`
+            : key === "border" ? `color-mix(in srgb, black 8%, ${panelBg})`
+            : `color-mix(in srgb, black 35%, ${panelBg})`;
         }
-        ctx.fillStyle = key === "trail" ? `color-mix(in srgb, ${accent} 55%, ${panelBg})` : panelBg;
         ctx.fillRect(
           x * CELL - FOG_OVERDRAW, y * CELL - FOG_OVERDRAW,
           (runEnd - x) * CELL + FOG_OVERDRAW * 2, CELL + FOG_OVERDRAW * 2,
         );
+        ctx.globalAlpha = 1;
         x = runEnd;
       }
+    }
+    // Sweep out fully-faded entries once per frame, outside the draw scan —
+    // deleting mid-iteration above would be safe too (Map allows it), but
+    // keeping the scan pure-read keeps keyOf()'s repeated lookups consistent
+    // within a single frame.
+    for (const [cellIdx, claimedAt] of revealing) {
+      if ((now - claimedAt) / REVEAL_MS >= 1) revealing.delete(cellIdx);
     }
 
     ctx.strokeStyle = border;
@@ -469,24 +556,29 @@ export function XonixWidget({ onClose }: { onClose: () => void }) {
     }
 
     if (pausedRef.current || gameOverRef.current) {
+      const won = gameOverRef.current && wonRef.current;
       // Lighter dim specifically on a win — the whole point of clearing a
       // level is seeing the fully-revealed picture, so don't bury it under
       // the same heavy scrim used for pause/game-over.
-      ctx.fillStyle = gameOverRef.current && wonRef.current ? "rgba(0,0,0,0.25)" : "rgba(0,0,0,0.63)";
+      ctx.fillStyle = won ? "rgba(0,0,0,0.25)" : "rgba(0,0,0,0.63)";
       ctx.fillRect(0, 0, GAME_W, GAME_H);
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 30px sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      const label = pausedRef.current ? "PAUSED" : wonRef.current ? "LEVEL CLEARED!" : "GAME OVER";
-      ctx.fillText(label, GAME_W / 2, GAME_H / 2);
-      if (gameOverRef.current) {
-        ctx.fillStyle = "#aaaaaa";
-        ctx.font = "16px sans-serif";
-        ctx.fillText(
-          wonRef.current ? "Press Restart or Enter for the next level" : "Press Restart or Enter",
-          GAME_W / 2, GAME_H / 2 + 32,
-        );
+      // The win label/"next level" prompt is an HTML overlay instead (see
+      // the JSX return below) — canvas text drawn in flat white had no
+      // guaranteed contrast against whatever the revealed picture happened
+      // to be (unreadable over a bright/white cover), and "press Enter to
+      // continue" wasn't actually clickable. PAUSED/GAME OVER keep the
+      // heavier dim above, so plain white text still reads fine there.
+      if (!won) {
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 30px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(pausedRef.current ? "PAUSED" : "GAME OVER", GAME_W / 2, GAME_H / 2);
+        if (gameOverRef.current) {
+          ctx.fillStyle = "#aaaaaa";
+          ctx.font = "16px sans-serif";
+          ctx.fillText("Press Restart or Enter", GAME_W / 2, GAME_H / 2 + 32);
+        }
       }
     }
     ctx.restore();
@@ -528,11 +620,19 @@ export function XonixWidget({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     highScoreRef.current = Number(localStorage.getItem(LS_HIGH_SCORE) ?? 0);
     // Fetched once and cached for the game's whole lifetime — loadPicture()
-    // samples from these pools on every level start. The very first level
-    // may start before these land, in which case it just falls back to the
-    // current track's own art for that one level.
-    api.getAllAlbums("random").then((albums) => { albumPoolRef.current = albums; }).catch(() => {});
-    api.getAllArtistsSorted("random").then((artists) => { artistPoolRef.current = artists; }).catch(() => {});
+    // samples from this pool on every level start. startLevel() below always
+    // runs before this fetch can possibly land, so the very first level
+    // would otherwise be stuck showing the current-track fallback for its
+    // entire duration (not just briefly) — re-running loadPicture() once the
+    // pool actually arrives corrects that, swapping in a real random pick
+    // for whatever level is still in progress at that point (almost always
+    // still level 1, since this typically resolves in well under a level's
+    // length).
+    api.getRandomSongs(300).then((tracks) => {
+      trackPoolRef.current = tracks;
+      loadPicture();
+      forceRender();
+    }).catch(() => {});
     startLevel();
     containerRef.current?.focus();
     lastTimeRef.current = null;
@@ -575,7 +675,122 @@ export function XonixWidget({ onClose }: { onClose: () => void }) {
     >
       {/* min-h-0 — see TetrisWidget.tsx's identical note: without it the
           canvas (a replaced element) balloons and pushes the HUD out of view. */}
-      <canvas ref={canvasRef} className="flex-1 min-h-0" style={{ width: "100%", height: "100%" }} />
+      <div className="relative flex-1 min-h-0">
+        <canvas ref={canvasRef} style={{ width: "100%", height: "100%" }} />
+        {/* The revealed picture's own mini grid-card — same look as any
+            other cover-art grid card (Albums/ForYou/Playlists/Starred):
+            rounded thumbnail + title/artist caption strip, with the same
+            hover-play/hold-to-queue button over the thumbnail. Sized off
+            the app's own CARD_MIN (Albums.tsx) so it lands in the same
+            ballpark as a regular grid item rather than an arbitrary size,
+            clamped to a % of the board so it still fits a narrower panel.
+            Only once a level's fully won and the picture is actually the
+            real, uncropped art (not mid-reveal, and not the
+            generated-gradient fallback when nothing was usable) — clearing
+            a level this way doubles as a way to discover and jump straight
+            to whatever track it was. */}
+        {gameOverRef.current && wonRef.current && pictureTrackRef.current && (
+          <div
+            className="flex flex-col"
+            onMouseEnter={() => setCardHovered(true)}
+            onMouseLeave={() => setCardHovered(false)}
+            style={{
+              position: "absolute", top: "50%", left: "50%",
+              transform: "translate(-50%, -50%)",
+              width: `min(${CARD_MIN}px, 60%)`,
+              borderRadius: 8, overflow: "hidden",
+              // Two layers: a wide, even ambient halo (0 offset, big blur)
+              // so the card reads as clearly floating above the busy cover
+              // art behind it from every edge, plus a tighter directional
+              // shadow underneath for actual depth — the single shadow this
+              // shipped with was too subtle to separate the card from
+              // equally-dark/busy areas of the revealed picture.
+              boxShadow: "0 0 32px 6px rgba(0,0,0,0.55), 0 10px 28px rgba(0,0,0,0.5)",
+            }}
+          >
+            <div style={{ position: "relative" }}>
+              {/* Same hover treatment as AlbumCard's cover — scaled slightly
+                  and dimmed a touch, clipped by the card's own
+                  overflow:hidden above so the zoom never spills past the
+                  rounded corners. */}
+              <CoverArt
+                coverId={pictureTrackRef.current.cover_id}
+                size={CARD_MIN}
+                className="w-full aspect-square"
+                style={{
+                  transform: `scale(${cardHovered ? 1.03 : 1})`,
+                  filter: `brightness(${cardHovered ? 0.9 : 1})`,
+                  transition: "transform 150ms, filter 150ms",
+                }}
+              />
+              <div
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  heldRef.current = false;
+                  holdTimerRef.current = window.setTimeout(() => {
+                    heldRef.current = true;
+                    holdTimerRef.current = null;
+                    addTrackToQueue(pictureTrackRef.current!);
+                  }, 600);
+                }}
+                onMouseUp={(e) => {
+                  e.stopPropagation();
+                  const held = holdTimerRef.current === null && heldRef.current;
+                  if (holdTimerRef.current !== null) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
+                  if (!held) playTrack(pictureTrackRef.current!);
+                }}
+                onMouseEnter={() => setPlayHovered(true)}
+                onMouseLeave={() => {
+                  setPlayHovered(false);
+                  if (holdTimerRef.current !== null) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
+                }}
+                title={`Play "${pictureTrackRef.current.title}" (hold to add to queue)`}
+                style={{
+                  position: "absolute", top: "50%", left: "50%",
+                  transform: `translate(-50%, -50%) scale(${playHovered ? 1 : 0.8})`,
+                  width: "min(60px, 33%)", aspectRatio: "1", borderRadius: "50%",
+                  background: "var(--accent)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  opacity: playHovered ? 1 : cardHovered ? 0.8 : 0,
+                  transition: "transform 150ms, opacity 150ms",
+                  cursor: "pointer",
+                }}
+              >
+                <Icon src="img/play.png" size={20} style={{ background: PLAY_ICON_DARK, marginLeft: 2 }} />
+              </div>
+            </div>
+            <div className="flex flex-col grid-card-meta">
+              <p className="truncate" style={{ color: "var(--text-primary)", fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)" }}>
+                {pictureTrackRef.current.title}
+              </p>
+              <p className="truncate" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>
+                {pictureTrackRef.current.artist}
+              </p>
+            </div>
+          </div>
+        )}
+        {/* Advance button as a real HTML overlay, not canvas text — "press
+            Enter to continue" wasn't actually clickable, and the button on
+            its own already says everything a separate "Level Cleared!"
+            label would have (the revealed picture + mini card is the actual
+            celebration moment). Shown regardless of whether the mini card
+            above is (a level can be won even when no usable picture was
+            found for it). */}
+        {gameOverRef.current && wonRef.current && (
+          <button
+            onClick={restart}
+            style={{
+              position: "absolute", bottom: "6%", left: "50%", transform: "translateX(-50%)",
+              padding: "8px 20px", borderRadius: 999, border: "none",
+              background: "var(--accent)", color: PLAY_ICON_DARK,
+              fontWeight: 700, fontSize: 14, cursor: "pointer",
+              boxShadow: "0 4px 14px rgba(0,0,0,0.4)",
+            }}
+          >
+            Next Level →
+          </button>
+        )}
+      </div>
       <div className="flex flex-col shrink-0" style={{ padding: "6px 8px", gap: 3, background: "var(--left-panel-bg)" }}>
         <p className="text-center" style={{ color: "var(--text-secondary)", fontSize: 12 }}>
           Score: {score}   Lives: {lives}   Level: {level}   Claimed: {claimedPct}%   Best: {best}

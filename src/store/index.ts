@@ -114,6 +114,14 @@ interface AppStore {
   leftPanelPlaylistsVisible: boolean;
   setLeftPanelPlaylistsVisible: (v: boolean) => void;
 
+  /** Settings > Appearance > Home Tab's "Show Daily Mix" toggle — same
+   *  purely-visual, no-account, global (not per-server) flag as the two
+   *  above. Home.tsx filters the "foryou" row out entirely (rather than
+   *  rendering it hidden) when this is off, so ForYouRow never mounts and
+   *  its mix-building fetches never fire. */
+  homeDailyMixVisible: boolean;
+  setHomeDailyMixVisible: (v: boolean) => void;
+
   // "Scrobble to Last.fm" (Settings > Integrations) — independent of both
   // the read-only fields above and the Navidrome-relayed `scrobble` module
   // function further down; also only togglable once connected.
@@ -505,6 +513,17 @@ function loadLeftPanelPlaylistsVisible(): boolean {
   }
 }
 
+const LS_HOME_DAILY_MIX_VISIBLE_KEY = "icosahedron_home_daily_mix_visible";
+
+function loadHomeDailyMixVisible(): boolean {
+  try {
+    const raw = localStorage.getItem(LS_HOME_DAILY_MIX_VISIBLE_KEY);
+    return raw === null ? true : raw === "true";
+  } catch {
+    return true;
+  }
+}
+
 // A <input type="range"> fires onChange on essentially every pixel of
 // movement during a drag — setCastVolume below used to send a fresh SOAP
 // SetVolume call (over its own brand-new TCP connection, DLNA's
@@ -612,6 +631,12 @@ export const useStore = create<AppStore>((set, get) => ({
   setLeftPanelPlaylistsVisible: (v) => {
     try { localStorage.setItem(LS_LEFT_PANEL_PLAYLISTS_VISIBLE_KEY, String(v)); } catch { /* best-effort */ }
     set({ leftPanelPlaylistsVisible: v });
+  },
+
+  homeDailyMixVisible: loadHomeDailyMixVisible(),
+  setHomeDailyMixVisible: (v) => {
+    try { localStorage.setItem(LS_HOME_DAILY_MIX_VISIBLE_KEY, String(v)); } catch { /* best-effort */ }
+    set({ homeDailyMixVisible: v });
   },
 
   lastfmScrobbleEnabled: false,

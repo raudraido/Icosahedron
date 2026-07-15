@@ -310,7 +310,14 @@ export function Home() {
     };
   }
 
-  const rows = rowOrder.map((id) => ROWS.find((r) => r.id === id)).filter((r): r is RowConfig => !!r);
+  const homeDailyMixVisible = useStore((s) => s.homeDailyMixVisible);
+  // Filtered out entirely (not just hidden) when disabled, so ForYouRow never
+  // mounts and its mix-building fetches (Settings > Appearance > Home Tab's
+  // "Show Daily Mix" toggle, store/index.ts) never fire.
+  const rows = rowOrder
+    .map((id) => ROWS.find((r) => r.id === id))
+    .filter((r): r is RowConfig => !!r)
+    .filter((r) => r.id !== "foryou" || homeDailyMixVisible);
 
   if (openMix) {
     return <MixDetail mix={openMix} />;

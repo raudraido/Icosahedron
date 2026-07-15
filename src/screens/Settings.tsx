@@ -517,6 +517,8 @@ function AppearanceTab() {
   const historyAvailable = lastfmConnected && lastFmEnabled;
   const leftPanelPlaylistsVisible = useStore((s) => s.leftPanelPlaylistsVisible);
   const setLeftPanelPlaylistsVisible = useStore((s) => s.setLeftPanelPlaylistsVisible);
+  const homeDailyMixVisible = useStore((s) => s.homeDailyMixVisible);
+  const setHomeDailyMixVisible = useStore((s) => s.setHomeDailyMixVisible);
 
   return (
     <div className="flex flex-col" style={{ gap: 24, maxWidth: 480 }}>
@@ -541,6 +543,14 @@ function AppearanceTab() {
           description="Adds a collapsible/resizable playlists list, same as Recently Played above."
           checked={leftPanelPlaylistsVisible}
           onChange={setLeftPanelPlaylistsVisible}
+        />
+      </Section>
+      <Section title="Home Tab">
+        <ToggleRow
+          label="Show Daily Mix"
+          description="Removes the Daily Mix row from Home entirely — it also stops building today's mixes in the background while off."
+          checked={homeDailyMixVisible}
+          onChange={setHomeDailyMixVisible}
         />
       </Section>
     </div>

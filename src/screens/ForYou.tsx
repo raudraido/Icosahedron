@@ -197,8 +197,8 @@ function MixCard({ mix, width, onPlay, onOpen }: { mix: Mix; width: number; onPl
       className="text-left group grid-card"
       style={{ width, flexShrink: 0 }}
     >
-      <div style={{ position: "relative" }}>
-        <MixCover coverIds={mix.coverIds} size={200} className="w-full aspect-square rounded-lg group-hover:brightness-75 transition-all" />
+      <div style={{ position: "relative", overflow: "hidden", borderRadius: "8px 8px 0 0" }}>
+        <MixCover coverIds={mix.coverIds} size={200} className="w-full aspect-square rounded-t-lg group-hover:brightness-75 group-hover:scale-[1.03] transition-all" />
         <div
           onClick={(e) => { e.stopPropagation(); onPlay(mix); }}
           onMouseEnter={() => setPlayHovered(true)}
@@ -218,7 +218,7 @@ function MixCard({ mix, width, onPlay, onOpen }: { mix: Mix; width: number; onPl
           <Icon src="img/play.png" size={20} style={{ background: PLAY_ICON_DARK, marginLeft: 2 }} />
         </div>
       </div>
-      <div className="flex flex-col" style={{ marginTop: 8, gap: 2 }}>
+      <div className="flex flex-col grid-card-meta group-hover:brightness-75 transition-all">
         <p className="truncate" style={{ color: hovered ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)" }}>{mix.title}</p>
         <p className="truncate" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>{mix.tagline}</p>
         <p className="truncate" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>{mix.tracks.length} tracks</p>

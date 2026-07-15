@@ -26,6 +26,12 @@ export interface AppTheme {
   headerBg: string;
   mainBg: string;
   cardBg: string;
+  /** Background box behind the title/artist/meta text under a grid card's
+   *  cover art (Albums/Playlists/Artists/ForYou/Starred's `.grid-card`) —
+   *  its own field rather than reusing cardBg so it can be toggled
+   *  independently (e.g. transparent) without also affecting other card
+   *  surfaces like queue/context-menu popovers. */
+  gridCardTextBg: string;
   textPrimary: string;
   textSecondary: string;
   border: string;
@@ -72,6 +78,7 @@ export const DARK: AppTheme = {
   headerBg:          "rgb(28,30,39)",
   mainBg:            "rgb(28,30,39)",
   cardBg:            "#232631",
+  gridCardTextBg:    "#232631",
   textPrimary:       "#72a1cd",
   textSecondary:     "#a3bdba",
   border:            "#232631",
@@ -104,12 +111,46 @@ export const CREAM: AppTheme = {
   headerBg:          "rgb(232,232,232)",
   mainBg:            "rgb(232,232,232)",
   cardBg:            "#deddda",
+  gridCardTextBg:    "#deddda",
   textPrimary:       "#63452c",
   textSecondary:     "#525563",
   border:            "#dcd5c5",
   hoverBg:           "#d5d1c6",
   skeleton:          "#deddda",
   error:             "#c0392b",
+  fontSizeSmall:     11,
+  fontSizeSecondary: 12,
+  fontSizePrimary:   14,
+  fontSizeHeading:   17,
+  fontSizeTitle:     22,
+  fontSizeHero:      26,
+  fontWeightSmall:     400,
+  fontWeightSecondary: 400,
+  fontWeightPrimary:   400,
+  fontWeightHeading:   400,
+  fontWeightTitle:     400,
+  fontWeightHero:      400,
+  fontWeightEmphasis:  700,
+  fontFamily:        "'Inter Variable', 'Noto Sans'",
+  titleBarDark:      false,
+};
+
+export const SAND: AppTheme = {
+  name: "Sand",
+  accent:            "#c17f3e",
+  leftPanelBg:       "rgb(230,220,180)",
+  rightPanelBg:      "rgb(230,220,180)",
+  footerBg:          "rgb(230,220,180)",
+  headerBg:          "rgb(238,230,196)",
+  mainBg:            "rgb(238,230,196)",
+  cardBg:            "#e6dcb4",
+  gridCardTextBg:    "#e6dcb4",
+  textPrimary:       "#4a3c28",
+  textSecondary:     "#7a6a4e",
+  border:            "#d8c9a0",
+  hoverBg:           "#ddd0a0",
+  skeleton:          "#e6dcb4",
+  error:             "#b23a2e",
   fontSizeSmall:     11,
   fontSizeSecondary: 12,
   fontSizePrimary:   14,
@@ -136,6 +177,7 @@ export const GREED: AppTheme = {
   headerBg:          "rgb(20,20,20)",
   mainBg:            "rgb(20,20,20)",
   cardBg:            "#181818",
+  gridCardTextBg:    "#181818",
   textPrimary:       "#ffffff",
   textSecondary:     "#707474",
   border:            "#171c18",
@@ -163,7 +205,7 @@ export const GREED: AppTheme = {
 // choice — used by both App.tsx's boot-time applyTheme call and
 // Settings.tsx's Themes tab, so a chosen theme survives a relaunch instead
 // of always resetting to CREAM.
-export const THEMES: AppTheme[] = [CREAM, DARK, GREED];
+export const THEMES: AppTheme[] = [CREAM, DARK, GREED, SAND];
 const LS_THEME_KEY = "icosahedron_theme";
 const LS_CUSTOM_THEMES_KEY = "icosahedron_custom_themes";
 
@@ -188,6 +230,9 @@ function withPanelBgDefaults(raw: AppTheme & { panelBg?: string }): AppTheme {
     rightPanelBg: t.rightPanelBg ?? panelBg,
     footerBg:     t.footerBg     ?? panelBg,
     headerBg:     t.headerBg     ?? t.mainBg,
+    // Same backfill for a preset saved before gridCardTextBg existed —
+    // otherwise ColorDial/applyTheme would receive undefined for it.
+    gridCardTextBg: t.gridCardTextBg ?? t.cardBg,
   };
 }
 
@@ -250,6 +295,7 @@ export function applyTheme(t: AppTheme) {
   r.style.setProperty("--header-bg",      t.headerBg);
   r.style.setProperty("--main-bg",        t.mainBg);
   r.style.setProperty("--card-bg",        t.cardBg);
+  r.style.setProperty("--grid-card-text-bg", t.gridCardTextBg);
   r.style.setProperty("--text-primary",   t.textPrimary);
   r.style.setProperty("--text-secondary", t.textSecondary);
   r.style.setProperty("--border",         t.border);

@@ -52,6 +52,7 @@
   --header-bg:      rgb(28, 30, 39);
   --main-bg:        rgb(28, 30, 39);
   --card-bg:        #232631;
+  --grid-card-text-bg: #232631;
   --text-primary:   #72a1cd;
   --text-secondary: #d8f0ee;
   --border:         #232631;
@@ -105,6 +106,10 @@ html, body, #root {
  * which is why this was invisible in Albums.tsx's own grid; Home.tsx's
  * horizontal rows don't get that for free, so this needs to hold for both). */
 .grid-card { display: block; width: 100%; }
+
+/* Text block under a grid card's cover art (title/artist/meta) — its own
+ * boxed background, themeable independently via --grid-card-text-bg. */
+.grid-card-meta { gap: 2px; padding: 6px 8px; border-radius: 0 0 6px 6px; background: var(--grid-card-text-bg); }
 
 /* TrackTable's reorderable "#" column — track number/playing-bars by
  * default, drag grip only on row hover (matches QueuePanel's grip-on-hover

@@ -228,23 +228,23 @@ function TopArtistCard({ entry, selected, onClick }: { entry: TopArtistEntry; se
       onMouseLeave={() => setHov(false)}
       className="text-left group grid-card"
     >
-      <div style={{ position: "relative" }}>
+      <div style={{ position: "relative", overflow: "hidden", borderRadius: "8px 8px 0 0" }}>
         <CoverArt
           coverId={entry.coverId}
           size={200}
-          className="w-full aspect-square rounded-lg transition-all"
+          className="w-full aspect-square rounded-t-lg group-hover:scale-[1.03] transition-all"
         />
         <div
           aria-hidden
           style={{
-            position: "absolute", inset: 0, borderRadius: 8,
+            position: "absolute", inset: 0, borderRadius: "8px 8px 0 0",
             border: `2px solid ${selected ? "var(--accent)" : "transparent"}`,
             background: selected ? "color-mix(in srgb, var(--accent) 15%, transparent)" : hov ? "color-mix(in srgb, black 25%, transparent)" : "transparent",
             transition: "background 150ms, border-color 150ms",
           }}
         />
       </div>
-      <div className="flex flex-col" style={{ marginTop: 8, gap: 2 }}>
+      <div className="flex flex-col grid-card-meta group-hover:brightness-75 transition-all">
         <p className="truncate" style={{ color: selected || hov ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)" }}>{entry.name}</p>
         <p className="truncate" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>
           {entry.count} song{entry.count === 1 ? "" : "s"}

@@ -100,8 +100,8 @@ export const ArtistCard = React.memo(function ArtistCard({ artist, onOpen }: { a
       onMouseLeave={() => setHovered(false)}
       className="text-left group grid-card"
     >
-      <div style={{ position: "relative" }}>
-        <CoverArt coverId={artist.cover_id} size={200} className="w-full aspect-square rounded-lg group-hover:brightness-75 transition-all" />
+      <div style={{ position: "relative", overflow: "hidden", borderRadius: "8px 8px 0 0" }}>
+        <CoverArt coverId={artist.cover_id} size={200} className="w-full aspect-square rounded-t-lg group-hover:brightness-75 group-hover:scale-[1.03] transition-all" />
         <div
           style={{
             position: "absolute", top: "50%", left: "50%",
@@ -151,7 +151,7 @@ export const ArtistCard = React.memo(function ArtistCard({ artist, onOpen }: { a
           </div>
         </div>
       </div>
-      <div className="flex flex-col" style={{ marginTop: 8, gap: 2 }}>
+      <div className="flex flex-col grid-card-meta group-hover:brightness-75 transition-all">
         <p className="truncate" style={{ color: hovered ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)" }}>{artist.name}</p>
         <p className="truncate" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>
           {artist.album_count} album{artist.album_count === 1 ? "" : "s"}
@@ -166,7 +166,7 @@ export const ArtistCard = React.memo(function ArtistCard({ artist, onOpen }: { a
 
 const CARD_MIN = 200;
 const GAP = 12;
-const META_HEIGHT = 62; // 3 text rows below cover (name, album count, track count)
+const META_HEIGHT = 74; // 3 text rows below cover (name, album count, track count) + grid-card-meta's own padding (12px)
 
 function getColsFromWidth(width: number) {
   return Math.max(1, Math.floor((width + GAP) / (CARD_MIN + GAP)));

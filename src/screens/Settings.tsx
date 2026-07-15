@@ -1576,6 +1576,7 @@ function ThemeBuilderTab() {
         </div>
         <BuilderRow label="Main Background"><ColorDial value={draft.mainBg} onChange={(v) => set("mainBg", v)} /></BuilderRow>
         <BuilderRow label="Card Background"><ColorDial value={draft.cardBg} onChange={(v) => set("cardBg", v)} /></BuilderRow>
+        <BuilderRow label="Grid Card Text Background"><ColorDial value={draft.gridCardTextBg} onChange={(v) => set("gridCardTextBg", v)} /></BuilderRow>
         <BuilderRow label="Skeleton / Placeholders"><ColorDial value={draft.skeleton} onChange={(v) => set("skeleton", v)} /></BuilderRow>
       </Section>
 
@@ -1649,7 +1650,7 @@ function ThemeBuilderTab() {
         <button
           onClick={() => handleSave(draft.name)}
           disabled={isBuiltInThemeName(draft.name)}
-          title={isBuiltInThemeName(draft.name) ? "Cream/Dark can't be overwritten — use Save as Preset" : `Overwrite "${draft.name}"`}
+          title={isBuiltInThemeName(draft.name) ? `"${draft.name}" is a built-in theme and can't be overwritten — use Save as Preset` : `Overwrite "${draft.name}"`}
           style={{
             background: "transparent", border: "1px solid var(--border)", borderRadius: 4, padding: "7px 16px",
             fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)",

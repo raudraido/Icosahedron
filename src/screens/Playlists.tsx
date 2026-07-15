@@ -97,8 +97,8 @@ function PlaylistCard({ playlist, onOpen, onContextMenu }: { playlist: Playlist;
       onMouseLeave={() => setHovered(false)}
       className="text-left group grid-card"
     >
-      <div style={{ position: "relative" }}>
-        <CoverArt coverId={playlist.cover_id} size={200} className="w-full aspect-square rounded-lg group-hover:brightness-75 transition-all" />
+      <div style={{ position: "relative", overflow: "hidden", borderRadius: "8px 8px 0 0" }}>
+        <CoverArt coverId={playlist.cover_id} size={200} className="w-full aspect-square rounded-t-lg group-hover:brightness-75 group-hover:scale-[1.03] transition-all" />
         <div
           style={{
             position: "absolute", top: "50%", left: "50%",
@@ -148,7 +148,7 @@ function PlaylistCard({ playlist, onOpen, onContextMenu }: { playlist: Playlist;
           </div>
         </div>
       </div>
-      <div className="flex flex-col" style={{ marginTop: 8, gap: 2 }}>
+      <div className="flex flex-col grid-card-meta group-hover:brightness-75 transition-all">
         <p className="truncate" style={{ color: hovered ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)" }}>{playlist.name}</p>
         <p className="truncate" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>
           {playlist.song_count} track{playlist.song_count === 1 ? "" : "s"}

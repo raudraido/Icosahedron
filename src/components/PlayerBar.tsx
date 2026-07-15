@@ -357,8 +357,14 @@ export function PlayerBar() {
               {(effectiveBpm != null || bpmLoading) && (
                 <span
                   onClick={(e) => { if (track && effectiveBpm != null) setBpmMenu({ x: e.clientX, y: e.clientY }); }}
-                  onMouseEnter={(e) => (e.currentTarget.style.textDecorationLine = "underline")}
-                  onMouseLeave={(e) => (e.currentTarget.style.textDecorationLine = "none")}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.textDecorationLine = "underline";
+                    if (effectiveBpm != null) e.currentTarget.style.color = "var(--accent)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.textDecorationLine = "none";
+                    e.currentTarget.style.color = "";
+                  }}
                   style={{ cursor: effectiveBpm != null ? "pointer" : "default", textUnderlineOffset: 2, textDecorationThickness: 1, textDecorationColor: "var(--accent)" }}
                 >
                   {effectiveBpm != null ? `${effectiveBpm.toFixed(1)} BPM` : "···BPM"}

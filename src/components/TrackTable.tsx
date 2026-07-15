@@ -1543,28 +1543,39 @@ export function TrackTable({
                   // pixel boundaries.
                   display: "flex", alignItems: "center", gap: 0,
                   padding: "0 24px", cursor: "pointer",
-                  background: isPlaying
-                    ? "color-mix(in srgb, var(--accent) 15%, transparent)"
-                    : isSelected
-                      ? "var(--hover-bg)"
-                      : "transparent",
                 }}
                 onMouseEnter={(e) => {
-                  if (!isPlaying && !isSelected) e.currentTarget.style.background = "var(--hover-bg)";
                   // Inline styles beat CSS regardless of specificity, so the
                   // unconditional cursor:"pointer" above would otherwise
                   // permanently shadow a .reorder-row:hover CSS rule — has
                   // to be set imperatively here instead, same reason the
-                  // hover background above is too (this row is virtualized;
-                  // React state here would re-render the whole list on
-                  // every hover change).
+                  // hover halo below is too (this row is virtualized; React
+                  // state here would re-render the whole list on every
+                  // hover change).
+                  if (!isPlaying && !isSelected) (e.currentTarget.firstElementChild as HTMLElement).style.background = "var(--hover-bg)";
                   if (reorderActive) e.currentTarget.style.cursor = "grab";
                 }}
                 onMouseLeave={(e) => {
-                  if (!isPlaying && !isSelected) e.currentTarget.style.background = "transparent";
+                  if (!isPlaying && !isSelected) (e.currentTarget.firstElementChild as HTMLElement).style.background = "transparent";
                   if (reorderActive) e.currentTarget.style.cursor = "pointer";
                 }}
               >
+                {/* Same inset/rounded-rect halo as QueuePanel's row hover —
+                    gives spacing on both sides instead of a full-bleed
+                    background. zIndex: -1 so it paints below the row's
+                    static content despite being later in source order (see
+                    QueuePanel.tsx for why that matters for absolute children). */}
+                <div
+                  className="absolute rounded-lg"
+                  style={{
+                    inset: "1px 8px", zIndex: -1, pointerEvents: "none",
+                    background: isPlaying
+                      ? "color-mix(in srgb, var(--accent) 15%, transparent)"
+                      : isSelected
+                        ? "var(--hover-bg)"
+                        : "transparent",
+                  }}
+                />
                 <div
                   style={{ flex: `0 0 ${NUM_COL_WIDTH}px`, marginLeft: -NUM_COL_SHIFT, marginRight: NUM_COL_SHIFT, position: "relative", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}
                 >

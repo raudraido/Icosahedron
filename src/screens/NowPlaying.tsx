@@ -567,7 +567,7 @@ function TourEventRow({ event }: { event: TourEvent }) {
       className="flex items-center"
       style={{ gap: 10, padding: "4px 6px", borderRadius: 6, cursor: event.url ? "pointer" : "default", background: hov ? "var(--hover-bg)" : "transparent" }}
     >
-      <div className="flex flex-col items-center justify-center shrink-0" style={{ width: 38, height: 42, borderRadius: 6, background: "var(--panel-bg)" }}>
+      <div className="flex flex-col items-center justify-center shrink-0" style={{ width: 38, height: 42, borderRadius: 6, background: "var(--left-panel-bg)" }}>
         <span style={{ color: "var(--accent)", fontSize: 9, fontWeight: "var(--fw-emphasis)" }}>{month}</span>
         <span style={{ color: "var(--text-primary)", fontSize: 14, fontWeight: "var(--fw-emphasis)" }}>{day}</span>
       </div>

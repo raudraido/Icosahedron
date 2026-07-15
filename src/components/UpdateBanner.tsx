@@ -67,7 +67,7 @@ export function UpdateBanner() {
       style={{
         position: "fixed", left: "50%", bottom: 96, transform: "translateX(-50%)", zIndex: 1500,
         gap: 8, padding: "10px 16px", borderRadius: 8, minWidth: 280,
-        background: "var(--panel-bg)", border: "1px solid var(--border)",
+        background: "var(--left-panel-bg)", border: "1px solid var(--border)",
         boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
       }}
     >

@@ -731,7 +731,7 @@ export function LeftPanel() {
   return (
     <div
       className="flex flex-col shrink-0"
-      style={{ position: "relative", width: panelWidth, background: "var(--panel-bg)", borderRight: "1px solid var(--border)" }}
+      style={{ position: "relative", width: panelWidth, background: "var(--left-panel-bg)", borderRight: "1px solid var(--border)" }}
     >
       <ResizeHandle placement="right" dragging={panelResizing} onMouseDown={onPanelResizeStart} />
 
@@ -836,7 +836,7 @@ export function LeftPanel() {
               style={{
                 position: "absolute", inset: 0,
                 backdropFilter: "blur(2px)", WebkitBackdropFilter: "blur(2px)",
-                background: "color-mix(in srgb, var(--panel-bg) 55%, transparent)",
+                background: "color-mix(in srgb, var(--left-panel-bg) 55%, transparent)",
                 zIndex: 20, cursor: "pointer",
               }}
             />

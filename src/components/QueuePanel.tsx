@@ -106,7 +106,7 @@ export function GhostRow({ track, y }: { track: Track; y: number }) {
       style={{
         position: "absolute", left: 6, right: 6, top: y - ROW_HEIGHT / 2, height: ROW_HEIGHT,
         display: "flex", alignItems: "center", gap: 8, padding: "0 12px",
-        background: "color-mix(in srgb, var(--panel-bg) 95%, white)",
+        background: "color-mix(in srgb, var(--left-panel-bg) 95%, white)",
         border: "1px solid var(--accent)", borderRadius: 6, opacity: 0.8,
         pointerEvents: "none", zIndex: 20,
       }}
@@ -481,7 +481,7 @@ export function QueuePanel() {
   return (
     <div
       className="flex flex-col shrink-0"
-      style={{ position: "relative", width: panelWidth, background: "var(--panel-bg)", borderLeft: "1px solid var(--border)" }}
+      style={{ position: "relative", width: panelWidth, background: "var(--right-panel-bg)", borderLeft: "1px solid var(--border)" }}
     >
       <ResizeHandle placement="left" dragging={panelResizing} onMouseDown={onPanelResizeStart} />
       {/* Header — icon toolbar instead of the "Queue" title/position/duration

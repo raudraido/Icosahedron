@@ -15,6 +15,7 @@ import {
   listServers, saveServer, deleteServer, getActiveServerId, setActiveServerId, loadServerCredentials, updateServerLibrary,
 } from "./credentials";
 import { getCachedBpm, setCachedBpm, getAllCachedBpm } from "./bpmCache";
+import { captureScreens } from "./screenCapture";
 import { checkForUpdate, downloadAndInstallUpdate } from "./updater";
 import * as lastfm from "./lastfm";
 import {
@@ -465,6 +466,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle("bandsintown_events", (_e, { artistName }) => getBandsintownEvents(artistName));
 
   ipcMain.handle("app_version", () => app.getVersion());
+  ipcMain.handle("capture_screens", () => captureScreens());
   ipcMain.handle("check_for_update", () => checkForUpdate());
   ipcMain.handle("download_and_install_update", (_e, { downloadUrl }: { downloadUrl: string }) =>
     downloadAndInstallUpdate(

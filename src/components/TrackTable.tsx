@@ -1467,7 +1467,7 @@ export function TrackTable({
               position: "absolute", top: 0, height: 36,
               left: ghostX - displayColWidth(dragColId) / 2, width: displayColWidth(dragColId),
               display: "flex", alignItems: "center", justifyContent: "center",
-              background: "color-mix(in srgb, var(--panel-bg) 95%, white)",
+              background: "color-mix(in srgb, var(--left-panel-bg) 95%, white)",
               border: "1px solid var(--accent)", borderRadius: 6, opacity: 0.8,
               pointerEvents: "none", zIndex: 20,
             }}

@@ -3,7 +3,27 @@ import { api } from "./api";
 export interface AppTheme {
   name: string;
   accent: string;
-  panelBg: string;
+  /** Left nav panel's own background (LeftPanel.tsx), also the catch-all
+   *  "chrome surface" color for everything that isn't specifically the
+   *  right/footer/header panel (tooltips, dialogs, the game-widget overlays,
+   *  the login screen, etc.) — this replaced the single `panelBg` field
+   *  those all used to share; shipped themes below give it that field's old
+   *  value so nothing's appearance changed in the split. */
+  leftPanelBg: string;
+  /** Right queue panel's own background (QueuePanel.tsx) — same split as
+   *  leftPanelBg above, defaulted to the old `panelBg` value it already
+   *  rendered. */
+  rightPanelBg: string;
+  /** Bottom player bar's own background (PlayerBar.tsx) — same split as
+   *  leftPanelBg above, defaulted to the old `panelBg` value it already
+   *  rendered. */
+  footerBg: string;
+  /** Top tab-bar header's own background (App.tsx) — previously had no
+   *  explicit background of its own and just showed `mainBg` through from
+   *  its container, so shipped themes below default it to their `mainBg`
+   *  value (not the old `panelBg`) to keep today's actual rendered color
+   *  unchanged. */
+  headerBg: string;
   mainBg: string;
   cardBg: string;
   textPrimary: string;
@@ -46,7 +66,10 @@ export interface AppTheme {
 export const DARK: AppTheme = {
   name: "Dark",
   accent:            "#44cfcf",
-  panelBg:           "rgb(21,23,29)",
+  leftPanelBg:       "rgb(21,23,29)",
+  rightPanelBg:      "rgb(21,23,29)",
+  footerBg:          "rgb(21,23,29)",
+  headerBg:          "rgb(28,30,39)",
   mainBg:            "rgb(28,30,39)",
   cardBg:            "#232631",
   textPrimary:       "#72a1cd",
@@ -75,7 +98,10 @@ export const DARK: AppTheme = {
 export const CREAM: AppTheme = {
   name: "Cream",
   accent:            "#9b1720",
-  panelBg:           "rgb(222,221,218)",
+  leftPanelBg:       "rgb(222,221,218)",
+  rightPanelBg:      "rgb(222,221,218)",
+  footerBg:          "rgb(222,221,218)",
+  headerBg:          "rgb(232,232,232)",
   mainBg:            "rgb(232,232,232)",
   cardBg:            "#deddda",
   textPrimary:       "#63452c",
@@ -104,7 +130,10 @@ export const CREAM: AppTheme = {
 export const GREED: AppTheme = {
   name: "Greed",
   accent:            "#1ed760",
-  panelBg:           "rgb(10,10,10)",
+  leftPanelBg:       "rgb(10,10,10)",
+  rightPanelBg:      "rgb(10,10,10)",
+  footerBg:          "rgb(10,10,10)",
+  headerBg:          "rgb(20,20,20)",
   mainBg:            "rgb(20,20,20)",
   cardBg:            "#181818",
   textPrimary:       "#ffffff",
@@ -142,10 +171,30 @@ const LS_CUSTOM_THEMES_KEY = "icosahedron_custom_themes";
 // theme_builder.py's "Save as Preset", which wrote a themes/<name>.json
 // file — this app has no per-file theme store, so they're kept as a single
 // localStorage array instead) — layered on top of the two built-ins.
+// Backfills leftPanelBg/rightPanelBg/footerBg/headerBg on presets saved
+// before those fields existed (and before the single `panelBg` field they
+// replaced was removed) — otherwise ColorDial/applyTheme would receive
+// `undefined` for a custom theme created pre-split. Matches what each field
+// actually rendered as before the split: left/right/footer panels showed the
+// old single `panelBg`, while the header (no explicit background of its own)
+// showed `mainBg` through from its container. `panelBg` itself is read off
+// the raw parsed JSON, not AppTheme, since the field no longer exists on the
+// type but may still be sitting in localStorage from before this migration.
+function withPanelBgDefaults(raw: AppTheme & { panelBg?: string }): AppTheme {
+  const { panelBg, ...t } = raw;
+  return {
+    ...t,
+    leftPanelBg:  t.leftPanelBg  ?? panelBg,
+    rightPanelBg: t.rightPanelBg ?? panelBg,
+    footerBg:     t.footerBg     ?? panelBg,
+    headerBg:     t.headerBg     ?? t.mainBg,
+  };
+}
+
 export function loadCustomThemes(): AppTheme[] {
   try {
     const raw = localStorage.getItem(LS_CUSTOM_THEMES_KEY);
-    return raw ? (JSON.parse(raw) as AppTheme[]) : [];
+    return raw ? (JSON.parse(raw) as (AppTheme & { panelBg?: string })[]).map(withPanelBgDefaults) : [];
   } catch {
     return [];
   }
@@ -195,7 +244,10 @@ export const PLAY_ICON_DARK = "#111";
 export function applyTheme(t: AppTheme) {
   const r = document.documentElement;
   r.style.setProperty("--accent",         t.accent);
-  r.style.setProperty("--panel-bg",       t.panelBg);
+  r.style.setProperty("--left-panel-bg",  t.leftPanelBg);
+  r.style.setProperty("--right-panel-bg", t.rightPanelBg);
+  r.style.setProperty("--footer-bg",      t.footerBg);
+  r.style.setProperty("--header-bg",      t.headerBg);
   r.style.setProperty("--main-bg",        t.mainBg);
   r.style.setProperty("--card-bg",        t.cardBg);
   r.style.setProperty("--text-primary",   t.textPrimary);

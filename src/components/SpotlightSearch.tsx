@@ -257,7 +257,7 @@ export function SpotlightSearch() {
         paddingTop: rows.length > 0 ? "5vh" : "35vh",
         transition: "padding-top 220ms cubic-bezier(0.25, 1, 0.5, 1)",
         backdropFilter: "blur(2px)", WebkitBackdropFilter: "blur(2px)",
-        background: "color-mix(in srgb, var(--panel-bg) 55%, transparent)",
+        background: "color-mix(in srgb, var(--left-panel-bg) 55%, transparent)",
       }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}
     >
@@ -265,7 +265,7 @@ export function SpotlightSearch() {
         className="flex flex-col spotlight-pop"
         style={{
           width: 640, maxWidth: "90vw", maxHeight: "90vh",
-          background: "var(--panel-bg)", border: "1px solid var(--border)", borderRadius: 10,
+          background: "var(--left-panel-bg)", border: "1px solid var(--border)", borderRadius: 10,
           boxShadow: "0 12px 40px rgba(0,0,0,0.45)", overflow: "hidden",
         }}
       >

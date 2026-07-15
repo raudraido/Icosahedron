@@ -19,7 +19,10 @@
 /* Default fallback values — overridden at runtime by applyTheme() */
 :root {
   --accent:         #44cfcf;
-  --panel-bg:       rgb(21, 23, 29);
+  --left-panel-bg:  rgb(21, 23, 29);
+  --right-panel-bg: rgb(21, 23, 29);
+  --footer-bg:      rgb(21, 23, 29);
+  --header-bg:      rgb(28, 30, 39);
   --main-bg:        rgb(28, 30, 39);
   --card-bg:        #232631;
   --text-primary:   #72a1cd;
@@ -64,7 +67,7 @@ html, body, #root {
   font-family: var(--font-family);
   font-weight: 500;
   -webkit-font-smoothing: antialiased;
-  background: var(--panel-bg);
+  background: var(--left-panel-bg);
   color: var(--text-primary);
   font-size: var(--fs-primary);
 }

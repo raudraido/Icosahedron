@@ -278,7 +278,7 @@ export function PlayerBar() {
       ref={barRef}
       className="flex items-center shrink-0"
       style={{
-        height: 132, background: "var(--panel-bg)",
+        height: 132, background: "var(--footer-bg)",
         borderTop: "1px solid var(--border)",
         paddingLeft: 8, paddingRight: 12,
       }}

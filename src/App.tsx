@@ -322,7 +322,7 @@ function MainApp() {
   }
 
   return (
-    <div className="flex flex-col h-screen" style={{ background: "var(--panel-bg)" }}>
+    <div className="flex flex-col h-screen" style={{ background: "var(--left-panel-bg)" }}>
       <div className="flex flex-1 overflow-hidden">
         <LeftPanel />
 
@@ -337,7 +337,7 @@ function MainApp() {
           <div
             ref={headerRef}
             className="flex items-center px-3 shrink-0"
-            style={{ height: 62, borderBottom: "1px solid var(--border)" }}
+            style={{ height: 62, background: "var(--header-bg)", borderBottom: "1px solid var(--border)" }}
           >
             <div className="flex items-center shrink-0" style={{ width: NAV_ARROWS_WIDTH, gap: 4 }}>
               <NavArrow direction="left"  disabled={!canBack} onClick={navBack} />
@@ -461,7 +461,7 @@ function AppInner() {
 
   if (booting) {
     return (
-      <div className="flex h-screen items-center justify-center" style={{ background: "var(--panel-bg)" }}>
+      <div className="flex h-screen items-center justify-center" style={{ background: "var(--left-panel-bg)" }}>
         <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>Connecting…</span>
       </div>
     );

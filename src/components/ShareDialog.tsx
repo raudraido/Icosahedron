@@ -50,7 +50,7 @@ export function ShareDialog() {
       style={{
         position: "fixed", inset: 0, zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center",
         backdropFilter: "blur(2px)", WebkitBackdropFilter: "blur(2px)",
-        background: "color-mix(in srgb, var(--panel-bg) 55%, transparent)",
+        background: "color-mix(in srgb, var(--left-panel-bg) 55%, transparent)",
       }}
     >
       <div

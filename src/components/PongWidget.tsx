@@ -138,7 +138,7 @@ export function PongWidget({ onClose }: { onClose: () => void }) {
     const ox = Math.floor((W - gw) / 2), oy = Math.floor((H - gh) / 2);
 
     const rootStyle = getComputedStyle(document.documentElement);
-    const panelBg = rootStyle.getPropertyValue("--panel-bg").trim() || "#0d0d0d";
+    const panelBg = rootStyle.getPropertyValue("--left-panel-bg").trim() || "#0d0d0d";
     const border = rootStyle.getPropertyValue("--border").trim() || "#1a1a1a";
     const accent = rootStyle.getPropertyValue("--accent").trim() || "#ffffff";
 
@@ -267,12 +267,12 @@ export function PongWidget({ onClose }: { onClose: () => void }) {
       onKeyDown={handleKeyDown}
       onKeyUp={handleKeyUp}
       className="absolute inset-0 flex flex-col outline-none"
-      style={{ background: "var(--panel-bg)", zIndex: 50 }}
+      style={{ background: "var(--left-panel-bg)", zIndex: 50 }}
     >
       {/* min-h-0 — see TetrisWidget.tsx's identical note: without it the
           canvas (a replaced element) balloons and pushes the HUD out of view. */}
       <canvas ref={canvasRef} className="flex-1 min-h-0" style={{ width: "100%", height: "100%" }} />
-      <div className="flex flex-col shrink-0" style={{ padding: "6px 8px", gap: 3, background: "var(--panel-bg)" }}>
+      <div className="flex flex-col shrink-0" style={{ padding: "6px 8px", gap: 3, background: "var(--left-panel-bg)" }}>
         <p className="text-center" style={{ color: "var(--text-secondary)", fontSize: 12 }}>
           You: {playerScore}   AI: {aiScore}   Best Streak: {best}
         </p>

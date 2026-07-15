@@ -106,7 +106,7 @@ export function Login() {
       <form
         onSubmit={handleSubmit}
         className="w-full space-y-4 rounded-xl p-8 shadow-2xl"
-        style={{ maxWidth: 420, background: "var(--panel-bg)", border: "1px solid var(--border)" }}
+        style={{ maxWidth: 420, background: "var(--left-panel-bg)", border: "1px solid var(--border)" }}
       >
         <div className="flex flex-col items-center" style={{ gap: 8 }}>
           {/* Same shahedron2 base + shahedron1 alpha-masked mark as LeftPanel.tsx's sidebar logo */}

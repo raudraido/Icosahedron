@@ -134,7 +134,7 @@ export function GlobalTooltip() {
         maxWidth: "min(480px, 90vw)",
         padding: "1px 5px",
         borderRadius: 4,
-        background: "var(--panel-bg)",
+        background: "var(--left-panel-bg)",
         border: "1px solid var(--border)",
         color: "var(--text-secondary)",
         fontSize: "var(--fs-secondary)",

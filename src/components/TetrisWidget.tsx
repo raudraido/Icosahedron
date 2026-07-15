@@ -184,12 +184,12 @@ export function TetrisWidget({ onClose }: { onClose: () => void }) {
     const bw = COLS * cell, bh = ROWS * cell;
     const ox = Math.floor((W - bw) / 2), oy = Math.floor((H - bh) / 2);
 
-    // Board bg/grid follow the active theme (--panel-bg/--border, matching
+    // Board bg/grid follow the active theme (--left-panel-bg/--border, matching
     // the left panel this overlay sits in) instead of a hardcoded near-black,
     // so Theme Builder edits (including live dial preview) are reflected
     // here too, not just the HUD strip around it.
     const rootStyle = getComputedStyle(document.documentElement);
-    ctx.fillStyle = rootStyle.getPropertyValue("--panel-bg").trim() || "#0d0d0d";
+    ctx.fillStyle = rootStyle.getPropertyValue("--left-panel-bg").trim() || "#0d0d0d";
     ctx.fillRect(0, 0, W, H);
 
     ctx.strokeStyle = rootStyle.getPropertyValue("--border").trim() || "#1a1a1a";
@@ -290,7 +290,7 @@ export function TetrisWidget({ onClose }: { onClose: () => void }) {
       tabIndex={-1}
       onKeyDown={handleKeyDown}
       className="absolute inset-0 flex flex-col outline-none"
-      style={{ background: "var(--panel-bg)", zIndex: 50 }}
+      style={{ background: "var(--left-panel-bg)", zIndex: 50 }}
     >
       {/* min-h-0 is required here — a <canvas>, like an <img>, is a replaced
           element with an intrinsic size, so a flex column child defaults to
@@ -298,7 +298,7 @@ export function TetrisWidget({ onClose }: { onClose: () => void }) {
           balloon to fill the whole container and push the HUD out of view
           (or under it) instead of sharing space with it. */}
       <canvas ref={canvasRef} className="flex-1 min-h-0" style={{ width: "100%", height: "100%" }} />
-      <div className="flex flex-col shrink-0" style={{ padding: "6px 8px", gap: 3, background: "var(--panel-bg)" }}>
+      <div className="flex flex-col shrink-0" style={{ padding: "6px 8px", gap: 3, background: "var(--left-panel-bg)" }}>
         <p className="text-center" style={{ color: "var(--text-secondary)", fontSize: 12 }}>
           Score: {score}   Lines: {lines}   Lv {level}   Best: {best}
         </p>

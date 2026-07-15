@@ -348,6 +348,11 @@ export const api = {
   getAppVersion: () => invoke<string>("app_version"),
   setWindowTheme: (dark: boolean) => invoke<void>("set_window_theme", { dark }),
 
+  // Settings.tsx's Wayland screen color picker (electron/main/screenCapture.ts)
+  // — one still frame per screen, since Chromium's own EyeDropper crashes
+  // under native Wayland.
+  captureScreens: () => invoke<{ id: string; name: string; dataUrl: string }[]>("capture_screens"),
+
   // ── Update check (electron/main/updater.ts) — lightweight GitHub Releases
   // poll, not a full electron-updater integration (see that file's header
   // comment for why). ──────────────────────────────────────────────────────

@@ -987,7 +987,7 @@ function ThemesTab() {
                       display: "flex", flexDirection: "column",
                     }}
                   >
-                    <div style={{ height: "40%", background: t.panelBg }} />
+                    <div style={{ height: "40%", background: t.leftPanelBg }} />
                     <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <div style={{ width: 20, height: 20, borderRadius: "50%", background: t.accent }} />
                     </div>
@@ -1028,7 +1028,7 @@ function ThemesTab() {
 // Reset" interaction, just against this app's own theme shape. ──
 
 // <input type="color"> requires strict "#rrggbb" — AppTheme mixes hex
-// ("#9b1720") and "rgb(r,g,b)" strings (panelBg/mainBg), so round-trip
+// ("#9b1720") and "rgb(r,g,b)" strings (leftPanelBg/mainBg), so round-trip
 // through whichever format the field already used (matches theme_builder.py's
 // own _rgb_str_to_hex/_hex_to_rgb_str pair for the same reason).
 function toHex(color: string): string {
@@ -1043,10 +1043,44 @@ function fromHex(hex: string, originalFormat: string): string {
   return `rgb(${r},${g},${b})`;
 }
 
-function BuilderRow({ label, children }: { label: string; children: React.ReactNode }) {
+// Backs ColorPickerPopover's saturation/value square + hue strip — the only
+// place this app needs HSV at all, since <input type="color"> normally
+// handles color-space conversion natively.
+function hexToHsv(hex: string): [h: number, s: number, v: number] {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  let h = 0;
+  if (d !== 0) {
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  return [h, max === 0 ? 0 : d / max, max];
+}
+
+function hsvToHex(h: number, s: number, v: number): string {
+  const c = v * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = v - c;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) [r, g, b] = [c, x, 0];
+  else if (h < 120) [r, g, b] = [x, c, 0];
+  else if (h < 180) [r, g, b] = [0, c, x];
+  else if (h < 240) [r, g, b] = [0, x, c];
+  else if (h < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  const byte = (n: number) => Math.round((n + m) * 255).toString(16).padStart(2, "0");
+  return `#${byte(r)}${byte(g)}${byte(b)}`;
+}
+
+function BuilderRow({ label, labelWidth = 180, children }: { label: string; labelWidth?: number; children: React.ReactNode }) {
   return (
     <div className="flex items-center" style={{ gap: 12, padding: "6px 0" }}>
-      <span style={{ width: 180, flexShrink: 0, color: "var(--text-primary)", fontSize: "var(--fs-secondary)" }}>{label}</span>
+      <span style={{ width: labelWidth, flexShrink: 0, color: "var(--text-primary)", fontSize: "var(--fs-secondary)" }}>{label}</span>
       {children}
     </div>
   );
@@ -1058,10 +1092,258 @@ function BuilderRow({ label, children }: { label: string; children: React.ReactN
 // screen, including other applications' windows. Feature-detected since it's
 // still a fairly recent Chromium addition; the button just doesn't render
 // on a build old enough not to have it.
-const hasEyeDropper = typeof window !== "undefined" && "EyeDropper" in window;
+// Also hidden on native Wayland (electron/main/index.ts forces this backend
+// under XDG_SESSION_TYPE=wayland) — Chromium's EyeDropper crashes the whole
+// renderer there, a known gap in Ozone/Wayland's implementation. XWayland
+// (Electron's default everywhere else on Linux) isn't affected.
+const isWaylandLinux = typeof window !== "undefined" && !!window.electronAPI?.isWaylandLinux;
+const hasEyeDropper = typeof window !== "undefined" && "EyeDropper" in window && !isWaylandLinux;
+
+// Matches toHex/fromHex's own strict "#rrggbb" shape.
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+
+// Custom saturation/value square + hue strip + hex entry, portaled/centered
+// the same way AddServerDialog is — stands in for the native color-chooser
+// dialog on Wayland, where that dialog crashes the renderer outright (see
+// isWaylandLinux above). Not a native dialog at all, so there's nothing here
+// for that Ozone/Wayland gap to hit.
+function ColorPickerPopover({ hex, onChange, onClose }: { hex: string; onChange: (hex: string) => void; onClose: () => void }) {
+  const [h, s, v] = hexToHsv(hex);
+  const [hexDraft, setHexDraft] = useState(hex);
+  useEffect(() => setHexDraft(hex), [hex]);
+  const svRef = useRef<HTMLDivElement>(null);
+  const hueRef = useRef<HTMLDivElement>(null);
+
+  function dragSv(e: React.MouseEvent) {
+    const el = svRef.current;
+    if (!el) return;
+    function update(clientX: number, clientY: number) {
+      const rect = el!.getBoundingClientRect();
+      const s2 = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      const v2 = Math.max(0, Math.min(1, 1 - (clientY - rect.top) / rect.height));
+      onChange(hsvToHex(h, s2, v2));
+    }
+    update(e.clientX, e.clientY);
+    function onMove(ev: MouseEvent) { update(ev.clientX, ev.clientY); }
+    function onUp() { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
+  function dragHue(e: React.MouseEvent) {
+    const el = hueRef.current;
+    if (!el) return;
+    function update(clientX: number) {
+      const rect = el!.getBoundingClientRect();
+      const h2 = Math.max(0, Math.min(359.999, ((clientX - rect.left) / rect.width) * 360));
+      onChange(hsvToHex(h2, s, v));
+    }
+    update(e.clientX);
+    function onMove(ev: MouseEvent) { update(ev.clientX); }
+    function onUp() { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
+  function commitHexDraft() {
+    const v2 = hexDraft.startsWith("#") ? hexDraft : `#${hexDraft}`;
+    if (HEX_RE.test(v2)) onChange(v2);
+    else setHexDraft(hex); // invalid — snap back to the last valid color
+  }
+
+  return createPortal(
+    <div
+      onClick={onClose}
+      style={{ position: "fixed", inset: 0, zIndex: 2000, background: "color-mix(in srgb, black 40%, transparent)", display: "flex", alignItems: "center", justifyContent: "center" }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="flex flex-col"
+        style={{ background: "var(--main-bg)", border: "1px solid var(--border)", borderRadius: 10, padding: 16, width: 220, gap: 12, boxShadow: "0 12px 32px color-mix(in srgb, black 30%, transparent)" }}
+      >
+        <div
+          ref={svRef}
+          onMouseDown={dragSv}
+          style={{
+            position: "relative", width: "100%", height: 140, borderRadius: 6, cursor: "crosshair",
+            background: `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent), hsl(${h}, 100%, 50%)`,
+          }}
+        >
+          <div style={{
+            position: "absolute", left: `${s * 100}%`, top: `${(1 - v) * 100}%`,
+            width: 12, height: 12, marginLeft: -6, marginTop: -6, borderRadius: "50%",
+            border: "2px solid white", boxShadow: "0 0 0 1px rgba(0,0,0,0.5)", pointerEvents: "none",
+          }} />
+        </div>
+        <div
+          ref={hueRef}
+          onMouseDown={dragHue}
+          style={{
+            position: "relative", width: "100%", height: 14, borderRadius: 7, cursor: "pointer",
+            background: "linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)",
+          }}
+        >
+          <div style={{
+            position: "absolute", left: `${(h / 360) * 100}%`, top: "50%",
+            width: 14, height: 14, marginLeft: -7, marginTop: -7, borderRadius: "50%",
+            border: "2px solid white", boxShadow: "0 0 0 1px rgba(0,0,0,0.5)", pointerEvents: "none", background: `hsl(${h}, 100%, 50%)`,
+          }} />
+        </div>
+        <div className="flex items-center" style={{ gap: 8 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 4, border: "1px solid var(--border)", background: hex, flexShrink: 0 }} />
+          <input
+            value={hexDraft}
+            onChange={(e) => setHexDraft(e.target.value)}
+            onBlur={commitHexDraft}
+            onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+            className="tabular-nums"
+            style={{ flex: 1, background: "transparent", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: 4, padding: "4px 6px", fontSize: "var(--fs-secondary)" }}
+          />
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// Fullscreen "click a pixel anywhere on screen" picker for Wayland, backing
+// electron/main/screenCapture.ts's one-still-frame-per-screen capture —
+// stands in for Chromium's EyeDropper (also broken under native Wayland,
+// same as the color-chooser dialog ColorPickerPopover replaces above). Not a
+// live floating magnifier like the real EyeDropper — captures a still frame
+// via the OS's screen-share portal first, then samples pixels from that.
+function ScreenColorPickerOverlay({ onPick, onClose }: { onPick: (hex: string) => void; onClose: () => void }) {
+  const [sources, setSources] = useState<{ id: string; name: string; dataUrl: string }[] | null>(null);
+  const [selected, setSelected] = useState<{ id: string; name: string; dataUrl: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [hover, setHover] = useState<{ x: number; y: number; hex: string } | null>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  // Drawn once per selected source (see handleImgLoad) at the image's real
+  // pixel dimensions, so getImageData samples the actual captured pixel
+  // regardless of how large the on-screen <img> is stretched/letterboxed to.
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.captureScreens()
+      .then((s) => {
+        if (cancelled) return;
+        if (!s.length) { setError("No screen sources available."); return; }
+        setSources(s);
+        if (s.length === 1) setSelected(s[0]);
+      })
+      .catch(() => { if (!cancelled) setError("Screen capture was denied or failed."); });
+    return () => { cancelled = true; };
+  }, []);
+
+  function handleImgLoad() {
+    const img = imgRef.current;
+    if (!img) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    if (ctx) ctx.drawImage(img, 0, 0);
+    canvasRef.current = canvas;
+  }
+
+  // Maps a mouse event to the captured image's pixel space, undoing
+  // object-fit: contain's letterboxing (the <img> rarely matches the
+  // canvas's aspect ratio exactly against the viewport).
+  function samplePixel(e: React.MouseEvent): { x: number; y: number; hex: string } | null {
+    const img = imgRef.current;
+    const canvas = canvasRef.current;
+    if (!img || !canvas) return null;
+    const rect = img.getBoundingClientRect();
+    const scale = Math.min(rect.width / canvas.width, rect.height / canvas.height);
+    const dispW = canvas.width * scale, dispH = canvas.height * scale;
+    const offX = (rect.width - dispW) / 2, offY = (rect.height - dispH) / 2;
+    const px = Math.floor((e.clientX - rect.left - offX) / scale);
+    const py = Math.floor((e.clientY - rect.top - offY) / scale);
+    if (px < 0 || py < 0 || px >= canvas.width || py >= canvas.height) return null;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    const [r, g, b] = ctx.getImageData(px, py, 1, 1).data;
+    return { x: e.clientX, y: e.clientY, hex: `#${[r, g, b].map((n) => n.toString(16).padStart(2, "0")).join("")}` };
+  }
+
+  return createPortal(
+    <div
+      className="flex"
+      tabIndex={-1}
+      ref={(el) => el?.focus()}
+      onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
+      style={{ position: "fixed", inset: 0, zIndex: 3000, background: "black" }}
+    >
+      {error && (
+        <div className="flex flex-col items-center justify-center" style={{ position: "absolute", inset: 0, gap: 12 }}>
+          <p style={{ color: "white" }}>{error}</p>
+          <button
+            onClick={onClose}
+            style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid white", background: "none", color: "white", cursor: "pointer" }}
+          >
+            Close
+          </button>
+        </div>
+      )}
+      {!error && !sources && (
+        <div className="flex items-center justify-center" style={{ position: "absolute", inset: 0, color: "white" }}>Capturing screen…</div>
+      )}
+      {!error && sources && !selected && (
+        <div className="flex flex-col items-center justify-center" style={{ position: "absolute", inset: 0, gap: 16 }}>
+          <p style={{ color: "white" }}>Choose a screen</p>
+          <div className="flex" style={{ gap: 16 }}>
+            {sources.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => setSelected(s)}
+                style={{ border: "2px solid white", borderRadius: 8, padding: 4, background: "none", cursor: "pointer" }}
+              >
+                <img src={s.dataUrl} alt={s.name} style={{ maxWidth: 240, maxHeight: 160, display: "block" }} />
+                <p style={{ color: "white", fontSize: 12, marginTop: 4 }}>{s.name}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {!error && selected && (
+        <img
+          ref={imgRef}
+          src={selected.dataUrl}
+          alt=""
+          onLoad={handleImgLoad}
+          onMouseMove={(e) => { const p = samplePixel(e); if (p) setHover(p); }}
+          onClick={(e) => { const p = samplePixel(e); if (p) onPick(p.hex); }}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", cursor: "crosshair" }}
+        />
+      )}
+      {hover && selected && (
+        <div style={{
+          position: "fixed", left: hover.x + 16, top: hover.y + 16, zIndex: 3001,
+          display: "flex", alignItems: "center", gap: 6, padding: "4px 8px", borderRadius: 6,
+          background: "rgba(0,0,0,0.8)", border: "1px solid white", pointerEvents: "none",
+        }}>
+          <div style={{ width: 14, height: 14, borderRadius: 3, background: hover.hex, border: "1px solid white" }} />
+          <span style={{ color: "white", fontSize: 12, fontFamily: "monospace" }}>{hover.hex.toUpperCase()}</span>
+        </div>
+      )}
+      <button
+        onClick={onClose}
+        title="Cancel"
+        className="flex items-center justify-center"
+        style={{ position: "absolute", top: 16, right: 16, zIndex: 3001, width: 32, height: 32, borderRadius: "50%", border: "1px solid white", background: "rgba(0,0,0,0.5)", color: "white", cursor: "pointer", fontSize: 16 }}
+      >
+        ×
+      </button>
+    </div>,
+    document.body,
+  );
+}
 
 function ColorDial({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const hex = toHex(value);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [screenPickerOpen, setScreenPickerOpen] = useState(false);
 
   async function pickFromScreen() {
     try {
@@ -1075,15 +1357,39 @@ function ColorDial({ value, onChange }: { value: string; onChange: (v: string) =
 
   return (
     <div className="flex items-center" style={{ gap: 8 }}>
-      <input
-        type="color"
-        value={hex}
-        onChange={(e) => onChange(fromHex(e.target.value, value))}
-        style={{ width: 36, height: 28, padding: 0, border: "1px solid var(--border)", borderRadius: 4, background: "none", cursor: "pointer" }}
-      />
-      {hasEyeDropper && (
+      {/* Chromium's native color-chooser dialog (what <input type="color">
+          opens) crashes the whole renderer under native Wayland — not just
+          the EyeDropper button above, the base swatch itself. There's no
+          working native picker to fall back to there, so Wayland opens
+          ColorPickerPopover (a custom SV-square + hue-strip picker, no
+          native dialog involved) instead of ever invoking the real one. */}
+      {isWaylandLinux ? (
         <button
-          onClick={pickFromScreen}
+          onClick={() => setPickerOpen(true)}
+          title="Change color"
+          style={{ width: 36, height: 28, padding: 0, border: "1px solid var(--border)", borderRadius: 4, background: hex, cursor: "pointer" }}
+        />
+      ) : (
+        <input
+          type="color"
+          value={hex}
+          onChange={(e) => onChange(fromHex(e.target.value, value))}
+          style={{ width: 36, height: 28, padding: 0, border: "1px solid var(--border)", borderRadius: 4, background: "none", cursor: "pointer" }}
+        />
+      )}
+      {isWaylandLinux && pickerOpen && (
+        <ColorPickerPopover
+          hex={hex}
+          onChange={(v) => onChange(fromHex(v, value))}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
+      {/* Wayland gets the same 💧 affordance as everywhere else, just wired
+          to ScreenColorPickerOverlay (capture-then-click) instead of the
+          native EyeDropper (which crashes there — see hasEyeDropper above). */}
+      {(hasEyeDropper || isWaylandLinux) && (
+        <button
+          onClick={() => { if (isWaylandLinux) setScreenPickerOpen(true); else pickFromScreen(); }}
           title="Pick color from screen"
           className="flex items-center justify-center"
           style={{ width: 28, height: 28, border: "1px solid var(--border)", borderRadius: 4, background: "none", cursor: "pointer", fontSize: 14 }}
@@ -1092,6 +1398,12 @@ function ColorDial({ value, onChange }: { value: string; onChange: (v: string) =
         >
           💧
         </button>
+      )}
+      {isWaylandLinux && screenPickerOpen && (
+        <ScreenColorPickerOverlay
+          onPick={(v) => { onChange(fromHex(v, value)); setScreenPickerOpen(false); }}
+          onClose={() => setScreenPickerOpen(false)}
+        />
       )}
       <span className="tabular-nums" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)", width: 76 }}>{hex.toUpperCase()}</span>
     </div>
@@ -1238,7 +1550,14 @@ function ThemeBuilderTab() {
       </Section>
 
       <Section title="Backgrounds">
-        <BuilderRow label="Panel Background"><ColorDial value={draft.panelBg} onChange={(v) => set("panelBg", v)} /></BuilderRow>
+        <div className="flex" style={{ gap: 16 }}>
+          <BuilderRow label="Left Panel" labelWidth={90}><ColorDial value={draft.leftPanelBg} onChange={(v) => set("leftPanelBg", v)} /></BuilderRow>
+          <BuilderRow label="Right Panel" labelWidth={90}><ColorDial value={draft.rightPanelBg} onChange={(v) => set("rightPanelBg", v)} /></BuilderRow>
+        </div>
+        <div className="flex" style={{ gap: 16 }}>
+          <BuilderRow label="Footer" labelWidth={90}><ColorDial value={draft.footerBg} onChange={(v) => set("footerBg", v)} /></BuilderRow>
+          <BuilderRow label="Header" labelWidth={90}><ColorDial value={draft.headerBg} onChange={(v) => set("headerBg", v)} /></BuilderRow>
+        </div>
         <BuilderRow label="Main Background"><ColorDial value={draft.mainBg} onChange={(v) => set("mainBg", v)} /></BuilderRow>
         <BuilderRow label="Card Background"><ColorDial value={draft.cardBg} onChange={(v) => set("cardBg", v)} /></BuilderRow>
         <BuilderRow label="Skeleton / Placeholders"><ColorDial value={draft.skeleton} onChange={(v) => set("skeleton", v)} /></BuilderRow>

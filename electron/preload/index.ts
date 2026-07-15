@@ -2,6 +2,16 @@ import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("electronAPI", {
   invoke: (cmd: string, args?: Record<string, unknown>) => ipcRenderer.invoke(cmd, args),
+  // Static boot-time fact, read directly here rather than round-tripped
+  // through ipcMain like everything else — preload runs in a full Node
+  // context (contextIsolation only walls off the renderer's main world), so
+  // process.platform/env are already available with no IPC needed. Settings.tsx's
+  // ColorDial uses this to hide the "pick from screen" EyeDropper button:
+  // Chromium's EyeDropper implementation crashes the whole renderer under
+  // the native Wayland Ozone backend electron/main/index.ts forces on
+  // Wayland sessions (XWayland, which Electron uses everywhere else on
+  // Linux, doesn't hit this — the EyeDropper works fine there).
+  isWaylandLinux: process.platform === "linux" && process.env["XDG_SESSION_TYPE"] === "wayland",
   // First main→renderer push channel in the app (everything else is
   // renderer-initiated `invoke`) — carries native audio-engine progress/
   // playing/track_switched/ended/error events. Returns an unsubscribe fn.

@@ -12,6 +12,7 @@ import { PongWidget } from "./PongWidget";
 import { SpaceInvadersWidget } from "./SpaceInvadersWidget";
 import { BreakoutWidget } from "./BreakoutWidget";
 import { XonixWidget } from "./XonixWidget";
+import { SnakeWidget } from "./SnakeWidget";
 import { ContextMenu } from "./ContextMenu";
 import { ScrollThumb } from "./ScrollThumb";
 import { ResizeHandle } from "./ResizeHandle";
@@ -584,7 +585,7 @@ function PlaylistsPanel() {
   );
 }
 
-type GameId = "tetris" | "pong" | "spaceInvaders" | "breakout" | "xonix";
+type GameId = "tetris" | "pong" | "spaceInvaders" | "breakout" | "xonix" | "snake";
 
 // Matches left_panel.qml's artTargetSize = leftPanel.width() - 16 (8px margin
 // each side) — now derived from the panel's own (resizable) width instead of
@@ -888,6 +889,7 @@ export function LeftPanel() {
         {activeGame === "spaceInvaders" && <SpaceInvadersWidget onClose={() => setActiveGame(null)} />}
         {activeGame === "breakout" && <BreakoutWidget onClose={() => setActiveGame(null)} />}
         {activeGame === "xonix" && <XonixWidget onClose={() => setActiveGame(null)} />}
+        {activeGame === "snake" && <SnakeWidget onClose={() => setActiveGame(null)} />}
       </div>
 
       {gameMenuPos && (
@@ -900,6 +902,7 @@ export function LeftPanel() {
             { label: "Space Invaders", onClick: () => setActiveGame("spaceInvaders") },
             { label: "Breakout", onClick: () => setActiveGame("breakout") },
             { label: "Xonix", onClick: () => setActiveGame("xonix") },
+            { label: "Snake", onClick: () => setActiveGame("snake") },
           ]}
           onClose={() => setGameMenuPos(null)}
         />

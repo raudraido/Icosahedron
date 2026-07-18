@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Snake — Nokia LCD</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  html, body {
+    margin: 0; height: 100%; background: #1b1d16;
+    display: flex; align-items: center; justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  #wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  #viewport { width: min(92vw, 1400px); height: min(78vh, 800px); display: flex; align-items: center; justify-content: center; }
+  canvas { width: 100%; height: 100%; image-rendering: pixelated; }
+  #hud { color: #cfd6c4; font-size: 18px; text-align: center; }
+  #controls { display: flex; gap: 16px; }
+  button {
+    font-size: 15px; padding: 8px 18px; border-radius: 6px; border: 1px solid #555;
+    background: #2c3122; color: #cfd6c4; cursor: pointer;
+  }
+  button:hover { background: #3a4030; }
+  #hint { color: #7d8570; font-size: 13px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="viewport"><canvas id="canvas"></canvas></div>
+  <p id="hud">Score: 0   Length: 9   Level: 1   Best: 0</p>
+  <div id="controls">
+    <button id="btnPause">Pause</button>
+    <button id="btnRestart">Restart</button>
+  </div>
+  <p id="hint">Arrow keys to move · P to pause · Enter to restart after game over</p>
+</div>
+
+<script>
+const GRID_COLS = 20;
+const GRID_ROWS = 11;
+const SUBCELL_R = 5, SUBGAP_R = 1, SPACING_R = 1;
+const BORDER_DOTS = 2;
+// Real LCD glass pixels aren't perfectly square. Derived from a reference
+// screenshot of an actual Nokia 5110 screen (1250x837 img-px, cropped flush
+// to the 84x48 active area): per-dot width = 1250/84 = 14.881 img-px,
+// per-dot height = 837/48 = 17.4375 img-px, ratio = 17.4375/14.881 = 1.1718.
+// Applied as a uniform post-hoc vertical scale at render time (see draw())
+// rather than baked into subcell/subgap/gap, so all the grid alignment math
+// above stays in exact square units internally.
+const PIXEL_ASPECT = 1.1718;
+const LCD_BG = "#9caa82";
+const LCD_INK = "#2c3122";
+const LS_HIGH_SCORE = "snake_high_score_standalone";
+const FOODS_PER_LEVEL = 5;
+
+function unitsFor(k) {
+  const subcell = Math.max(1, Math.round(SUBCELL_R * k));
+  const subgap = Math.max(1, Math.round(SUBGAP_R * k));
+  const spacing = Math.max(1, Math.round(SPACING_R * k));
+  // gap is derived from subcell/subgap (pitch + one more subgap) rather than
+  // rounded independently from its own ratio (GAP_R=7). Rounding subcell and
+  // gap separately let them drift apart by a pixel at some k, which broke
+  // the cell-to-cell step's exact 4-pitch identity and misaligned the
+  // interior dots from the border dots. Deriving gap this way makes
+  // cell+gap == 4*(subcell+subgap) exactly, for every k, always.
+  const gap = subcell + 2 * subgap;
+  const cell = 3 * subcell + 2 * subgap;
+  const playW = GRID_COLS * cell + (GRID_COLS - 1) * gap;
+  const playH = GRID_ROWS * cell + (GRID_ROWS - 1) * gap;
+  const borderThickness = BORDER_DOTS * subcell + (BORDER_DOTS - 1) * subgap;
+  return {
+    subcell, subgap, gap, spacing, cell, borderThickness,
+    gameW: playW + 2 * spacing + 2 * borderThickness,
+    gameH: playH + 2 * spacing + 2 * borderThickness,
+    playOx: borderThickness + spacing,
+    playOy: borderThickness + spacing,
+  };
+}
+
+function fitUnits(maxW, maxH) {
+  // Budget height in pre-stretch units — draw() applies PIXEL_ASPECT on top,
+  // so the final on-screen height is gameH * PIXEL_ASPECT and must fit maxH.
+  const maxHUnstretched = maxH / PIXEL_ASPECT;
+  let lo = 0, hi = 40;
+  let best = unitsFor(0);
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    const u = unitsFor(mid);
+    if (u.gameW <= maxW && u.gameH <= maxHUnstretched) { best = u; lo = mid; } else { hi = mid; }
+  }
+  return best;
+}
+
+function speedForLevel(level) {
+  return Math.max(76, 216 - (level - 1) * 13);
+}
+
+function initialSnake() {
+  const y = GRID_ROWS - 1;
+  const headX = 8;
+  const points = [];
+  for (let i = 0; i < 9; i++) points.push({ x: headX - i, y });
+  return points;
+}
+
+function randomEmptyCell(snake) {
+  for (;;) {
+    const x = Math.floor(Math.random() * GRID_COLS);
+    const y = Math.floor(Math.random() * GRID_ROWS);
+    if (!snake.some((s) => s.x === x && s.y === y)) return { x, y };
+  }
+}
+
+// Steps by the exact same pitch (subcell+subgap) the interior grid's cellRect
+// uses, from the same x=0 origin, rather than independently evenly-dividing
+// `total` into `count` dots — that independent division was a different
+// formula from the interior grid's, so its dot spacing didn't actually match
+// the interior's pitch and the two slowly drifted apart across the row.
+// Stepping by the shared pitch guarantees every border dot lands exactly on
+// the same fine grid the interior dots do, for any viewport size.
+function borderDots(pitch, count) {
+  const positions = [];
+  for (let i = 0; i < count; i++) positions.push(i * pitch);
+  return positions;
+}
+
+const viewport = document.getElementById("viewport");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const hud = document.getElementById("hud");
+const btnPause = document.getElementById("btnPause");
+const btnRestart = document.getElementById("btnRestart");
+
+let snake = initialSnake();
+let dir = { dx: 1, dy: 0 };
+let nextDir = { dx: 1, dy: 0 };
+let food = randomEmptyCell(snake);
+let score = 0, foodEaten = 0, level = 1;
+let highScore = Number(localStorage.getItem(LS_HIGH_SCORE) ?? 0);
+let paused = false, gameOver = false;
+let timer = null;
+
+function updateHighScore() {
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem(LS_HIGH_SCORE, String(highScore));
+  }
+}
+
+function updateHud() {
+  hud.textContent = `Score: ${score}   Length: ${snake.length}   Level: ${level}   Best: ${highScore}   Prays eaten: ${foodEaten}`;
+  btnPause.textContent = paused ? "Resume" : "Pause";
+}
+
+function scheduleTick() {
+  if (timer) clearTimeout(timer);
+  timer = setTimeout(tick, speedForLevel(level));
+}
+
+function endGame() {
+  gameOver = true;
+  if (timer) clearTimeout(timer);
+  updateHighScore();
+  draw();
+  updateHud();
+}
+
+// Whether the given heading's next step would hit the wall or the snake's
+// own body (same rules as tick()'s own collision check, extracted so both
+// the normal tick and the grace-period re-check below can share it).
+function wouldCollide(d) {
+  const head = snake[0];
+  const nx = head.x + d.dx, ny = head.y + d.dy;
+  if (nx < 0 || ny < 0 || nx >= GRID_COLS || ny >= GRID_ROWS) return true;
+  const willGrow = nx === food.x && ny === food.y;
+  const body = willGrow ? snake : snake.slice(0, -1);
+  return body.some((s) => s.x === nx && s.y === ny);
+}
+
+function applyMove(d) {
+  const head = snake[0];
+  const nx = head.x + d.dx, ny = head.y + d.dy;
+  const willGrow = nx === food.x && ny === food.y;
+  snake.unshift({ x: nx, y: ny });
+  if (willGrow) {
+    score += 10 * level;
+    foodEaten += 1;
+    level = Math.floor(foodEaten / FOODS_PER_LEVEL) + 1;
+    food = randomEmptyCell(snake);
+  } else {
+    snake.pop();
+  }
+}
+
+// Grace period before a fatal collision actually ends the game — same
+// forgiveness the original hardware gave: a move that would hit the wall or
+// the snake's own tail doesn't end things immediately, it waits GRACE_MS
+// longer for one last direction change. If the player redirects to a safe
+// heading within that window the game continues; if not (or the new
+// heading is fatal too), it ends. inGrace guards against looping forever if
+// the player keeps re-aiming into more collisions — only one grace window
+// is granted per close call.
+const GRACE_MS = 200;
+let inGrace = false;
+
+function tick() {
+  if (gameOver || paused) return;
+  dir = nextDir;
+
+  if (wouldCollide(dir)) {
+    if (inGrace) { endGame(); return; }
+    inGrace = true;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(tick, GRACE_MS);
+    return;
+  }
+  inGrace = false;
+
+  applyMove(dir);
+
+  draw();
+  updateHud();
+  scheduleTick();
+}
+
+function togglePause() {
+  if (gameOver) return;
+  paused = !paused;
+  if (!paused) scheduleTick();
+  draw();
+  updateHud();
+}
+
+function restart() {
+  snake = initialSnake();
+  dir = { dx: 1, dy: 0 };
+  nextDir = { dx: 1, dy: 0 };
+  food = randomEmptyCell(snake);
+  score = 0;
+  foodEaten = 0;
+  level = 1;
+  gameOver = false;
+  paused = false;
+  inGrace = false;
+  scheduleTick();
+  draw();
+  updateHud();
+}
+
+function draw() {
+  const W = viewport.clientWidth, H = viewport.clientHeight;
+  canvas.width = W;
+  canvas.height = H;
+  ctx.clearRect(0, 0, W, H);
+
+  const u = fitUnits(W, H);
+  const ox = Math.floor((W - u.gameW) / 2), oy = Math.floor((H - u.gameH * PIXEL_ASPECT) / 2);
+  ctx.save();
+  ctx.translate(ox, oy);
+  ctx.scale(1, PIXEL_ASPECT);
+
+  ctx.fillStyle = LCD_BG;
+  ctx.fillRect(0, 0, u.gameW, u.gameH);
+
+  ctx.fillStyle = LCD_INK;
+  const bottomY = u.gameH - u.subcell, rightX = u.gameW - u.subcell;
+  const pitch = u.subcell + u.subgap;
+  // Total dot count across each axis, in the same units as the interior
+  // grid: BORDER_DOTS on each side plus the play area's own 4*GRID_N-1 dots
+  // (3 per cell + 1 bridge-gap dot between consecutive cells). This falls
+  // out exactly from gap == subcell+2*subgap (see unitsFor), so the last
+  // dot's position always lands exactly on gameW/gameH - subcell.
+  const totalDotsW = 4 * GRID_COLS + 2 * BORDER_DOTS - 1;
+  const totalDotsH = 4 * GRID_ROWS + 2 * BORDER_DOTS - 1;
+  for (const x of borderDots(pitch, totalDotsW)) {
+    ctx.fillRect(x, 0, u.subcell, u.subcell);
+    ctx.fillRect(x, bottomY, u.subcell, u.subcell);
+  }
+  for (const y of borderDots(pitch, totalDotsH)) {
+    ctx.fillRect(0, y, u.subcell, u.subcell);
+    ctx.fillRect(rightX, y, u.subcell, u.subcell);
+  }
+
+  function cellRect(cx, cy, color) {
+    const baseX = u.playOx + cx * (u.cell + u.gap), baseY = u.playOy + cy * (u.cell + u.gap);
+    ctx.fillStyle = color;
+    for (let sr = 0; sr < 3; sr++) {
+      for (let sc = 0; sc < 3; sc++) {
+        ctx.fillRect(baseX + sc * (u.subcell + u.subgap), baseY + sr * (u.subcell + u.subgap), u.subcell, u.subcell);
+      }
+    }
+  }
+
+  function preyRect(cx, cy) {
+    const baseX = u.playOx + cx * (u.cell + u.gap), baseY = u.playOy + cy * (u.cell + u.gap);
+    ctx.fillStyle = LCD_INK;
+    const edgeMiddles = [[1, 0], [0, 1], [2, 1], [1, 2]];
+    for (const [sc, sr] of edgeMiddles) {
+      ctx.fillRect(baseX + sc * (u.subcell + u.subgap), baseY + sr * (u.subcell + u.subgap), u.subcell, u.subcell);
+    }
+  }
+
+  function bridgeRect(cxLo, cyLo, horizontal) {
+    const baseX = u.playOx + cxLo * (u.cell + u.gap), baseY = u.playOy + cyLo * (u.cell + u.gap);
+    const pitch = u.subcell + u.subgap;
+    ctx.fillStyle = LCD_INK;
+    if (horizontal) {
+      const zoneEnd = baseX + u.cell + u.gap;
+      for (let sr = 0; sr < 3; sr++) {
+        const y = baseY + sr * pitch;
+        for (let sc = 3; ; sc++) {
+          const x = baseX + sc * pitch;
+          if (x + u.subcell > zoneEnd) break;
+          ctx.fillRect(x, y, u.subcell, u.subcell);
+        }
+      }
+    } else {
+      const zoneEnd = baseY + u.cell + u.gap;
+      for (let sc = 0; sc < 3; sc++) {
+        const x = baseX + sc * pitch;
+        for (let sr = 3; ; sr++) {
+          const y = baseY + sr * pitch;
+          if (y + u.subcell > zoneEnd) break;
+          ctx.fillRect(x, y, u.subcell, u.subcell);
+        }
+      }
+    }
+  }
+
+  preyRect(food.x, food.y);
+
+  for (let i = 0; i < snake.length; i++) cellRect(snake[i].x, snake[i].y, LCD_INK);
+  for (let i = 0; i < snake.length - 1; i++) {
+    const a = snake[i], b = snake[i + 1];
+    if (a.x === b.x) bridgeRect(a.x, Math.min(a.y, b.y), false);
+    else bridgeRect(Math.min(a.x, b.x), a.y, true);
+  }
+
+  if (paused || gameOver) {
+    ctx.fillStyle = "rgba(0,0,0,0.63)";
+    ctx.fillRect(0, 0, u.gameW, u.gameH);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 22px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(paused ? "PAUSED" : "GAME OVER", u.gameW / 2, u.gameH / 2);
+    if (gameOver) {
+      ctx.fillStyle = "#aaaaaa";
+      ctx.font = "13px sans-serif";
+      ctx.fillText("Press Restart or Enter", u.gameW / 2, u.gameH / 2 + 24);
+    }
+  }
+  ctx.restore();
+}
+
+document.addEventListener("keydown", (e) => {
+  if (gameOver) {
+    if (e.key === "Enter" || e.key === " ") restart();
+    return;
+  }
+  if (e.key === "p" || e.key === "P") { togglePause(); return; }
+  if (paused) return;
+
+  const cur = dir;
+  function setDir(dx, dy) {
+    if (dx === -cur.dx && dy === -cur.dy) return;
+    nextDir = { dx, dy };
+  }
+  if (e.key === "ArrowLeft")  { e.preventDefault(); setDir(-1, 0); }
+  if (e.key === "ArrowRight") { e.preventDefault(); setDir(1, 0); }
+  if (e.key === "ArrowUp")    { e.preventDefault(); setDir(0, -1); }
+  if (e.key === "ArrowDown")  { e.preventDefault(); setDir(0, 1); }
+});
+
+btnPause.addEventListener("click", togglePause);
+btnRestart.addEventListener("click", restart);
+
+const ro = new ResizeObserver(draw);
+ro.observe(viewport);
+
+scheduleTick();
+draw();
+updateHud();
+</script>
+</body>
+</html>

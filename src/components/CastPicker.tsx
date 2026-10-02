@@ -179,7 +179,7 @@ export function CastPicker({
         return (
           <Row key={d.id} title={d.reachable ? undefined : "Not reachable from this network"}>
             <Icon
-              src={d.protocol === "dlna" ? "img/dlna.png" : "img/cast.png"}
+              src={d.protocol === "dlna" ? "img/dlna.png" : d.protocol === "airplay" ? "img/airplay.png" : "img/cast.png"}
               size={ICON_COL_WIDTH}
               style={{ background: "var(--accent)", flexShrink: 0, opacity: d.reachable ? 1 : 0.4 }}
             />

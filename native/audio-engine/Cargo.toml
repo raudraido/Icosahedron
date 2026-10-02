@@ -18,6 +18,11 @@ futures-util = "0.3"
 rodio = { version = "0.22", default-features = false, features = ["playback", "symphonia-all"] }
 symphonia = { version = "0.5", default-features = false, features = ["flac", "mp3", "pcm", "aac", "alac", "isomp4", "vorbis", "ogg", "wav"] }
 thread-priority = "1"
+# AirPlay 2 sender (https://github.com/lmcgartland/airplay2-rs, GPL-3.0-or-later).
+# Pinned to a commit — its public API is explicitly unstable (alpha).
+airplay-client = { git = "https://github.com/lmcgartland/airplay2-rs", rev = "a2f980cf25bf13ae20158497cc2d2ea69cd88fa7" }
+airplay-core = { git = "https://github.com/lmcgartland/airplay2-rs", rev = "a2f980cf25bf13ae20158497cc2d2ea69cd88fa7" }
+airplay-audio = { git = "https://github.com/lmcgartland/airplay2-rs", rev = "a2f980cf25bf13ae20158497cc2d2ea69cd88fa7" }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

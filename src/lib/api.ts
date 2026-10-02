@@ -169,12 +169,12 @@ export interface UpdateDownloadProgress {
   totalBytes: number;
 }
 
-/** A discovered Chromecast/DLNA receiver (electron/main/castDiscovery.ts) —
+/** A discovered Chromecast/DLNA/AirPlay receiver (electron/main/castDiscovery.ts) —
  *  `id` is opaque to the renderer, only used to pass back to `castConnect`. */
 export interface CastDevice {
   id: string;
   name: string;
-  protocol: "chromecast" | "dlna";
+  protocol: "chromecast" | "dlna" | "airplay";
   /** False when a real TCP connectivity probe to the device failed —
    *  CastPicker.tsx greys these out and disables connecting to them. */
   reachable: boolean;

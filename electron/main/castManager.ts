@@ -122,7 +122,7 @@ export class CastManager {
       .finally(() => { this.scanning = false; this.sendScanning(false); });
   }
 
-  async connect(deviceId: string): Promise<void> {
+  async connect(deviceId: string, pin?: string): Promise<void> {
     const device = this.deviceCache.get(deviceId);
     if (!device) throw new Error("Unknown cast device — try rescanning");
     // CastPicker.tsx already disables the click for these — this is defense
@@ -137,7 +137,7 @@ export class CastManager {
     if (device.protocol === "chromecast") {
       session = new ChromecastDevice(device.host, (event) => this.handleStatus(event));
     } else if (device.protocol === "airplay") {
-      session = new AirplayDevice(device.id, (event) => this.handleStatus(event));
+      session = new AirplayDevice(device.id, device.host, device.port, pin, (event) => this.handleStatus(event));
     } else {
       if (!device.avTransportControlUrl) throw new Error("Missing DLNA control URL — try rescanning");
       // Registered before constructing the device, not after — it needs to

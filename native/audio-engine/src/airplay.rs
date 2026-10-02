@@ -15,8 +15,10 @@ use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 
 use airplay_audio::{AudioDecoder, LiveAudioDecoder, LivePcmFrame};
-use airplay_client::{AirPlayClient, PlaybackState};
-use airplay_core::Device;
+use std::path::PathBuf;
+
+use airplay_client::{AirPlayClient, Connection, PlaybackState};
+use airplay_core::{Device, Error as AirplayError, PairingError, StreamConfig};
 use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction, ThreadsafeFunctionCallMode};
 use napi::JsFunction;
 use napi_derive::napi;
@@ -61,6 +63,39 @@ fn emit(cb: &Emitter, ev: AirplayEvent) {
     cb.call(Ok(ev), ThreadsafeFunctionCallMode::NonBlocking);
 }
 
+/// Runs `f` against the live connection, or fails if not connected.
+async fn with_conn<T, F>(shared: &Shared, f: F) -> napi::Result<T>
+where
+    F: for<'a> FnOnce(&'a mut Connection) -> std::pin::Pin<Box<dyn std::future::Future<Output = airplay_core::Result<T>> + Send + 'a>>,
+{
+    let mut guard = shared.conn.lock().await;
+    let conn = guard.as_mut().ok_or_else(|| napi::Error::from_reason("Not connected to an AirPlay device"))?;
+    f(conn).await.map_err(err)
+}
+
+/// Temporarily points the process cwd at `dir` (created if missing) so
+/// airplay2-rs's cwd-relative identity files land somewhere writable.
+struct CwdGuard(Option<PathBuf>);
+
+impl CwdGuard {
+    fn enter(dir: &PathBuf) -> Self {
+        let previous = std::env::current_dir().ok();
+        let _ = std::fs::create_dir_all(dir);
+        if std::env::set_current_dir(dir).is_err() {
+            return Self(None);
+        }
+        Self(previous)
+    }
+}
+
+impl Drop for CwdGuard {
+    fn drop(&mut self) {
+        if let Some(prev) = self.0.take() {
+            let _ = std::env::set_current_dir(prev);
+        }
+    }
+}
+
 fn err<E: std::fmt::Display>(e: E) -> napi::Error {
     napi::Error::from_reason(e.to_string())
 }
@@ -84,7 +119,14 @@ struct Feeder {
 }
 
 struct Shared {
-    client: Mutex<AirPlayClient>,
+    /// Only used for mDNS discovery — sessions go through `conn` directly,
+    /// since `AirPlayClient` can't drive HomeKit-Normal (PIN) pairing or
+    /// pair-verify with a saved identity.
+    discovery: Mutex<AirPlayClient>,
+    conn: Mutex<Option<Connection>>,
+    /// airplay2-rs persists paired identities as `.airplay_sender_identity_*.json`
+    /// relative to the process cwd; connect() points the cwd here while pairing.
+    identity_dir: PathBuf,
     devices: StdMutex<HashMap<String, Device>>,
     track: StdMutex<Track>,
     feeder: StdMutex<Option<Feeder>>,
@@ -99,14 +141,17 @@ pub struct AirplayClient {
 
 #[napi]
 impl AirplayClient {
-    /// `callback(err, event: AirplayEvent)`.
+    /// `callback(err, event: AirplayEvent)`; `identity_dir`: writable directory
+    /// where paired-device identities are kept (so a PIN is only needed once).
     #[napi(constructor)]
-    pub fn new(callback: JsFunction) -> napi::Result<Self> {
+    pub fn new(callback: JsFunction, identity_dir: String) -> napi::Result<Self> {
         let cb: Emitter = callback.create_threadsafe_function(0, |ctx| Ok(vec![ctx.value]))?;
         let client = AirPlayClient::new().map_err(err)?;
         Ok(Self {
             shared: Arc::new(Shared {
-                client: Mutex::new(client),
+                discovery: Mutex::new(client),
+                conn: Mutex::new(None),
+                identity_dir: PathBuf::from(identity_dir),
                 devices: StdMutex::new(HashMap::new()),
                 track: StdMutex::new(Track { volume: 1.0, ..Default::default() }),
                 feeder: StdMutex::new(None),
@@ -120,7 +165,7 @@ impl AirplayClient {
     #[napi]
     pub async fn discover(&self, timeout_ms: u32) -> napi::Result<Vec<AirplayDevice>> {
         let found = {
-            let client = self.shared.client.lock().await;
+            let client = self.shared.discovery.lock().await;
             client.discover(Duration::from_millis(timeout_ms as u64)).await.map_err(err)?
         };
         let mut cache = self.shared.devices.lock().unwrap();
@@ -142,6 +187,12 @@ impl AirplayClient {
         Ok(out)
     }
 
+    /// Without `pin`: pair-verify with a saved identity if there is one, else
+    /// transient pairing (HomePod etc., no user interaction). If the device
+    /// needs a PIN first, rejects with `PIN_REQUIRED` — the caller makes the
+    /// device display one and retries with `pin`. With `pin`: HomeKit-Normal
+    /// pair-setup (Apple TV), which saves the identity for next time; a wrong
+    /// PIN rejects with `PIN_WRONG`.
     #[napi]
     pub async fn connect(&self, device_id: String, pin: Option<String>) -> napi::Result<()> {
         let device = self
@@ -152,12 +203,43 @@ impl AirplayClient {
             .get(&device_id)
             .cloned()
             .ok_or_else(|| napi::Error::from_reason("Unknown AirPlay device — try rescanning"))?;
-        {
-            let mut client = self.shared.client.lock().await;
+        // Bit 3 of the status flags = "PIN required" (AIRPLAY_2_SPEC.md).
+        let pin_hint = device.requires_password || (device.status_flags >> 3) & 1 == 1;
+        let had_pin = pin.is_some();
+
+        let result = {
+            let _cwd = CwdGuard::enter(&self.shared.identity_dir);
+            let config = StreamConfig::default();
             match pin {
-                Some(p) => client.connect_with_pin(&device, &p).await.map_err(err)?,
-                None => client.connect(&device).await.map_err(err)?,
+                Some(p) => Connection::connect_with_pin_pairing(device, config, &p).await,
+                None => Connection::connect_auto(device, config, "3939").await,
             }
+        };
+        let mut connection = match result {
+            Ok(c) => c,
+            Err(e) => {
+                let pairing = matches!(e, AirplayError::Pairing(_));
+                return Err(if had_pin && pairing {
+                    napi::Error::from_reason(if matches!(e, AirplayError::Pairing(PairingError::InvalidPin)) {
+                        "PIN_WRONG".to_string()
+                    } else {
+                        format!("PIN_WRONG: {e}")
+                    })
+                } else if !had_pin && (pairing || pin_hint) {
+                    napi::Error::from_reason("PIN_REQUIRED")
+                } else {
+                    err(e)
+                });
+            }
+        };
+        connection.set_render_delay_ms(200); // retransmit headroom over WiFi (client default)
+        connection.setup().await.map_err(err)?;
+
+        // A previous session (if any) is replaced.
+        self.halt_feeder();
+        let previous = self.shared.conn.lock().await.replace(connection);
+        if let Some(mut old) = previous {
+            let _ = old.disconnect().await;
         }
         self.start_poller();
         Ok(())
@@ -171,14 +253,14 @@ impl AirplayClient {
 
     #[napi]
     pub async fn pause(&self) -> napi::Result<()> {
-        self.shared.client.lock().await.pause().await.map_err(err)?;
+        with_conn(&self.shared, |c| Box::pin(c.pause())).await?;
         self.shared.track.lock().unwrap().paused = true;
         Ok(())
     }
 
     #[napi]
     pub async fn resume(&self) -> napi::Result<()> {
-        self.shared.client.lock().await.resume().await.map_err(err)?;
+        with_conn(&self.shared, |c| Box::pin(c.resume())).await?;
         self.shared.track.lock().unwrap().paused = false;
         Ok(())
     }
@@ -187,7 +269,7 @@ impl AirplayClient {
     pub async fn stop(&self) -> napi::Result<()> {
         self.halt_feeder();
         self.shared.track.lock().unwrap().active = false;
-        let _ = self.shared.client.lock().await.stop().await;
+        let _ = with_conn(&self.shared, |c| Box::pin(c.stop())).await;
         Ok(())
     }
 
@@ -203,7 +285,7 @@ impl AirplayClient {
     pub async fn set_volume(&self, volume: f64) -> napi::Result<()> {
         let v = volume.clamp(0.0, 1.0) as f32;
         self.shared.track.lock().unwrap().volume = v;
-        self.shared.client.lock().await.set_volume(v).await.map_err(err)
+        with_conn(&self.shared, |c| Box::pin(c.set_volume(v))).await
     }
 
     #[napi]
@@ -213,7 +295,9 @@ impl AirplayClient {
         }
         self.halt_feeder();
         self.shared.track.lock().unwrap().active = false;
-        let _ = self.shared.client.lock().await.disconnect().await;
+        if let Some(mut c) = self.shared.conn.lock().await.take() {
+            let _ = c.disconnect().await;
+        }
         Ok(())
     }
 }
@@ -233,7 +317,7 @@ impl AirplayClient {
         self.halt_feeder();
         self.shared.track.lock().unwrap().active = false;
         // Flush whatever the receiver still has queued from the previous stream.
-        let _ = self.shared.client.lock().await.stop().await;
+        let _ = with_conn(&self.shared, |c| Box::pin(c.stop())).await;
 
         let open_path = path.clone();
         let (decoder, sample_rate, channels, duration) = tokio::task::spawn_blocking(move || {
@@ -282,7 +366,7 @@ impl AirplayClient {
         // startup artifacts — see start_live_streaming_with_decoder's docs).
         tokio::time::sleep(PREFILL).await;
 
-        self.shared.client.lock().await.start_live_streaming_with_decoder(live).await.map_err(err)?;
+        with_conn(&self.shared, |c| Box::pin(c.start_streaming_live(live))).await?;
 
         {
             let mut t = self.shared.track.lock().unwrap();
@@ -294,7 +378,7 @@ impl AirplayClient {
         }
         // Receivers reset to their own volume on a fresh RECORD.
         let v = self.shared.track.lock().unwrap().volume;
-        let _ = self.shared.client.lock().await.set_volume(v).await;
+        let _ = with_conn(&self.shared, |c| Box::pin(c.set_volume(v))).await;
         Ok(())
     }
 
@@ -309,11 +393,11 @@ impl AirplayClient {
             loop {
                 tokio::time::sleep(POLL_INTERVAL).await;
                 tick = tick.wrapping_add(1);
-                let mut client = shared.client.lock().await;
-                if !client.is_connected() {
+                let mut guard = shared.conn.lock().await;
+                let Some(client) = guard.as_mut() else {
                     emit(&shared.cb, event("disconnected"));
                     return;
-                }
+                };
                 if tick % FEEDBACK_EVERY_N_POLLS == 0 {
                     if let Err(e) = client.send_feedback().await {
                         let mut ev = event("error");
@@ -323,7 +407,7 @@ impl AirplayClient {
                 }
                 let state = client.playback_state();
                 let position = client.playback_position();
-                drop(client);
+                drop(guard);
 
                 let (active, paused, offset, duration, volume) = {
                     let t = shared.track.lock().unwrap();

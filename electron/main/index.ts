@@ -500,7 +500,7 @@ function registerIpcHandlers(): void {
   // ── Casting (Chromecast/DLNA — see castManager.ts) ──────────────────────
   ipcMain.handle("cast_discover", () => requireCast().discover());
   ipcMain.handle("cast_rescan", () => requireCast().rescan());
-  ipcMain.handle("cast_connect", (_e, { deviceId }) => requireCast().connect(deviceId));
+  ipcMain.handle("cast_connect", (_e, { deviceId, pin }) => requireCast().connect(deviceId, pin));
   ipcMain.handle("cast_disconnect", () => requireCast().disconnect());
   ipcMain.handle("cast_play_track", (_e, input) => requireCast().playTrack(input));
   ipcMain.handle("cast_pause", () => requireCast().pause());

@@ -382,7 +382,7 @@ export const api = {
    *  unlike castDiscover(), which now just returns the cache, this is the
    *  only thing that actually sends a network scan burst. */
   castRescan: () => invoke<void>("cast_rescan"),
-  castConnect: (deviceId: string) => invoke<void>("cast_connect", { deviceId }),
+  castConnect: (deviceId: string, pin?: string) => invoke<void>("cast_connect", { deviceId, pin }),
   castDisconnect: () => invoke<void>("cast_disconnect"),
   castPlayTrack: (input: {
     trackId: string; title: string; artist: string; coverId: string | null; format: string | null; positionSecs: number;

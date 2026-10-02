@@ -1,4 +1,5 @@
 import { AirplayClient, type AirplayEvent } from "icosahedron-audio-engine";
+import { app } from "electron";
 import { createWriteStream } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -22,9 +23,14 @@ let onNativeEvent: ((event: AirplayEvent) => void) | null = null;
 
 function getNative(): AirplayClient {
   if (!native) {
-    native = new AirplayClient((err: Error | null, event: AirplayEvent) => {
-      if (!err) onNativeEvent?.(event);
-    });
+    native = new AirplayClient(
+      (err: Error | null, event: AirplayEvent) => {
+        if (!err) onNativeEvent?.(event);
+      },
+      // Where airplay2-rs keeps paired-device identities, so a PIN-paired
+      // receiver (Apple TV) only asks once.
+      join(app.getPath("userData"), "airplay-identities"),
+    );
   }
   return native;
 }
@@ -65,13 +71,41 @@ export class AirplayDevice {
   private loadCounter = 0;
   private connected = false;
 
-  constructor(private deviceId: string, private onStatus: (event: CastStatusEvent) => void) {}
+  constructor(
+    private deviceId: string,
+    private host: string,
+    private port: number,
+    private pin: string | undefined,
+    private onStatus: (event: CastStatusEvent) => void,
+  ) {}
 
+  // Rejects with "PIN_REQUIRED" / "PIN_WRONG" (src/store/index.ts's
+  // connectCast keys off these) when the receiver wants a PIN — in that case
+  // it's first told to put a fresh code on its screen, so by the time the
+  // renderer shows the PIN field there's something to type in.
   async connect(): Promise<void> {
     const nativeClient = getNative();
     onNativeEvent = (ev) => this.handleNative(ev);
-    await nativeClient.connect(this.deviceId.replace(/^airplay:/, ""));
+    try {
+      await nativeClient.connect(this.deviceId.replace(/^airplay:/, ""), this.pin);
+    } catch (err) {
+      onNativeEvent = null;
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes("PIN_REQUIRED") || message.includes("PIN_WRONG")) await this.showPinOnDevice();
+      throw err;
+    }
     this.connected = true;
+  }
+
+  // Apple TV only displays its pairing PIN once asked to (POST /pair-pin-start,
+  // see airplay2-rs's README). Best-effort — devices with a fixed PIN just
+  // don't have the endpoint.
+  private async showPinOnDevice(): Promise<void> {
+    try {
+      await fetch(`http://${this.host}:${this.port}/pair-pin-start`, { method: "POST", signal: AbortSignal.timeout(3000) });
+    } catch (err) {
+      console.log(`[airplay] pair-pin-start failed: ${err instanceof Error ? err.message : err}`);
+    }
   }
 
   private handleNative(ev: AirplayEvent): void {

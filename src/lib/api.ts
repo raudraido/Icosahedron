@@ -169,12 +169,12 @@ export interface UpdateDownloadProgress {
   totalBytes: number;
 }
 
-/** A discovered Chromecast/DLNA receiver (electron/main/castDiscovery.ts) —
+/** A discovered Chromecast/DLNA/AirPlay receiver (electron/main/castDiscovery.ts) —
  *  `id` is opaque to the renderer, only used to pass back to `castConnect`. */
 export interface CastDevice {
   id: string;
   name: string;
-  protocol: "chromecast" | "dlna";
+  protocol: "chromecast" | "dlna" | "airplay";
   /** False when a real TCP connectivity probe to the device failed —
    *  CastPicker.tsx greys these out and disables connecting to them. */
   reachable: boolean;
@@ -382,7 +382,7 @@ export const api = {
    *  unlike castDiscover(), which now just returns the cache, this is the
    *  only thing that actually sends a network scan burst. */
   castRescan: () => invoke<void>("cast_rescan"),
-  castConnect: (deviceId: string) => invoke<void>("cast_connect", { deviceId }),
+  castConnect: (deviceId: string, pin?: string) => invoke<void>("cast_connect", { deviceId, pin }),
   castDisconnect: () => invoke<void>("cast_disconnect"),
   castPlayTrack: (input: {
     trackId: string; title: string; artist: string; coverId: string | null; format: string | null; positionSecs: number;

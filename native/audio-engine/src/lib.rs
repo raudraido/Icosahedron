@@ -9,6 +9,7 @@ use std::sync::Arc;
 use napi::JsFunction;
 use napi_derive::napi;
 
+mod airplay;
 mod bpm;
 mod bpm_analyze;
 mod commands;

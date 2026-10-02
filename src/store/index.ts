@@ -316,6 +316,11 @@ interface AppStore {
    *  CastPicker.tsx so a failure is visible instead of silently doing
    *  nothing, which otherwise reads as "the app didn't hear my click". */
   castConnectError: string | null;
+  /** AirPlay device that is waiting for a PIN (shown on its screen) — set when
+   *  connectCast fails with PIN_REQUIRED/PIN_WRONG so CastPicker.tsx shows an
+   *  inline PIN field on that device's row instead of a generic error. */
+  castPinDeviceId: string | null;
+  cancelCastPin: () => void;
   castConnected: boolean;
   castDevice: CastDevice | null;
   /** The connected device's own volume (0-100) — independent of `volume`
@@ -327,7 +332,7 @@ interface AppStore {
    *  the only thing that actually sends a network scan; discoverCastDevices
    *  above just reads the cache now (see castManager.ts's discover()). */
   rescanCastDevices: () => Promise<void>;
-  connectCast: (deviceId: string) => Promise<void>;
+  connectCast: (deviceId: string, pin?: string) => Promise<void>;
   disconnectCast: () => Promise<void>;
 }
 
@@ -843,6 +848,8 @@ export const useStore = create<AppStore>((set, get) => ({
   castScanning: false,
   castConnecting: false,
   castConnectError: null,
+  castPinDeviceId: null,
+  cancelCastPin: () => set({ castPinDeviceId: null, castConnectError: null }),
   castConnected: false,
   castDevice: null,
   castVolume: 100,
@@ -1179,10 +1186,11 @@ export const useStore = create<AppStore>((set, get) => ({
   // push from castManager.ts (below) — not set optimistically here, so the
   // store never claims a session exists that the main process didn't
   // actually confirm.
-  connectCast: async (deviceId) => {
+  connectCast: async (deviceId, pin) => {
     set({ castConnecting: true, castConnectError: null });
     try {
-      await api.castConnect(deviceId);
+      await api.castConnect(deviceId, pin);
+      set({ castPinDeviceId: null });
       const { queue, currentIndex, currentTime } = get();
       const track = queue[currentIndex];
       if (track) {
@@ -1196,7 +1204,16 @@ export const useStore = create<AppStore>((set, get) => ({
       // action (CastPicker's onConnect={connectCast} has no .catch of its
       // own) — silent from the user's POV, which just reads as the picker
       // not responding to the click at all.
-      set({ castConnectError: err instanceof Error ? err.message : "Couldn't connect to that device" });
+      const message = err instanceof Error ? err.message : "Couldn't connect to that device";
+      // castManager.ts's AirPlay path rejects with these codes (the receiver
+      // is already showing a PIN on its screen by the time we get here).
+      if (message.includes("PIN_REQUIRED")) {
+        set({ castPinDeviceId: deviceId });
+      } else if (message.includes("PIN_WRONG")) {
+        set({ castPinDeviceId: deviceId, castConnectError: "Wrong PIN — a new one is showing on the device" });
+      } else {
+        set({ castPinDeviceId: null, castConnectError: message });
+      }
     } finally {
       set({ castConnecting: false });
     }
@@ -1206,7 +1223,7 @@ export const useStore = create<AppStore>((set, get) => ({
     await api.castDisconnect().catch(() => {});
     // Doesn't touch `playing` — local playback runs independently of the
     // cast session now, so disconnecting has no effect on it either way.
-    set({ castConnected: false, castDevice: null, castConnectError: null });
+    set({ castConnected: false, castDevice: null, castConnectError: null, castPinDeviceId: null });
   },
 }));
 

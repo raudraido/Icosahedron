@@ -1,11 +1,12 @@
 import Bonjour from "bonjour-service";
 import { Socket } from "node:net";
 import { createSocket } from "node:dgram";
+import { scanAirplay } from "./castAirplay";
 
 export interface DiscoveredCastDevice {
   id: string;
   name: string;
-  protocol: "chromecast" | "dlna";
+  protocol: "chromecast" | "dlna" | "airplay";
   host: string;
   port: number;
   /** False when a real TCP probe to host:port didn't connect within
@@ -328,6 +329,6 @@ async function scanDlna(timeoutMs: number): Promise<DiscoveredCastDevice[]> {
 }
 
 export async function scanCastDevices(timeoutMs = 5000): Promise<DiscoveredCastDevice[]> {
-  const [chromecasts, dlna] = await Promise.all([scanChromecasts(timeoutMs), scanDlna(timeoutMs)]);
-  return [...chromecasts, ...dlna];
+  const [chromecasts, dlna, airplay] = await Promise.all([scanChromecasts(timeoutMs), scanDlna(timeoutMs), scanAirplay(timeoutMs)]);
+  return [...chromecasts, ...dlna, ...airplay];
 }

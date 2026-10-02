@@ -43,7 +43,12 @@ interface Props {
   /** Set when the last connect attempt failed (e.g. device unreachable) —
    *  shown inline instead of failing silently. */
   connectError: string | null;
-  onConnect: (deviceId: string) => void;
+  /** `pin` only for AirPlay devices that asked for one (see `pinDeviceId`). */
+  onConnect: (deviceId: string, pin?: string) => void;
+  /** AirPlay device currently showing a PIN on its own screen — its row gets
+   *  an inline PIN field below it. */
+  pinDeviceId: string | null;
+  onCancelPin: () => void;
   onDisconnect: () => void;
   /** Explicit rescan — opening the picker no longer scans automatically
    *  (see castManager.ts's discover()), so this is the only way to
@@ -54,7 +59,7 @@ interface Props {
 
 export function CastPicker({
   x, y, track, volume, onVolumeChange, castVolume, onCastVolumeChange,
-  devices, scanning, connectedDevice, connecting, connectError, onConnect, onDisconnect, onRescan, onClose,
+  devices, scanning, connectedDevice, connecting, connectError, onConnect, pinDeviceId, onCancelPin, onDisconnect, onRescan, onClose,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x, y, ready: false });
@@ -177,9 +182,10 @@ export function CastPicker({
       {devices.map((d) => {
         const isConnected = connectedDevice?.id === d.id;
         return (
-          <Row key={d.id} title={d.reachable ? undefined : "Not reachable from this network"}>
+          <div key={d.id}>
+          <Row title={d.reachable ? undefined : "Not reachable from this network"}>
             <Icon
-              src={d.protocol === "dlna" ? "img/dlna.png" : "img/cast.png"}
+              src={d.protocol === "dlna" ? "img/dlna.png" : d.protocol === "airplay" ? "img/airplay.png" : "img/cast.png"}
               size={ICON_COL_WIDTH}
               style={{ background: "var(--accent)", flexShrink: 0, opacity: d.reachable ? 1 : 0.4 }}
             />
@@ -192,6 +198,10 @@ export function CastPicker({
             {isConnected && <VolumeSlider value={castVolume} onChange={onCastVolumeChange} />}
             <CheckBox checked={isConnected} disabled={connecting || !d.reachable} onClick={() => toggle(d)} />
           </Row>
+          {pinDeviceId === d.id && !isConnected && (
+            <PinEntry busy={connecting} onSubmit={(pin) => onConnect(d.id, pin)} onCancel={onCancelPin} />
+          )}
+          </div>
         );
       })}
       {devices.length > 0 && scanning && (
@@ -201,6 +211,45 @@ export function CastPicker({
       )}
     </div>,
     document.body,
+  );
+}
+
+// Inline PIN field under an AirPlay device's row — the receiver (e.g. an
+// Apple TV) is already displaying the 4-digit code by the time this shows.
+function PinEntry({ busy, onSubmit, onCancel }: { busy: boolean; onSubmit: (pin: string) => void; onCancel: () => void }) {
+  const [pin, setPin] = useState("");
+  const ready = pin.length >= 4 && !busy;
+  return (
+    <div className="flex items-center" style={{ gap: 8, padding: "0 14px 10px", paddingLeft: 14 + ICON_COL_WIDTH + 10 }}>
+      <input
+        autoFocus
+        inputMode="numeric"
+        maxLength={8}
+        placeholder="PIN shown on device"
+        value={pin}
+        onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && ready) onSubmit(pin);
+          if (e.key === "Escape") { e.stopPropagation(); onCancel(); }
+        }}
+        style={{
+          flex: 1, minWidth: 0, height: 28, padding: "0 8px", borderRadius: 6,
+          border: "1px solid var(--border)", background: "transparent",
+          color: "var(--text-primary)", fontSize: "var(--fs-secondary)", outline: "none",
+        }}
+      />
+      <button
+        onClick={() => onSubmit(pin)}
+        disabled={!ready}
+        style={{
+          height: 28, padding: "0 10px", borderRadius: 6, border: "none",
+          cursor: ready ? "pointer" : "default", opacity: ready ? 1 : 0.5,
+          background: "var(--accent)", color: "var(--main-bg)", fontSize: "var(--fs-small)",
+        }}
+      >
+        Pair
+      </button>
+    </div>
   );
 }
 

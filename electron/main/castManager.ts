@@ -3,11 +3,12 @@ import type { SubsonicClient } from "./subsonic";
 import { scanCastDevices, type DiscoveredCastDevice } from "./castDiscovery";
 import { ChromecastDevice, type CastStatusEvent, type CastTrackMetadata } from "./castChromecast";
 import { DlnaDevice } from "./castDlna";
+import { AirplayDevice } from "./castAirplay";
 import { CastProxyServer } from "./castProxy";
 import { contentTypeForFormat } from "./castDidl";
 
-// Structural contract both device wrappers satisfy — lets this file treat
-// an active Chromecast or DLNA session identically everywhere below.
+// Structural contract all device wrappers satisfy — lets this file treat
+// an active Chromecast, DLNA or AirPlay session identically everywhere below.
 interface CastSession {
   connect(): Promise<void>;
   loadMedia(url: string, contentType: string, metadata: CastTrackMetadata, startPositionSecs: number): Promise<void>;
@@ -39,7 +40,7 @@ const DLNA_NOTIFY_PATH = "dlna-event";
 export interface CastDevice {
   id: string;
   name: string;
-  protocol: "chromecast" | "dlna";
+  protocol: "chromecast" | "dlna" | "airplay";
   /** False when a real TCP probe to the device couldn't connect — see
    *  castDiscovery.ts's probeReachable(). connect() still rejects these
    *  server-side (defense in depth), but CastPicker.tsx greys them out and
@@ -121,7 +122,7 @@ export class CastManager {
       .finally(() => { this.scanning = false; this.sendScanning(false); });
   }
 
-  async connect(deviceId: string): Promise<void> {
+  async connect(deviceId: string, pin?: string): Promise<void> {
     const device = this.deviceCache.get(deviceId);
     if (!device) throw new Error("Unknown cast device — try rescanning");
     // CastPicker.tsx already disables the click for these — this is defense
@@ -135,6 +136,8 @@ export class CastManager {
     let session: CastSession;
     if (device.protocol === "chromecast") {
       session = new ChromecastDevice(device.host, (event) => this.handleStatus(event));
+    } else if (device.protocol === "airplay") {
+      session = new AirplayDevice(device.id, device.host, device.port, pin, (event) => this.handleStatus(event));
     } else {
       if (!device.avTransportControlUrl) throw new Error("Missing DLNA control URL — try rescanning");
       // Registered before constructing the device, not after — it needs to

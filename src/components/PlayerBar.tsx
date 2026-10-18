@@ -112,6 +112,8 @@ export function PlayerBar() {
   const castConnected      = useStore((s) => s.castConnected);
   const castConnecting     = useStore((s) => s.castConnecting);
   const castConnectError   = useStore((s) => s.castConnectError);
+  const castPinDeviceId    = useStore((s) => s.castPinDeviceId);
+  const cancelCastPin      = useStore((s) => s.cancelCastPin);
   const castDevice         = useStore((s) => s.castDevice);
   const castDevices        = useStore((s) => s.castDevices);
   const castScanning       = useStore((s) => s.castScanning);
@@ -528,6 +530,8 @@ export function PlayerBar() {
           connectedDevice={castDevice}
           connecting={castConnecting}
           connectError={castConnectError}
+          pinDeviceId={castPinDeviceId}
+          onCancelPin={cancelCastPin}
           // Stays open across a toggle (matches the old app) — the row's own
           // checkmark/slider update in place so switching devices or
           // adjusting volume doesn't require reopening the picker each time.

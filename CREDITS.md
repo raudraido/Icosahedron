@@ -42,3 +42,10 @@ region detection and BPM-snapping logic. This project didn't copy Mixxx's
 code directly; it ports the algorithm as this project's own PyQt/QML
 predecessor had already adapted it, reimplemented again in Rust in
 `bpm.rs`'s `retrieve_const_regions`/`make_const_bpm_ex`/`bpm_round`.
+
+## airplay2-rs
+
+AirPlay 2 casting (`native/audio-engine/src/airplay.rs`) is built on
+**airplay2-rs** (https://github.com/lmcgartland/airplay2-rs, GPL-3.0-or-later),
+used as a pinned git dependency for device discovery, pairing and audio
+streaming to AirPlay receivers.

@@ -30,3 +30,8 @@ libc = "0.2"
 [build-dependencies]
 napi-build = "2"
 cc = "1"
+
+# Upstream airplay-audio doesn't compile on Windows (Unix-only socket calls in
+# rtp.rs); use a vendored copy with that one function fixed. See vendor/airplay-audio/README.md.
+[patch."https://github.com/lmcgartland/airplay2-rs"]
+airplay-audio = { path = "vendor/airplay-audio" }

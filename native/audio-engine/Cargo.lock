@@ -49,7 +49,6 @@ dependencies = [
 [[package]]
 name = "airplay-audio"
 version = "0.1.0"
-source = "git+https://github.com/lmcgartland/airplay2-rs?rev=a2f980cf25bf13ae20158497cc2d2ea69cd88fa7#a2f980cf25bf13ae20158497cc2d2ea69cd88fa7"
 dependencies = [
  "airplay-core",
  "airplay-crypto",

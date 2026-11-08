@@ -7,6 +7,7 @@
 // the picker and can send commands or transfer playback here.
 import { create } from "zustand";
 import { platform } from "../platform";
+import { getSyncUrl, saveEngineUrl } from "../platform/syncUrl";
 import { api, type Track } from "./api";
 import { useStore } from "../store";
 
@@ -26,7 +27,7 @@ interface SyncStore {
 }
 
 const LS_ID = "ico.deviceId";
-const LS_URL = "ico.syncUrl";
+
 
 function loadDeviceId(): string {
   try {
@@ -34,20 +35,6 @@ function loadDeviceId(): string {
     if (!id) { id = crypto.randomUUID(); localStorage.setItem(LS_ID, id); }
     return id;
   } catch { return "dev-" + Math.random().toString(36).slice(2); }
-}
-
-export function getSyncUrl(): string | null {
-  if (platform.kind === "web") return location.origin.replace(/^http/, "ws") + "/sync";
-  try {
-    const v = localStorage.getItem(LS_URL);
-    return v ? v.replace(/^http/, "ws").replace(/\/+$/, "").replace(/\/sync$/, "") + "/sync" : null;
-  } catch { return null; }
-}
-
-export function setSyncUrl(url: string): void {
-  try { url ? localStorage.setItem(LS_URL, url) : localStorage.removeItem(LS_URL); } catch { /* ignore */ }
-  useSync.setState({ syncUrl: getSyncUrl() });
-  restart();
 }
 
 function deviceName(): string {
@@ -61,6 +48,12 @@ function deviceName(): string {
 export const useSync = create<SyncStore>(() => ({
   status: "off", deviceId: loadDeviceId(), devices: [], activeDeviceId: null, remote: null, syncUrl: getSyncUrl(),
 }));
+
+export function setSyncUrl(url: string): void {
+  saveEngineUrl(url);
+  useSync.setState({ syncUrl: getSyncUrl() });
+  restart();
+}
 
 let ws: WebSocket | null = null;
 let retry = 0;

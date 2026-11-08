@@ -5,6 +5,7 @@ import { WebSocketServer } from "ws";
 import { Hub } from "./hub.mjs";
 import { verifySubsonic } from "./auth.mjs";
 import { isProxied, proxyToNavidrome } from "./proxy.mjs";
+import { createBpmStore } from "./bpm.mjs";
 
 const MIME = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".mjs": "text/javascript",
@@ -15,12 +16,51 @@ const MIME = {
 /**
  * @param {{navidromeUrl:string, webRoot?:string, store:any, verify?:Function}} opts
  */
-export function createApp({ navidromeUrl, webRoot, store, verify = verifySubsonic }) {
+export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmStore(), verify = verifySubsonic }) {
   const hub = new Hub(store);
+  const authCache = new Map(); // "u|t|s" -> expiry; tokens stay valid, so re-verifying each call is wasted
+
+  async function authed(req) {
+    const m = /^Subsonic\s+(.+)$/.exec(req.headers.authorization ?? "");
+    if (!m) return false;
+    const p = new URLSearchParams(m[1]);
+    const cred = { u: p.get("u"), t: p.get("t"), s: p.get("s") };
+    const key = `${cred.u}|${cred.t}|${cred.s}`;
+    if ((authCache.get(key) ?? 0) > Date.now()) return true;
+    if (!(await verify(navidromeUrl, cred))) return false;
+    authCache.set(key, Date.now() + 10 * 60 * 1000);
+    if (authCache.size > 500) authCache.delete(authCache.keys().next().value);
+    return true;
+  }
+
+  async function handleBpm(req, res, url) {
+    if (!(await authed(req))) { res.writeHead(401).end(); return; }
+    const id = decodeURIComponent(url.pathname.slice("/bpm".length).replace(/^\//, ""));
+    const json = (code, body) => { res.writeHead(code, { "content-type": "application/json" }); res.end(JSON.stringify(body)); };
+    if (req.method === "GET" && !id) return json(200, bpmStore.all());
+    if (req.method === "GET") { const b = bpmStore.get(id); return b === undefined ? json(404, {}) : json(200, { bpm: b }); }
+    if (req.method === "PUT" && id) {
+      let body = "";
+      for await (const c of req) { body += c; if (body.length > 1024) { res.writeHead(413).end(); return; } }
+      let j; try { j = JSON.parse(body); } catch { res.writeHead(400).end(); return; }
+      if (!bpmStore.set(id, j?.bpm, j?.manual)) { res.writeHead(422).end(); return; }
+      res.writeHead(204).end(); return;
+    }
+    if (req.method === "POST" && !id) { // bulk upload of detected values, e.g. a desktop's existing local cache
+      let body = "";
+      for await (const c of req) { body += c; if (body.length > 4 * 1024 * 1024) { res.writeHead(413).end(); return; } }
+      let j; try { j = JSON.parse(body); } catch { res.writeHead(400).end(); return; }
+      let stored = 0;
+      if (j && typeof j === "object") for (const [k, v] of Object.entries(j)) if (bpmStore.set(k, v, false)) stored++;
+      return json(200, { stored });
+    }
+    res.writeHead(405).end();
+  }
 
   const http = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://x");
     if (isProxied(url.pathname)) { proxyToNavidrome(navidromeUrl, req, res); return; }
+    if (url.pathname === "/bpm" || url.pathname.startsWith("/bpm/")) { handleBpm(req, res, url).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); }); return; }
     if (url.pathname === "/healthz") { res.writeHead(200).end("ok"); return; }
     if (url.pathname === "/config.json") {
       // The web UI reads this to learn which Subsonic server to talk to.
@@ -72,6 +112,6 @@ export function createApp({ navidromeUrl, webRoot, store, verify = verifySubsoni
 
   return {
     http, hub,
-    close: () => { for (const c of wss.clients) c.terminate(); wss.close(); http.close(); http.closeAllConnections?.(); },
+    close: () => { bpmStore.flush(); for (const c of wss.clients) c.terminate(); wss.close(); http.close(); http.closeAllConnections?.(); },
   };
 }

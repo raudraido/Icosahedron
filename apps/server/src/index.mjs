@@ -1,5 +1,6 @@
 import { createApp } from "./server.mjs";
 import { fileStore } from "./store.mjs";
+import { createBpmStore } from "./bpm.mjs";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -11,6 +12,7 @@ const app = createApp({
   navidromeUrl,
   webRoot: existsSync(webDir) ? webDir : undefined,
   store: fileStore(process.env.DATA_DIR ?? "/data"),
+  bpmStore: createBpmStore(process.env.DATA_DIR ?? "/data"),
 });
 app.http.listen(port, () => console.log(`icosahedron-server on :${port} → ${navidromeUrl}`));
 for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => { app.close(); process.exit(0); });

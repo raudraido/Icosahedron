@@ -2,6 +2,7 @@
 // host it runs in (Electron today; browser/PWA and Capacitor mobile next).
 // UI and store code must go through `platform`, never `window.electronAPI`.
 import { createWebPlatform } from "./web";
+import { withEngineBpm } from "./bpmSync";
 import type {
   AudioEventPayload,
   CastDevice,
@@ -44,7 +45,8 @@ function electronPlatform(api: NonNullable<Window["electronAPI"]>): Platform {
   };
 }
 
-export const platform: Platform =
+const basePlatform: Platform =
   typeof window !== "undefined" && window.electronAPI
     ? electronPlatform(window.electronAPI)
     : createWebPlatform();
+export const platform: Platform = withEngineBpm(basePlatform);

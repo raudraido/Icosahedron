@@ -1,6 +1,8 @@
 services:
   icosahedron:
-    build: .
+    build:
+      context: ../..
+      dockerfile: apps/server/Dockerfile
     restart: unless-stopped
     environment:
       NAVIDROME_URL: http://navidrome:4533   # accounts = Navidrome accounts

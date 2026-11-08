@@ -1,16 +1,29 @@
-# Web engine: serves the web UI (when bundled into /app/web) and the sync hub.
+# Web engine: web UI + sync hub + Navidrome proxy in one container.
+# Build context is the repository root:
+#   docker build -f apps/server/Dockerfile -t icosahedron .
+
+FROM node:22-alpine AS web
+WORKDIR /repo
+COPY package.json package-lock.json ./
+COPY native/audio-engine/package.json native/audio-engine/
+# --ignore-scripts: skip the Rust audio-engine build and Electron download,
+# neither is needed for the browser bundle.
+RUN npm ci --ignore-scripts
+COPY . .
+RUN npx vite build --config vite.web.config.ts
+
 FROM node:22-alpine AS deps
 WORKDIR /app
-COPY package.json package-lock.json ./
+COPY apps/server/package.json apps/server/package-lock.json ./
 RUN npm ci --omit=dev
 
 FROM node:22-alpine
 WORKDIR /app
-ENV NODE_ENV=production PORT=8080 DATA_DIR=/data
+ENV NODE_ENV=production PORT=8080 DATA_DIR=/data WEB_ROOT=/app/web
 COPY --from=deps /app/node_modules ./node_modules
-COPY package.json ./
-COPY src ./src
-# COPY web ./web   # added once the web build (stage 3) exists
+COPY apps/server/package.json ./
+COPY apps/server/src ./src
+COPY --from=web /repo/dist-web ./web
 VOLUME /data
 EXPOSE 8080
 USER node

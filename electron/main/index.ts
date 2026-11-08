@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, protocol, screen, shell, Tray } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { SubsonicClient } from "./subsonic";
+import { SubsonicClient } from "../../src/lib/subsonic/client";
 import { AudioEngineClient } from "./audioEngine";
 import { CastManager } from "./castManager";
 import { CALIBRATION_SECONDS } from "./castCalibration";

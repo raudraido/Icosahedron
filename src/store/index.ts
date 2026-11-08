@@ -795,8 +795,7 @@ export const useStore = create<AppStore>((set, get) => ({
       username: user,
       activeServerId,
       activeTab: "home", navHistory: [{ tab: "home" }], navPos: 0,
-      coverUrl: (coverId, size = 200) =>
-        coverId ? `cover://localhost/${encodeURIComponent(coverId)}?size=${size}` : "",
+      coverUrl: (coverId, size = 200) => platform.coverUrl(coverId, size),
     });
     api.lastfmGetConnection(activeServerId ?? LASTFM_DEFAULT_SERVER_KEY)
       .then((conn) => get().setLastfmConnection(conn)).catch(() => {});
@@ -842,8 +841,7 @@ export const useStore = create<AppStore>((set, get) => ({
       username: result.username,
       activeServerId: id,
       activeTab: "home", navHistory: [{ tab: "home" }], navPos: 0,
-      coverUrl: (coverId, size = 200) =>
-        coverId ? `cover://localhost/${encodeURIComponent(coverId)}?size=${size}` : "",
+      coverUrl: (coverId, size = 200) => platform.coverUrl(coverId, size),
     });
     // Last.fm is scoped per server profile — the newly-active profile's own
     // connection/toggle state (or none at all) replaces whatever the
@@ -1660,8 +1658,7 @@ export async function tryAutoConnect() {
     serverUrl: result.url,
     username: result.username,
     activeServerId,
-    coverUrl: (coverId, size = 200) =>
-      coverId ? `cover://localhost/${encodeURIComponent(coverId)}?size=${size}` : "",
+      coverUrl: (coverId, size = 200) => platform.coverUrl(coverId, size),
   });
   try {
     await useStore.getState().restoreSession();

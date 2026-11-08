@@ -4,6 +4,7 @@ import { join, extname, normalize, sep } from "node:path";
 import { WebSocketServer } from "ws";
 import { Hub } from "./hub.mjs";
 import { verifySubsonic } from "./auth.mjs";
+import { isProxied, proxyToNavidrome } from "./proxy.mjs";
 
 const MIME = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".mjs": "text/javascript",
@@ -19,6 +20,7 @@ export function createApp({ navidromeUrl, webRoot, store, verify = verifySubsoni
 
   const http = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://x");
+    if (isProxied(url.pathname)) { proxyToNavidrome(navidromeUrl, req, res); return; }
     if (url.pathname === "/healthz") { res.writeHead(200).end("ok"); return; }
     if (url.pathname === "/config.json") {
       // The web UI reads this to learn which Subsonic server to talk to.

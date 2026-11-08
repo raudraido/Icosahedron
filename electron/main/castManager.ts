@@ -1,5 +1,5 @@
 import type { BrowserWindow } from "electron";
-import type { SubsonicClient } from "./subsonic";
+import type { SubsonicClient } from "../../src/lib/subsonic/client";
 import { scanCastDevices, type DiscoveredCastDevice } from "./castDiscovery";
 import { ChromecastDevice, type CastStatusEvent, type CastTrackMetadata } from "./castChromecast";
 import { DlnaDevice } from "./castDlna";

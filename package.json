@@ -10,6 +10,7 @@
     "dev": "electron-vite dev",
     "build": "tsc --noEmit && electron-vite build",
     "preview": "electron-vite preview",
+    "build:web": "tsc --noEmit && vite build --config vite.web.config.ts",
     "dist": "npm run build && node scripts/gen-appstream.mjs && electron-builder --publish=never",
     "build:native": "cd native/audio-engine && napi build --platform --release",
     "postinstall": "npm run build:native"

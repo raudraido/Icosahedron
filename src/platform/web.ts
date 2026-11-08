@@ -167,6 +167,7 @@ export function createWebPlatform(): Platform {
       };
       d.servers = existing ? d.servers.map((s) => (s.id === p.id ? p : s)) : [...d.servers, p];
       if (!d.active) d.active = p.id;
+      void navigator.storage?.persist?.(); // ask the browser not to evict the saved login under storage pressure
       writeData(d);
       return publicProfile(p);
     },

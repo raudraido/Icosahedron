@@ -6,6 +6,7 @@
 import { SubsonicClient } from "../lib/subsonic/client";
 import type { AudioEventPayload } from "../lib/api";
 import type { Platform, Unsubscribe } from "./index";
+import { createEngine } from "./engineApi";
 
 const LS_SERVERS = "ico.servers";
 const LS_LYRICS = "ico.lyrics.";
@@ -111,6 +112,14 @@ export function createWebPlatform(): Platform {
   };
   const mkClient = (p: { username: string; password: string; musicFolderIds?: string[] }) =>
     new SubsonicClient(ORIGIN(), p.username, p.password, p.musicFolderIds ?? []);
+
+  const engine = createEngine(async () => need().syncAuth());
+  const lf = async (method: string, path: string, body?: unknown) => {
+    const r = await engine(path, { method, body: body === undefined ? undefined : JSON.stringify(body) });
+    if (!r) throw new Error("sync server unavailable");
+    if (!r.ok) throw new Error(`Last.fm: ${r.status === 503 ? "not configured on this server" : "HTTP " + r.status}`);
+    return r.status === 204 ? undefined : r.json();
+  };
 
   const inert = (value: unknown) => () => value;
   const unsupported = (cmd: string) => () => Promise.reject(new Error(`"${cmd}" is not available in the web app`));
@@ -232,15 +241,26 @@ export function createWebPlatform(): Platform {
     set_bpm_override: inert(undefined),
     get_bpm_cache_all: inert({}),
 
-    // casting / Last.fm / app shell — desktop-only
+    // Last.fm runs in the web engine (secret + session key stay server-side)
+    lastfm_connect_start: async () => {
+      const { token, authUrl } = await lf("POST", "/lastfm/token");
+      window.open(authUrl, "_blank", "noopener");
+      return { token };
+    },
+    lastfm_connect_poll: ({ token }) => lf("POST", "/lastfm/session", { token }),
+    lastfm_get_connection: () => lf("GET", "/lastfm/connection").catch(() => null),
+    lastfm_public_api_key: () => lf("GET", "/lastfm/config").then((c) => c.apiKey ?? "").catch(() => ""),
+    lastfm_disconnect: () => lf("DELETE", "/lastfm/connection"),
+    lastfm_set_history_enabled: ({ value }) => lf("PUT", "/lastfm/toggles", { historyEnabled: value }),
+    lastfm_set_scrobble_enabled: ({ value }) => lf("PUT", "/lastfm/toggles", { scrobbleEnabled: value }),
+    lastfm_now_playing: ({ track }) => lf("POST", "/lastfm/nowplaying", { track }).catch(() => undefined),
+    lastfm_scrobble: ({ track, timestamp }) => lf("POST", "/lastfm/scrobble", { track, timestamp }).catch(() => undefined),
+
+    // casting / app shell — desktop-only
     cast_discover: inert([]), cast_rescan: inert([]), cast_disconnect: inert(undefined), cast_stop: inert(undefined),
     cast_pause: inert(undefined), cast_resume: inert(undefined), cast_seek: inert(undefined), cast_set_volume: inert(undefined),
     cast_connect: unsupported("cast_connect"), cast_play_track: unsupported("cast_play_track"),
     cast_calibration_start: unsupported("cast_calibration_start"), cast_calibration_stop: inert(undefined),
-    lastfm_connect_start: unsupported("lastfm_connect_start"), lastfm_connect_poll: unsupported("lastfm_connect_poll"),
-    lastfm_get_connection: inert(null), lastfm_public_api_key: inert(""), lastfm_disconnect: inert(undefined),
-    lastfm_set_history_enabled: inert(undefined), lastfm_set_scrobble_enabled: inert(undefined),
-    lastfm_now_playing: inert(undefined), lastfm_scrobble: inert(undefined),
     app_version: inert("web"), check_for_update: inert(null), download_and_install_update: unsupported("update"),
     capture_screens: inert([]), set_window_theme: inert(undefined), quit_app: inert(undefined),
     get_tray_settings: inert({ minimizeToTray: false, exitToTray: false }), set_tray_settings: inert(undefined),

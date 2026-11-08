@@ -106,6 +106,18 @@ export function createWebPlatform(): Platform {
   const audioListeners = new Set<(p: AudioEventPayload) => void>();
   const audio = new WebAudio((p) => audioListeners.forEach((cb) => cb(p)));
 
+  // The store asks for Last.fm state at startup, before auto-connect has finished
+  // (the desktop main process is ready instantly, the browser client is not) —
+  // those calls wait for the connection instead of failing and leaving the UI
+  // thinking Last.fm is disconnected.
+  const waiters: Array<(c: SubsonicClient) => void> = [];
+  const setClient = (c: SubsonicClient) => { client = c; waiters.splice(0).forEach((w) => w(c)); };
+  const whenConnected = (): Promise<SubsonicClient> =>
+    client ? Promise.resolve(client) : new Promise((resolve, reject) => {
+      const t = window.setTimeout(() => reject(new Error("not connected")), 20000);
+      waiters.push((c) => { clearTimeout(t); resolve(c); });
+    });
+
   const need = (): SubsonicClient => {
     if (!client) throw new Error("not connected");
     return client;
@@ -113,7 +125,7 @@ export function createWebPlatform(): Platform {
   const mkClient = (p: { username: string; password: string; musicFolderIds?: string[] }) =>
     new SubsonicClient(ORIGIN(), p.username, p.password, p.musicFolderIds ?? []);
 
-  const engine = createEngine(async () => need().syncAuth());
+  const engine = createEngine(async () => (await whenConnected()).syncAuth());
   const lf = async (method: string, path: string, body?: unknown) => {
     const r = await engine(path, { method, body: body === undefined ? undefined : JSON.stringify(body) });
     if (!r) throw new Error("sync server unavailable");
@@ -127,7 +139,7 @@ export function createWebPlatform(): Platform {
   type Handler = (a: any) => any;
   const H: Record<string, Handler> = {
     // connection & profiles
-    connect: async (a) => { const c = mkClient(a); await c.ping(); client = c; return true; },
+    connect: async (a) => { const c = mkClient(a); await c.ping(); setClient(c); return true; },
     ping: () => need().ping(),
     test_connection: async (a) => { try { await mkClient(a).ping(); return true; } catch { return false; } },
     list_servers: () => readData().servers.map(publicProfile),
@@ -157,7 +169,7 @@ export function createWebPlatform(): Platform {
       const s = readData().servers.find((x) => x.id === id);
       if (!s) return null;
       try {
-        const c = mkClient(s); await c.ping(); client = c;
+        const c = mkClient(s); await c.ping(); setClient(c);
         const d = readData(); d.active = id; writeData(d);
         return { url: s.url, username: s.username };
       } catch { return null; }
@@ -171,7 +183,7 @@ export function createWebPlatform(): Platform {
       const d = readData();
       const s = d.servers.find((x) => x.id === d.active);
       if (!s) return null;
-      try { const c = mkClient(s); await c.ping(); client = c; return { url: s.url, username: s.username }; } catch { return null; }
+      try { const c = mkClient(s); await c.ping(); setClient(c); return { url: s.url, username: s.username }; } catch { return null; }
     },
 
     // library

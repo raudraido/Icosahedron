@@ -183,7 +183,7 @@ function showDebug(supported: boolean): void {
     box.textContent = [
       `build ${typeof __BUILD_ID__ === "string" ? __BUILD_ID__ : "?"}  (tap to hide)`,
       `ua ${navigator.userAgent.replace(/\(.*?\)/, "").slice(0, 70)}`,
-      `secure ${isSecureContext}  mediaSession ${!!ms}  active ${supported}  sw ${"serviceWorker" in navigator && !!navigator.serviceWorker.controller}`,
+      `secure ${isSecureContext}  mediaSession ${!!ms}  active ${supported}  sw ${"serviceWorker" in navigator && !!navigator.serviceWorker.controller}  nosw ${localStorage.getItem("ico.nosw") === "1"}`,
       `handlers ok [${dbg.registered.join(",")}]  failed [${dbg.failed.join(",")}]`,
       `session.state ${ms?.playbackState}  title "${md?.title ?? ""}"  artwork ${md?.artwork?.length ?? 0}`,
       `art ${artMode()} ${dbg.art}  metaSets ${dbg.metaSets} (last "${dbg.metaTrack}")  posSets ${dbg.posSets} (${dbg.lastPos})`,

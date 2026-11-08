@@ -118,7 +118,9 @@ export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmSt
     }
     try {
       const body = await readFile(file);
-      res.writeHead(200, { "content-type": MIME[extname(file)] ?? "application/octet-stream" });
+      // Hashed bundles never change; the shell and the service worker must always be revalidated.
+      const cache = rel.startsWith("assets/") ? "public, max-age=31536000, immutable" : "no-cache";
+      res.writeHead(200, { "content-type": MIME[extname(file)] ?? "application/octet-stream", "cache-control": cache });
       res.end(body);
     } catch {
       res.writeHead(404).end();

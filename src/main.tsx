@@ -11,3 +11,11 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <App />
   </React.StrictMode>,
 );
+
+// Installable PWA: the service worker is for the browser build only (Electron
+// loads file:// and has no use for it). Needs HTTPS, or localhost.
+if (!window.electronAPI && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => { /* not a secure context — just not installable */ });
+  });
+}

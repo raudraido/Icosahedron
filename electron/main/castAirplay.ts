@@ -1,11 +1,6 @@
 import { AirplayClient, type AirplayEvent } from "icosahedron-audio-engine";
 import { app } from "electron";
-import { createWriteStream } from "node:fs";
-import { mkdir, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
 import type { CastStatusEvent, CastTrackMetadata } from "./castChromecast";
 import type { DiscoveredCastDevice } from "./castDiscovery";
 
@@ -15,8 +10,10 @@ import type { DiscoveredCastDevice } from "./castDiscovery";
 // scanned devices, so connect() needs the same instance that scanned them.
 //
 // Unlike Chromecast/DLNA the receiver doesn't fetch a URL: the native side
-// decodes and pushes PCM itself, so loadMedia() below first pulls the track
-// from castProxy.ts into a temp file and hands that path over.
+// decodes and pushes PCM itself. loadMedia() below hands it the castProxy.ts
+// URL; the native side downloads the track in the background while it is
+// already being decoded and streamed, so playback starts without waiting for
+// the whole file.
 
 let native: AirplayClient | null = null;
 let onNativeEvent: ((event: AirplayEvent) => void) | null = null;
@@ -54,21 +51,13 @@ export async function scanAirplay(timeoutMs: number): Promise<DiscoveredCastDevi
   }
 }
 
-const EXT_BY_CONTENT_TYPE: Record<string, string> = {
-  "audio/mpeg": "mp3",
-  "audio/flac": "flac",
-  "audio/ogg": "ogg",
-  "audio/mp4": "m4a",
-  "audio/aac": "aac",
-  "audio/wav": "wav",
-};
-
 // castManager.ts's CastSession contract (see there) — AirPlay implements the
 // same shape so the orchestrator treats all three protocols identically.
 export class AirplayDevice {
-  private tempDir = join(tmpdir(), "icosahedron-airplay");
-  private tempFile: string | null = null;
-  private loadCounter = 0;
+  // castPlayTrack is fire-and-forget, so loads can overlap (skipping tracks
+  // fast, or the artwork fetch still running): only the newest one may start.
+  private loadGeneration = 0;
+  private loadAbort: AbortController | null = null;
   private connected = false;
 
   constructor(
@@ -99,10 +88,16 @@ export class AirplayDevice {
 
   // Apple TV only displays its pairing PIN once asked to (POST /pair-pin-start,
   // see airplay2-rs's README). Best-effort — devices with a fixed PIN just
-  // don't have the endpoint.
+  // don't have the endpoint. Apple TV answers 403 to any request without an
+  // AirPlay User-Agent (Node's default "node" UA included), so send one.
   private async showPinOnDevice(): Promise<void> {
     try {
-      await fetch(`http://${this.host}:${this.port}/pair-pin-start`, { method: "POST", signal: AbortSignal.timeout(3000) });
+      const resp = await fetch(`http://${this.host}:${this.port}/pair-pin-start`, {
+        method: "POST",
+        headers: { "User-Agent": "AirPlay/320.20" },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (!resp.ok) console.log(`[airplay] pair-pin-start returned HTTP ${resp.status}`);
     } catch (err) {
       console.log(`[airplay] pair-pin-start failed: ${err instanceof Error ? err.message : err}`);
     }
@@ -133,37 +128,67 @@ export class AirplayDevice {
     }
   }
 
-  async loadMedia(url: string, contentType: string, _metadata: CastTrackMetadata, startPositionSecs: number): Promise<void> {
-    const path = await this.download(url, contentType);
-    await getNative().play(path, startPositionSecs);
+  async loadMedia(url: string, contentType: string, metadata: CastTrackMetadata, startPositionSecs: number): Promise<void> {
+    const generation = this.supersedeLoads();
+    const ctl = this.loadAbort!;
+    try {
+      // The cover loads alongside the track and is sent once it's there — a
+      // slow cover fetch must never delay the music.
+      const artworkPromise = this.fetchArtwork(metadata.artUrl, ctl.signal);
+      // The native side downloads + streams the track and pushes title/artist
+      // and the progress bar to the receiver's now-playing screen
+      // (SET_PARAMETER), re-sending them on seek. The content type is only a
+      // format hint for the decoder.
+      await getNative().play(url, startPositionSecs, { title: metadata.title, artist: metadata.subtitle }, contentType);
+      const artwork = await artworkPromise;
+      if (artwork && generation === this.loadGeneration) {
+        await getNative().setArtwork(artwork.bytes, artwork.contentType);
+      }
+    } catch (err) {
+      // A superseded load is not an error — the newer track is what matters.
+      if (generation !== this.loadGeneration) return;
+      throw err;
+    }
   }
 
-  private async download(url: string, contentType: string): Promise<string> {
-    await mkdir(this.tempDir, { recursive: true });
-    const previous = this.tempFile;
-    const file = join(this.tempDir, `${process.pid}-${++this.loadCounter}.${EXT_BY_CONTENT_TYPE[contentType] ?? "mp3"}`);
-    const resp = await fetch(url);
-    if (!resp.ok || !resp.body) throw new Error(`Couldn't fetch track for AirPlay (HTTP ${resp.status})`);
-    await pipeline(Readable.fromWeb(resp.body as never), createWriteStream(file));
-    this.tempFile = file;
-    // The native side has already switched to the new file by the time the
-    // caller's play() returns, so the previous one is safe to drop afterwards.
-    if (previous) void rm(previous, { force: true });
-    return file;
+  // Invalidates any in-flight load (new track, stop, disconnect) and returns
+  // the new generation number.
+  private supersedeLoads(): number {
+    this.loadAbort?.abort();
+    this.loadAbort = new AbortController();
+    return ++this.loadGeneration;
+  }
+
+  // Receivers only decode JPEG/PNG artwork; anything else (or a failed fetch)
+  // just means no cover on the TV, never a failed cast.
+  private async fetchArtwork(artUrl: string | undefined, signal: AbortSignal): Promise<{ bytes: Buffer; contentType: string } | null> {
+    if (!artUrl) return null;
+    try {
+      const resp = await fetch(artUrl, { signal: AbortSignal.any([signal, AbortSignal.timeout(5000)]) });
+      if (!resp.ok) return null;
+      const contentType = (resp.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+      if (contentType !== "image/jpeg" && contentType !== "image/png") return null;
+      return { bytes: Buffer.from(await resp.arrayBuffer()), contentType };
+    } catch (err) {
+      console.log(`[airplay] artwork fetch failed: ${err instanceof Error ? err.message : err}`);
+      return null;
+    }
   }
 
   pause(): void { void getNative().pause().catch(() => {}); }
   resume(): void { void getNative().resume().catch(() => {}); }
-  stop(): void { void getNative().stop().catch(() => {}); }
+  stop(): void {
+    this.supersedeLoads(); // a load still downloading must not start playing after a stop
+    void getNative().stop().catch(() => {});
+  }
   seek(seconds: number): void { void getNative().seek(seconds).catch(() => {}); }
   setVolume(volume: number): void { void getNative().setVolume(volume).catch(() => {}); }
 
   disconnect(): void {
     if (!this.connected) return;
     this.connected = false;
+    this.supersedeLoads();
     onNativeEvent = null;
     void getNative().disconnect().catch(() => {});
-    if (this.tempFile) void rm(this.tempFile, { force: true });
-    this.tempFile = null;
   }
 }

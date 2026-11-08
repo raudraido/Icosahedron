@@ -22,11 +22,13 @@ thread-priority = "1"
 # Pinned to a commit of our fork (branch `icosahedron`): upstream master plus the
 # changes proposed upstream that this player needs — stream restarts on one
 # session (track change/seek), track metadata + progress, decoding from a
-# download in progress, a reliable stop(), and the NTP/SETUP race fix. Switch back
-# to upstream once those are merged. The API is explicitly unstable (alpha).
-airplay-client = { git = "https://github.com/raudraido/airplay2-rs", rev = "5a046b3392a055de7810a11115daac5d96fdd2c1" }
-airplay-core = { git = "https://github.com/raudraido/airplay2-rs", rev = "5a046b3392a055de7810a11115daac5d96fdd2c1" }
-airplay-audio = { git = "https://github.com/raudraido/airplay2-rs", rev = "5a046b3392a055de7810a11115daac5d96fdd2c1" }
+# download in progress, a reliable stop(), the NTP/SETUP race fix, remote-control
+# commands from the receiver, correct channel/sample-rate conversion, and
+# building on Windows (airplay-audio's socket QoS via socket2). Switch back to
+# upstream once those are merged. The API is explicitly unstable (alpha).
+airplay-client = { git = "https://github.com/raudraido/airplay2-rs", rev = "c40921d010e7489eb7b68a1adfe673db77aeffac" }
+airplay-core = { git = "https://github.com/raudraido/airplay2-rs", rev = "c40921d010e7489eb7b68a1adfe673db77aeffac" }
+airplay-audio = { git = "https://github.com/raudraido/airplay2-rs", rev = "c40921d010e7489eb7b68a1adfe673db77aeffac" }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

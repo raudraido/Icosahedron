@@ -49,7 +49,7 @@ dependencies = [
 [[package]]
 name = "airplay-audio"
 version = "0.1.0"
-source = "git+https://github.com/raudraido/airplay2-rs?rev=5a046b3392a055de7810a11115daac5d96fdd2c1#5a046b3392a055de7810a11115daac5d96fdd2c1"
+source = "git+https://github.com/raudraido/airplay2-rs?rev=c40921d010e7489eb7b68a1adfe673db77aeffac#c40921d010e7489eb7b68a1adfe673db77aeffac"
 dependencies = [
  "airplay-core",
  "airplay-crypto",
@@ -74,7 +74,7 @@ dependencies = [
 [[package]]
 name = "airplay-client"
 version = "0.1.0"
-source = "git+https://github.com/raudraido/airplay2-rs?rev=5a046b3392a055de7810a11115daac5d96fdd2c1#5a046b3392a055de7810a11115daac5d96fdd2c1"
+source = "git+https://github.com/raudraido/airplay2-rs?rev=c40921d010e7489eb7b68a1adfe673db77aeffac#c40921d010e7489eb7b68a1adfe673db77aeffac"
 dependencies = [
  "airplay-audio",
  "airplay-core",
@@ -86,6 +86,7 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "futures",
+ "plist",
  "rand 0.8.8",
  "serde",
  "serde_json",
@@ -97,7 +98,7 @@ dependencies = [
 [[package]]
 name = "airplay-core"
 version = "0.1.0"
-source = "git+https://github.com/raudraido/airplay2-rs?rev=5a046b3392a055de7810a11115daac5d96fdd2c1#5a046b3392a055de7810a11115daac5d96fdd2c1"
+source = "git+https://github.com/raudraido/airplay2-rs?rev=c40921d010e7489eb7b68a1adfe673db77aeffac#c40921d010e7489eb7b68a1adfe673db77aeffac"
 dependencies = [
  "serde",
  "thiserror 1.0.69",
@@ -107,7 +108,7 @@ dependencies = [
 [[package]]
 name = "airplay-crypto"
 version = "0.1.0"
-source = "git+https://github.com/raudraido/airplay2-rs?rev=5a046b3392a055de7810a11115daac5d96fdd2c1#5a046b3392a055de7810a11115daac5d96fdd2c1"
+source = "git+https://github.com/raudraido/airplay2-rs?rev=c40921d010e7489eb7b68a1adfe673db77aeffac#c40921d010e7489eb7b68a1adfe673db77aeffac"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -133,7 +134,7 @@ dependencies = [
 [[package]]
 name = "airplay-discovery"
 version = "0.1.0"
-source = "git+https://github.com/raudraido/airplay2-rs?rev=5a046b3392a055de7810a11115daac5d96fdd2c1#5a046b3392a055de7810a11115daac5d96fdd2c1"
+source = "git+https://github.com/raudraido/airplay2-rs?rev=c40921d010e7489eb7b68a1adfe673db77aeffac#c40921d010e7489eb7b68a1adfe673db77aeffac"
 dependencies = [
  "airplay-core",
  "async-stream",
@@ -149,7 +150,7 @@ dependencies = [
 [[package]]
 name = "airplay-pairing"
 version = "0.1.0"
-source = "git+https://github.com/raudraido/airplay2-rs?rev=5a046b3392a055de7810a11115daac5d96fdd2c1#5a046b3392a055de7810a11115daac5d96fdd2c1"
+source = "git+https://github.com/raudraido/airplay2-rs?rev=c40921d010e7489eb7b68a1adfe673db77aeffac#c40921d010e7489eb7b68a1adfe673db77aeffac"
 dependencies = [
  "airplay-core",
  "airplay-crypto",
@@ -163,7 +164,7 @@ dependencies = [
 [[package]]
 name = "airplay-resampler"
 version = "0.1.0"
-source = "git+https://github.com/raudraido/airplay2-rs?rev=5a046b3392a055de7810a11115daac5d96fdd2c1#5a046b3392a055de7810a11115daac5d96fdd2c1"
+source = "git+https://github.com/raudraido/airplay2-rs?rev=c40921d010e7489eb7b68a1adfe673db77aeffac#c40921d010e7489eb7b68a1adfe673db77aeffac"
 dependencies = [
  "airplay-core",
  "fastrand",
@@ -174,7 +175,7 @@ dependencies = [
 [[package]]
 name = "airplay-rtsp"
 version = "0.1.0"
-source = "git+https://github.com/raudraido/airplay2-rs?rev=5a046b3392a055de7810a11115daac5d96fdd2c1#5a046b3392a055de7810a11115daac5d96fdd2c1"
+source = "git+https://github.com/raudraido/airplay2-rs?rev=c40921d010e7489eb7b68a1adfe673db77aeffac#c40921d010e7489eb7b68a1adfe673db77aeffac"
 dependencies = [
  "airplay-core",
  "airplay-crypto",
@@ -194,7 +195,7 @@ dependencies = [
 [[package]]
 name = "airplay-timing"
 version = "0.1.0"
-source = "git+https://github.com/raudraido/airplay2-rs?rev=5a046b3392a055de7810a11115daac5d96fdd2c1#5a046b3392a055de7810a11115daac5d96fdd2c1"
+source = "git+https://github.com/raudraido/airplay2-rs?rev=c40921d010e7489eb7b68a1adfe673db77aeffac#c40921d010e7489eb7b68a1adfe673db77aeffac"
 dependencies = [
  "airplay-core",
  "async-trait",

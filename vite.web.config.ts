@@ -8,6 +8,7 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig({
   root: ".",
   base: "/",
+  define: { __BUILD_ID__: JSON.stringify(new Date().toISOString().slice(0, 19).replace("T", " ")) },
   plugins: [tailwindcss(), react()],
   build: {
     outDir: "dist-web",

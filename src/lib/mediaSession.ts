@@ -29,7 +29,7 @@ const artCache = new Map<string, Art>();
 
 // How the cover goes to iOS, switchable with ?art=<mode> (remembered) because
 // what iOS accepts is not documented: it greys out images it dislikes.
-//   128 | 256 | 384 | 512   fetch that size, declare it, pass as data: URL
+//   128 | 256 | 384 | 512   (default 512) fetch that size, declare it, pass as data: URL
 //   512d128                 fetch 512 px but declare 128x128
 //   url                     pass the https cover URL (512 px) and let iOS fetch it
 const ART_MODES = ["128", "256", "384", "512", "512d128", "url"];
@@ -38,8 +38,8 @@ function artMode(): string {
     const q = new URLSearchParams(location.search).get("art");
     if (q && ART_MODES.includes(q)) localStorage.setItem("ico.art", q);
     const v = localStorage.getItem("ico.art");
-    return v && ART_MODES.includes(v) ? v : "256";
-  } catch { return "256"; }
+    return v && ART_MODES.includes(v) ? v : "512";
+  } catch { return "512"; }
 }
 
 async function loadArtwork(coverId: string): Promise<Art | null> {

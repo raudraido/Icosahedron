@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Media Session test</title>
+<style>
+  body { font: 16px/1.4 -apple-system, system-ui, sans-serif; margin: 16px; background: #1c1e27; color: #eee; }
+  h1 { font-size: 18px; }
+  fieldset { border: 1px solid #555; border-radius: 8px; margin: 10px 0; padding: 8px 12px; }
+  legend { color: #9cf; }
+  label { display: block; padding: 6px 0; }
+  button { font-size: 18px; padding: 12px 18px; border-radius: 10px; border: 0; background: #c33; color: #fff; margin: 6px 6px 6px 0; }
+  pre { background: #000; color: #9f9; padding: 8px; border-radius: 6px; font-size: 12px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>Media Session isolation test</h1>
+<p>Pick options, tap Start, wait 3 s, lock the phone and look at the lock screen. Then change one option and repeat.</p>
+
+<fieldset><legend>When to set metadata</legend>
+  <label><input type="radio" name="when" value="before"> before play()</label>
+  <label><input type="radio" name="when" value="playing" checked> on the audio "playing" event</label>
+  <label><input type="radio" name="when" value="late"> 2 s after playback started</label>
+</fieldset>
+<fieldset><legend>Artwork</legend>
+  <label><input type="radio" name="art" value="none"> none</label>
+  <label><input type="radio" name="art" value="d128" checked> data: URL 128x128 PNG</label>
+  <label><input type="radio" name="art" value="d512"> data: URL 512x512 PNG</label>
+  <label><input type="radio" name="art" value="url"> https URL (/icons/icon-192.png)</label>
+</fieldset>
+<fieldset><legend>Other</legend>
+  <label><input type="checkbox" id="artist" checked> set artist</label>
+  <label><input type="checkbox" id="album"> set album</label>
+  <label><input type="checkbox" id="handlers" checked> action handlers (play, pause, prev, next, seekto)</label>
+  <label><input type="checkbox" id="pos" checked> setPositionState</label>
+  <label><input type="checkbox" id="dom" checked> audio element inside the DOM</label>
+  <label><input type="checkbox" id="title"> also set document.title</label>
+</fieldset>
+
+<button id="start">Start</button><button id="stop" style="background:#555">Stop</button>
+<pre id="log"></pre>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const val = (name) => document.querySelector(`input[name=${name}]:checked`).value;
+const log = (m) => { $("log").textContent += m + "\n"; };
+
+// 60 s quiet 220 Hz tone, 8 kHz 8-bit mono WAV, built in memory (no network needed).
+function wavUrl() {
+  const rate = 8000, secs = 60, n = rate * secs, buf = new ArrayBuffer(44 + n), v = new DataView(buf);
+  const w = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  w(0, "RIFF"); v.setUint32(4, 36 + n, true); w(8, "WAVEfmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate, true); v.setUint16(32, 1, true);
+  v.setUint16(34, 8, true); w(36, "data"); v.setUint32(40, n, true);
+  for (let i = 0; i < n; i++) v.setUint8(44 + i, 128 + Math.round(Math.sin(2 * Math.PI * 220 * i / rate) * 12));
+  return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+}
+
+function pngDataUrl(size) {
+  const c = document.createElement("canvas"); c.width = c.height = size;
+  const g = c.getContext("2d");
+  g.fillStyle = "#c33"; g.fillRect(0, 0, size, size);
+  g.fillStyle = "#fff"; g.font = `bold ${size / 2}px sans-serif`; g.textAlign = "center"; g.textBaseline = "middle";
+  g.fillText("T", size / 2, size / 2);
+  return c.toDataURL("image/png");
+}
+
+let audio = null, wavSrc = null;
+
+function applyMetadata() {
+  const art = val("art");
+  const artwork = art === "none" ? [] :
+    art === "d128" ? [{ src: pngDataUrl(128), sizes: "128x128", type: "image/png" }] :
+    art === "d512" ? [{ src: pngDataUrl(512), sizes: "512x512", type: "image/png" }] :
+    [{ src: location.origin + "/icons/icon-192.png", sizes: "192x192", type: "image/png" }];
+  const init = { title: "TEST TITLE", artwork };
+  if ($("artist").checked) init.artist = "TEST ARTIST";
+  if ($("album").checked) init.album = "TEST ALBUM";
+  navigator.mediaSession.metadata = new MediaMetadata(init);
+  if ($("title").checked) document.title = "TEST TITLE";
+  log(`metadata set (${art}) -> title "${navigator.mediaSession.metadata.title}", artwork ${navigator.mediaSession.metadata.artwork.length}`);
+}
+
+function applyHandlers() {
+  if (!$("handlers").checked) return;
+  const ms = navigator.mediaSession;
+  ms.setActionHandler("play", () => audio.play());
+  ms.setActionHandler("pause", () => audio.pause());
+  ms.setActionHandler("previoustrack", () => log("prev pressed"));
+  ms.setActionHandler("nexttrack", () => log("next pressed"));
+  ms.setActionHandler("seekto", (d) => { audio.currentTime = d.seekTime; });
+}
+
+$("start").onclick = async () => {
+  $("log").textContent = "";
+  if (audio) { audio.pause(); audio.remove(); }
+  audio = document.createElement("audio");
+  wavSrc ||= wavUrl();
+  audio.src = wavSrc; audio.loop = true;
+  audio.setAttribute("playsinline", "");
+  if ($("dom").checked) document.body.appendChild(audio);
+  const when = val("when");
+  applyHandlers();
+  if (when === "before") applyMetadata();
+  audio.addEventListener("playing", () => {
+    log("audio playing");
+    if (when === "playing") applyMetadata();
+    if (when === "late") setTimeout(applyMetadata, 2000);
+    navigator.mediaSession.playbackState = "playing";
+    if ($("pos").checked) {
+      try { navigator.mediaSession.setPositionState({ duration: 60, position: 0, playbackRate: 1 }); log("position state set"); }
+      catch (e) { log("position error " + e.message); }
+    }
+  }, { once: true });
+  try { await audio.play(); } catch (e) { log("play() failed: " + e.message); }
+};
+$("stop").onclick = () => { if (audio) { audio.pause(); audio.removeAttribute("src"); audio.load(); } log("stopped"); };
+
+log("iOS " + (navigator.userAgent.match(/OS ([\d_]+)/) || [])[1] + "  mediaSession " + ("mediaSession" in navigator));
+</script>
+</body>
+</html>

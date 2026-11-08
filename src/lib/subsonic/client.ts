@@ -88,6 +88,12 @@ export class SubsonicClient {
     };
   }
 
+  /** Fresh salted token for the sync server, which replays it as a Subsonic ping. */
+  syncAuth(): { u: string; t: string; s: string } {
+    const { u, t, s } = this.authParams();
+    return { u, t, s };
+  }
+
   streamUrl(songId: string): string {
     const params = this.authParams();
     params.id = songId;

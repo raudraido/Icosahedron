@@ -205,6 +205,7 @@ export function createWebPlatform(): Platform {
     save_play_queue: (a) => need().savePlayQueue(a.trackIds, a.currentTrackId, a.positionSecs),
     cover_art_url: ({ coverId, size }) => need().coverArtUrl(coverId, size ?? undefined),
     stream_url: ({ songId }) => need().streamUrl(songId),
+    sync_auth: () => need().syncAuth(),
 
     // lyrics: server-side ones work, local cache in localStorage, the rest is desktop-only for now
     lyrics_server: ({ artist, title }) => need().getServerLyrics(artist, title),

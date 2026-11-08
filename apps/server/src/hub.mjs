@@ -1,7 +1,7 @@
 // Per-user sync hub. Pure logic, no sockets: a "connection" is anything with
 // send(obj). Protocol (all JSON):
 //   client → server
-//     {type:"state", state}                       publish own playback state
+//     {type:"state", state}                       publish own playback state (queue only when changed)
 //     {type:"command", target, cmd, args?}        remote-control another device
 //     {type:"transfer", target}                   hand playback to another device
 //     {type:"settings", settings}                 replace synced settings blob
@@ -17,6 +17,7 @@
 // "active" one; it is the source of truth for position.
 
 const MAX_QUEUE = 20000;
+const MAX_QUEUE_BYTES = 3 * 1024 * 1024;
 const COMMANDS = new Set(["play", "pause", "toggle", "seek", "next", "prev", "volume", "load"]);
 
 export class Hub {
@@ -85,9 +86,16 @@ export class Hub {
     switch (msg?.type) {
       case "state": {
         const s = msg.state;
-        if (!s || !Array.isArray(s.queue) || s.queue.length > MAX_QUEUE) return;
+        if (!s || typeof s !== "object") return;
+        // `queue` is only sent when it changed (items are opaque track
+        // objects); otherwise the stored queue is kept, so position updates
+        // stay tiny.
+        const hasQueue = Array.isArray(s.queue);
+        if (hasQueue && (s.queue.length > MAX_QUEUE || JSON.stringify(s.queue).length > MAX_QUEUE_BYTES)) return;
+        const queue = hasQueue ? s.queue : d.state?.queue;
+        if (!queue) return; // nothing to attach a position to yet
         d.state = {
-          queue: s.queue.map(String), index: Number(s.index) | 0,
+          queue, index: Number(s.index) | 0,
           positionMs: Math.max(0, Number(s.positionMs) || 0), playing: !!s.playing,
           volume: typeof s.volume === "number" ? s.volume : undefined,
           updatedAt: Date.now(),
@@ -95,7 +103,7 @@ export class Hub {
         const becameActive = d.state.playing && d.activeDeviceId !== from;
         if (becameActive) d.activeDeviceId = from;
         this.store.save(user, d);
-        this._broadcast(user, { type: "state", from, state: d.state }, from);
+        this._broadcast(user, { type: "state", from, state: hasQueue ? d.state : { ...d.state, queue: undefined } }, from);
         if (becameActive) this._broadcast(user, { type: "devices", devices: this._devices(user), activeDeviceId: from });
         return;
       }

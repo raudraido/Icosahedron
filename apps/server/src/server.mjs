@@ -46,7 +46,7 @@ export function createApp({ navidromeUrl, webRoot, store, verify = verifySubsoni
     }
   });
 
-  const wss = new WebSocketServer({ server: http, path: "/sync", maxPayload: 1024 * 1024 });
+  const wss = new WebSocketServer({ server: http, path: "/sync", maxPayload: 4 * 1024 * 1024 });
   wss.on("connection", (ws) => {
     let session = null;
     const conn = { send: (o) => ws.readyState === 1 && ws.send(JSON.stringify(o)), close: () => ws.close() };

@@ -81,3 +81,22 @@ test("late joiner receives stored state", async () => {
   assert.deepEqual(w.state.queue, ["9"]);
   app.close();
 });
+
+test("queue is kept when omitted; broadcast omits it; queue items may be objects", async () => {
+  const { app, url } = await boot();
+  const a = client(url, "bob", "phone");
+  await a.next((m) => m.type === "welcome");
+  const b = client(url, "bob", "laptop");
+  await b.next((m) => m.type === "welcome");
+  a.send({ type: "state", state: { queue: [{ id: "1", title: "x" }], index: 0, positionMs: 0, playing: true } });
+  assert.equal((await b.next((m) => m.type === "state")).state.queue[0].id, "1");
+  a.send({ type: "state", state: { index: 0, positionMs: 4000, playing: true } });
+  const s2 = await b.next((m) => m.type === "state");
+  assert.equal(s2.state.queue, undefined);
+  assert.equal(s2.state.positionMs, 4000);
+  const c = client(url, "bob", "tv");
+  const w = await c.next((m) => m.type === "welcome");
+  assert.equal(w.state.queue[0].title, "x");
+  assert.equal(w.state.positionMs, 4000);
+  app.close();
+});

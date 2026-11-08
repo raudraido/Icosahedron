@@ -3,6 +3,7 @@ import { api, AudioEventPayload, Track, Album, Playlist, ServerProfile, CastDevi
 import type { QueueTab } from "../components/QueueBottomTabs";
 import { queryClient } from "../lib/queryClient";
 import { measureCastDelay } from "../lib/castCalibration";
+import { platform } from "../platform";
 
 export type Tab =
   | "home" | "nowPlaying" | "albums" | "artists" | "tracks" | "playlists" | "starred"
@@ -1527,7 +1528,7 @@ function handleAudioEvent(payload: AudioEventPayload) {
   }
 }
 
-window.electronAPI.onAudioEvent(handleAudioEvent);
+platform.onAudioEvent(handleAudioEvent);
 
 // Reconciles the single active cast session's state, pushed from
 // castManager.ts — structured like handleAudioEvent above (module-scope,
@@ -1577,13 +1578,13 @@ function handleCastEvent(payload: CastPush) {
   }
 }
 
-window.electronAPI.onCastStatus(handleCastEvent);
+platform.onCastStatus(handleCastEvent);
 
 // Live-refreshes the picker's device list when castManager.ts's background
 // rescan (triggered by discoverCastDevices finding its cache stale) resolves
 // — the picker itself doesn't need to be open/polling for this.
-window.electronAPI.onCastDevices((devices) => useStore.setState({ castDevices: devices }));
-window.electronAPI.onCastScanning((scanning) => useStore.setState({ castScanning: scanning }));
+platform.onCastDevices((devices) => useStore.setState({ castDevices: devices }));
+platform.onCastScanning((scanning) => useStore.setState({ castScanning: scanning }));
 
 // ── Window title ─────────────────────────────────────────────────────────
 // Matches the old app's update_window_title (player/mixins/visuals.py):

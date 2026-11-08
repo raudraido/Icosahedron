@@ -11,7 +11,6 @@ import { useStore } from "../store";
 
 declare const __BUILD_ID__: string | undefined;
 
-const ART_SIZES = [96, 192, 256, 384, 512];
 
 const dbg = {
   registered: [] as string[],
@@ -21,8 +20,31 @@ const dbg = {
   errors: [] as string[],
   posSets: 0,
   lastPos: "",
+  art: "-",
 };
 const note = (e: unknown, where: string) => dbg.errors.push(`${where}: ${String((e as Error)?.message ?? e)}`.slice(0, 120));
+
+type Art = { src: string; sizes: string; type: string };
+const artCache = new Map<string, Art>();
+
+async function loadArtwork(coverId: string): Promise<Art | null> {
+  const url = platform.coverUrl(coverId, 512);
+  if (!url) return null;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`cover HTTP ${res.status}`);
+  const blob = await res.blob();
+  if (!blob.type.startsWith("image/")) throw new Error(`cover is ${blob.type || "not an image"}`);
+  const src = await new Promise<string>((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+  const art = { src, sizes: "512x512", type: blob.type };
+  artCache.set(coverId, art);
+  if (artCache.size > 20) artCache.delete(artCache.keys().next().value!);
+  return art;
+}
 
 export function initMediaSession(): void {
   if (new URLSearchParams(location.search).has("debug")) sessionStorage.setItem("ico.debug", "1");
@@ -50,21 +72,32 @@ export function initMediaSession(): void {
   let lastPos = { at: 0, time: 0 };
   let appliedWhilePlayingFor: string | null = null;
 
+  // Title/artist go out immediately, without artwork. The cover is fetched by
+  // the page itself (it has the session cookie; the OS fetching an artwork URL
+  // on its own would be bounced to the SSO login page) and handed over as a
+  // data: URL, then the metadata is set again with it.
   const updateMetadata = () => {
     const s = st();
     const track = s.queue[s.currentIndex];
     try {
       if (!track) { ms.metadata = null; return; }
-      ms.metadata = new MediaMetadata({
-        title: track.title,
-        artist: track.artist,
-        album: track.album ?? "",
-        artwork: track.cover_id
-          ? ART_SIZES.map((n) => ({ src: platform.coverUrl(track.cover_id, n), sizes: `${n}x${n}`, type: "image/jpeg" }))
-          : [],
-      });
+      const base = { title: track.title, artist: track.artist, album: track.album ?? "" };
+      const cached = track.cover_id ? artCache.get(track.cover_id) : undefined;
+      ms.metadata = new MediaMetadata({ ...base, artwork: cached ? [cached] : [] });
       dbg.metaSets++;
       dbg.metaTrack = track.title;
+      if (track.cover_id && !cached) {
+        const trackId = track.id;
+        dbg.art = "loading";
+        void loadArtwork(track.cover_id).then((art) => {
+          dbg.art = art ? `ok ${Math.round(art.src.length / 1024)}KB` : "none";
+          const cur = st().queue[st().currentIndex];
+          if (art && cur?.id === trackId) {
+            ms.metadata = new MediaMetadata({ ...base, artwork: [art] });
+            dbg.metaSets++;
+          }
+        }).catch((e) => { dbg.art = "fail"; note(e, "artwork"); });
+      }
     } catch (e) { note(e, "metadata"); }
   };
 
@@ -72,9 +105,9 @@ export function initMediaSession(): void {
     const s = st();
     if (!(s.duration > 0)) return;
     try {
-      ms.setPositionState({ duration: s.duration, position: Math.min(Math.max(0, s.currentTime), s.duration), playbackRate: 1 });
+      ms.setPositionState({ duration: s.duration, position: Math.min(Math.max(0, s.currentTimeRaw), s.duration), playbackRate: 1 });
       dbg.posSets++;
-      dbg.lastPos = `${Math.round(s.currentTime)}/${Math.round(s.duration)}`;
+      dbg.lastPos = `${Math.round(s.currentTimeRaw)}/${Math.round(s.duration)}`;
     } catch (e) { note(e, "position"); }
     lastPos = { at: Date.now(), time: s.currentTime };
   };
@@ -132,7 +165,7 @@ function showDebug(supported: boolean): void {
       `secure ${isSecureContext}  mediaSession ${!!ms}  active ${supported}  sw ${"serviceWorker" in navigator && !!navigator.serviceWorker.controller}`,
       `handlers ok [${dbg.registered.join(",")}]  failed [${dbg.failed.join(",")}]`,
       `session.state ${ms?.playbackState}  title "${md?.title ?? ""}"  artwork ${md?.artwork?.length ?? 0}`,
-      `metaSets ${dbg.metaSets} (last "${dbg.metaTrack}")  posSets ${dbg.posSets} (${dbg.lastPos})`,
+      `art ${dbg.art}  metaSets ${dbg.metaSets} (last "${dbg.metaTrack}")  posSets ${dbg.posSets} (${dbg.lastPos})`,
       `audio ${a ? `paused ${a.paused} ready ${a.readyState} t ${a.currentTime.toFixed(1)} dur ${a.duration} src ${a.currentSrc ? new URL(a.currentSrc).pathname : "-"}` : "NO ELEMENT"}`,
       ...dbg.errors.slice(-4).map((e) => `ERR ${e}`),
     ].join("\n");

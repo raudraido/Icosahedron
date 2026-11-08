@@ -55,12 +55,19 @@ interface Props {
    *  (see castManager.ts's discover()), so this is the only way to
    *  actually search for devices again once it's open. */
   onRescan: () => void;
+  /** Delay (ms) the player's own output waits for the connected device, so both
+   *  are heard together; measured with the microphone or set by hand. */
+  syncOffsetMs: number;
+  onSyncOffsetChange: (ms: number) => void;
+  calibration: { running: boolean; message: string | null };
+  onCalibrate: () => void;
   onClose: () => void;
 }
 
 export function CastPicker({
   x, y, track, volume, onVolumeChange, castVolume, onCastVolumeChange,
-  devices, scanning, connectedDevice, connecting, connectError, onConnect, pinDeviceId, onCancelPin, onDisconnect, onRescan, onClose,
+  devices, scanning, connectedDevice, connecting, connectError, onConnect, pinDeviceId, onCancelPin, onDisconnect, onRescan,
+  syncOffsetMs, onSyncOffsetChange, calibration, onCalibrate, onClose,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x, y });
@@ -198,8 +205,68 @@ export function CastPicker({
           Refreshing…
         </div>
       )}
+
+      {connectedDevice && (
+        <>
+          <div style={{ height: 1, background: "var(--border)" }} />
+          <SyncSection offsetMs={syncOffsetMs} onChange={onSyncOffsetChange} calibration={calibration} onCalibrate={onCalibrate} />
+        </>
+      )}
     </div>,
     document.body,
+  );
+}
+
+// Lines this device's own speakers up with the cast device: a cast device
+// plays a stream some time after it is sent, so local playback waits that long.
+// "Calibrate" measures it with the microphone (the player and the cast device
+// each play a test tone; their onsets are compared); the slider is the manual
+// fallback.
+function SyncSection({
+  offsetMs, onChange, calibration, onCalibrate,
+}: {
+  offsetMs: number;
+  onChange: (ms: number) => void;
+  calibration: { running: boolean; message: string | null };
+  onCalibrate: () => void;
+}) {
+  return (
+    <div style={{ padding: "10px 14px 12px" }}>
+      <div className="flex items-center" style={{ gap: 10 }}>
+        <span style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)", flexShrink: 0 }}>Sync</span>
+        <input
+          type="range"
+          min={0}
+          max={1000}
+          step={5}
+          value={offsetMs}
+          disabled={calibration.running}
+          onChange={(e) => onChange(Number(e.target.value))}
+          title="How long this device waits for the cast device, so both are heard together"
+          style={{ flex: 1, accentColor: "var(--accent)" }}
+        />
+        <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)", width: 52, textAlign: "right", flexShrink: 0 }}>
+          {offsetMs} ms
+        </span>
+      </div>
+      <div className="flex items-center" style={{ gap: 10, marginTop: 8 }}>
+        <button
+          onClick={onCalibrate}
+          disabled={calibration.running}
+          title="Measures the delay with the microphone: the player and the cast device each play a short test tone"
+          style={{
+            background: "var(--accent)", color: "var(--bg, #000)", border: "none", borderRadius: 6,
+            padding: "4px 10px", fontSize: "var(--fs-small)", cursor: calibration.running ? "default" : "pointer",
+            opacity: calibration.running ? 0.6 : 1, flexShrink: 0,
+          }}
+        >
+          {calibration.running ? "Measuring…" : "Calibrate"}
+        </button>
+        <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)", opacity: 0.8 }}>
+          {calibration.message ?? "Measures with the microphone"}
+        </span>
+      </div>
+    </div>
   );
 }
 

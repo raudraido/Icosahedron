@@ -6,6 +6,11 @@ import { DlnaDevice } from "./castDlna";
 import { AirplayDevice } from "./castAirplay";
 import { CastProxyServer } from "./castProxy";
 import { contentTypeForFormat } from "./castDidl";
+import {
+  CALIBRATION_CAST_HZ,
+  CALIBRATION_LOCAL_HZ,
+  makeCalibrationWav,
+} from "./castCalibration";
 
 // Structural contract all device wrappers satisfy — lets this file treat
 // an active Chromecast, DLNA or AirPlay session identically everywhere below.
@@ -13,9 +18,13 @@ interface CastSession {
   connect(): Promise<void>;
   loadMedia(url: string, contentType: string, metadata: CastTrackMetadata, startPositionSecs: number): Promise<void>;
   pause(): void;
-  resume(): void;
+  /** May return a promise that resolves once playback has actually resumed,
+   *  with the position (seconds) it resumed at. */
+  resume(): void | Promise<number | void>;
   stop(): void;
-  seek(seconds: number): void;
+  /** May return a promise that resolves once the device has actually moved
+   *  (AirPlay restarts its stream), so callers can line other outputs up. */
+  seek(seconds: number): void | Promise<void>;
   setVolume(volume: number): void;
   disconnect(): void;
   /** DLNA only — routed here from castProxy.ts's NOTIFY handling.
@@ -221,10 +230,32 @@ export class CastManager {
   }
 
   pause(): void { this.session?.pause(); }
-  resume(): void { this.session?.resume(); }
+  async resume(): Promise<number | void> { return this.session?.resume(); }
   stop(): void { this.session?.stop(); }
-  seek(seconds: number): void { this.session?.seek(seconds); }
+  async seek(seconds: number): Promise<void> { await this.session?.seek(seconds); }
   setVolume(volume: number): void { this.session?.setVolume(volume); }
+
+  // ── Output-sync calibration ──────────────────────────────────────────────
+  // Registers the two test signals and returns where each is served from. The
+  // renderer then records with the microphone while startCalibration() plays
+  // them on the cast device and locally at the same moment.
+  prepareCalibration(): { castUrl: string; localUrl: string } {
+    return {
+      castUrl: this.proxy.registerBlob("calibration-cast.wav", makeCalibrationWav(CALIBRATION_CAST_HZ), "audio/wav"),
+      localUrl: this.proxy.registerBlob("calibration-local.wav", makeCalibrationWav(CALIBRATION_LOCAL_HZ), "audio/wav"),
+    };
+  }
+
+  /** Starts the cast device on `url` (resolves once it is streaming). */
+  async playUrl(url: string, contentType: string, title: string): Promise<void> {
+    if (!this.session) throw new Error("Not connected to a cast device");
+    await this.session.loadMedia(url, contentType, { title }, 0);
+  }
+
+  clearCalibration(): void {
+    this.proxy.unregisterBlob("calibration-cast.wav");
+    this.proxy.unregisterBlob("calibration-local.wav");
+  }
 
   teardown(): void {
     this.session?.disconnect();

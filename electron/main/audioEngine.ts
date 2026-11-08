@@ -43,6 +43,11 @@ export class AudioEngineClient {
     this.engine.resume();
   }
 
+  /** Resumes `offsetMs` after the latest AirPlay stream's first audio went out (microsecond-timed, natively). */
+  resumeAtCastStart(offsetMs: number): void {
+    this.engine.resumeAtCastStart(offsetMs);
+  }
+
   stop(): void {
     this.engine.stop();
   }

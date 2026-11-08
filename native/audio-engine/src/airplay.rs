@@ -2,32 +2,58 @@
 //!
 //! Unlike Chromecast/DLNA ("hand the receiver a URL, it fetches and plays"),
 //! AirPlay is push-based: we decode and stream PCM to the receiver ourselves.
-//! The Node side (electron/main/castAirplay.ts) downloads the track to a temp
-//! file and calls `play(path, startSecs)`.
+//! The Node side (electron/main/castAirplay.ts) calls `play(url, startSecs)`;
+//! the track is downloaded in the background while it is already being decoded
+//! and streamed (see `Download`), so playback starts without waiting for it.
 //!
 //! Everything is routed through airplay2-rs's *live* streaming path (decoder
 //! thread -> bounded `LiveFrameSender`) rather than `play_file`, because the
 //! library's own `seek()` is currently a stub and `play_file` can't start at an
 //! offset. Seeking is therefore "restart the feeder at the new position".
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 
 use airplay_audio::{AudioDecoder, LiveAudioDecoder, LivePcmFrame};
+use std::io::{self, Read, Seek, SeekFrom};
 use std::path::PathBuf;
+use std::sync::Condvar;
 
-use airplay_client::{AirPlayClient, Connection, PlaybackState};
+use airplay_client::{AirPlayClient, Connection, PlaybackState, TrackMetadata};
 use airplay_core::{Device, Error as AirplayError, PairingError, StreamConfig};
 use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction, ThreadsafeFunctionCallMode};
+use futures_util::StreamExt;
+use napi::bindgen_prelude::Buffer;
 use napi::JsFunction;
 use napi_derive::napi;
+use symphonia::core::io::MediaSource;
 use tokio::sync::Mutex;
+
+/// Wall-clock time (µs since the Unix epoch) at which the most recent stream
+/// started — i.e. the first audio went out to the receiver. Other outputs line
+/// up with the cast device against this, rather than against when the start
+/// call happened to return (which includes metadata round-trips, the IPC hop
+/// and whatever the UI is busy with).
+static STREAM_STARTED_AT_US: AtomicU64 = AtomicU64::new(0);
+
+pub(crate) fn stream_started_at_us() -> u64 {
+    STREAM_STARTED_AT_US.load(Ordering::SeqCst)
+}
+
+pub(crate) fn now_us() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_micros() as u64
+}
 
 const POLL_INTERVAL: Duration = Duration::from_millis(500);
 const FEEDBACK_EVERY_N_POLLS: u32 = 4; // receivers expect ~2s keepalives
 const PREFILL: Duration = Duration::from_millis(400);
 const END_MARGIN_SECS: f64 = 0.4;
+/// Consecutive failed keepalives after which the receiver is considered gone.
+const KEEPALIVE_FAILURES_BEFORE_DISCONNECT: u32 = 2;
 
 #[napi(object)]
 #[derive(Clone)]
@@ -44,7 +70,7 @@ pub struct AirplayDevice {
 #[napi(object)]
 #[derive(Clone)]
 pub struct AirplayEvent {
-    /// "status" | "ended" | "disconnected" | "error"
+    /// "status" | "ended" | "disconnected" | "error" | "remote_play" | "remote_pause" | "remote_next" | "remote_seek"
     pub kind: String,
     pub playing: Option<bool>,
     pub current_time: Option<f64>,
@@ -100,8 +126,224 @@ fn err<E: std::fmt::Display>(e: E) -> napi::Error {
     napi::Error::from_reason(e.to_string())
 }
 
+/// What the receiver's "now playing" screen should show for the current track.
+#[napi(object)]
+pub struct AirplayMetadata {
+    pub title: Option<String>,
+    pub artist: Option<String>,
+    pub album: Option<String>,
+    /// Encoded cover image (JPEG or PNG bytes).
+    pub artwork: Option<Buffer>,
+    /// `image/jpeg` or `image/png`; sniffed from the bytes when omitted.
+    pub artwork_content_type: Option<String>,
+}
+
+#[derive(Clone, Default)]
+struct NowPlaying {
+    title: Option<String>,
+    artist: Option<String>,
+    album: Option<String>,
+    artwork: Option<(Vec<u8>, String)>,
+}
+
+fn sniff_image_type(bytes: &[u8]) -> String {
+    if bytes.starts_with(&[0x89, b'P', b'N', b'G']) { "image/png" } else { "image/jpeg" }.to_string()
+}
+
+impl From<AirplayMetadata> for NowPlaying {
+    fn from(m: AirplayMetadata) -> Self {
+        let artwork = m.artwork.and_then(|b| {
+            let bytes = b.to_vec();
+            if bytes.is_empty() {
+                return None;
+            }
+            let content_type = m.artwork_content_type.unwrap_or_else(|| sniff_image_type(&bytes));
+            Some((bytes, content_type))
+        });
+        Self { title: m.title, artist: m.artist, album: m.album, artwork }
+    }
+}
+
+/// A track being downloaded in the background. The decoder reads it through
+/// `ProgressiveSource`, whose reads block until the bytes it needs have
+/// arrived, so decoding (and playback) can begin long before the download ends.
+struct Download {
+    state: StdMutex<DownloadState>,
+    cv: Condvar,
+    cancelled: AtomicBool,
+}
+
+#[derive(Default)]
+struct DownloadState {
+    data: Vec<u8>,
+    /// Content-Length, when the server sent one.
+    total: Option<u64>,
+    done: bool,
+    error: Option<String>,
+}
+
+/// How long a read waits for the download to make progress before giving up.
+const DOWNLOAD_STALL_TIMEOUT: Duration = Duration::from_secs(30);
+
+impl Download {
+    fn new(total: Option<u64>) -> Arc<Self> {
+        let state = DownloadState {
+            data: Vec::with_capacity(total.unwrap_or(0).min(256 * 1024 * 1024) as usize),
+            total,
+            ..Default::default()
+        };
+        Arc::new(Self { state: StdMutex::new(state), cv: Condvar::new(), cancelled: AtomicBool::new(false) })
+    }
+
+    fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Relaxed);
+        self.cv.notify_all();
+    }
+
+    fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::Relaxed)
+    }
+
+    fn finish(&self, error: Option<String>) {
+        let mut st = self.state.lock().unwrap();
+        st.done = true;
+        st.error = error;
+        self.cv.notify_all();
+    }
+}
+
+async fn run_download(dl: Arc<Download>, resp: reqwest::Response) {
+    let mut stream = resp.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        if dl.is_cancelled() {
+            return;
+        }
+        match chunk {
+            Ok(bytes) => {
+                dl.state.lock().unwrap().data.extend_from_slice(&bytes);
+                dl.cv.notify_all();
+            }
+            Err(e) => {
+                dl.finish(Some(format!("Track download failed: {e}")));
+                return;
+            }
+        }
+    }
+    dl.finish(None);
+}
+
+/// `Read + Seek` over a `Download` (each decoder gets its own position, the
+/// bytes are shared — so a seek restart doesn't download the track again).
+struct ProgressiveSource {
+    dl: Arc<Download>,
+    pos: u64,
+}
+
+impl Read for ProgressiveSource {
+    fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
+        if out.is_empty() {
+            return Ok(0);
+        }
+        let mut st = self.dl.state.lock().unwrap();
+        loop {
+            let len = st.data.len() as u64;
+            if self.pos < len {
+                let n = out.len().min((len - self.pos) as usize);
+                let start = self.pos as usize;
+                out[..n].copy_from_slice(&st.data[start..start + n]);
+                self.pos += n as u64;
+                return Ok(n);
+            }
+            if let Some(e) = &st.error {
+                return Err(io::Error::new(io::ErrorKind::Other, e.clone()));
+            }
+            if st.done || self.dl.is_cancelled() {
+                return Ok(0); // EOF
+            }
+            let (guard, timeout) = self.dl.cv.wait_timeout(st, DOWNLOAD_STALL_TIMEOUT).unwrap();
+            st = guard;
+            if timeout.timed_out() && self.pos >= st.data.len() as u64 && !st.done {
+                return Err(io::Error::new(io::ErrorKind::TimedOut, "Track download stalled"));
+            }
+        }
+    }
+}
+
+impl Seek for ProgressiveSource {
+    fn seek(&mut self, from: SeekFrom) -> io::Result<u64> {
+        let target: i128 = match from {
+            SeekFrom::Start(n) => n as i128,
+            SeekFrom::Current(d) => self.pos as i128 + d as i128,
+            SeekFrom::End(d) => {
+                // The end is only known up front when the server sent a
+                // Content-Length; otherwise wait for the download to finish.
+                let mut st = self.dl.state.lock().unwrap();
+                while st.total.is_none() && !st.done && !self.dl.is_cancelled() {
+                    st = self.dl.cv.wait_timeout(st, DOWNLOAD_STALL_TIMEOUT).unwrap().0;
+                }
+                if let Some(e) = &st.error {
+                    return Err(io::Error::new(io::ErrorKind::Other, e.clone()));
+                }
+                let end = st.total.unwrap_or(st.data.len() as u64);
+                end as i128 + d as i128
+            }
+        };
+        if target < 0 {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "seek before start"));
+        }
+        self.pos = target as u64;
+        Ok(self.pos)
+    }
+}
+
+impl MediaSource for ProgressiveSource {
+    fn is_seekable(&self) -> bool {
+        true
+    }
+
+    fn byte_len(&self) -> Option<u64> {
+        let st = self.dl.state.lock().unwrap();
+        st.total.or(if st.done { Some(st.data.len() as u64) } else { None })
+    }
+}
+
+/// Identifies a restart request, so a stale one (superseded while it waited for
+/// `start_lock`) can be skipped instead of costing seconds for nothing.
+#[derive(Clone, Copy)]
+struct Stamp {
+    play: u64,
+    /// 0 for a `play`; the seek's own number for a `seek`.
+    seek: u64,
+}
+
+/// The track currently loaded, kept so seeking (which restarts the stream)
+/// can reuse the bytes already downloaded.
+#[derive(Clone)]
+struct Source {
+    dl: Arc<Download>,
+    format_hint: Option<String>,
+}
+
+/// RTP timestamp rate of the stream we send (airplay2-rs's default format).
+const STREAM_RATE_HZ: f64 = 44100.0;
+
+/// `(track start, current, track end)` as RTP timestamps, for the receiver's
+/// seek bar. The stream's timestamps start at `base` (see airplay2-rs's
+/// `stream_rtp_base`) at its first sample, which sits `offset` seconds into
+/// the track, so the track's own start lies `offset` seconds before `base`;
+/// `position` is seconds since the stream began.
+fn progress_rtp(base: u32, offset: f64, duration: f64, position: f64) -> (u32, u32, u32) {
+    let start = base.wrapping_sub((offset * STREAM_RATE_HZ) as u32);
+    let current = base.wrapping_add((position * STREAM_RATE_HZ) as u32);
+    let end = start.wrapping_add((duration * STREAM_RATE_HZ) as u32);
+    (start, current, end)
+}
+
 #[derive(Default)]
 struct Track {
+    /// Shown on the receiver; kept so seeking (which restarts the stream)
+    /// can re-send it.
+    meta: Option<NowPlaying>,
     /// A track is loaded and hasn't ended/been stopped.
     active: bool,
     paused: bool,
@@ -109,8 +351,8 @@ struct Track {
     offset: f64,
     duration: f64,
     volume: f32,
-    /// File being streamed, so `seek` can restart it at a new offset.
-    path: Option<String>,
+    /// Track being streamed, so `seek` can restart it at a new offset.
+    source: Option<Source>,
 }
 
 struct Feeder {
@@ -130,6 +372,15 @@ struct Shared {
     devices: StdMutex<HashMap<String, Device>>,
     track: StdMutex<Track>,
     feeder: StdMutex<Option<Feeder>>,
+    /// Held for the whole of `start_stream`: play/seek can be requested while a
+    /// previous start is still in flight (the Node side fires them without
+    /// waiting), and interleaving two would stop each other's feeder/stream.
+    start_lock: Mutex<()>,
+    /// Bumped by every `play` (and `stop`): any restart requested earlier is stale.
+    play_seq: AtomicU64,
+    /// Bumped by every `seek`: only the newest seek of a track is worth doing
+    /// (dragging the seek bar fires dozens, each restart costs seconds).
+    seek_seq: AtomicU64,
     cb: Emitter,
 }
 
@@ -155,6 +406,9 @@ impl AirplayClient {
                 devices: StdMutex::new(HashMap::new()),
                 track: StdMutex::new(Track { volume: 1.0, ..Default::default() }),
                 feeder: StdMutex::new(None),
+                start_lock: Mutex::new(()),
+                play_seq: AtomicU64::new(0),
+                seek_seq: AtomicU64::new(0),
                 cb,
             }),
             poller: StdMutex::new(None),
@@ -234,6 +488,7 @@ impl AirplayClient {
         };
         connection.set_render_delay_ms(200); // retransmit headroom over WiFi (client default)
         connection.setup().await.map_err(err)?;
+        let receiver_events = connection.take_receiver_events();
 
         // A previous session (if any) is replaced.
         self.halt_feeder();
@@ -242,13 +497,61 @@ impl AirplayClient {
             let _ = old.disconnect().await;
         }
         self.start_poller();
+        if let Some(rx) = receiver_events {
+            self.start_receiver_events(rx);
+        }
         Ok(())
     }
 
-    /// Streams the audio file at `path`, starting `start_secs` in.
+    /// Streams the track at `url`, starting `start_secs` in. The download runs in
+    /// the background; playback starts as soon as enough has arrived to decode.
+    /// `content_type` is only a format hint for the decoder.
     #[napi]
-    pub async fn play(&self, path: String, start_secs: f64) -> napi::Result<()> {
-        self.start_stream(path, start_secs.max(0.0)).await
+    pub async fn play(
+        &self,
+        url: String,
+        start_secs: f64,
+        metadata: Option<AirplayMetadata>,
+        content_type: Option<String>,
+    ) -> napi::Result<()> {
+        let stamp = Stamp { play: self.shared.play_seq.fetch_add(1, Ordering::SeqCst) + 1, seek: 0 };
+        let resp = reqwest::Client::new().get(&url).send().await.map_err(err)?;
+        if !resp.status().is_success() {
+            return Err(napi::Error::from_reason(format!("Couldn't fetch track for AirPlay (HTTP {})", resp.status())));
+        }
+        let format_hint = resp
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .and_then(crate::helpers::content_type_to_hint)
+            .or_else(|| content_type.as_deref().and_then(crate::helpers::content_type_to_hint));
+        let dl = Download::new(resp.content_length());
+        tokio::spawn(run_download(dl.clone(), resp));
+
+        let source = Source { dl, format_hint };
+        {
+            // A newer track replaces (and stops downloading) the previous one.
+            let mut t = self.shared.track.lock().unwrap();
+            if let Some(old) = t.source.replace(source.clone()) {
+                old.dl.cancel();
+            }
+            t.meta = metadata.map(NowPlaying::from);
+        }
+        self.start_stream(source, start_secs.max(0.0), stamp).await
+    }
+
+    /// Cover art for the track `play` just started — separate from `play` so a
+    /// slow cover fetch never delays the music.
+    #[napi]
+    pub async fn set_artwork(&self, artwork: Buffer, content_type: Option<String>) -> napi::Result<()> {
+        let bytes = artwork.to_vec();
+        if bytes.is_empty() {
+            return Ok(());
+        }
+        let content_type = content_type.unwrap_or_else(|| sniff_image_type(&bytes));
+        self.shared.track.lock().unwrap().meta.get_or_insert_with(NowPlaying::default).artwork = Some((bytes, content_type));
+        self.push_now_playing().await;
+        Ok(())
     }
 
     #[napi]
@@ -262,11 +565,44 @@ impl AirplayClient {
     pub async fn resume(&self) -> napi::Result<()> {
         with_conn(&self.shared, |c| Box::pin(c.resume())).await?;
         self.shared.track.lock().unwrap().paused = false;
+        // The receiver's seek bar needs a fresh position after a pause.
+        self.push_progress().await;
         Ok(())
+    }
+
+    /// Resume after `pause` by restarting the stream where it paused, like a
+    /// seek, instead of the RECORD-based `resume`. The receiver takes an
+    /// unpredictable time to start playing again after a RECORD (it varies from
+    /// one resume to the next), whereas a restarted stream has the same, known
+    /// start-up latency as a seek — so the caller can start another output to
+    /// match it. Resolves once the stream is up, with the position (seconds) it
+    /// restarted at: the other output has to be put at exactly that position,
+    /// wherever it happened to stop.
+    #[napi]
+    pub async fn restart_at_pause(&self) -> napi::Result<f64> {
+        let (source, offset) = {
+            let t = self.shared.track.lock().unwrap();
+            (t.source.clone(), t.offset)
+        };
+        let source = source.ok_or_else(|| napi::Error::from_reason("Nothing to resume"))?;
+        let position = {
+            let guard = self.shared.conn.lock().await;
+            guard.as_ref().map_or(0.0, |c| c.playback_position())
+        };
+        let stamp = Stamp {
+            play: self.shared.play_seq.load(Ordering::SeqCst),
+            seek: self.shared.seek_seq.fetch_add(1, Ordering::SeqCst) + 1,
+        };
+        self.shared.track.lock().unwrap().paused = false;
+        let restart_at = offset + position;
+        self.start_stream(source, restart_at, stamp).await?;
+        Ok(restart_at)
     }
 
     #[napi]
     pub async fn stop(&self) -> napi::Result<()> {
+        // A restart still queued must not bring the stream back after a stop.
+        self.shared.play_seq.fetch_add(1, Ordering::SeqCst);
         self.halt_feeder();
         self.shared.track.lock().unwrap().active = false;
         let _ = with_conn(&self.shared, |c| Box::pin(c.stop())).await;
@@ -276,8 +612,12 @@ impl AirplayClient {
     /// airplay2-rs's own `seek()` is a stub — restart the feeder at `seconds`.
     #[napi]
     pub async fn seek(&self, seconds: f64) -> napi::Result<()> {
-        let path = self.current_path().ok_or_else(|| napi::Error::from_reason("Nothing playing"))?;
-        self.start_stream(path, seconds.max(0.0)).await
+        let source = self.current_source().ok_or_else(|| napi::Error::from_reason("Nothing playing"))?;
+        let stamp = Stamp {
+            play: self.shared.play_seq.load(Ordering::SeqCst),
+            seek: self.shared.seek_seq.fetch_add(1, Ordering::SeqCst) + 1,
+        };
+        self.start_stream(source, seconds.max(0.0), stamp).await
     }
 
     /// `volume`: 0.0–1.0.
@@ -294,7 +634,13 @@ impl AirplayClient {
             h.abort();
         }
         self.halt_feeder();
-        self.shared.track.lock().unwrap().active = false;
+        {
+            let mut t = self.shared.track.lock().unwrap();
+            t.active = false;
+            if let Some(src) = t.source.take() {
+                src.dl.cancel();
+            }
+        }
         if let Some(mut c) = self.shared.conn.lock().await.take() {
             let _ = c.disconnect().await;
         }
@@ -303,8 +649,8 @@ impl AirplayClient {
 }
 
 impl AirplayClient {
-    fn current_path(&self) -> Option<String> {
-        self.shared.track.lock().unwrap().path.clone()
+    fn current_source(&self) -> Option<Source> {
+        self.shared.track.lock().unwrap().source.clone()
     }
 
     fn halt_feeder(&self) {
@@ -313,15 +659,25 @@ impl AirplayClient {
         }
     }
 
-    async fn start_stream(&self, path: String, start_secs: f64) -> napi::Result<()> {
+    async fn start_stream(&self, source: Source, start_secs: f64, stamp: Stamp) -> napi::Result<()> {
+        let _start_guard = self.shared.start_lock.lock().await;
+        // Superseded while waiting for the lock: by a newer `play`/`stop`, or
+        // (for a seek) by a newer seek.
+        let stale = stamp.play != self.shared.play_seq.load(Ordering::SeqCst)
+            || (stamp.seek != 0 && stamp.seek != self.shared.seek_seq.load(Ordering::SeqCst));
+        if stale || source.dl.is_cancelled() {
+            return Ok(());
+        }
         self.halt_feeder();
         self.shared.track.lock().unwrap().active = false;
         // Flush whatever the receiver still has queued from the previous stream.
         let _ = with_conn(&self.shared, |c| Box::pin(c.stop())).await;
 
-        let open_path = path.clone();
+        let reader = ProgressiveSource { dl: source.dl.clone(), pos: 0 };
+        let hint = source.format_hint.clone();
         let (decoder, sample_rate, channels, duration) = tokio::task::spawn_blocking(move || {
-            let mut d = AudioDecoder::open(&open_path)?;
+            // Blocks until enough of the (still downloading) track has arrived.
+            let mut d = AudioDecoder::from_reader(Box::new(reader), hint.as_deref())?;
             let sr = d.sample_rate();
             let ch = d.channels();
             let dur = d.duration_samples().map(|s| s as f64 / sr as f64).unwrap_or(0.0);
@@ -343,9 +699,22 @@ impl AirplayClient {
                 .name("airplay-feeder".into())
                 .spawn(move || {
                     let mut decoder = decoder;
+                    let mut logged_format = false;
                     while !stop.load(Ordering::Relaxed) {
                         match decoder.decode_frame() {
                             Ok(Some(f)) => {
+                                // The stream sent to the receiver is 44.1 kHz stereo; other
+                                // sources are converted by airplay2-rs. Say so once — a
+                                // wrong conversion is what a "twice as fast" track means.
+                                if !logged_format {
+                                    logged_format = true;
+                                    if f.channels != 2 || f.sample_rate != 44100 {
+                                        eprintln!(
+                                            "[airplay] source is {} Hz, {} ch: converting to 44100 Hz, 2 ch",
+                                            f.sample_rate, f.channels
+                                        );
+                                    }
+                                }
                                 let frame = LivePcmFrame { samples: f.samples, channels: f.channels, sample_rate: f.sample_rate };
                                 // Blocks while the channel is full — natural pacing.
                                 if !sender.send(frame) {
@@ -367,6 +736,7 @@ impl AirplayClient {
         tokio::time::sleep(PREFILL).await;
 
         with_conn(&self.shared, |c| Box::pin(c.start_streaming_live(live))).await?;
+        STREAM_STARTED_AT_US.store(now_us(), Ordering::SeqCst);
 
         {
             let mut t = self.shared.track.lock().unwrap();
@@ -374,12 +744,98 @@ impl AirplayClient {
             t.paused = false;
             t.offset = start_secs;
             t.duration = duration;
-            t.path = Some(path);
         }
         // Receivers reset to their own volume on a fresh RECORD.
         let v = self.shared.track.lock().unwrap().volume;
         let _ = with_conn(&self.shared, |c| Box::pin(c.set_volume(v))).await;
+        self.push_now_playing().await;
         Ok(())
+    }
+
+    /// Title/artist/artwork plus progress for the receiver's now-playing
+    /// screen. Best effort — a receiver that ignores these still plays audio.
+    /// Re-sent after every stream (re)start, since a flush clears the display.
+    async fn push_now_playing(&self) {
+        let (meta, duration) = {
+            let t = self.shared.track.lock().unwrap();
+            (t.meta.clone(), t.duration)
+        };
+        if let Some(m) = meta {
+            let tm = TrackMetadata {
+                title: m.title,
+                artist: m.artist,
+                album: m.album,
+                duration_ms: (duration > 0.0).then(|| (duration * 1000.0) as u32),
+            };
+            let _ = with_conn(&self.shared, move |c| {
+                Box::pin(async move {
+                    let base = c.stream_rtp_base();
+                    c.set_track_metadata(&tm, base).await
+                })
+            })
+            .await;
+            if let Some((bytes, content_type)) = m.artwork {
+                let _ = with_conn(&self.shared, move |c| {
+                    Box::pin(async move {
+                        let base = c.stream_rtp_base();
+                        c.set_artwork(bytes, &content_type, base).await
+                    })
+                })
+                .await;
+            }
+        }
+        self.push_progress().await;
+    }
+
+    /// Progress in RTP timestamps: the stream's timestamps start at 0 at the
+    /// stream's first sample, which corresponds to `offset` seconds into the
+    /// track, so the track's own start lies `offset` seconds before 0.
+    async fn push_progress(&self) {
+        let (offset, duration) = {
+            let t = self.shared.track.lock().unwrap();
+            (t.offset, t.duration)
+        };
+        if duration <= 0.0 {
+            return;
+        }
+        let position = {
+            let guard = self.shared.conn.lock().await;
+            guard.as_ref().map_or((0, 0.0), |c| (c.stream_rtp_base(), c.playback_position()))
+        };
+        let (base, position) = position;
+        let (start, current, end) = progress_rtp(base, offset, duration, position);
+        let _ = with_conn(&self.shared, move |c| Box::pin(async move { c.set_progress(start, current, end).await })).await;
+    }
+
+    /// Forwards what the user does on the receiver itself (the Apple TV remote:
+    /// play, pause, next, scrubbing) to the application as `remote_*` events,
+    /// so it can act on its own playback — the receiver only sent a request and
+    /// does nothing by itself.
+    fn start_receiver_events(&self, mut rx: tokio::sync::mpsc::UnboundedReceiver<airplay_client::ReceiverEvent>) {
+        let shared = self.shared.clone();
+        tokio::spawn(async move {
+            while let Some(ev) = rx.recv().await {
+                let airplay_client::ReceiverEvent::Request(req) = ev else { break };
+                let Some(command) = req.remote_command() else { continue };
+                let ev = match command {
+                    airplay_client::RemoteCommand::Play => event("remote_play"),
+                    airplay_client::RemoteCommand::Pause => event("remote_pause"),
+                    airplay_client::RemoteCommand::NextItem => event("remote_next"),
+                    airplay_client::RemoteCommand::SetPosition(seconds) => {
+                        let mut ev = event("remote_seek");
+                        ev.current_time = Some(seconds);
+                        ev
+                    }
+                    airplay_client::RemoteCommand::Other(code) => {
+                        // Not handled (yet): say which, so it can be added.
+                        let mut ev = event("error");
+                        ev.message = Some(format!("Unhandled AirPlay remote command \"{code}\""));
+                        ev
+                    }
+                };
+                emit(&shared.cb, ev);
+            }
+        });
     }
 
     fn start_poller(&self) {
@@ -390,6 +846,7 @@ impl AirplayClient {
         let shared = self.shared.clone();
         *slot = Some(tokio::spawn(async move {
             let mut tick: u32 = 0;
+            let mut keepalive_failures: u32 = 0;
             loop {
                 tokio::time::sleep(POLL_INTERVAL).await;
                 tick = tick.wrapping_add(1);
@@ -399,20 +856,44 @@ impl AirplayClient {
                     return;
                 };
                 if tick % FEEDBACK_EVERY_N_POLLS == 0 {
-                    if let Err(e) = client.send_feedback().await {
-                        let mut ev = event("error");
-                        ev.message = Some(format!("AirPlay keepalive failed: {e}"));
-                        emit(&shared.cb, ev);
+                    match client.send_feedback().await {
+                        Ok(()) => keepalive_failures = 0,
+                        Err(e) => {
+                            keepalive_failures += 1;
+                            let mut ev = event("error");
+                            ev.message = Some(format!("AirPlay keepalive failed: {e}"));
+                            emit(&shared.cb, ev);
+                            // The receiver closed the connection (e.g. it dropped the
+                            // session): nothing will bring it back, so report it
+                            // instead of failing every 2 s forever.
+                            if keepalive_failures >= KEEPALIVE_FAILURES_BEFORE_DISCONNECT {
+                                guard.take();
+                                drop(guard);
+                                if let Some(f) = shared.feeder.lock().unwrap().take() {
+                                    f.stop.store(true, Ordering::Relaxed);
+                                }
+                                shared.track.lock().unwrap().active = false;
+                                emit(&shared.cb, event("disconnected"));
+                                return;
+                            }
+                        }
                     }
                 }
                 let state = client.playback_state();
                 let position = client.playback_position();
-                drop(guard);
 
                 let (active, paused, offset, duration, volume) = {
                     let t = shared.track.lock().unwrap();
                     (t.active, t.paused, t.offset, t.duration, t.volume)
                 };
+                // Receivers (Apple TV) don't keep advancing the seek bar on
+                // their own after a single `progress`, so refresh it with the
+                // keepalive.
+                if tick % FEEDBACK_EVERY_N_POLLS == 0 && active && !paused && duration > 0.0 {
+                    let (start, current, end) = progress_rtp(client.stream_rtp_base(), offset, duration, position);
+                    let _ = client.set_progress(start, current, end).await;
+                }
+                drop(guard);
                 if !active {
                     continue;
                 }

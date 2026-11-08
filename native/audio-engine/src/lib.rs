@@ -87,6 +87,39 @@ impl AudioEngine {
         Ok(())
     }
 
+    /// Resume `offset_ms` after the most recent AirPlay stream started (its
+    /// first audio went out), on a dedicated thread — so the moment is
+    /// microsecond-accurate and independent of the JS side's timers and IPC.
+    /// A cast device plays a stream some time after it is sent; resuming this
+    /// output that much later lines the two up. If the moment has already
+    /// passed, resumes immediately.
+    #[napi]
+    pub fn resume_at_cast_start(&self, offset_ms: f64) -> napi::Result<()> {
+        let started = airplay::stream_started_at_us();
+        let base = if started == 0 { airplay::now_us() } else { started };
+        let target = base + (offset_ms.max(0.0) * 1000.0) as u64;
+        let inner = self.inner.clone();
+        std::thread::Builder::new()
+            .name("resume-at".into())
+            .spawn(move || {
+                loop {
+                    let now = airplay::now_us();
+                    if now >= target {
+                        break;
+                    }
+                    let left = target - now;
+                    if left > 2000 {
+                        std::thread::sleep(std::time::Duration::from_micros(left - 1500));
+                    } else {
+                        std::hint::spin_loop();
+                    }
+                }
+                transport::resume(&inner);
+            })
+            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+        Ok(())
+    }
+
     #[napi]
     pub fn stop(&self) -> napi::Result<()> {
         transport::stop(&self.inner);

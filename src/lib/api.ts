@@ -188,7 +188,8 @@ export type CastPush =
   | { kind: "status"; playing: boolean; currentTime: number; duration: number; volume: number }
   | { kind: "ended" }
   | { kind: "disconnected" }
-  | { kind: "error"; message: string };
+  | { kind: "error"; message: string }
+  | { kind: "remote"; command: "play" | "pause" | "next" | "seek"; position?: number };
 
 /** Pushed from the native gapless audio engine (electron/main/audioEngine.ts)
  *  via the `onAudioEvent` preload channel — see src/store/index.ts's
@@ -368,6 +369,8 @@ export const api = {
     invoke<void>("audio_chain_preload", { url, durationHint }),
   audioPause: () => invoke<void>("audio_pause"),
   audioResume: () => invoke<void>("audio_resume"),
+  /** Resumes `offsetMs` after the latest AirPlay stream's first audio went out; timed natively, to the microsecond. */
+  audioResumeAtCastStart: (offsetMs: number) => invoke<void>("audio_resume_at_cast_start", { offsetMs }),
   audioStop: () => invoke<void>("audio_stop"),
   audioSeek: (seconds: number) => invoke<void>("audio_seek", { seconds }),
   audioSetVolume: (volume: number) => invoke<void>("audio_set_volume", { volume }),
@@ -388,9 +391,14 @@ export const api = {
     trackId: string; title: string; artist: string; coverId: string | null; format: string | null; positionSecs: number;
   }) => invoke<void>("cast_play_track", input),
   castPause: () => invoke<void>("cast_pause"),
-  castResume: () => invoke<void>("cast_resume"),
+  /** Resolves once the cast device is playing again, with the position (seconds) it resumed at, if known. */
+  castResume: () => invoke<number | void>("cast_resume"),
   castStop: () => invoke<void>("cast_stop"),
+  /** Resolves once the cast device has actually moved (AirPlay restarts its stream). */
   castSeek: (seconds: number) => invoke<void>("cast_seek", { seconds }),
+  /** Plays the calibration test signals on the cast device and locally (see castCalibration.ts). */
+  castCalibrationStart: (volume: number) => invoke<void>("cast_calibration_start", { volume }),
+  castCalibrationStop: () => invoke<void>("cast_calibration_stop"),
   castSetVolume: (volume: number) => invoke<void>("cast_set_volume", { volume }),
 
   // ── BPM detection (footer bar) — cache-first; get_bpm runs the native

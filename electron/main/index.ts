@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { SubsonicClient } from "./subsonic";
 import { AudioEngineClient } from "./audioEngine";
 import { CastManager } from "./castManager";
+import { CALIBRATION_SECONDS } from "./castCalibration";
 import { registerCoverProtocol } from "./coverProtocol";
 import { applyWindowState, loadWindowState } from "./windowState";
 import { loadTraySettings, saveTraySettings, TraySettings } from "./traySettings";
@@ -492,6 +493,8 @@ function registerIpcHandlers(): void {
   ipcMain.handle("audio_chain_preload", (_e, { url, durationHint }) => requireAudio().chainPreload(url, durationHint));
   ipcMain.handle("audio_pause", () => requireAudio().pause());
   ipcMain.handle("audio_resume", () => requireAudio().resume());
+  ipcMain.handle("audio_resume_at_cast_start", (_e, { offsetMs }: { offsetMs: number }) =>
+    requireAudio().resumeAtCastStart(offsetMs));
   ipcMain.handle("audio_stop", () => requireAudio().stop());
   ipcMain.handle("audio_seek", (_e, { seconds }) => requireAudio().seek(seconds));
   ipcMain.handle("audio_set_volume", (_e, { volume }) => requireAudio().setVolume(volume));
@@ -508,6 +511,28 @@ function registerIpcHandlers(): void {
   ipcMain.handle("cast_stop", () => requireCast().stop());
   ipcMain.handle("cast_seek", (_e, { seconds }) => requireCast().seek(seconds));
   ipcMain.handle("cast_set_volume", (_e, { volume }) => requireCast().setVolume(volume));
+
+  // Output-sync calibration: play the test signals on the cast device and
+  // locally, the local one the moment the cast device is streaming — the
+  // renderer is recording with the microphone meanwhile and works out how much
+  // later the cast device is heard (src/lib/castCalibration.ts).
+  ipcMain.handle("cast_calibration_start", async (_e, { volume }: { volume: number }) => {
+    const cast = requireCast();
+    const { castUrl, localUrl } = cast.prepareCalibration();
+    // Exactly like playback while casting (store/index.ts's playTrack): the
+    // local output is prepared paused alongside the cast start and released the
+    // moment the cast stream is up, so the measured delay is for that path.
+    const audio = requireAudio();
+    const localReady = audio.play(localUrl, volume, CALIBRATION_SECONDS, true, true);
+    await cast.playUrl(castUrl, "audio/wav", "Calibration");
+    await localReady;
+    audio.resumeAtCastStart(0);
+  });
+  ipcMain.handle("cast_calibration_stop", async () => {
+    requireAudio().stop();
+    requireCast().stop();
+    requireCast().clearCalibration();
+  });
 
   // ── BPM detection (footer bar) — cache-first, falls back to the native
   // QM-DSP analyzer (audio_engine.rs's analyze_bpm) on a cache miss. ────────

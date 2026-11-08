@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { api, AudioEventPayload, Track, Album, Playlist, ServerProfile, CastDevice, CastPush } from "../lib/api";
 import type { QueueTab } from "../components/QueueBottomTabs";
 import { queryClient } from "../lib/queryClient";
+import { measureCastDelay } from "../lib/castCalibration";
 
 export type Tab =
   | "home" | "nowPlaying" | "albums" | "artists" | "tracks" | "playlists" | "starred"
@@ -327,6 +328,14 @@ interface AppStore {
    *  above, which stays local-only. */
   castVolume: number;
   setCastVolume: (v: number) => void;
+  /** How long (ms) the player's own output waits for the cast device, so both
+   *  are heard together: a cast device plays a stream some time after it is
+   *  sent (render delay, its own output chain), local output does not. Per
+   *  device, measured with the microphone (calibrateCastSync) or set by hand. */
+  castSyncOffsetMs: number;
+  setCastSyncOffset: (ms: number) => void;
+  castCalibration: { running: boolean; message: string | null };
+  calibrateCastSync: () => Promise<void>;
   discoverCastDevices: () => Promise<void>;
   /** Explicit, user-triggered rescan (CastPicker.tsx's refresh button) —
    *  the only thing that actually sends a network scan; discoverCastDevices
@@ -566,6 +575,98 @@ function pushEq(get: () => AppStore): void {
   const { eqEnabled, eqPreampDb, eqBandsDb } = get();
   api.audioSetEq(eqEnabled, eqPreampDb, eqBandsDb).catch(() => {});
   localStorage.setItem(LS_EQ, JSON.stringify({ enabled: eqEnabled, preampDb: eqPreampDb, bandsDb: eqBandsDb }));
+}
+
+// ── Cast output sync ───────────────────────────────────────────────────────
+// A cast device plays a stream some time after it is sent (AirPlay: the
+// render delay plus the device's own output chain), local output does not, so
+// local playback is held back by `castSyncOffsetMs`. Per device, in
+// localStorage; measured with the microphone (calibrateCastSync) or set by hand.
+const CAST_SYNC_KEY_PREFIX = "icosahedron_cast_sync_";
+/** Used for an AirPlay device that hasn't been calibrated: measured at ~150 ms
+ *  (releasing the prepared local output that long after the cast stream's first
+ *  audio went out) on an Apple TV behind an AVR; calibrating replaces it. */
+const DEFAULT_AIRPLAY_SYNC_MS = 150;
+
+function loadCastSyncOffset(device: CastDevice): number {
+  try {
+    const stored = localStorage.getItem(CAST_SYNC_KEY_PREFIX + device.id);
+    if (stored !== null && Number.isFinite(Number(stored))) return Number(stored);
+  } catch { /* storage unavailable: use the default */ }
+  return device.protocol === "airplay" ? DEFAULT_AIRPLAY_SYNC_MS : 0;
+}
+
+// Local-output work runs in order, lined up with the cast operation it goes
+// with:
+//   immediate  runs first (e.g. silence the local output while the cast device
+//              restarts its stream);
+//   castOp     is then awaited, and its result handed to
+//   prepare    (e.g. put the still-silent local output at exactly the position
+//              the cast device restarted at — wherever local happened to be);
+//   release    runs after `castSyncOffsetMs` more — or, with `nativeTimed`,
+//              straight away: it then hands the offset to the native side
+//              (audioResumeAtCastStart), which times it against when the cast
+//              stream's first audio actually went out, to the microsecond. A
+//              timer here would be at the mercy of whatever the UI is busy
+//              with at that moment, and of IPC.
+// Starting, resuming and seeking all go through this same pause → position →
+// release pattern, so the one measured offset (calibrateCastSync) is the
+// latency of releasing a prepared local output, whichever it was. Starting
+// local playback directly instead would add however long the engine takes to
+// fetch and decode the track, which differs every time.
+// With no cast device, release runs straight away.
+let localChain: Promise<void> = Promise.resolve();
+function alignWithCast(opts: {
+  castOp?: Promise<unknown> | null;
+  immediate?: () => void;
+  prepare?: (castResult: unknown) => void;
+  nativeTimed?: boolean;
+  release: () => void;
+}): void {
+  const { castConnected, castSyncOffsetMs } = useStore.getState();
+  localChain = localChain.then(async () => {
+    if (!castConnected) {
+      opts.release();
+      return;
+    }
+    opts.immediate?.();
+    const result = opts.castOp ? await opts.castOp.catch(() => undefined) : undefined;
+    opts.prepare?.(result);
+    if (!opts.nativeTimed && castSyncOffsetMs > 0) await new Promise((r) => setTimeout(r, castSyncOffsetMs));
+    opts.release();
+  });
+}
+
+/** Whether the connected cast device is AirPlay, whose stream restarts on every start, seek and resume. */
+function castIsAirplay(): boolean {
+  return useStore.getState().castDevice?.protocol === "airplay";
+}
+
+// A seek restarts an AirPlay stream, which takes a while and resolves once it
+// is up: local output stays silent meanwhile, is put at the new position, and
+// is released after the offset — the same pattern as starting. A cast device
+// that seeks in place (Chromecast, DLNA) just gets local seeked after it.
+function seekLocalAndCast(secs: number): void {
+  const { castConnected } = useStore.getState();
+  if (!castConnected) {
+    api.audioSeek(secs);
+    return;
+  }
+  const castOp = api.castSeek(secs).catch(() => {});
+  if (castIsAirplay()) {
+    alignWithCast({
+      immediate: () => api.audioPause(),
+      castOp,
+      prepare: () => api.audioSeek(secs),
+      nativeTimed: true,
+      // Seeking while paused must leave it paused.
+      release: () => {
+        if (useStore.getState().playing) api.audioResumeAtCastStart(useStore.getState().castSyncOffsetMs);
+      },
+    });
+  } else {
+    alignWithCast({ castOp, release: () => api.audioSeek(secs) });
+  }
 }
 
 export const useStore = create<AppStore>((set, get) => ({
@@ -853,6 +954,8 @@ export const useStore = create<AppStore>((set, get) => ({
   castConnected: false,
   castDevice: null,
   castVolume: 100,
+  castSyncOffsetMs: 0,
+  castCalibration: { running: false, message: null },
 
   playTrack: (track, queue) => {
     const resolvedQueue = queue ?? [track];
@@ -878,12 +981,31 @@ export const useStore = create<AppStore>((set, get) => ({
     // playback always gets this call — casting is a second, independent
     // output alongside it (not a takeover), so a connected cast session
     // additionally gets the same track relayed, never instead of local.
-    api.audioPlay(track.stream_url, volume / 100, track.duration_secs, true, false).catch(() => {});
+    // With a cast device connected, local playback starts only once the cast
+    // stream is up (+ the device's render delay) so both are heard together.
     if (get().castConnected) {
-      api.castPlayTrack({
+      const castOp = api.castPlayTrack({
         trackId: track.id, title: track.title, artist: track.artist,
         coverId: track.cover_id, format: track.format, positionSecs: 0,
       }).catch(() => {});
+      if (castIsAirplay()) {
+        // Local playback fetches and decodes the track from the server first,
+        // which takes an unpredictable while. Prepare it paused, alongside the
+        // cast start, and release it at the exact moment.
+        const localReady = api.audioPlay(track.stream_url, volume / 100, track.duration_secs, true, true).catch(() => {});
+        alignWithCast({
+          castOp: Promise.all([castOp, localReady]),
+          nativeTimed: true,
+          release: () => { api.audioResumeAtCastStart(useStore.getState().castSyncOffsetMs).catch(() => {}); },
+        });
+      } else {
+        alignWithCast({
+          castOp,
+          release: () => { api.audioPlay(track.stream_url, volume / 100, track.duration_secs, true, false).catch(() => {}); },
+        });
+      }
+    } else {
+      api.audioPlay(track.stream_url, volume / 100, track.duration_secs, true, false).catch(() => {});
     }
     scrobble(track, false);
 
@@ -910,14 +1032,37 @@ export const useStore = create<AppStore>((set, get) => ({
       if (track) playTrack(track, queue);
       return;
     }
-    if (playing) api.audioPause(); else api.audioResume();
-    if (castConnected) { if (playing) api.castPause(); else api.castResume(); }
+    // Resuming a cast device restarts its stream (resolving once it is up), so
+    // local playback resumes after it — like a seek, which is what keeps the
+    // two lined up; a plain RECORD-style resume starts again after an
+    // unpredictable delay.
+    let castOp: Promise<unknown> | null = null;
+    if (castConnected) {
+      if (playing) api.castPause();
+      else castOp = api.castResume().catch(() => undefined);
+    }
+    if (playing) {
+      alignWithCast({ release: () => api.audioPause() });
+    } else {
+      const airplay = castConnected && castIsAirplay();
+      alignWithCast({
+        castOp,
+        // The cast stream restarted at a known position; local stopped
+        // wherever it happened to, so put it exactly there first.
+        prepare: (position) => { if (typeof position === "number") api.audioSeek(position); },
+        nativeTimed: airplay,
+        release: () => {
+          if (airplay) api.audioResumeAtCastStart(useStore.getState().castSyncOffsetMs);
+          else api.audioResume();
+        },
+      });
+    }
     set({ playing: !playing });
   },
 
   stop: () => {
-    api.audioStop();
     if (get().castConnected) api.castStop();
+    alignWithCast({ release: () => api.audioStop() });
     set({ playing: false, _stopped: true, ...positionPatch(0) });
   },
 
@@ -928,10 +1073,9 @@ export const useStore = create<AppStore>((set, get) => ({
   },
 
   prev: () => {
-    const { queue, currentIndex, currentTime, castConnected, playTrack } = get();
+    const { queue, currentIndex, currentTime, playTrack } = get();
     if (currentTime > 3) {
-      api.audioSeek(0);
-      if (castConnected) api.castSeek(0);
+      seekLocalAndCast(0);
       set(positionPatch(0));
       return;
     }
@@ -940,8 +1084,7 @@ export const useStore = create<AppStore>((set, get) => ({
   },
 
   setCurrentTime: (secs) => {
-    api.audioSeek(secs);
-    if (get().castConnected) api.castSeek(secs);
+    seekLocalAndCast(secs);
     set(positionPatch(secs));
   },
 
@@ -962,6 +1105,32 @@ export const useStore = create<AppStore>((set, get) => ({
     pushEq(get);
   },
   resetEq: () => { set({ eqPreampDb: 0, eqBandsDb: Array(10).fill(0) }); pushEq(get); },
+
+  setCastSyncOffset: (ms) => {
+    const offset = Math.max(0, Math.min(3000, Math.round(ms)));
+    set({ castSyncOffsetMs: offset });
+    const device = get().castDevice;
+    if (device) {
+      try { localStorage.setItem(CAST_SYNC_KEY_PREFIX + device.id, String(offset)); } catch { /* not persisted */ }
+    }
+  },
+
+  calibrateCastSync: async () => {
+    if (!get().castConnected || get().castCalibration.running) return;
+    set({ castCalibration: { running: true, message: "Listening — keep the room quiet (about 12 s)…" } });
+    try {
+      const { offsetMs } = await measureCastDelay(
+        () => api.castCalibrationStart(get().volume / 100),
+        () => api.castCalibrationStop(),
+      );
+      get().setCastSyncOffset(offsetMs);
+      set({ castCalibration: { running: false, message: `Measured ${offsetMs} ms` } });
+    } catch (err) {
+      set({ castCalibration: { running: false, message: err instanceof Error ? err.message : "Calibration failed" } });
+    }
+    // The test signals replaced whatever was playing.
+    set({ playing: false, _stopped: true });
+  },
 
   setCastVolume: (v) => {
     const clamped = Math.max(0, Math.min(100, v));
@@ -1198,6 +1367,19 @@ export const useStore = create<AppStore>((set, get) => ({
           trackId: track.id, title: track.title, artist: track.artist,
           coverId: track.cover_id, format: track.format, positionSecs: currentTime,
         }).catch(() => {});
+        // Local kept playing while the cast stream started: bring it back to
+        // where the cast device began, so the two are heard together.
+        if (get().playing) {
+          alignWithCast({
+            immediate: () => api.audioPause(),
+            prepare: () => api.audioSeek(currentTime),
+            nativeTimed: castIsAirplay(),
+            release: () => {
+              if (castIsAirplay()) api.audioResumeAtCastStart(useStore.getState().castSyncOffsetMs);
+              else api.audioResume();
+            },
+          });
+        }
       }
     } catch (err) {
       // api.castConnect's rejection used to propagate uncaught out of this
@@ -1246,7 +1428,10 @@ function handleAudioEvent(payload: AudioEventPayload) {
       // duration-based since JS learns position via these ticks).
       const currentTrack = s.queue[s.currentIndex];
       const remaining = duration - currentTime;
-      if (currentTrack && s._chainedForTrackId !== currentTrack.id && remaining > 0 && remaining <= 30) {
+      // No gapless chain while casting: the cast device can't follow it, and
+      // local playback has to be started again through playTrack so that it
+      // stays lined up with the cast stream (see the "ended" case below).
+      if (currentTrack && !s.castConnected && s._chainedForTrackId !== currentTrack.id && remaining > 0 && remaining <= 30) {
         const picked = computeNextTrack(s.queue, s.currentIndex, s.shuffle, s.repeat);
         useStore.setState({
           _chainedForTrackId: currentTrack.id,
@@ -1317,7 +1502,17 @@ function handleAudioEvent(payload: AudioEventPayload) {
       // ended played out in full, so it always counts as a real play.
       const finishedTrack = s.queue[s.currentIndex];
       if (finishedTrack) scrobble(finishedTrack, true);
-      if (s.castConnected) api.castStop();
+      if (s.castConnected) {
+        // While casting there is no chain (see above), so the end of a track
+        // is where the queue advances — through playTrack, which starts the
+        // cast stream and local playback together.
+        const picked = computeNextTrack(s.queue, s.currentIndex, s.shuffle, s.repeat);
+        if (picked) {
+          s.playTrack(picked.track, s.queue);
+          break;
+        }
+        api.castStop();
+      }
       // The sink played out its source fully — same "resume() is a no-op"
       // situation stop() leaves behind, so playPause() must restart via
       // playTrack rather than resume.
@@ -1345,7 +1540,11 @@ window.electronAPI.onAudioEvent(handleAudioEvent);
 function handleCastEvent(payload: CastPush) {
   switch (payload.kind) {
     case "connected":
-      useStore.setState({ castConnected: true, castDevice: payload.device });
+      useStore.setState({
+        castConnected: true,
+        castDevice: payload.device,
+        castSyncOffsetMs: loadCastSyncOffset(payload.device),
+      });
       break;
     case "status":
       useStore.setState({ castVolume: Math.round(payload.volume * 100) });
@@ -1357,6 +1556,17 @@ function handleCastEvent(payload: CastPush) {
       // end-of-track here too would double-advance the queue whenever the
       // two happen to finish within the same tick of each other.
       break;
+    case "remote": {
+      // Something done on the cast device itself (the Apple TV remote). The
+      // device only *asks*; local playback and the cast stream are ours to
+      // change, through the same actions the player's own controls use.
+      const s = useStore.getState();
+      if (payload.command === "play" && !s.playing) s.playPause();
+      else if (payload.command === "pause" && s.playing) s.playPause();
+      else if (payload.command === "next") s.next();
+      else if (payload.command === "seek" && payload.position !== undefined) s.setCurrentTime(payload.position);
+      break;
+    }
     case "disconnected":
     case "error":
       if (payload.kind === "error") console.error("[cast]", payload.message);

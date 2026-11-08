@@ -27,8 +27,29 @@ const note = (e: unknown, where: string) => dbg.errors.push(`${where}: ${String(
 type Art = { src: string; sizes: string; type: string };
 const artCache = new Map<string, Art>();
 
+// How the cover goes to iOS, switchable with ?art=<mode> (remembered) because
+// what iOS accepts is not documented: it greys out images it dislikes.
+//   128 | 256 | 384 | 512   fetch that size, declare it, pass as data: URL
+//   512d128                 fetch 512 px but declare 128x128
+//   url                     pass the https cover URL (512 px) and let iOS fetch it
+const ART_MODES = ["128", "256", "384", "512", "512d128", "url"];
+function artMode(): string {
+  try {
+    const q = new URLSearchParams(location.search).get("art");
+    if (q && ART_MODES.includes(q)) localStorage.setItem("ico.art", q);
+    const v = localStorage.getItem("ico.art");
+    return v && ART_MODES.includes(v) ? v : "256";
+  } catch { return "256"; }
+}
+
 async function loadArtwork(coverId: string): Promise<Art | null> {
-  const url = platform.coverUrl(coverId, 128);
+  const mode = artMode();
+  if (mode === "url") {
+    const src = platform.coverUrl(coverId, 512);
+    return src ? { src, sizes: "512x512", type: "image/jpeg" } : null;
+  }
+  const px = mode === "512d128" ? 512 : Number(mode);
+  const url = platform.coverUrl(coverId, px);
   if (!url) return null;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`cover HTTP ${res.status}`);
@@ -40,8 +61,9 @@ async function loadArtwork(coverId: string): Promise<Art | null> {
     r.onerror = () => reject(r.error);
     r.readAsDataURL(blob);
   });
-  const art = { src, sizes: "128x128", type: blob.type }; // iOS greys out anything larger than 128x128
-  artCache.set(coverId, art);
+  const declared = mode === "512d128" ? 128 : px;
+  const art = { src, sizes: `${declared}x${declared}`, type: blob.type };
+  artCache.set(`${mode}:${coverId}`, art);
   if (artCache.size > 20) artCache.delete(artCache.keys().next().value!);
   return art;
 }
@@ -82,7 +104,7 @@ export function initMediaSession(): void {
     try {
       if (!track) { ms.metadata = null; return; }
       const base = { title: track.title, artist: track.artist, album: track.album ?? "" };
-      const cached = track.cover_id ? artCache.get(track.cover_id) : undefined;
+      const cached = track.cover_id ? artCache.get(`${artMode()}:${track.cover_id}`) : undefined;
       ms.metadata = new MediaMetadata({ ...base, artwork: cached ? [cached] : [] });
       dbg.metaSets++;
       dbg.metaTrack = track.title;
@@ -165,7 +187,7 @@ function showDebug(supported: boolean): void {
       `secure ${isSecureContext}  mediaSession ${!!ms}  active ${supported}  sw ${"serviceWorker" in navigator && !!navigator.serviceWorker.controller}`,
       `handlers ok [${dbg.registered.join(",")}]  failed [${dbg.failed.join(",")}]`,
       `session.state ${ms?.playbackState}  title "${md?.title ?? ""}"  artwork ${md?.artwork?.length ?? 0}`,
-      `art ${dbg.art}  metaSets ${dbg.metaSets} (last "${dbg.metaTrack}")  posSets ${dbg.posSets} (${dbg.lastPos})`,
+      `art ${artMode()} ${dbg.art}  metaSets ${dbg.metaSets} (last "${dbg.metaTrack}")  posSets ${dbg.posSets} (${dbg.lastPos})`,
       `audio ${a ? `paused ${a.paused} ready ${a.readyState} t ${a.currentTime.toFixed(1)} dur ${a.duration} src ${a.currentSrc ? new URL(a.currentSrc).pathname : "-"}` : "NO ELEMENT"}`,
       ...dbg.errors.slice(-4).map((e) => `ERR ${e}`),
     ].join("\n");

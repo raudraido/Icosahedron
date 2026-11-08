@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "./Icon";
 import { CoverArt } from "./CoverArt";
@@ -15,6 +15,7 @@ import type { CastDevice, Track } from "../lib/api";
 const PANEL_BG = "var(--main-bg)";
 const PANEL_SHADOW = "0 4px 16px color-mix(in srgb, var(--text-primary) 15%, transparent)";
 const ICON_COL_WIDTH = 20;
+const PANEL_WIDTH = 300;
 
 interface Props {
   /** Anchor's *right* edge (not a top-left position like ContextMenu/
@@ -62,7 +63,7 @@ export function CastPicker({
   devices, scanning, connectedDevice, connecting, connectError, onConnect, pinDeviceId, onCancelPin, onDisconnect, onRescan, onClose,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ x, y, ready: false });
+  const [pos, setPos] = useState({ x, y });
 
   useEffect(() => {
     function onDown(e: MouseEvent) {
@@ -79,26 +80,15 @@ export function CastPicker({
     };
   }, [onClose]);
 
-  // Opens upward-and-leftward from the button's top-right corner (the
-  // natural direction for a bottom-right-corner trigger) before falling
-  // back to the same clamp-into-viewport ContextMenu.tsx/BpmMenu.tsx use —
-  // that clamp is still here as a safety net (e.g. a very short window),
-  // but shouldn't normally need to do anything now. Shared with the resize
-  // handler below so both compute a position the exact same way.
+  // Anchored by the panel's *bottom* edge (CSS `bottom`), not its top: the
+  // device list fills in after opening (discovery is async), so the panel
+  // grows while open. A top-anchored panel would grow downward over the
+  // trigger and past the window edge; a bottom-anchored one grows upward
+  // and the trigger button stays put. Width is fixed (PANEL_WIDTH), so no
+  // measuring is needed. Shared with the resize handler below.
   const reposition = useCallback((anchorX: number, anchorY: number) => {
-    const el = ref.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const naturalLeft = anchorX - rect.width;
-    const naturalTop = anchorY - rect.height;
-    const clampedX = Math.max(12, Math.min(naturalLeft, window.innerWidth - rect.width - 12));
-    const clampedY = Math.max(12, Math.min(naturalTop, window.innerHeight - rect.height - 12));
-    setPos({ x: clampedX, y: clampedY, ready: true });
+    setPos({ x: anchorX, y: anchorY });
   }, []);
-
-  useLayoutEffect(() => {
-    reposition(x, y);
-  }, [x, y, reposition]);
 
   // The trigger button lives in the window's bottom-right corner, so
   // resizing the window moves it — without this, the already-open popup
@@ -126,16 +116,15 @@ export function CastPicker({
     <div
       ref={ref}
       style={{
-        position: "fixed", top: pos.y, left: pos.x, zIndex: 1000,
-        visibility: pos.ready ? "visible" : "hidden",
+        position: "fixed", zIndex: 1000,
+        left: Math.max(12, Math.min(pos.x - PANEL_WIDTH, window.innerWidth - PANEL_WIDTH - 12)),
+        bottom: Math.max(12, window.innerHeight - pos.y),
         background: PANEL_BG, border: "1px solid var(--border)",
         borderRadius: 10, boxShadow: PANEL_SHADOW,
-        width: 300,
-        // Position is already clamped into the viewport above, but that
-        // alone doesn't stop a long device list from growing taller than
-        // the window — cap + scroll it too, same as ContextMenu.tsx's
-        // submenu (maxHeight: min(..., calc(100vh - 16px))).
-        maxHeight: "calc(100vh - 24px)", overflowY: "auto", overflowX: "hidden",
+        width: PANEL_WIDTH,
+        // The panel grows upward from its bottom anchor, so cap it at the
+        // space above the anchor and scroll the list beyond that.
+        maxHeight: Math.max(120, pos.y - 12), overflowY: "auto", overflowX: "hidden",
       }}
     >
       {/* Now-playing header */}

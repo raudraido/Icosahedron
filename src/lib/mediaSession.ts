@@ -20,8 +20,6 @@ export function initMediaSession(): void {
     ["previoustrack", () => st().prev()],
     ["nexttrack", () => st().next()],
     ["seekto", (d) => { if (typeof d.seekTime === "number") st().setCurrentTime(d.seekTime); }],
-    ["seekbackward", (d) => st().setCurrentTime(Math.max(0, st().currentTime - (d.seekOffset ?? 10)))],
-    ["seekforward", (d) => st().setCurrentTime(Math.min(st().duration || Infinity, st().currentTime + (d.seekOffset ?? 10)))],
   ];
   for (const [action, fn] of handlers) {
     try { ms.setActionHandler(action, fn); } catch { /* action unsupported by this browser */ }
@@ -64,6 +62,7 @@ export function initMediaSession(): void {
     }
     if (s.playing !== lastPlaying) {
       lastPlaying = s.playing;
+      if (s.playing) updateMetadata(); // Safari can drop metadata set before the element was playing
       ms.playbackState = track ? (s.playing ? "playing" : "paused") : "none";
       updatePosition();
     }

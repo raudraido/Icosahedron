@@ -31,44 +31,51 @@ const publicProfile = ({ password: _p, ...rest }: StoredProfile) => rest;
 // to location.origin regardless of what URL was typed into the form.
 const ORIGIN = () => location.origin;
 
-// ── Audio: one active <audio> plus one preloaded for gapless-ish chaining ──
+// ── Audio: ONE persistent <audio> element, in the DOM ───────────────────────
+// iOS/Safari ties lock-screen info, background playback and the autoplay
+// unlock to a single media element: once a user gesture has started it, it may
+// keep going to the next track in the background and own the Now Playing card.
+// A fresh element per track loses all of that, so the element is reused and
+// tracks change by swapping `src`. (The cost is a short gap between tracks —
+// no gapless in the browser.)
 class WebAudio {
-  private cur: HTMLAudioElement | null = null;
-  private chain: HTMLAudioElement | null = null;
-  private volume = 1;
+  private el: HTMLAudioElement;
+  private chainUrl: string | null = null;
   private ticker: number | null = null;
-  constructor(private emit: (p: AudioEventPayload) => void) {}
+  private announceSwitch = false;
 
-  private mk(url: string): HTMLAudioElement {
-    const el = new Audio();
+  constructor(private emit: (p: AudioEventPayload) => void) {
+    const el = (this.el = document.createElement("audio"));
     el.preload = "auto";
-    el.crossOrigin = "anonymous";
-    el.src = url;
-    el.volume = this.volume;
-    return el;
-  }
-
-  private attach(el: HTMLAudioElement) {
+    el.setAttribute("playsinline", "");
+    el.style.display = "none";
     el.onended = () => {
-      if (this.chain) {
-        const next = this.chain;
-        this.chain = null;
-        this.cur = next;
-        this.attach(next);
-        next.play().catch(() => {});
-        this.emit({ kind: "track_switched", duration: next.duration || 0 });
+      if (this.chainUrl) {
+        const next = this.chainUrl;
+        this.chainUrl = null;
+        this.announceSwitch = true;
+        el.src = next;
+        el.play().catch(() => this.emit({ kind: "error", message: "next track could not start" }));
       } else {
         this.emit({ kind: "ended" });
       }
     };
-    el.onerror = () => this.emit({ kind: "error", message: el.error?.message || "audio error" });
+    // Duration is only known once the new source's metadata arrives.
+    el.onloadedmetadata = () => {
+      if (this.announceSwitch) {
+        this.announceSwitch = false;
+        this.emit({ kind: "track_switched", duration: Number.isFinite(el.duration) ? el.duration : 0 });
+      }
+    };
+    el.onerror = () => { if (el.getAttribute("src")) this.emit({ kind: "error", message: el.error?.message || "audio error" }); };
+    document.body.appendChild(el);
   }
 
   private startTicker() {
     if (this.ticker != null) return;
     this.ticker = window.setInterval(() => {
-      const el = this.cur;
-      if (!el) return;
+      const el = this.el;
+      if (!el.getAttribute("src")) return;
       this.emit({
         kind: "progress", currentTime: el.currentTime, duration: Number.isFinite(el.duration) ? el.duration : 0,
         buffering: el.readyState < 3 && !el.paused,
@@ -76,35 +83,41 @@ class WebAudio {
     }, 250);
   }
 
-  private teardown(el: HTMLAudioElement | null) {
-    if (!el) return;
-    el.onended = null; el.onerror = null; el.pause(); el.removeAttribute("src"); el.load();
-  }
-
   async play(url: string, volume: number, durationHint: number, _manual: boolean, startPaused: boolean) {
-    this.teardown(this.cur); this.teardown(this.chain); this.chain = null;
-    this.volume = volume;
-    const el = (this.cur = this.mk(url));
-    this.attach(el);
+    const el = this.el;
+    this.chainUrl = null;
+    this.announceSwitch = false;
+    el.src = url;
+    el.volume = volume;
     this.startTicker();
     this.emit({ kind: "playing", duration: durationHint });
     if (!startPaused) await el.play();
   }
-  chainPreload(url: string) { this.teardown(this.chain); this.chain = this.mk(url); }
-  pause() { this.cur?.pause(); }
-  resume() { this.cur?.play().catch(() => {}); }
+  chainPreload(url: string) { this.chainUrl = url; }
+  pause() { this.el.pause(); }
+  resume() { this.el.play().catch(() => {}); }
   stop() {
-    this.teardown(this.cur); this.teardown(this.chain); this.cur = this.chain = null;
+    this.chainUrl = null;
+    this.el.pause();
+    this.el.removeAttribute("src");
+    this.el.load();
     if (this.ticker != null) { clearInterval(this.ticker); this.ticker = null; }
   }
-  seek(s: number) { if (this.cur) this.cur.currentTime = s; }
-  setVolume(v: number) { this.volume = v; if (this.cur) this.cur.volume = v; if (this.chain) this.chain.volume = v; }
+  seek(s: number) { this.el.currentTime = s; }
+  setVolume(v: number) { this.el.volume = v; }
 }
 
 export function createWebPlatform(): Platform {
   let client: SubsonicClient | null = null;
   const audioListeners = new Set<(p: AudioEventPayload) => void>();
-  const audio = new WebAudio((p) => audioListeners.forEach((cb) => cb(p)));
+  let audioEngine: WebAudio | null = null;
+  const audio = new Proxy({} as WebAudio, {
+    get: (_t, k) => {
+      audioEngine ??= new WebAudio((p) => audioListeners.forEach((cb) => cb(p)));
+      const v = (audioEngine as any)[k];
+      return typeof v === "function" ? v.bind(audioEngine) : v;
+    },
+  });
 
   // The store asks for Last.fm state at startup, before auto-connect has finished
   // (the desktop main process is ready instantly, the browser client is not) —

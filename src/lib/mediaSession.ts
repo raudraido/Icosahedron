@@ -94,32 +94,31 @@ export function initMediaSession(): void {
   let lastPos = { at: 0, time: 0 };
   let appliedWhilePlayingFor: string | null = null;
 
-  // Title/artist go out immediately, without artwork. The cover is fetched by
-  // the page itself (it has the session cookie; the OS fetching an artwork URL
-  // on its own would be bounced to the SSO login page) and handed over as a
-  // data: URL, then the metadata is set again with it.
-  const updateMetadata = () => {
-    const s = st();
-    const track = s.queue[s.currentIndex];
+  // Metadata is set exactly ONCE per track, after the element is really playing
+  // and the cover is in hand (fetched by the page itself so the OS never has to
+  // fetch an artwork URL on its own; waits at most 2 s for it). Replacing the
+  // MediaMetadata several times in a row — before playback, again, then with
+  // the cover — is what a plain test page doesn't do and what iOS may choke on.
+  const applyMetadata = async () => {
+    const track = st().queue[st().currentIndex];
+    if (!track) return;
+    const id = track.id;
     try {
-      if (!track) { ms.metadata = null; return; }
-      const base = { title: track.title, artist: track.artist, album: track.album ?? "" };
-      const cached = track.cover_id ? artCache.get(`${artMode()}:${track.cover_id}`) : undefined;
-      ms.metadata = new MediaMetadata({ ...base, artwork: cached ? [cached] : [] });
+      let art: Art | null | undefined = track.cover_id ? artCache.get(`${artMode()}:${track.cover_id}`) : null;
+      if (track.cover_id && !art) {
+        dbg.art = "loading";
+        art = await Promise.race([
+          loadArtwork(track.cover_id).catch((e) => { note(e, "artwork"); return null; }),
+          new Promise<null>((r) => setTimeout(() => r(null), 2000)),
+        ]);
+        dbg.art = art ? `ok ${Math.round(art.src.length / 1024)}KB` : "none";
+      }
+      if (st().queue[st().currentIndex]?.id !== id) return; // skipped to another track meanwhile
+      ms.metadata = new MediaMetadata({
+        title: track.title, artist: track.artist, album: track.album ?? "", artwork: art ? [art] : [],
+      });
       dbg.metaSets++;
       dbg.metaTrack = track.title;
-      if (track.cover_id && !cached) {
-        const trackId = track.id;
-        dbg.art = "loading";
-        void loadArtwork(track.cover_id).then((art) => {
-          dbg.art = art ? `ok ${Math.round(art.src.length / 1024)}KB` : "none";
-          const cur = st().queue[st().currentIndex];
-          if (art && cur?.id === trackId) {
-            ms.metadata = new MediaMetadata({ ...base, artwork: [art] });
-            dbg.metaSets++;
-          }
-        }).catch((e) => { dbg.art = "fail"; note(e, "artwork"); });
-      }
     } catch (e) { note(e, "metadata"); }
   };
 
@@ -139,8 +138,8 @@ export function initMediaSession(): void {
     const id = track?.id ?? null;
     if (id !== lastTrackId) {
       lastTrackId = id;
-      appliedWhilePlayingFor = null;
-      updateMetadata();
+      appliedWhilePlayingFor = null; // metadata follows at this track's first progress tick
+      if (!track) ms.metadata = null;
       updatePosition();
     }
     if (s.playing !== lastPlaying) {
@@ -166,9 +165,9 @@ export function initMediaSession(): void {
     const id = s.queue[s.currentIndex]?.id ?? null;
     if (!id || appliedWhilePlayingFor === id) return;
     appliedWhilePlayingFor = id;
-    updateMetadata();
     ms.playbackState = "playing";
     updatePosition();
+    void applyMetadata();
   });
 }
 

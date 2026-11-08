@@ -28,7 +28,7 @@ type Art = { src: string; sizes: string; type: string };
 const artCache = new Map<string, Art>();
 
 async function loadArtwork(coverId: string): Promise<Art | null> {
-  const url = platform.coverUrl(coverId, 512);
+  const url = platform.coverUrl(coverId, 128);
   if (!url) return null;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`cover HTTP ${res.status}`);
@@ -40,7 +40,7 @@ async function loadArtwork(coverId: string): Promise<Art | null> {
     r.onerror = () => reject(r.error);
     r.readAsDataURL(blob);
   });
-  const art = { src, sizes: "512x512", type: blob.type };
+  const art = { src, sizes: "128x128", type: blob.type }; // iOS greys out anything larger than 128x128
   artCache.set(coverId, art);
   if (artCache.size > 20) artCache.delete(artCache.keys().next().value!);
   return art;

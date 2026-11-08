@@ -30,6 +30,24 @@ use napi_derive::napi;
 use symphonia::core::io::MediaSource;
 use tokio::sync::Mutex;
 
+/// Wall-clock time (µs since the Unix epoch) at which the most recent stream
+/// started — i.e. the first audio went out to the receiver. Other outputs line
+/// up with the cast device against this, rather than against when the start
+/// call happened to return (which includes metadata round-trips, the IPC hop
+/// and whatever the UI is busy with).
+static STREAM_STARTED_AT_US: AtomicU64 = AtomicU64::new(0);
+
+pub(crate) fn stream_started_at_us() -> u64 {
+    STREAM_STARTED_AT_US.load(Ordering::SeqCst)
+}
+
+pub(crate) fn now_us() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_micros() as u64
+}
+
 const POLL_INTERVAL: Duration = Duration::from_millis(500);
 const FEEDBACK_EVERY_N_POLLS: u32 = 4; // receivers expect ~2s keepalives
 const PREFILL: Duration = Duration::from_millis(400);
@@ -52,7 +70,7 @@ pub struct AirplayDevice {
 #[napi(object)]
 #[derive(Clone)]
 pub struct AirplayEvent {
-    /// "status" | "ended" | "disconnected" | "error"
+    /// "status" | "ended" | "disconnected" | "error" | "remote_play" | "remote_pause" | "remote_next" | "remote_seek"
     pub kind: String,
     pub playing: Option<bool>,
     pub current_time: Option<f64>,
@@ -470,6 +488,7 @@ impl AirplayClient {
         };
         connection.set_render_delay_ms(200); // retransmit headroom over WiFi (client default)
         connection.setup().await.map_err(err)?;
+        let receiver_events = connection.take_receiver_events();
 
         // A previous session (if any) is replaced.
         self.halt_feeder();
@@ -478,6 +497,9 @@ impl AirplayClient {
             let _ = old.disconnect().await;
         }
         self.start_poller();
+        if let Some(rx) = receiver_events {
+            self.start_receiver_events(rx);
+        }
         Ok(())
     }
 
@@ -546,6 +568,35 @@ impl AirplayClient {
         // The receiver's seek bar needs a fresh position after a pause.
         self.push_progress().await;
         Ok(())
+    }
+
+    /// Resume after `pause` by restarting the stream where it paused, like a
+    /// seek, instead of the RECORD-based `resume`. The receiver takes an
+    /// unpredictable time to start playing again after a RECORD (it varies from
+    /// one resume to the next), whereas a restarted stream has the same, known
+    /// start-up latency as a seek — so the caller can start another output to
+    /// match it. Resolves once the stream is up, with the position (seconds) it
+    /// restarted at: the other output has to be put at exactly that position,
+    /// wherever it happened to stop.
+    #[napi]
+    pub async fn restart_at_pause(&self) -> napi::Result<f64> {
+        let (source, offset) = {
+            let t = self.shared.track.lock().unwrap();
+            (t.source.clone(), t.offset)
+        };
+        let source = source.ok_or_else(|| napi::Error::from_reason("Nothing to resume"))?;
+        let position = {
+            let guard = self.shared.conn.lock().await;
+            guard.as_ref().map_or(0.0, |c| c.playback_position())
+        };
+        let stamp = Stamp {
+            play: self.shared.play_seq.load(Ordering::SeqCst),
+            seek: self.shared.seek_seq.fetch_add(1, Ordering::SeqCst) + 1,
+        };
+        self.shared.track.lock().unwrap().paused = false;
+        let restart_at = offset + position;
+        self.start_stream(source, restart_at, stamp).await?;
+        Ok(restart_at)
     }
 
     #[napi]
@@ -648,9 +699,22 @@ impl AirplayClient {
                 .name("airplay-feeder".into())
                 .spawn(move || {
                     let mut decoder = decoder;
+                    let mut logged_format = false;
                     while !stop.load(Ordering::Relaxed) {
                         match decoder.decode_frame() {
                             Ok(Some(f)) => {
+                                // The stream sent to the receiver is 44.1 kHz stereo; other
+                                // sources are converted by airplay2-rs. Say so once — a
+                                // wrong conversion is what a "twice as fast" track means.
+                                if !logged_format {
+                                    logged_format = true;
+                                    if f.channels != 2 || f.sample_rate != 44100 {
+                                        eprintln!(
+                                            "[airplay] source is {} Hz, {} ch: converting to 44100 Hz, 2 ch",
+                                            f.sample_rate, f.channels
+                                        );
+                                    }
+                                }
                                 let frame = LivePcmFrame { samples: f.samples, channels: f.channels, sample_rate: f.sample_rate };
                                 // Blocks while the channel is full — natural pacing.
                                 if !sender.send(frame) {
@@ -672,6 +736,7 @@ impl AirplayClient {
         tokio::time::sleep(PREFILL).await;
 
         with_conn(&self.shared, |c| Box::pin(c.start_streaming_live(live))).await?;
+        STREAM_STARTED_AT_US.store(now_us(), Ordering::SeqCst);
 
         {
             let mut t = self.shared.track.lock().unwrap();
@@ -740,6 +805,37 @@ impl AirplayClient {
         let (base, position) = position;
         let (start, current, end) = progress_rtp(base, offset, duration, position);
         let _ = with_conn(&self.shared, move |c| Box::pin(async move { c.set_progress(start, current, end).await })).await;
+    }
+
+    /// Forwards what the user does on the receiver itself (the Apple TV remote:
+    /// play, pause, next, scrubbing) to the application as `remote_*` events,
+    /// so it can act on its own playback — the receiver only sent a request and
+    /// does nothing by itself.
+    fn start_receiver_events(&self, mut rx: tokio::sync::mpsc::UnboundedReceiver<airplay_client::ReceiverEvent>) {
+        let shared = self.shared.clone();
+        tokio::spawn(async move {
+            while let Some(ev) = rx.recv().await {
+                let airplay_client::ReceiverEvent::Request(req) = ev else { break };
+                let Some(command) = req.remote_command() else { continue };
+                let ev = match command {
+                    airplay_client::RemoteCommand::Play => event("remote_play"),
+                    airplay_client::RemoteCommand::Pause => event("remote_pause"),
+                    airplay_client::RemoteCommand::NextItem => event("remote_next"),
+                    airplay_client::RemoteCommand::SetPosition(seconds) => {
+                        let mut ev = event("remote_seek");
+                        ev.current_time = Some(seconds);
+                        ev
+                    }
+                    airplay_client::RemoteCommand::Other(code) => {
+                        // Not handled (yet): say which, so it can be added.
+                        let mut ev = event("error");
+                        ev.message = Some(format!("Unhandled AirPlay remote command \"{code}\""));
+                        ev
+                    }
+                };
+                emit(&shared.cb, ev);
+            }
+        });
     }
 
     fn start_poller(&self) {

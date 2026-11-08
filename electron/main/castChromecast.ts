@@ -4,7 +4,10 @@ export type CastStatusEvent =
   | { kind: "status"; playing: boolean; currentTime: number; duration: number; volume: number }
   | { kind: "ended" }
   | { kind: "disconnected" }
-  | { kind: "error"; message: string };
+  | { kind: "error"; message: string }
+  /** The user did this on the receiver itself (e.g. the Apple TV remote); the
+   *  receiver only asks, so the app must act on its own playback. */
+  | { kind: "remote"; command: "play" | "pause" | "next" | "seek"; position?: number };
 
 export interface CastTrackMetadata {
   title: string;

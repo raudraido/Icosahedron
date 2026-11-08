@@ -120,6 +120,18 @@ export class AirplayDevice {
       case "disconnected":
         this.onStatus({ kind: "disconnected" });
         break;
+      case "remote_play":
+        this.onStatus({ kind: "remote", command: "play" });
+        break;
+      case "remote_pause":
+        this.onStatus({ kind: "remote", command: "pause" });
+        break;
+      case "remote_next":
+        this.onStatus({ kind: "remote", command: "next" });
+        break;
+      case "remote_seek":
+        this.onStatus({ kind: "remote", command: "seek", position: ev.currentTime ?? 0 });
+        break;
       case "error":
         // Keepalive/stream hiccups are reported but not fatal on their own;
         // a dead session surfaces as "disconnected" from the native poller.
@@ -176,12 +188,17 @@ export class AirplayDevice {
   }
 
   pause(): void { void getNative().pause().catch(() => {}); }
-  resume(): void { void getNative().resume().catch(() => {}); }
+  // Restarts the stream where it paused (see the native `restartAtPause`);
+  // resolves once it is up, with the position it restarted at, so local
+  // playback can be put at that position and lined up with it.
+  resume(): Promise<number | void> { return getNative().restartAtPause().catch(() => undefined); }
   stop(): void {
     this.supersedeLoads(); // a load still downloading must not start playing after a stop
     void getNative().stop().catch(() => {});
   }
-  seek(seconds: number): void { void getNative().seek(seconds).catch(() => {}); }
+  // Resolves once the stream has restarted at `seconds`, so the caller can
+  // line local playback up with it (a failure just means no restart).
+  seek(seconds: number): Promise<void> { return getNative().seek(seconds).catch(() => {}); }
   setVolume(volume: number): void { void getNative().setVolume(volume).catch(() => {}); }
 
   disconnect(): void {

@@ -109,6 +109,10 @@ export function PlayerBar() {
   // apart from "was closed, this click is an open".
   const eqWasOpenRef = useRef(false);
   const startRadio         = useStore((s) => s.startRadio);
+  const castSyncOffsetMs   = useStore((s) => s.castSyncOffsetMs);
+  const setCastSyncOffset  = useStore((s) => s.setCastSyncOffset);
+  const castCalibration    = useStore((s) => s.castCalibration);
+  const calibrateCastSync  = useStore((s) => s.calibrateCastSync);
   const castConnected      = useStore((s) => s.castConnected);
   const castConnecting     = useStore((s) => s.castConnecting);
   const castConnectError   = useStore((s) => s.castConnectError);
@@ -538,6 +542,10 @@ export function PlayerBar() {
           onConnect={connectCast}
           onDisconnect={disconnectCast}
           onRescan={rescanCastDevices}
+          syncOffsetMs={castSyncOffsetMs}
+          onSyncOffsetChange={setCastSyncOffset}
+          calibration={castCalibration}
+          onCalibrate={calibrateCastSync}
           onClose={() => setCastPicker(null)}
         />
       )}

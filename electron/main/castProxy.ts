@@ -56,8 +56,21 @@ export class CastProxyServer {
   // the callback below is generation-checked by the caller).
   private stallTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private stallHandler: ((trackId: string) => void) | null = null;
+  // In-memory files served under /blob/<name> (calibration signals) — they
+  // don't come from the Subsonic server, so they skip the client lookup.
+  private blobs = new Map<string, { data: Buffer; contentType: string }>();
 
   constructor(private getClient: () => SubsonicClient | null) {}
+
+  /** Serves `data` at the returned URL until unregisterBlob(). */
+  registerBlob(name: string, data: Buffer, contentType: string): string {
+    this.blobs.set(name, { data, contentType });
+    return `http://${this.host}:${this.port}/blob/${encodeURIComponent(name)}`;
+  }
+
+  unregisterBlob(name: string): void {
+    this.blobs.delete(name);
+  }
 
   /** Registers a NOTIFY body handler under `path` and returns the full
    *  callback URL to hand a renderer as its GENA subscription CALLBACK. */
@@ -128,6 +141,13 @@ export class CastProxyServer {
 
       const [, kind, rawId] = url.pathname.split("/");
       const id = rawId ? decodeURIComponent(rawId) : "";
+      if (kind === "blob") {
+        const blob = this.blobs.get(id);
+        if (!blob) { res.writeHead(404).end(); return; }
+        res.writeHead(200, { "Content-Type": blob.contentType, "Content-Length": blob.data.length });
+        res.end(blob.data);
+        return;
+      }
       const client = this.getClient();
       if (!client || !id) { res.writeHead(404).end(); return; }
 

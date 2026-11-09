@@ -791,6 +791,36 @@
         }
       }
     },
+    "Idle": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ootel"
+          }
+        }
+      }
+    },
+    "Paused": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pausil"
+          }
+        }
+      }
+    },
+    "No other devices online.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Teisi seadmeid pole võrgus."
+          }
+        }
+      }
+    },
     "Add to Device Queue": {
       "localizations": {
         "et": {

@@ -36,6 +36,7 @@ struct JukeboxView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                         Text(t.title).font(.title3.weight(.semibold)).multilineTextAlignment(.center)
                         Text(t.artist).foregroundStyle(.secondary)
+                        RemoteProgress(device: active, duration: Double(t.duration))
                         HStack(spacing: 36) {
                             Button { sync.command(to: active, "prev") } label: { Image(systemName: "backward.fill") }
                             Button { sync.command(to: active, "toggle") } label: { Image(systemName: sync.remotePlaying ? "pause.fill" : "play.fill").font(.title) }
@@ -71,6 +72,103 @@ struct JukeboxView: View {
                     }
                 }
             }
+        }
+    }
+}
+
+/// Position of the playing device: moves on by itself, drag to seek.
+struct RemoteProgress: View {
+    @Environment(AppModel.self) private var app
+    let device: String
+    let duration: Double
+    @State private var dragging: Double?
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.5)) { ctx in
+            let pos = dragging ?? app.sync.remotePosition(at: ctx.date)
+            VStack(spacing: 2) {
+                Slider(
+                    value: Binding(get: { pos }, set: { dragging = $0 }),
+                    in: 0...max(duration, 1)
+                ) { editing in
+                    if !editing, let d = dragging {
+                        app.sync.seek(on: device, to: d)
+                        dragging = nil
+                    }
+                }
+                .tint(Theme.accent)
+                HStack {
+                    Text(formatTime(pos))
+                    Spacer()
+                    Text("-" + formatTime(max(0, duration - pos)))
+                }
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+/// The Jukebox tab: the user's devices; open the one that is playing to control it.
+struct JukeboxTab: View {
+    @Environment(AppModel.self) private var app
+
+    var body: some View {
+        let sync = app.sync
+        NavigationStack {
+            List {
+                if sync.status != "online" {
+                    Text(sync.status == "connecting" ? String(localized: "Connecting…") : String(localized: "Sync server not reachable"))
+                        .foregroundStyle(.secondary)
+                }
+                Section(String(localized: "Devices")) {
+                    ForEach(sync.devices) { d in
+                        row(d, sync)
+                    }
+                    if sync.status == "online", sync.devices.count <= 1 {
+                        Text("No other devices online.").foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .navigationTitle("Jukebox")
+        }
+    }
+
+    @ViewBuilder
+    private func row(_ d: SyncModel.Device, _ sync: SyncModel) -> some View {
+        let isMe = d.id == sync.deviceId
+        let isActive = d.id == sync.activeDeviceId
+        let content = HStack(spacing: 12) {
+            Image(systemName: icon(d.kind)).font(.title3)
+                .foregroundStyle(isActive ? Theme.accent : Color.secondary).frame(width: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(d.name + (isMe ? " " + String(localized: "(this phone)") : ""))
+                    .foregroundStyle(isActive ? Theme.accent : Color.primary)
+                if isActive, let t = sync.remoteTrack {
+                    Text("\(sync.remotePlaying ? String(localized: "Playing") : String(localized: "Paused")): \(t.title) — \(t.artist)")
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                } else {
+                    Text("Idle").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            if !isActive, sync.remoteTrack != nil {
+                Button(isMe ? String(localized: "Play here") : String(localized: "Send")) { sync.transfer(to: d.id) }
+                    .buttonStyle(.bordered)
+            }
+        }
+        if isActive, !isMe {
+            NavigationLink { JukeboxView() } label: { content }
+        } else {
+            content
+        }
+    }
+
+    private func icon(_ kind: String) -> String {
+        switch kind {
+        case "mobile": return "iphone"
+        case "electron": return "desktopcomputer"
+        default: return "laptopcomputer"
         }
     }
 }

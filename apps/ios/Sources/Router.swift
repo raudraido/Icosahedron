@@ -5,7 +5,7 @@ import Observation
 /// open an album from anywhere, including the full-screen player) and whether the player is up.
 @MainActor @Observable
 final class Router {
-    enum AppTab: Hashable { case home, library, search }
+    enum AppTab: Hashable { case home, library, jukebox, search }
 
     var tab: AppTab = .home
     var libraryPath = NavigationPath()

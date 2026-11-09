@@ -19,6 +19,10 @@ final class SyncModel {
     /// The active device's track and state, for the "playing on …" display.
     var remoteTrack: Track?
     var remotePlaying = false
+    /// The active device's position when its state arrived. Not observed: views that show it
+    /// tick on their own timer instead of re-rendering on every state message.
+    @ObservationIgnored private(set) var remotePositionMs: Double = 0
+    @ObservationIgnored private(set) var remoteStamp = Date()
 
     let deviceId: String
     @ObservationIgnored private var task: URLSessionWebSocketTask?
@@ -186,6 +190,8 @@ final class SyncModel {
         if track != remoteTrack { remoteTrack = track }
         let playing = (s["playing"] as? Bool) ?? false
         if playing != remotePlaying { remotePlaying = playing }
+        remotePositionMs = (s["positionMs"] as? Double) ?? 0
+        remoteStamp = Date()
     }
 
     private func handleCommand(_ cmd: String, _ args: [String: Any]?) {
@@ -302,6 +308,20 @@ final class SyncModel {
 
     func command(to target: String, _ cmd: String) {
         send(["type": "command", "target": target, "cmd": cmd])
+    }
+
+    /// The active device's position in seconds, moving on locally while it plays.
+    func remotePosition(at now: Date = Date()) -> Double {
+        let base = remotePositionMs / 1000
+        let pos = remotePlaying ? base + now.timeIntervalSince(remoteStamp) : base
+        let limit = Double(remoteTrack?.duration ?? 0)
+        return limit > 0 ? min(pos, limit) : pos
+    }
+
+    func seek(on target: String, to seconds: Double) {
+        send(["type": "command", "target": target, "cmd": "seek", "args": ["positionMs": Int(seconds * 1000)]])
+        remotePositionMs = seconds * 1000
+        remoteStamp = Date()
     }
 
     func transfer(to target: String) {

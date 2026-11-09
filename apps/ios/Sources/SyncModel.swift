@@ -195,6 +195,20 @@ final class SyncModel {
             let pos = ((s["positionMs"] as? Double) ?? 0) / 1000
             let playing = (s["playing"] as? Bool) ?? true
             player.play(tracks, at: tracks.indices.contains(i) ? i : 0, startPaused: !playing, startAt: pos)
+        case "enqueue":
+            guard let raw = args?["tracks"] as? [[String: Any]] else { return }
+            let tracks = raw.compactMap { Track(wire: $0) }
+            if (args?["at"] as? String) == "next" {
+                for t in tracks.reversed() { player.playNext(t) } // keeps the given order
+            } else {
+                for t in tracks { player.addToQueue(t) }
+            }
+        case "jump":
+            if let i = J.int(args ?? [:], "index"), player.queue.indices.contains(i) {
+                player.play(player.queue, at: i)
+            }
+        case "remove":
+            if let i = J.int(args ?? [:], "index") { player.removeFromQueue(at: i) }
         default:
             break
         }

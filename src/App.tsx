@@ -19,6 +19,7 @@ import { LeftPanel, NavArrow } from "./components/LeftPanel";
 import { QueuePanel } from "./components/QueuePanel";
 import { MobileApp } from "./mobile/MobileApp";
 import { useIsMobile } from "./lib/useIsMobile";
+import { PlayerOnly, isPlayerMode } from "./components/PlayerOnly";
 import { Icon } from "./components/Icon";
 import { GlobalTooltip } from "./components/GlobalTooltip";
 import { GlobalHotkeys } from "./components/GlobalHotkeys";
@@ -435,7 +436,9 @@ function DesktopApp() {
 }
 
 function MainApp() {
-  return useIsMobile() ? <MobileApp /> : <DesktopApp />;
+  const mobile = useIsMobile();
+  if (isPlayerMode()) return <PlayerOnly />;
+  return mobile ? <MobileApp /> : <DesktopApp />;
 }
 
 export default function App() {

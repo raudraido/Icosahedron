@@ -19,6 +19,7 @@ import { ARTIST_SEP_RE } from "./ArtistTokens";
 import { FAVORITE_PINK } from "../lib/theme";
 import { GripDots, InsertionIndicator, GhostRow } from "./QueuePanel";
 import { ScrollThumb } from "./ScrollThumb";
+import { useSync, syncActions } from "../lib/sync";
 
 // Fixed track-row height — used both by react-virtual's estimateSize and by
 // the reorder drag math below (Math.floor(relY / TRACK_ROW_HEIGHT)). Only
@@ -1092,12 +1093,28 @@ export function TrackTable({
     return items;
   }
 
+  // Jukebox: queue the track on another of the user's online devices. Read at
+  // menu-build time, which is when the menu opens.
+  function jukeboxMenu(track: Track): MenuEntry[] {
+    const { status, devices, deviceId } = useSync.getState();
+    const others = status === "online" ? devices.filter((d) => d.deviceId !== deviceId) : [];
+    if (!others.length) return [];
+    return [{
+      label: "Add to Device Queue", icon: "img/queue.png",
+      submenu: others.flatMap((d) => [
+        { label: `${d.name}: Play Next`, icon: "img/sub_next.png", onClick: () => syncActions.enqueue(d.deviceId, [track], "next") },
+        { label: `${d.name}: Add to Queue`, icon: "img/queue.png", onClick: () => syncActions.enqueue(d.deviceId, [track], "end") },
+      ]),
+    }];
+  }
+
   function buildTrackMenu(track: Track): MenuEntry[] {
     const filterByItems = buildFilterByItems(track);
     return [
       { label: "Play Now", icon: "img/sub_play.png", onClick: () => playTrack(track, [track]) },
       { label: "Play Next", icon: "img/sub_next.png", onClick: () => addTrackNext(track) },
       { label: "Add to Queue", icon: "img/queue.png", onClick: () => addTrackToQueue(track) },
+      ...jukeboxMenu(track),
       { label: "Go to Artist", icon: "img/sub_artist.png", disabled: !track.artist_id, onClick: () => track.artist_id && navigateTo({ tab: "artists", artistId: track.artist_id }) },
       { label: "Start Radio", icon: "img/radio.png", onClick: () => startRadio(track) },
       {

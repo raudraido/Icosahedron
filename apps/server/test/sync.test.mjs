@@ -70,6 +70,30 @@ test("state propagates, remote command and transfer work, users are isolated", a
   app.close();
 });
 
+test("jukebox commands are validated and forwarded", async () => {
+  const { app, url } = await boot();
+  const a = client(url, "bob", "player");
+  await a.next((m) => m.type === "welcome");
+  const b = client(url, "bob", "remote");
+  await b.next((m) => m.type === "welcome");
+
+  const tracks = [{ id: "1", title: "One" }, { id: "2", title: "Two" }];
+  b.send({ type: "command", target: "player", cmd: "enqueue", args: { at: "end", tracks: [] } }); // empty: dropped
+  b.send({ type: "command", target: "player", cmd: "enqueue", args: { at: "middle", tracks } }); // bad position: dropped
+  b.send({ type: "command", target: "player", cmd: "jump", args: { index: "x" } }); // not an integer: dropped
+  b.send({ type: "command", target: "player", cmd: "enqueue", args: { at: "next", tracks } });
+  const e = await a.next((m) => m.type === "command");
+  assert.equal(e.cmd, "enqueue"); // the invalid ones above never arrived
+  assert.equal(e.args.tracks.length, 2);
+  assert.equal(e.args.at, "next");
+
+  b.send({ type: "command", target: "player", cmd: "jump", args: { index: 3 } });
+  assert.equal((await a.next((m) => m.type === "command")).args.index, 3);
+  b.send({ type: "command", target: "player", cmd: "remove", args: { index: 0 } });
+  assert.equal((await a.next((m) => m.type === "command")).cmd, "remove");
+  app.close();
+});
+
 test("late joiner receives stored state", async () => {
   const { app, url } = await boot();
   const a = client(url, "bob", "phone");

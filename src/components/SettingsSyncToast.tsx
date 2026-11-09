@@ -1,20 +1,21 @@
 import { useSettingsSync } from "../lib/settingsSync";
+import { useSyncNotice } from "../lib/sync";
 
 // Shown when another device changed the shared preferences while music is
 // playing here: the reload that applies them would cut the music off, so it
 // waits for the user.
 export function SettingsSyncToast() {
   const pending = useSettingsSync((s) => s.pending);
-  if (!pending) return null;
+  const notice = useSyncNotice((s) => s.text);
+  const box = {
+    position: "fixed", left: "50%", bottom: 96, transform: "translateX(-50%)", zIndex: 9000,
+    display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 10,
+    background: "var(--left-panel-bg)", color: "var(--text-primary)", border: "1px solid var(--border)",
+    boxShadow: "0 4px 16px rgba(0,0,0,.35)", fontSize: 14, maxWidth: "92vw",
+  } as const;
+  if (!pending) return notice ? <div style={box}>{notice}</div> : null;
   return (
-    <div
-      style={{
-        position: "fixed", left: "50%", bottom: 96, transform: "translateX(-50%)", zIndex: 9000,
-        display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 10,
-        background: "var(--left-panel-bg)", color: "var(--text-primary)", border: "1px solid var(--border)",
-        boxShadow: "0 4px 16px rgba(0,0,0,.35)", fontSize: 14, maxWidth: "92vw",
-      }}
-    >
+    <div style={box}>
       <span>Settings changed on another device.</span>
       <button
         onClick={() => location.reload()}

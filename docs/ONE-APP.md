@@ -8,14 +8,14 @@ Töö on harul `feat/platform-adapter` (GitHub: raudraido/Icosahedron), **master
 ```
                          ┌──────────────────────────────┐
  Electron (desktop) ───► │  Veebimootor (Docker)        │ ◄─── Veeb / PWA (brauser)
- iOS (SwiftUI)      ───► │  apps/server, 10.0.0.18:8484 │
+ iOS (SwiftUI)      ───► │  apps/server, port 8484    │
                          │  • sünkroonihub  /sync (WS)  │
                          │  • Navidrome proxy           │ ───► Navidrome (docker_network)
                          │  • BPM talletus  /bpm        │
                          │  • Last.fm       /lastfm/*   │
                          │  • veebi-UI + PWA            │
                          └──────────────────────────────┘
-                              https://music.raud.cloud
+                              https://music.example.com
 ```
 
 Kasutaja = Navidrome'i konto. Klient saadab Subsonic-tokeni, server kontrollib seda Navidrome'i `ping`iga; servers ei hoita paroole.
@@ -28,7 +28,7 @@ Kasutaja = Navidrome'i konto. Klient saadab Subsonic-tokeni, server kontrollib s
 - **BPM** (`/bpm`): server ainult talletab; desktop tuvastab ja laeb üles, teised loevad. Käsitsi parandus võidab tuvastatud väärtuse.
 - **Last.fm** (`/lastfm/*`): API saladus ja kasutaja sessioonivõti on serveris (`lastfm.json`, õigused 600). Saladus on **ainult hosti compose-failis** (`LASTFM_API_KEY/SECRET`), mitte repos (vanas desktopi koodis on see siiski kirjas).
 - 12 testi (`npm test` kaustas `apps/server`).
-- **Deploy:** repo tar → `ssh ubuntu-18` → `~/icosahedron-src` → `docker compose -p icosahedron-server up -d --build` kaustas `apps/server`. Hosti `docker-compose.yml` (Last.fm võti) tuleb säilitada.
+- **Deploy:** repo kopeeritakse (tar üle ssh) Dockeri hosti → `docker compose -p icosahedron-server up -d --build` kaustas `apps/server`. Hosti `docker-compose.yml` (Last.fm võti) tuleb säilitada.
 
 ### Veeb (brauser, PWA)
 - Sama React-UI, `src/platform/` adapter (Electron vs veeb), Subsonic-klient jagatud (`src/lib/subsonic`).
@@ -55,10 +55,10 @@ Kasutaja = Navidrome'i konto. Klient saadab Subsonic-tokeni, server kontrollib s
 - **Ehitus:** GitHub Actions (`.github/workflows/ios.yml`, macos-26, Xcode 26) annab allkirjastamata `.ipa`. CI ebaõnnestub, kui käivitusfaili pole.
 
 ## Paigaldus telefoni (iOS)
-`Dev-board` (10.1.0.6, `ssh dev-10-1-0-6`): iPhone on sinna USB-ga ühendatud.
+Linuxi arvuti, millega iPhone on USB-ga ühendatud (iloader).
 1. Ehitus: `git push` harule → Actions → artefakt `Icosahedron-unsigned-ipa` (või `gh run download <id> -n Icosahedron-unsigned-ipa`).
-2. Fail `~/Downloads/iloader/Icosahedron.ipa` (kopeeritakse sinna).
-3. `~/Downloads/iloader/run-iloader.sh` → *Import IPA*, Apple ID + 2FA.
+2. Fail `Icosahedron.ipa` (kopeeritakse sinna).
+3. iloader → *Import IPA*, Apple ID + 2FA.
 4. Telefonis: Seaded → Üldine → VPN ja seadmehaldus → usalda arendajat.
 - Tasuta Apple ID: rakendus aegub **7 päeva pärast**, siis tuleb samm 3 korrata. Andmed jäävad alles.
 - iloader'i lahtipakitud AppImage (ilma bundlitud `libwayland`-ita) on vajalik, muidu on aken tühi.
@@ -81,8 +81,8 @@ Ma ei saanud iOS-i rakendust ise käivitada; kõik allolev on ehitatud (`BUILD S
 - Desktopi Last.fm on kohalik ⇒ topeltlugemise oht.
 
 ## Turvalisus ja puhastus
-- Authelia on `music.raud.cloud` eest **eemaldatud**; kaitse on Navidrome'i parool. Tasub vaadata, kas piirata päringute sagedust (`limit_req`) radadel `/auth/` ja `/rest/ping`.
-- Sandbox'is (`~/.config/gh`) on GitHubi token (õigused `repo`, `workflow`) lihttekstina ja SSH-võti `dev_10_1_0_6`. Kui sandbox'i ei kasutata enam: `gh auth logout` ning eemalda võti masina `Dev-board` failist `~/.ssh/authorized_keys`.
+- Kui veebimootor on otse avalikus võrgus (ilma SSO-proksita), on ainus kaitse Navidrome'i parool. Tasub vaadata, kas piirata päringute sagedust (`limit_req`) radadel `/auth/` ja `/rest/ping`.
+- Arenduskeskkonda jäetud GitHubi tokenid ja SSH-võtmed tuleb pärast tööd eemaldada (`gh auth logout`, võti `authorized_keys` failist).
 - Haru on avalikus repos; sisaldab kogu eelmist tööd. Hosti Last.fm saladus pole selles.
 
 ## Mis veel võiks tulla

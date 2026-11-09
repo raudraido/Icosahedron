@@ -48,7 +48,7 @@ export function DevicePicker() {
           {!syncUrl ? (
             <form onSubmit={(e) => { e.preventDefault(); setSyncUrl(urlDraft.trim()); }} className="flex flex-col gap-2">
               <div style={{ fontWeight: 600 }}>Sync server</div>
-              <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>Address of your Icosahedron web engine, e.g. https://music.raud.cloud</div>
+              <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>Address of your Icosahedron web engine, e.g. https://music.example.com</div>
               <input value={urlDraft} onChange={(e) => setUrlDraft(e.target.value)} placeholder="https://…" style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid var(--text-secondary)", background: "transparent", color: "inherit" }} />
               <button type="submit" style={{ padding: 6, borderRadius: 6, border: "none", background: "var(--accent)", color: "white", cursor: "pointer" }}>Connect</button>
             </form>

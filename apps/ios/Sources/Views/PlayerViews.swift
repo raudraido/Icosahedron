@@ -173,9 +173,9 @@ struct NowPlayingView: View {
 
     private func actionButtons(_ t: Track, _ p: PlayerModel, size: CGFloat) -> some View {
         HStack(spacing: 10) {
-            Button { p.toggleFavorite(t.id) } label: {
-                Image(systemName: t.starred ? "heart.fill" : "heart")
-                    .font(.title3).foregroundStyle(t.starred ? Color.red : Color.white)
+            Button { app.toggleStar(t) } label: {
+                Image(systemName: app.isStarred(t) ? "heart.fill" : "heart")
+                    .font(.title3).foregroundStyle(app.isStarred(t) ? Color.red : Color.white)
                     .frame(width: size, height: size)
                     .background(.ultraThinMaterial, in: Circle())
             }
@@ -304,6 +304,20 @@ struct QueueView: View {
 
     var body: some View {
         let p = app.player
+        VStack(spacing: 6) {
+            HStack {
+                Text("Queue").font(.headline)
+                Spacer()
+                Menu {
+                    Button { app.saveQueueAsPlaylist() } label: { Label("Save Queue as Playlist", systemImage: "text.badge.plus") }
+                    Button(role: .destructive) { p.clearQueue() } label: { Label("Clear Queue", systemImage: "trash") }
+                } label: { Image(systemName: "ellipsis.circle").font(.title3) }
+            }
+            queueList(p)
+        }
+    }
+
+    private func queueList(_ p: PlayerModel) -> some View {
         ScrollViewReader { proxy in
             List {
                 ForEach(Array(p.queue.enumerated()), id: \.offset) { i, t in

@@ -150,8 +150,11 @@ final class SubsonicClient {
     }
 
     /// `submission: false` = "now playing", `true` = a finished play.
-    func scrobble(_ id: String, submission: Bool) async throws {
-        _ = try await call("scrobble", [item("id", id), item("submission", submission ? "true" : "false")])
+    /// `time` is when the play happened (so a delayed, offline-queued scrobble still gets the right time).
+    func scrobble(_ id: String, submission: Bool, time: Date? = nil) async throws {
+        var items = [item("id", id), item("submission", submission ? "true" : "false")]
+        if let time { items.append(item("time", String(Int64(time.timeIntervalSince1970 * 1000)))) }
+        _ = try await call("scrobble", items)
     }
 
     /// All songs, paged (Navidrome answers an empty search with the whole library).
@@ -240,5 +243,54 @@ final class SubsonicClient {
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let b = obj["bpm"] as? Double else { return nil }
         return b
+    }
+
+    // MARK: Rating, sharing, playlist management
+
+    /// 1-5 stars, 0 clears.
+    func setRating(_ id: String, _ rating: Int) async throws {
+        _ = try await call("setRating", [item("id", id), item("rating", String(rating))])
+    }
+
+    /// A public link to a track/album (needs sharing enabled on the Navidrome server).
+    func createShare(_ id: String) async throws -> URL? {
+        let r = try await call("createShare", [item("id", id)])
+        let shares = (r["shares"] as? [String: Any]) ?? [:]
+        guard let first = J.arr(shares["share"]).first, let s = J.str(first, "url") else { return nil }
+        return URL(string: s)
+    }
+
+    func renamePlaylist(_ id: String, name: String) async throws {
+        _ = try await call("updatePlaylist", [item("playlistId", id), item("name", name)])
+    }
+
+    func deletePlaylist(_ id: String) async throws {
+        _ = try await call("deletePlaylist", [item("id", id)])
+    }
+
+    /// Replaces a playlist's contents (used for reordering and removing tracks).
+    func setPlaylistTracks(_ id: String, songIds: [String]) async throws {
+        var items = [item("playlistId", id)]
+        items += songIds.map { item("songId", $0) }
+        _ = try await call("createPlaylist", items)
+    }
+
+    // MARK: Web engine (Last.fm lives there)
+
+    /// Authenticated request to the web engine (apps/server) on the same host.
+    func engine(_ method: String, _ path: String, json: [String: Any]? = nil) async throws -> (status: Int, data: Data) {
+        guard let url = URL(string: baseURL.absoluteString + path) else { throw SubsonicError.badResponse }
+        var comps = URLComponents()
+        comps.queryItems = syncAuth().map { URLQueryItem(name: $0.key, value: $0.value) }
+        var req = URLRequest(url: url)
+        req.httpMethod = method
+        req.timeoutInterval = 12
+        req.setValue("Subsonic " + (comps.percentEncodedQuery ?? ""), forHTTPHeaderField: "Authorization")
+        if let json {
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try JSONSerialization.data(withJSONObject: json)
+        }
+        let (data, resp) = try await session.data(for: req)
+        return ((resp as? HTTPURLResponse)?.statusCode ?? 0, data)
     }
 }

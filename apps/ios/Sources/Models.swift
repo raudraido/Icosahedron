@@ -47,6 +47,7 @@ struct Track: Identifiable, Hashable, Codable {
     var channels: Int?
     var playCount: Int?
     var created: String?
+    var userRating: Int?
 
     /// From a Subsonic `song` / `entry` object.
     init?(subsonic d: [String: Any]) {
@@ -74,6 +75,7 @@ struct Track: Identifiable, Hashable, Codable {
         channels = J.int(d, "channelCount")
         playCount = J.int(d, "playCount")
         created = J.str(d, "created")
+        userRating = J.int(d, "userRating")
     }
 
     /// From the sync protocol's track object (the web/desktop Track shape).

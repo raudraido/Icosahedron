@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct IcosahedronApp: App {
     @State private var app = AppModel()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -11,6 +12,9 @@ struct IcosahedronApp: App {
                 .tint(Theme.accent)
                 .preferredColorScheme(.dark)
                 .task { await app.restore() }
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .active { app.flushScrobbles() }
+                }
         }
     }
 }

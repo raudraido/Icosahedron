@@ -109,6 +109,8 @@ struct TrackListScreen: View {
     @Environment(AppModel.self) private var app
     let title: String
     let loader: () async throws -> [Track]
+    /// Set for a playlist: the list can then be edited (reorder, remove) and the server is updated.
+    var playlist: Playlist? = nil
     @State private var tracks: [Track] = []
     @State private var loading = true
     @State private var error: String?
@@ -128,6 +130,14 @@ struct TrackListScreen: View {
                 Button { app.player.play(tracks, at: i) } label: { TrackRow(track: t, showCover: true) }
                     .buttonStyle(.plain)
             }
+            .onDelete(perform: playlist == nil ? nil : { offsets in
+                tracks.remove(atOffsets: offsets)
+                saveOrder()
+            })
+            .onMove(perform: playlist == nil ? nil : { from, to in
+                tracks.move(fromOffsets: from, toOffset: to)
+                saveOrder()
+            })
             if loading { ProgressView().frame(maxWidth: .infinity).listRowSeparator(.hidden) }
             if let error { Text(error).foregroundStyle(.red).font(.caption) }
         }
@@ -135,6 +145,9 @@ struct TrackListScreen: View {
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            if playlist != nil {
+                ToolbarItem(placement: .topBarTrailing) { EditButton() }
+            }
             if !tracks.isEmpty {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -147,6 +160,16 @@ struct TrackListScreen: View {
         .task {
             do { tracks = try await loader() } catch { self.error = error.localizedDescription }
             loading = false
+        }
+    }
+
+    /// The playlist's new contents (after a removal or a move) go to the server.
+    private func saveOrder() {
+        guard let playlist, let c = app.client else { return }
+        let ids = tracks.map { $0.id }
+        Task {
+            try? await c.setPlaylistTracks(playlist.id, songIds: ids)
+            await app.refreshPlaylists()
         }
     }
 

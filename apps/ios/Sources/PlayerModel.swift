@@ -21,6 +21,11 @@ final class PlayerModel {
     var client: SubsonicClient?
     /// Connection type, set by AppModel: decides the streaming quality and whether the cache may download.
     @ObservationIgnored var net: NetworkMonitor?
+    /// A track started ("now playing") / was played long enough to count (scrobble). Set by AppModel.
+    @ObservationIgnored var onNowPlaying: ((Track) -> Void)?
+    @ObservationIgnored var onScrobble: ((Track, Date) -> Void)?
+    @ObservationIgnored private var scrobbledKey: String?
+    @ObservationIgnored private var trackStartedAt = Date()
     /// What the current track is played as, e.g. "FLAC 889 kbps" or "MP3 192 kbps · transcoded".
     var qualityLabel = ""
     /// Fired when the queue, the current track or the play state changes (sync publishes from it).
@@ -194,6 +199,15 @@ final class PlayerModel {
         for i in queue.indices where queue[i].id == id { queue[i].starred = on }
     }
 
+    /// Keeps the queue's copies of a track in step when its favorite state / rating changes elsewhere.
+    func applyStarred(_ id: String, _ on: Bool) { setStarredLocally(id, on) }
+
+    func applyRating(_ id: String, _ rating: Int) {
+        for i in queue.indices where queue[i].id == id { queue[i].userRating = rating }
+    }
+
+    func clearQueue() { stop() }
+
     // MARK: Totals (for the "1 of N" / remaining-time header)
 
     var queueTotal: Double { queue.reduce(0) { $0 + Double($1.duration) } }
@@ -264,8 +278,11 @@ final class PlayerModel {
             isPlaying = true
         }
         updateNowPlaying(reloadArtwork: true)
-        let id = t.id
-        if t.directURL == nil, !silent { Task { try? await client.scrobble(id, submission: false) } } // "now playing"
+        if t.directURL == nil, !silent {
+            scrobbledKey = nil
+            trackStartedAt = Date()
+            onNowPlaying?(t)
+        }
         preloadNext()
         cacheCurrentSoon()
         updateQualityLabel()
@@ -390,10 +407,6 @@ final class PlayerModel {
         let cur = player.currentItem
         if cur === playingItem { return } // our own load(), or nothing changed
         if let q = queuedNext, cur === q.item {
-            if let t = current, t.directURL == nil, let client {
-                let id = t.id
-                Task { try? await client.scrobble(id, submission: true) } // the previous track played out
-            }
             queuedNext = nil
             index = q.index
             if nextOverrideId == queue[q.index].id { nextOverrideId = nil }
@@ -402,9 +415,10 @@ final class PlayerModel {
             duration = Double(current?.duration ?? 0)
             isPlaying = true
             updateNowPlaying(reloadArtwork: true)
-            if let t = current, t.directURL == nil, let client {
-                let id = t.id
-                Task { try? await client.scrobble(id, submission: false) }
+            if let t = current, t.directURL == nil {
+                scrobbledKey = nil
+                trackStartedAt = Date()
+                onNowPlaying?(t)
             }
             playingLocal = current.map { $0.directURL == nil && cache.localURL(for: $0) != nil } ?? false
             preloadNext()
@@ -420,10 +434,6 @@ final class PlayerModel {
 
     private func endOfQueueIfReally() {
         guard player.currentItem == nil, player.items().isEmpty, playingItem != nil else { return }
-        if let t = current, t.directURL == nil, let client {
-            let id = t.id
-            Task { try? await client.scrobble(id, submission: true) }
-        }
         playingItem = nil
         queuedNext = nil
         isPlaying = false
@@ -435,6 +445,7 @@ final class PlayerModel {
     private func tick(_ time: CMTime) {
         let s = time.seconds
         if s.isFinite, !seeking { position = s }
+        scrobbleIfDue()
         if let d = player.currentItem?.duration.seconds, d.isFinite, d > 0 { duration = d }
         if let item = player.currentItem, item.status == .failed, let cur = current, !handlingFailure {
             handlingFailure = true
@@ -451,6 +462,17 @@ final class PlayerModel {
             updateNowPlaying()
             onChange?()
         }
+    }
+
+    /// A play counts after half the track or 4 minutes (Last.fm's rule), once per play.
+    private func scrobbleIfDue() {
+        guard isPlaying, let t = current, t.directURL == nil, t.duration >= 30 else { return }
+        let key = "\(t.id)@\(trackStartedAt.timeIntervalSince1970)"
+        guard scrobbledKey != key else { return }
+        let threshold = min(Double(t.duration) / 2, 240)
+        guard position >= threshold else { return }
+        scrobbledKey = key
+        onScrobble?(t, trackStartedAt)
     }
 
     // MARK: Lock screen & audio session

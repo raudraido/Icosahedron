@@ -2,11 +2,10 @@ import SwiftUI
 
 struct PlaylistsList: View {
     @Environment(AppModel.self) private var app
-    @State private var playlists: [Playlist] = []
 
     var body: some View {
         List {
-            ForEach(playlists) { p in
+            ForEach(app.playlists) { p in
                 NavigationLink(value: p) {
                     HStack(spacing: 12) {
                         CoverImage(id: p.coverArt, size: 100)
@@ -17,11 +16,25 @@ struct PlaylistsList: View {
                         }
                     }
                 }
+                .contextMenu {
+                    Button { app.renamePlaylist(p) } label: { Label("Rename", systemImage: "pencil") }
+                    Button(role: .destructive) { app.deletePlaylist(p) } label: { Label("Delete", systemImage: "trash") }
+                }
+                .swipeActions(edge: .trailing) {
+                    Button(role: .destructive) { app.deletePlaylist(p) } label: { Label("Delete", systemImage: "trash") }
+                    Button { app.renamePlaylist(p) } label: { Label("Rename", systemImage: "pencil") }.tint(.blue)
+                }
             }
+            if app.playlists.isEmpty { Text("No playlists yet").foregroundStyle(.secondary) }
         }
         .listStyle(.plain)
-        .task { playlists = (try? await app.client?.playlists()) ?? [] }
-        .refreshable { playlists = (try? await app.client?.playlists()) ?? [] }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { app.newPlaylist() } label: { Image(systemName: "plus") }
+            }
+        }
+        .task { await app.refreshPlaylists() }
+        .refreshable { await app.refreshPlaylists() }
     }
 }
 
@@ -30,7 +43,7 @@ struct PlaylistScreen: View {
     let playlist: Playlist
 
     var body: some View {
-        TrackListScreen(title: playlist.name) { try await app.client?.playlistTracks(playlist.id) ?? [] }
+        TrackListScreen(title: playlist.name, loader: { try await app.client?.playlistTracks(playlist.id) ?? [] }, playlist: playlist)
     }
 }
 
@@ -98,6 +111,13 @@ struct SettingsView: View {
                 }
                 Section("Devices") {
                     DevicesList()
+                }
+                Section {
+                    LastFmSection()
+                } header: {
+                    Text("Last.fm")
+                } footer: {
+                    Text("Scrobbles go through your server, so one connection covers all your devices. Plays made offline are sent later. If your Navidrome is also linked to Last.fm, a play may be counted twice.")
                 }
                 Section("Lyrics") {
                     Toggle("Look up lyrics online (LRCLIB)", isOn: Binding(
@@ -241,5 +261,48 @@ struct QualitySection: View {
         case .wifi: return (n.isConstrained ? "Low Data Mode" : "Wi-Fi") + " · " + n.streamQuality.label
         case .cellular: return "Cellular · " + n.streamQuality.label
         }
+    }
+}
+
+struct LastFmSection: View {
+    @Environment(AppModel.self) private var app
+
+    var body: some View {
+        let fm = app.lastfm
+        switch fm.state {
+        case .unknown:
+            Text("Not available (needs the web engine)").foregroundStyle(.secondary)
+        case .notConfigured:
+            Text("Not set up on the server").foregroundStyle(.secondary)
+        case .disconnected:
+            if fm.pendingToken == nil {
+                Button("Connect to Last.fm") { connect() }
+            } else {
+                Text("Approve the connection in the browser, then come back and finish.").font(.footnote).foregroundStyle(.secondary)
+                Button("Finish connecting") { finish() }
+                Button("Cancel", role: .cancel) { fm.pendingToken = nil }
+            }
+        case .connected(let name):
+            LabeledContent("Account", value: name)
+            Toggle("Scrobble", isOn: Binding(get: { fm.scrobbleEnabled }, set: { on in
+                if let c = app.client { Task { await fm.setScrobbling(on, client: c) } }
+            }))
+            Button("Disconnect", role: .destructive) {
+                if let c = app.client { Task { await fm.disconnect(client: c) } }
+            }
+        }
+        if let m = fm.message { Text(m).font(.footnote).foregroundStyle(.orange) }
+        let waiting = ScrobbleQueue.shared.count
+        if waiting > 0 { Text("\(waiting) plays waiting to be sent").font(.footnote).foregroundStyle(.secondary) }
+    }
+
+    private func connect() {
+        guard let c = app.client else { return }
+        Task { await app.lastfm.beginConnect(client: c) }
+    }
+
+    private func finish() {
+        guard let c = app.client else { return }
+        Task { await app.lastfm.finishConnect(client: c) }
     }
 }

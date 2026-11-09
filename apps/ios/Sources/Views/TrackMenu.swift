@@ -26,13 +26,24 @@ struct TrackMenuContent: View {
             } else {
                 Button { app.keepOffline([track]) } label: { Label("Keep Offline", systemImage: "arrow.down.circle") }
             }
-            Button { app.player.toggleFavorite(track.id) } label: {
-                Label(track.starred ? "Remove Favorite" : "Favorite", systemImage: track.starred ? "heart.slash" : "heart")
+            Button { app.toggleStar(track) } label: {
+                Label(app.isStarred(track) ? "Remove Favorite" : "Favorite", systemImage: app.isStarred(track) ? "heart.slash" : "heart")
             }
             Menu {
-                if app.playlists.isEmpty {
-                    Text("No playlists")
-                } else {
+                ForEach(1...5, id: \.self) { n in
+                    Button { app.setRating(track, n) } label: {
+                        Label(String(repeating: "★", count: n), systemImage: app.rating(track) == n ? "checkmark" : "star")
+                    }
+                }
+                if app.rating(track) > 0 { Button("Clear Rating", role: .destructive) { app.setRating(track, 0) } }
+            } label: {
+                Label(app.rating(track) > 0 ? "Rating: " + String(repeating: "★", count: app.rating(track)) : "Rating", systemImage: "star")
+            }
+            Button { app.share(track) } label: { Label("Share", systemImage: "square.and.arrow.up") }
+            Menu {
+                Button { app.newPlaylist(with: [track]) } label: { Label("New Playlist…", systemImage: "plus") }
+                if !app.playlists.isEmpty {
+                    Divider()
                     ForEach(app.playlists) { p in
                         Button(p.name) { Task { await app.addToPlaylist(track, p) } }
                     }

@@ -26,6 +26,7 @@ final class PlayerModel {
     @ObservationIgnored private var queuedNext: (item: AVPlayerItem, index: Int)?
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var itemObserver: AnyCancellable?
+    @ObservationIgnored private var seeking = false
     @ObservationIgnored private var artworkTask: Task<Void, Never>?
     @ObservationIgnored private var artworkFor: String?
     @ObservationIgnored private var artwork: MPMediaItemArtwork?
@@ -106,7 +107,12 @@ final class PlayerModel {
 
     func seek(to seconds: Double) {
         let t = max(0, seconds)
-        player.seek(to: CMTime(seconds: t, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        // The periodic clock keeps reporting the old time until the seek has finished; ignore it
+        // meanwhile, otherwise the progress bar jumps back for a moment.
+        seeking = true
+        player.seek(to: CMTime(seconds: t, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+            DispatchQueue.main.async { self?.seeking = false }
+        }
         position = t
         updateNowPlaying()
         onChange?()
@@ -139,7 +145,7 @@ final class PlayerModel {
 
     private func load(startPaused: Bool = false, startAt: Double = 0) {
         guard let t = current, let client else { return }
-        let item = AVPlayerItem(url: t.directURL ?? client.streamURL(t.id))
+        let item = makeItem(t, client: client)
         player.removeAllItems()
         queuedNext = nil
         playingItem = item
@@ -161,6 +167,16 @@ final class PlayerModel {
         onChange?()
     }
 
+    /// A stream item with exact duration and timing. Without it AVPlayer *estimates* the
+    /// position of a seek from the byte offset (wrong for VBR MP3 and files without a seek
+    /// table): it then reports the requested time while the audio comes from somewhere else,
+    /// so the real end of the track arrives at a different time than the progress bar says.
+    private func makeItem(_ t: Track, client: SubsonicClient) -> AVPlayerItem {
+        if let direct = t.directURL { return AVPlayerItem(url: direct) } // radio: live, no timeline
+        let asset = AVURLAsset(url: client.streamURL(t.id), options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
+        return AVPlayerItem(asset: asset)
+    }
+
     /// The index that follows the current one under shuffle/repeat, or nil at the end of the queue.
     private func nextIndex() -> Int? {
         guard !queue.isEmpty, index >= 0 else { return nil }
@@ -180,7 +196,7 @@ final class PlayerModel {
             queuedNext = nil
         }
         guard let client, playingItem != nil, let idx = nextIndex() else { return }
-        let item = AVPlayerItem(url: queue[idx].directURL ?? client.streamURL(queue[idx].id))
+        let item = makeItem(queue[idx], client: client)
         player.insert(item, after: player.items().last)
         queuedNext = (item, idx)
     }
@@ -209,23 +225,29 @@ final class PlayerModel {
             preloadNext()
             onChange?()
         } else if cur == nil, playingItem != nil {
-            // End of the queue.
-            if let t = current, t.directURL == nil, let client {
-                let id = t.id
-                Task { try? await client.scrobble(id, submission: true) }
-            }
-            playingItem = nil
-            queuedNext = nil
-            isPlaying = false
-            position = 0
-            updateNowPlaying()
-            onChange?()
+            // Possibly the end of the queue — but the player can also be empty for a moment
+            // while it hops between items, so look again shortly before concluding that.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.endOfQueueIfReally() }
         }
+    }
+
+    private func endOfQueueIfReally() {
+        guard player.currentItem == nil, player.items().isEmpty, playingItem != nil else { return }
+        if let t = current, t.directURL == nil, let client {
+            let id = t.id
+            Task { try? await client.scrobble(id, submission: true) }
+        }
+        playingItem = nil
+        queuedNext = nil
+        isPlaying = false
+        position = 0
+        updateNowPlaying()
+        onChange?()
     }
 
     private func tick(_ time: CMTime) {
         let s = time.seconds
-        if s.isFinite { position = s }
+        if s.isFinite, !seeking { position = s }
         if let d = player.currentItem?.duration.seconds, d.isFinite, d > 0 { duration = d }
         // Pick up pauses/resumes that happened outside the app's own buttons.
         let playing = player.timeControlStatus != .paused
@@ -283,6 +305,7 @@ final class PlayerModel {
         // Keep the previous cover until the new one has loaded, rather than flashing an empty one at every track change.
         if let art = artwork { info[MPMediaItemPropertyArtwork] = art }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
         if reloadArtwork || artworkFor != t.id { loadArtwork(for: t) }
     }
 

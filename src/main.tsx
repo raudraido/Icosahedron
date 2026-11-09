@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import { SettingsSyncToast } from "./components/SettingsSyncToast";
 import "./index.css";
 import { initSync } from "./lib/sync";
 import { initMediaSession } from "./lib/mediaSession";
@@ -11,6 +12,7 @@ initMediaSession();
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <App />
+    <SettingsSyncToast />
   </React.StrictMode>,
 );
 

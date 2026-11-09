@@ -100,3 +100,29 @@ test("queue is kept when omitted; broadcast omits it; queue items may be objects
   assert.equal(w.state.positionMs, 4000);
   app.close();
 });
+
+test("settings: stored, broadcast to other devices only, delivered on join, size-limited", async () => {
+  const { app, url } = await boot();
+  const a = client(url, "bob", "phone");
+  const w0 = await a.next((m) => m.type === "welcome");
+  assert.equal(w0.settings, null);
+  const b = client(url, "bob", "laptop");
+  await b.next((m) => m.type === "welcome");
+
+  a.send({ type: "settings", settings: { values: { icosahedron_theme: "Dark" }, at: 1 } });
+  const m = await b.next((x) => x.type === "settings");
+  assert.equal(m.settings.values.icosahedron_theme, "Dark");
+  assert.equal(m.from, "phone");
+
+  const c = client(url, "bob", "tv");
+  const w = await c.next((x) => x.type === "welcome");
+  assert.equal(w.settings.values.icosahedron_theme, "Dark");
+
+  // oversized blobs are ignored, previous value stays
+  a.send({ type: "settings", settings: { values: { big: "x".repeat(300 * 1024) } } });
+  await new Promise((r) => setTimeout(r, 100));
+  const d = client(url, "bob", "watch");
+  const w2 = await d.next((x) => x.type === "welcome");
+  assert.equal(w2.settings.values.icosahedron_theme, "Dark");
+  app.close();
+});

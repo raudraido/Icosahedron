@@ -10,6 +10,7 @@ import { platform } from "../platform";
 import { getSyncUrl, saveEngineUrl } from "../platform/syncUrl";
 import { api, type Track } from "./api";
 import { useStore } from "../store";
+import { reconcileSettings, remoteSettingsChanged, settingsDisconnected, type SettingsBlob } from "./settingsSync";
 
 export interface SyncDevice { deviceId: string; name: string; kind: "electron" | "web" | "mobile" }
 export interface RemoteState {
@@ -84,6 +85,7 @@ async function connect(): Promise<void> {
   sock.onmessage = (ev) => { try { onMessage(JSON.parse(ev.data)); } catch { /* ignore malformed */ } };
   sock.onclose = (ev) => {
     if (ws === sock) ws = null;
+    settingsDisconnected();
     useSync.setState({ status: "off", devices: [], activeDeviceId: null });
     if (wanted && ev.code !== 4003) schedule(); // 4003 = bad credentials: don't hammer the server
   };
@@ -98,10 +100,14 @@ function schedule(): void {
 function onMessage(m: any): void {
   switch (m.type) {
     case "welcome":
+      reconcileSettings(m.settings ?? null, (blob: SettingsBlob) => send({ type: "settings", settings: blob }));
       useSync.setState({
         status: "online", devices: m.devices, activeDeviceId: m.activeDeviceId,
         remote: m.state && m.activeDeviceId ? { ...m.state, from: m.activeDeviceId } : m.state ? { ...m.state, from: "" } : null,
       });
+      break;
+    case "settings":
+      remoteSettingsChanged(m.settings ?? null);
       break;
     case "devices":
       useSync.setState({ devices: m.devices, activeDeviceId: m.activeDeviceId });

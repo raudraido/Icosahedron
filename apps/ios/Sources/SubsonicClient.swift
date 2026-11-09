@@ -188,4 +188,9 @@ final class SubsonicClient {
         items += songIds.map { item("songId", $0) }
         _ = try await call("createPlaylist", items)
     }
+
+    func song(_ id: String) async throws -> Track? {
+        let r = try await call("getSong", [item("id", id)])
+        return Track(subsonic: (r["song"] as? [String: Any]) ?? [:])
+    }
 }

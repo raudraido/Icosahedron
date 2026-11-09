@@ -39,6 +39,14 @@ struct Track: Identifiable, Hashable {
     var format: String?
     /// Set for internet radio: plays this URL instead of a Subsonic stream.
     var directURL: URL?
+    // Technical details, only on tracks read from the server's own song objects.
+    var size: Int?
+    var path: String?
+    var samplingRate: Int?
+    var bitDepth: Int?
+    var channels: Int?
+    var playCount: Int?
+    var created: String?
 
     /// From a Subsonic `song` / `entry` object.
     init?(subsonic d: [String: Any]) {
@@ -59,6 +67,13 @@ struct Track: Identifiable, Hashable {
         bitrate = J.int(d, "bitRate")
         format = J.str(d, "suffix")
         directURL = nil
+        size = J.int(d, "size")
+        path = J.str(d, "path")
+        samplingRate = J.int(d, "samplingRate")
+        bitDepth = J.int(d, "bitDepth")
+        channels = J.int(d, "channelCount")
+        playCount = J.int(d, "playCount")
+        created = J.str(d, "created")
     }
 
     /// From the sync protocol's track object (the web/desktop Track shape).

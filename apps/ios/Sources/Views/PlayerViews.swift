@@ -57,6 +57,8 @@ struct NowPlayingView: View {
     @State private var scrub: Double?
     @State private var showQueue = false
     @State private var showDevices = false
+    @State private var showInfo = false
+    @Namespace private var artNS
 
     var body: some View {
         let p = app.player
@@ -64,6 +66,9 @@ struct NowPlayingView: View {
             header(p)
             if showQueue {
                 QueueView()
+            } else if showInfo {
+                infoHeader(p)
+                InfoPanel(track: p.current)
             } else {
                 Spacer(minLength: 0)
                 artwork(p)
@@ -126,9 +131,33 @@ struct NowPlayingView: View {
         CoverImage(id: p.current?.coverArt, size: 800)
             .aspectRatio(1, contentMode: .fit)
             .clipShape(RoundedRectangle(cornerRadius: 14))
+            .matchedGeometryEffect(id: "art", in: artNS)
             .shadow(color: .black.opacity(0.5), radius: 26, y: 12)
             .scaleEffect(p.isPlaying ? 1 : 0.86)
             .animation(.spring(response: 0.45, dampingFraction: 0.75), value: p.isPlaying)
+            .contentShape(Rectangle())
+            .onTapGesture { toggleInfo() }
+    }
+
+    /// Info mode: the cover has shrunk to the top-left corner, title and actions beside it.
+    private func infoHeader(_ p: PlayerModel) -> some View {
+        HStack(spacing: 12) {
+            CoverImage(id: p.current?.coverArt, size: 300)
+                .frame(width: 84, height: 84)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .matchedGeometryEffect(id: "art", in: artNS)
+                .onTapGesture { toggleInfo() }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(p.current?.title ?? "Nothing playing").font(.headline).lineLimit(2)
+                subtitle(p.current)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if let t = p.current, t.directURL == nil { actionButtons(t, p, size: 38) }
+        }
+    }
+
+    private func toggleInfo() {
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { showInfo.toggle() }
     }
 
     private func titleRow(_ p: PlayerModel) -> some View {
@@ -138,20 +167,24 @@ struct NowPlayingView: View {
                 subtitle(p.current)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            if let t = p.current, t.directURL == nil {
-                Button { p.toggleFavorite(t.id) } label: {
-                    Image(systemName: t.starred ? "heart.fill" : "heart")
-                        .font(.title3).foregroundStyle(t.starred ? Color.red : Color.white)
-                        .frame(width: 44, height: 44)
-                        .background(.ultraThinMaterial, in: Circle())
-                }
-                Menu {
-                    TrackMenuContent(track: t)
-                } label: {
-                    Image(systemName: "ellipsis").font(.title3)
-                        .frame(width: 44, height: 44)
-                        .background(.ultraThinMaterial, in: Circle())
-                }
+            if let t = p.current, t.directURL == nil { actionButtons(t, p, size: 44) }
+        }
+    }
+
+    private func actionButtons(_ t: Track, _ p: PlayerModel, size: CGFloat) -> some View {
+        HStack(spacing: 10) {
+            Button { p.toggleFavorite(t.id) } label: {
+                Image(systemName: t.starred ? "heart.fill" : "heart")
+                    .font(.title3).foregroundStyle(t.starred ? Color.red : Color.white)
+                    .frame(width: size, height: size)
+                    .background(.ultraThinMaterial, in: Circle())
+            }
+            Menu {
+                TrackMenuContent(track: t)
+            } label: {
+                Image(systemName: "ellipsis").font(.title3)
+                    .frame(width: size, height: size)
+                    .background(.ultraThinMaterial, in: Circle())
             }
         }
     }
@@ -224,7 +257,7 @@ struct NowPlayingView: View {
             Button { showDevices = true } label: { Image(systemName: "laptopcomputer.and.iphone") }
                 .foregroundStyle(app.sync.status == "online" ? Color.white.opacity(0.75) : Color.white.opacity(0.35))
             Spacer()
-            Button { withAnimation(.snappy) { showQueue.toggle() } } label: {
+            Button { withAnimation(.snappy) { showQueue.toggle(); if showQueue { showInfo = false } } } label: {
                 Image(systemName: "list.bullet")
                     .padding(8)
                     .background(showQueue ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.clear), in: RoundedRectangle(cornerRadius: 8))

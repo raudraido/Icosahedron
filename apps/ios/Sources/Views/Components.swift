@@ -7,21 +7,24 @@ struct CoverImage: View {
     var size: Int = 300
 
     var body: some View {
-        ZStack {
-            Theme.card
-            if let url = app.client?.coverURL(id, size: size) {
-                AsyncImage(url: url) { phase in
-                    if let image = phase.image {
-                        image.resizable().scaledToFill()
-                    } else {
-                        placeholder
+        // The picture is only an overlay on a flexible base: a cover that is not square (wide or
+        // tall) would otherwise size the whole layout by its own proportions and push everything
+        // around it off the screen.
+        Theme.card
+            .overlay {
+                if let url = app.client?.coverURL(id, size: size) {
+                    AsyncImage(url: url) { phase in
+                        if let image = phase.image {
+                            image.resizable().scaledToFill()
+                        } else {
+                            placeholder
+                        }
                     }
+                } else {
+                    placeholder
                 }
-            } else {
-                placeholder
             }
-        }
-        .clipped()
+            .clipped()
     }
 
     private var placeholder: some View {

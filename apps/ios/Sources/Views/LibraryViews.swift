@@ -31,7 +31,7 @@ struct LibraryView: View {
     @Environment(AppModel.self) private var app
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: Bindable(app.router).libraryPath) {
             List(LibrarySection.allCases, id: \.self) { section in
                 NavigationLink(value: section) {
                     Label {

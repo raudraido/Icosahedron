@@ -93,6 +93,7 @@ struct TrackRow: View {
             Text(formatTime(Double(track.duration))).font(.caption).foregroundStyle(.secondary).monospacedDigit()
         }
         .contentShape(Rectangle())
+        .contextMenu { TrackMenuContent(track: track) }
     }
 }
 

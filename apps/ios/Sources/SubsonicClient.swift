@@ -178,4 +178,14 @@ final class SubsonicClient {
         let s = (r["internetRadioStations"] as? [String: Any]) ?? [:]
         return J.arr(s["internetRadioStation"]).compactMap { RadioStation(subsonic: $0) }
     }
+
+    func addToPlaylist(_ playlistId: String, songId: String) async throws {
+        _ = try await call("updatePlaylist", [item("playlistId", playlistId), item("songIdToAdd", songId)])
+    }
+
+    func createPlaylist(name: String, songIds: [String]) async throws {
+        var items = [item("name", name)]
+        items += songIds.map { item("songId", $0) }
+        _ = try await call("createPlaylist", items)
+    }
 }

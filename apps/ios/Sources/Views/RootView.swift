@@ -27,10 +27,10 @@ struct MainTabs: View {
     }
 
     var body: some View {
-        TabView {
-            Tab("Home", systemImage: "house.fill") { HomeView() }
-            Tab("Library", systemImage: "music.note.square.stack.fill") { LibraryView() }
-            Tab("Search", systemImage: "magnifyingglass", role: .search) { SearchView() }
+        TabView(selection: Bindable(app.router).tab) {
+            Tab("Home", systemImage: "house.fill", value: Router.AppTab.home) { HomeView() }
+            Tab("Library", systemImage: "music.note.square.stack.fill", value: Router.AppTab.library) { LibraryView() }
+            Tab("Search", systemImage: "magnifyingglass", value: Router.AppTab.search, role: .search) { SearchView() }
         }
         .tabViewBottomAccessory(isEnabled: showPlayer) { MiniPlayerBar() }
         .tabBarMinimizeBehavior(.onScrollDown)

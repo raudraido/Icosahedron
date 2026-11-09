@@ -27,6 +27,8 @@ final class PlayerModel {
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var itemObserver: AnyCancellable?
     @ObservationIgnored private var seeking = false
+    /// A track the user asked to play next; wins over shuffle for the very next step.
+    @ObservationIgnored private var nextOverrideId: String?
     @ObservationIgnored private var artworkTask: Task<Void, Never>?
     @ObservationIgnored private var artworkFor: String?
     @ObservationIgnored private var artwork: MPMediaItemArtwork?
@@ -55,6 +57,7 @@ final class PlayerModel {
         guard tracks.indices.contains(i) else { return }
         queue = tracks
         index = i
+        nextOverrideId = nil
         load(startPaused: startPaused, startAt: startAt)
     }
 
@@ -79,19 +82,13 @@ final class PlayerModel {
 
     func next() {
         guard !queue.isEmpty else { return }
-        if shuffle, queue.count > 1 {
-            var n = Int.random(in: 0..<queue.count)
-            while n == index { n = Int.random(in: 0..<queue.count) }
-            index = n
-        } else if index + 1 < queue.count {
-            index += 1
-        } else if repeatAll {
-            index = 0
-        } else {
+        guard let i = nextIndex() else {
             pause()
             seek(to: 0)
             return
         }
+        if nextOverrideId == queue[i].id { nextOverrideId = nil }
+        index = i
         load()
     }
 
@@ -116,6 +113,78 @@ final class PlayerModel {
         position = t
         updateNowPlaying()
         onChange?()
+    }
+
+    // MARK: Queue editing
+
+    /// Plays `track` right after the current one (starts it if nothing is playing).
+    func playNext(_ track: Track) {
+        guard current != nil else { play([track], at: 0); return }
+        queue.insert(track, at: index + 1)
+        nextOverrideId = track.id
+        preloadNext()
+        onChange?()
+    }
+
+    func addToQueue(_ track: Track) {
+        guard current != nil else { play([track], at: 0); return }
+        queue.append(track)
+        preloadNext() // it may have become the next one (end of queue with repeat)
+        onChange?()
+    }
+
+    func moveInQueue(from source: IndexSet, to destination: Int) {
+        var order = Array(queue.indices)
+        order.move(fromOffsets: source, toOffset: destination)
+        queue.move(fromOffsets: source, toOffset: destination)
+        if let newIndex = order.firstIndex(of: index) { index = newIndex }
+        preloadNext()
+        onChange?()
+    }
+
+    func removeFromQueue(at i: Int) {
+        guard queue.indices.contains(i) else { return }
+        if i == index {
+            queue.remove(at: i)
+            if queue.isEmpty {
+                stop()
+            } else {
+                index = min(i, queue.count - 1)
+                load()
+            }
+        } else {
+            queue.remove(at: i)
+            if i < index { index -= 1 }
+            preloadNext()
+        }
+        onChange?()
+    }
+
+    // MARK: Favorites
+
+    /// Flips the favorite state of a track everywhere it appears in the queue, optimistically.
+    func toggleFavorite(_ trackId: String) {
+        guard let client, let current = queue.first(where: { $0.id == trackId }) else { return }
+        let on = !current.starred
+        setStarredLocally(trackId, on)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Task { [weak self] in
+            do { try await client.setStarred(trackId, on) } catch { self?.setStarredLocally(trackId, !on) }
+        }
+    }
+
+    private func setStarredLocally(_ id: String, _ on: Bool) {
+        for i in queue.indices where queue[i].id == id { queue[i].starred = on }
+    }
+
+    // MARK: Totals (for the "1 of N" / remaining-time header)
+
+    var queueTotal: Double { queue.reduce(0) { $0 + Double($1.duration) } }
+
+    var queueRemaining: Double {
+        guard index >= 0, index < queue.count else { return 0 }
+        let after = queue[(index + 1)...].reduce(0) { $0 + Double($1.duration) }
+        return max(0, duration - position) + after
     }
 
     func toggleShuffle() {
@@ -180,6 +249,7 @@ final class PlayerModel {
     /// The index that follows the current one under shuffle/repeat, or nil at the end of the queue.
     private func nextIndex() -> Int? {
         guard !queue.isEmpty, index >= 0 else { return nil }
+        if let id = nextOverrideId, let i = queue.firstIndex(where: { $0.id == id }), i != index { return i }
         if shuffle, queue.count > 1 {
             var n = Int.random(in: 0..<queue.count)
             while n == index { n = Int.random(in: 0..<queue.count) }
@@ -213,6 +283,7 @@ final class PlayerModel {
             }
             queuedNext = nil
             index = q.index
+            if nextOverrideId == queue[q.index].id { nextOverrideId = nil }
             playingItem = q.item
             position = 0
             duration = Double(current?.duration ?? 0)

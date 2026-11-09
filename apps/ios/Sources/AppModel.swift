@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UIKit
 
 /// App-wide state: the signed-in server connection, the player and the sync link.
 @MainActor @Observable
@@ -8,6 +9,8 @@ final class AppModel {
     var restoring = true
     let player = PlayerModel()
     let sync = SyncModel()
+    let router = Router()
+    var playlists: [Playlist] = []
 
     var isLoggedIn: Bool { client != nil }
 
@@ -42,6 +45,21 @@ final class AppModel {
         client = c
         player.client = c
         sync.start(client: c, player: player)
+        Task { await refreshPlaylists() }
+    }
+
+    func refreshPlaylists() async {
+        playlists = (try? await client?.playlists()) ?? []
+    }
+
+    func addToPlaylist(_ track: Track, _ playlist: Playlist) async {
+        do {
+            try await client?.addToPlaylist(playlist.id, songId: track.id)
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            await refreshPlaylists()
+        } catch {
+            UINotificationFeedbackGenerator().notificationOccurred(.error)
+        }
     }
 
     func signOut() {

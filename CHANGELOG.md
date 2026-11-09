@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.15.4
+
+Adds the **jukebox**: control another of your devices — queue music on it, play it now, edit its queue and watch its progress — from the desktop app, the web app and the iOS app. It needs the web engine; with plain Navidrome nothing changes.
+
+### Web engine
+- New remote commands, validated by the engine: `enqueue` (`now`, `next` or `end`, 1 to 1000 tracks), `jump` and `remove`. Documented in [docs/sync-protocol.md](docs/sync-protocol.md).
+- **Update the engine** (`docker compose pull && docker compose up -d`) before using them; an older engine ignores the new commands.
+
+### Desktop and web app
+- **Add to Device Queue** in the track menu: pick a device, then *Play Now*, *Play Next* or *Add to Queue*. A short confirmation shows what was sent.
+- The devices popover lists the playing device's queue (**Show queue**): click a track to play it, ✕ to remove it.
+- **Player-only page** `/?player=1`: shows the current track and the next ones, registers as "Jukebox" and is controlled from your other devices. It asks for one tap only when the browser would block audio. See [docs/web.md](docs/web.md#jukebox).
+- The devices list keeps a fixed order (this device first, the rest by name); a reconnect no longer moves a device around.
+
+### iOS app
+- New **Jukebox tab**: your devices and what each one is doing. Open the one that is playing for a large cover, a **progress bar you can drag to seek**, previous / play-pause / next and its whole queue (tap a track to play it, swipe to remove).
+- **Add to Device Queue** in every track menu (*Play Now*, *Play Next*, *Add to Queue*).
+- The playing device can also be controlled from Settings > Devices.
+- Fixed: the devices list flickered because the remote state was re-assigned every few seconds even when nothing changed.
+- Fixed: devices swapped places in the list after a reconnect (see above).
+
+### Known limits
+- `jump` and `remove` use the queue position the controller last saw, so two controllers editing the same queue at once can hit the wrong track.
+- Not tested on every browser: `/?player=1` autoplay was tried in Firefox only.
+
 ## 0.15.3
 
 This release adds an optional **web engine** that keeps all your players in step, and a **platform layer** that lets the same UI run in a browser and in a new **iOS app**. Nothing changes for the desktop app unless you set up a sync server; every desktop feature below is opt-in.

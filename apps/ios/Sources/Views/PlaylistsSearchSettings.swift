@@ -106,11 +106,18 @@ struct SettingsView: View {
                     ))
                 }
                 Section {
+                    QualitySection()
+                } header: {
+                    Text("Playback quality")
+                } footer: {
+                    Text("Wi-Fi and wired use the Wi-Fi profile; cellular and iOS Low Data Mode use the Cellular one. Transcoding is done by your Navidrome server. A song already on the phone plays as it is. On cellular nothing is downloaded in the background unless you allow it.")
+                }
+                Section {
                     CacheSettings()
                 } header: {
                     Text("Offline cache")
                 } footer: {
-                    Text("Tracks are downloaded in the background — the next one right away — so they start instantly and play without a network. The oldest files are removed when the limit is reached.")
+                    Text("Tracks are downloaded in the background — the next one right away — so they start instantly and play without a network. The oldest files are removed when the limit is reached; songs you keep offline are never removed.")
                 }
                 Section {
                     Button("Sign out", role: .destructive) { app.signOut() }
@@ -172,6 +179,7 @@ struct DevicesList: View {
 struct CacheSettings: View {
     @AppStorage(AudioCache.limitKey) private var limitMB = 2048
     @State private var used: Int64 = 0
+    @State private var kept: Int64 = 0
 
     var body: some View {
         Picker("Cache size", selection: $limitMB) {
@@ -189,7 +197,8 @@ struct CacheSettings: View {
             if new == 0 { AudioCache.shared.clear() } else { AudioCache.shared.enforceLimit() }
             refresh()
         }
-        LabeledContent("Used", value: ByteCountFormatter.string(fromByteCount: used, countStyle: .file))
+        LabeledContent("Cache used", value: ByteCountFormatter.string(fromByteCount: used, countStyle: .file))
+        LabeledContent("Kept offline", value: ByteCountFormatter.string(fromByteCount: kept, countStyle: .file))
         Button("Clear Cache", role: .destructive) {
             AudioCache.shared.clear()
             refresh()
@@ -199,8 +208,38 @@ struct CacheSettings: View {
 
     private func refresh() {
         Task.detached {
-            let size = AudioCache.shared.totalSize()
-            await MainActor.run { used = size }
+            let sizes = AudioCache.shared.sizes()
+            await MainActor.run {
+                used = sizes.auto
+                kept = sizes.pinned
+            }
+        }
+    }
+}
+
+struct QualitySection: View {
+    @Environment(AppModel.self) private var app
+    @AppStorage(QualitySettings.wifiKey) private var wifi = "raw"
+    @AppStorage(QualitySettings.cellularKey) private var cellular = "mp3-192"
+    @AppStorage(QualitySettings.cellularCacheKey) private var cacheOnCellular = false
+
+    var body: some View {
+        Picker("Wi-Fi", selection: $wifi) {
+            ForEach(StreamQuality.options, id: \.storageKey) { Text($0.label).tag($0.storageKey) }
+        }
+        Picker("Cellular", selection: $cellular) {
+            ForEach(StreamQuality.options, id: \.storageKey) { Text($0.label).tag($0.storageKey) }
+        }
+        Toggle("Cache and download on cellular", isOn: $cacheOnCellular)
+        LabeledContent("Right now", value: nowText)
+    }
+
+    private var nowText: String {
+        let n = app.net
+        switch n.kind {
+        case .offline: return "Offline"
+        case .wifi: return (n.isConstrained ? "Low Data Mode" : "Wi-Fi") + " · " + n.streamQuality.label
+        case .cellular: return "Cellular · " + n.streamQuality.label
         }
     }
 }

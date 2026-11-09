@@ -141,6 +141,16 @@ struct AlbumDetailView: View {
         }
         .listStyle(.plain)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if !tracks.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button { app.keepOffline(tracks) } label: { Label("Keep Album Offline", systemImage: "arrow.down.circle") }
+                        Button { app.removeOffline(tracks.map { $0.id }) } label: { Label("Remove Offline", systemImage: "arrow.down.circle.badge.xmark") }
+                    } label: { Image(systemName: "ellipsis.circle") }
+                }
+            }
+        }
         .task { tracks = (try? await app.client?.album(album.id).1) ?? [] }
     }
 

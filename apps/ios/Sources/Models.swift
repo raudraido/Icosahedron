@@ -21,7 +21,7 @@ enum J {
     static func orNull(_ v: Any?) -> Any { v ?? NSNull() }
 }
 
-struct Track: Identifiable, Hashable {
+struct Track: Identifiable, Hashable, Codable {
     let id: String
     var title: String
     var artist: String

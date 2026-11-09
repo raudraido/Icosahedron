@@ -56,7 +56,15 @@ final class SubsonicClient {
         return comps.url!
     }
 
-    func streamURL(_ id: String) -> URL { url("stream", [URLQueryItem(name: "id", value: id)], json: false) }
+    /// Direct play (the original file) or a transcode by the server (Subsonic `format` + `maxBitRate`).
+    func streamURL(_ id: String, quality: StreamQuality = .direct) -> URL {
+        var items = [URLQueryItem(name: "id", value: id), URLQueryItem(name: "format", value: quality.format)]
+        if !quality.isDirect {
+            items.append(URLQueryItem(name: "maxBitRate", value: String(quality.bitrate)))
+            items.append(URLQueryItem(name: "estimateContentLength", value: "true"))
+        }
+        return url("stream", items, json: false)
+    }
 
     func coverURL(_ id: String?, size: Int) -> URL? {
         guard let id, !id.isEmpty else { return nil }

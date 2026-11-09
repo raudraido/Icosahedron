@@ -77,6 +77,7 @@ struct TrackRow: View {
 
     var body: some View {
         let playing = app.player.current?.id == track.id
+        let _ = app.cacheRevision // the kept-offline badge follows the cache
         HStack(spacing: 12) {
             if showCover {
                 CoverImage(id: track.coverArt, size: 100)
@@ -92,6 +93,9 @@ struct TrackRow: View {
             Spacer(minLength: 8)
             if playing && app.player.isPlaying {
                 Image(systemName: "waveform").foregroundStyle(Theme.accent)
+            }
+            if AudioCache.shared.isPinned(track.id) {
+                Image(systemName: "arrow.down.circle.fill").font(.caption).foregroundStyle(.secondary)
             }
             Text(formatTime(Double(track.duration))).font(.caption).foregroundStyle(.secondary).monospacedDigit()
         }
@@ -130,6 +134,16 @@ struct TrackListScreen: View {
         .listStyle(.plain)
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if !tracks.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button { app.keepOffline(tracks) } label: { Label("Keep All Offline", systemImage: "arrow.down.circle") }
+                        Button { app.removeOffline(tracks.map { $0.id }) } label: { Label("Remove Offline", systemImage: "arrow.down.circle.badge.xmark") }
+                    } label: { Image(systemName: "ellipsis.circle") }
+                }
+            }
+        }
         .task {
             do { tracks = try await loader() } catch { self.error = error.localizedDescription }
             loading = false

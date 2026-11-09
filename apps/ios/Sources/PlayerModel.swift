@@ -19,6 +19,10 @@ final class PlayerModel {
     var speed: Double = UserDefaults.standard.object(forKey: "playbackSpeed") as? Double ?? 1.0
     var keepPitch: Bool = UserDefaults.standard.object(forKey: "keepPitch") as? Bool ?? true
     var client: SubsonicClient?
+    /// Connection type, set by AppModel: decides the streaming quality and whether the cache may download.
+    @ObservationIgnored var net: NetworkMonitor?
+    /// What the current track is played as, e.g. "FLAC 889 kbps" or "MP3 192 kbps · transcoded".
+    var qualityLabel = ""
     /// Fired when the queue, the current track or the play state changes (sync publishes from it).
     @ObservationIgnored var onChange: (() -> Void)?
 
@@ -264,6 +268,7 @@ final class PlayerModel {
         if t.directURL == nil, !silent { Task { try? await client.scrobble(id, submission: false) } } // "now playing"
         preloadNext()
         cacheCurrentSoon()
+        updateQualityLabel()
         onChange?()
     }
 
@@ -286,7 +291,38 @@ final class PlayerModel {
             let asset = AVURLAsset(url: local, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
             return AVPlayerItem(asset: asset)
         }
-        return AVPlayerItem(url: client.streamURL(t.id))
+        return AVPlayerItem(url: client.streamURL(t.id, quality: wantedQuality()))
+    }
+
+    // MARK: Connection-dependent quality
+
+    func wantedQuality() -> StreamQuality { net?.streamQuality ?? QualitySettings.wifi() }
+
+    private var cachingAllowed: Bool { net?.cachingAllowed ?? true }
+
+    private func updateQualityLabel() {
+        guard let t = current else { qualityLabel = ""; return }
+        if t.directURL != nil { qualityLabel = "Radio"; return }
+        if playingLocal, let l = cache.qualityLabel(for: t) { qualityLabel = l + " · cached"; return }
+        let q = wantedQuality()
+        if q.isDirect {
+            qualityLabel = [t.format?.uppercased(), t.bitrate.map { "\($0) kbps" }].compactMap { $0 }.joined(separator: " ")
+        } else {
+            qualityLabel = "\(q.format.uppercased()) \(q.bitrate) kbps · transcoded"
+        }
+    }
+
+    /// The connection changed: the queued next track is re-created with the new profile
+    /// (the current one plays on as it is), and kept-offline downloads may continue.
+    func networkChanged() {
+        if let q = queuedNext { preloadNext(reuseIndex: q.index) }
+        resumePins()
+    }
+
+    /// Downloads kept-offline tracks that are still missing (Wi-Fi, or cellular if the user allowed it).
+    func resumePins() {
+        guard let client, cachingAllowed else { return }
+        cache.resumePending(client: client, quality: QualitySettings.wifi())
     }
 
     /// What must stay on disk / keep downloading: the playing track and the queued next one.
@@ -299,11 +335,12 @@ final class PlayerModel {
 
     /// The current track is cached too, a few seconds in (a skipped track shouldn't cost a download).
     private func cacheCurrentSoon() {
-        guard let t = current, let client, t.directURL == nil, cache.localURL(for: t) == nil else { return }
+        guard cachingAllowed, let t = current, let client, t.directURL == nil, cache.localURL(for: t) == nil else { return }
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             guard let self, self.current?.id == t.id else { return }
-            self.cache.prefetch(t, client: client)
+            guard self.cachingAllowed else { return }
+            self.cache.prefetch(t, client: client, quality: self.wantedQuality())
         }
     }
 
@@ -342,7 +379,9 @@ final class PlayerModel {
         player.insert(item, after: player.items().last)
         queuedNext = (item, idx)
         cache.setProtected(protectedIds())
-        cache.prefetch(queue[idx], client: client) // the next track is fetched in full right away
+        if cachingAllowed {
+            cache.prefetch(queue[idx], client: client, quality: wantedQuality()) // the next track is fetched in full right away
+        }
     }
 
     /// The player moved to another item (or ran out). With our queued next item that is the
@@ -370,6 +409,7 @@ final class PlayerModel {
             playingLocal = current.map { $0.directURL == nil && cache.localURL(for: $0) != nil } ?? false
             preloadNext()
             cacheCurrentSoon()
+            updateQualityLabel()
             onChange?()
         } else if cur == nil, playingItem != nil {
             // Possibly the end of the queue — but the player can also be empty for a moment
@@ -398,7 +438,7 @@ final class PlayerModel {
         if let d = player.currentItem?.duration.seconds, d.isFinite, d > 0 { duration = d }
         if let item = player.currentItem, item.status == .failed, let cur = current, !handlingFailure {
             handlingFailure = true
-            if playingLocal { cache.remove(cur) }
+            if playingLocal { cache.remove(cur.id) }
             let resumeAt = position
             let wasPlaying = isPlaying
             if playingLocal { load(startPaused: !wasPlaying, startAt: resumeAt, silent: true) } else { isPlaying = false; onChange?() }

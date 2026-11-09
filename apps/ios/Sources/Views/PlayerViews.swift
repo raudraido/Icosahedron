@@ -216,7 +216,7 @@ struct NowPlayingView: View {
             HStack {
                 Text(formatTime(scrub ?? p.position))
                 Spacer()
-                Text(qualityText(p.current)).font(.caption2)
+                Text(p.qualityLabel.isEmpty ? qualityText(p.current) : p.qualityLabel).font(.caption2)
                 Spacer()
                 Text("-" + formatTime(max(0, p.duration - (scrub ?? p.position)) / max(p.speed, 0.1)))
             }

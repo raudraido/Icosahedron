@@ -7,6 +7,7 @@ enum LibrarySection: String, Hashable, CaseIterable {
     case recent = "Recently Played Albums"
     case songs = "Songs"
     case favorites = "Favorite Songs"
+    case cached = "Cached Songs"
     case directories = "Directories"
     case playlists = "Playlists"
     case radios = "Radios"
@@ -19,6 +20,7 @@ enum LibrarySection: String, Hashable, CaseIterable {
         case .recent: return "clock.arrow.circlepath"
         case .songs: return "music.note"
         case .favorites: return "heart.fill"
+        case .cached: return "arrow.down.circle.fill"
         case .directories: return "folder.fill"
         case .playlists: return "music.note.list"
         case .radios: return "dot.radiowaves.left.and.right"
@@ -32,14 +34,20 @@ struct LibraryView: View {
 
     var body: some View {
         NavigationStack(path: Bindable(app.router).libraryPath) {
-            List(LibrarySection.allCases, id: \.self) { section in
-                NavigationLink(value: section) {
-                    Label {
-                        Text(section.rawValue).font(.title3)
-                    } icon: {
-                        Image(systemName: section.icon).foregroundStyle(Theme.accent).frame(width: 34)
+            List {
+                if !app.net.isOnline {
+                    Label("Offline — only cached songs can be played", systemImage: "wifi.slash")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+                ForEach(LibrarySection.allCases, id: \.self) { section in
+                    NavigationLink(value: section) {
+                        Label {
+                            Text(section.rawValue).font(.title3)
+                        } icon: {
+                            Image(systemName: section.icon).foregroundStyle(Theme.accent).frame(width: 34)
+                        }
+                        .padding(.vertical, 6)
                     }
-                    .padding(.vertical, 6)
                 }
             }
             .listStyle(.plain)
@@ -65,6 +73,8 @@ struct LibraryView: View {
             SongsScreen()
         case .favorites:
             TrackListScreen(title: "Favorite Songs") { try await app.client?.starred() ?? [] }
+        case .cached:
+            CachedSongsScreen()
         case .directories:
             DirectoryScreen(entry: nil)
         case .playlists:
@@ -180,4 +190,84 @@ struct RadiosScreen: View {
             loading = false
         }
     }
+}
+
+/// Songs on the phone: the automatic cache plus the ones kept offline. Works without a connection.
+struct CachedSongsScreen: View {
+    @Environment(AppModel.self) private var app
+    @State private var onlyKept = false
+
+    var body: some View {
+        let _ = app.cacheRevision // refresh whenever the cache changes
+        let all = AudioCache.shared.entries()
+        let shown = onlyKept ? all.filter { $0.pinned } : all
+        let playable = shown.filter { $0.file != nil }.map { $0.track }
+        let sizes = AudioCache.shared.sizes()
+        List {
+            Section {
+                Picker("", selection: $onlyKept) {
+                    Text("All").tag(false)
+                    Text("Kept Offline").tag(true)
+                }
+                .pickerStyle(.segmented)
+                Text("\(playable.count) songs · cache \(bytes(sizes.auto)) · kept offline \(bytes(sizes.pinned))")
+                    .font(.footnote).foregroundStyle(.secondary)
+                if !playable.isEmpty {
+                    HStack(spacing: 12) {
+                        Button { app.player.play(playable, at: 0) } label: { Label("Play", systemImage: "play.fill").frame(maxWidth: .infinity) }
+                            .buttonStyle(.borderedProminent)
+                        Button { app.player.play(playable.shuffled(), at: 0) } label: { Label("Shuffle", systemImage: "shuffle").frame(maxWidth: .infinity) }
+                            .buttonStyle(.bordered)
+                    }
+                }
+            }
+            .listRowSeparator(.hidden)
+
+            ForEach(shown) { e in
+                row(e, playable: playable)
+            }
+            if shown.isEmpty {
+                Text(onlyKept ? "Nothing kept offline yet. Use \"Keep Offline\" in a track's menu." : "No songs cached yet.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .listStyle(.plain)
+        .navigationTitle("Cached Songs")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { if let c = app.client { await AudioCache.shared.fillMissingMetadata(client: c) } }
+    }
+
+    @ViewBuilder
+    private func row(_ e: AudioCache.Entry, playable: [Track]) -> some View {
+        let ready = e.file != nil
+        Button {
+            if ready, let i = playable.firstIndex(where: { $0.id == e.id }) { app.player.play(playable, at: i) }
+        } label: {
+            HStack(spacing: 8) {
+                TrackRow(track: e.track, showCover: true)
+                if !ready {
+                    VStack(spacing: 2) {
+                        ProgressView()
+                        Text("Waiting").font(.caption2).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(!ready)
+        .swipeActions(edge: .trailing) {
+            Button(role: .destructive) { remove(e) } label: { Label("Remove", systemImage: "trash") }
+            if e.pinned {
+                Button { app.removeOffline([e.id]) } label: { Label("Unpin", systemImage: "pin.slash") }.tint(.orange)
+            } else {
+                Button { app.keepOffline([e.track]) } label: { Label("Keep", systemImage: "arrow.down.circle") }.tint(.blue)
+            }
+        }
+    }
+
+    private func remove(_ e: AudioCache.Entry) {
+        AudioCache.shared.remove(e.id)
+    }
+
+    private func bytes(_ n: Int64) -> String { ByteCountFormatter.string(fromByteCount: n, countStyle: .file) }
 }

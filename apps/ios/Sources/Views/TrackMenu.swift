@@ -21,6 +21,11 @@ struct TrackMenuContent: View {
                 Button { app.router.show(artist: artist) } label: { Label("Show Artist", systemImage: "music.mic") }
             }
             Divider()
+            if AudioCache.shared.isPinned(track.id) {
+                Button { app.removeOffline([track.id]) } label: { Label("Remove Offline", systemImage: "arrow.down.circle.badge.xmark") }
+            } else {
+                Button { app.keepOffline([track]) } label: { Label("Keep Offline", systemImage: "arrow.down.circle") }
+            }
             Button { app.player.toggleFavorite(track.id) } label: {
                 Label(track.starred ? "Remove Favorite" : "Favorite", systemImage: track.starred ? "heart.slash" : "heart")
             }

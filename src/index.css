@@ -224,3 +224,11 @@ input[type="range"] { accent-color: var(--accent); }
 }
 
 input::placeholder { color: var(--text-secondary); opacity: 1; }
+
+/* Phone behaviour: no rubber-band page bounce, no double-tap zoom, and 16px
+   inputs so iOS Safari doesn't zoom the page when a field is focused. */
+html { -webkit-text-size-adjust: 100%; touch-action: manipulation; }
+body { overscroll-behavior: none; }
+@media (max-width: 820px) {
+  input:not([type="range"]):not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: 16px; }
+}

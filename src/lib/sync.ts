@@ -118,12 +118,19 @@ function schedule(): void {
   retryTimer = window.setTimeout(connect, Math.min(30000, 1000 * 2 ** retry++));
 }
 
+/** Stable order: this device first, the rest by name (the server lists them in connection order). */
+function orderDevices(list: SyncDevice[]): SyncDevice[] {
+  const me = useSync.getState().deviceId;
+  return [...list].sort((a, b) =>
+    (a.deviceId === me ? 0 : 1) - (b.deviceId === me ? 0 : 1) || a.name.localeCompare(b.name) || a.deviceId.localeCompare(b.deviceId));
+}
+
 function onMessage(m: any): void {
   switch (m.type) {
     case "welcome":
       reconcileSettings(m.settings ?? null, (blob: SettingsBlob) => send({ type: "settings", settings: blob }));
       useSync.setState({
-        status: "online", devices: m.devices, activeDeviceId: m.activeDeviceId,
+        status: "online", devices: orderDevices(m.devices), activeDeviceId: m.activeDeviceId,
         remote: m.state && m.activeDeviceId ? { ...m.state, from: m.activeDeviceId } : m.state ? { ...m.state, from: "" } : null,
       });
       break;
@@ -131,7 +138,7 @@ function onMessage(m: any): void {
       remoteSettingsChanged(m.settings ?? null);
       break;
     case "devices":
-      useSync.setState({ devices: m.devices, activeDeviceId: m.activeDeviceId });
+      useSync.setState({ devices: orderDevices(m.devices), activeDeviceId: m.activeDeviceId });
       break;
     case "state": {
       const prev = useSync.getState().remote;

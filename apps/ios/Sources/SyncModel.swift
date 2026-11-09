@@ -170,9 +170,15 @@ final class SyncModel {
     }
 
     private func applyDevices(_ m: [String: Any]) {
+        // The server lists devices in the order they connected, so a reconnect moved a device to
+        // the end. Keep a fixed order instead: this phone first, the rest by name.
         devices = J.arr(m["devices"]).compactMap { d in
             guard let id = J.str(d, "deviceId") else { return nil }
             return Device(id: id, name: J.str(d, "name") ?? "Device", kind: J.str(d, "kind") ?? "web")
+        }
+        .sorted { a, b in
+            if (a.id == deviceId) != (b.id == deviceId) { return a.id == deviceId }
+            return (a.name.lowercased(), a.id) < (b.name.lowercased(), b.id)
         }
         activeDeviceId = m["activeDeviceId"] as? String
     }

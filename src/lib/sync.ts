@@ -40,6 +40,7 @@ function loadDeviceId(): string {
 
 function deviceName(): string {
   if (platform.kind === "electron") return "Desktop";
+  if (new URLSearchParams(location.search).has("player")) return "Jukebox"; // see components/PlayerOnly.tsx
   const ua = navigator.userAgent;
   const browser = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "Browser";
   const os = /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iOS" : /Mac/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows" : /Linux/.test(ua) ? "Linux" : "";
@@ -68,6 +69,13 @@ function send(msg: unknown): void {
 export const syncActions = {
   command: (target: string, cmd: string, args?: unknown) => send({ type: "command", target, cmd, args }),
   transfer: (target: string) => send({ type: "transfer", target }),
+  /** Jukebox: add tracks to `target`'s queue, right after the current one or at the end. */
+  enqueue: (target: string, tracks: Track[], at: "next" | "end") =>
+    send({ type: "command", target, cmd: "enqueue", args: { at, tracks: tracks.map(toWire) } }),
+  /** Jukebox: play item `index` of `target`'s queue. */
+  jump: (target: string, index: number) => send({ type: "command", target, cmd: "jump", args: { index } }),
+  /** Jukebox: remove item `index` from `target`'s queue. */
+  removeAt: (target: string, index: number) => send({ type: "command", target, cmd: "remove", args: { index } }),
 };
 
 async function connect(): Promise<void> {
@@ -134,6 +142,24 @@ async function handleCommand(cmd: string, args: any): Promise<void> {
     case "seek": if (typeof args?.positionMs === "number") s.setCurrentTime(args.positionMs / 1000); break;
     case "volume": if (typeof args?.volume === "number") s.setVolume(args.volume); break;
     case "load": await loadRemoteState(args?.state); break;
+    case "enqueue": {
+      const wire = args?.tracks as Omit<Track, "stream_url">[] | undefined;
+      if (!Array.isArray(wire) || !wire.length) break;
+      const tracks: Track[] = await Promise.all(wire.map(async (t) => ({ ...t, stream_url: await api.streamUrl(t.id) }) as Track));
+      if (args.at === "next") for (const t of [...tracks].reverse()) s.addTrackNext(t); // keeps the given order
+      else useStore.getState().appendToQueue(tracks);
+      break;
+    }
+    case "jump": {
+      const t = s.queue[args?.index];
+      if (t) s.playTrack(t, s.queue);
+      break;
+    }
+    case "remove": {
+      const t = s.queue[args?.index];
+      if (t) s.removeFromQueue(t.id);
+      break;
+    }
   }
 }
 

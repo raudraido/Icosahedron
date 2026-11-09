@@ -741,6 +741,16 @@
         }
       }
     },
+    "Add to Device Queue": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lisa seadme järjekorda"
+          }
+        }
+      }
+    },
     "Add to Queue": {
       "localizations": {
         "et": {

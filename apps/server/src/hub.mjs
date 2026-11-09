@@ -18,7 +18,8 @@
 
 const MAX_QUEUE = 20000;
 const MAX_QUEUE_BYTES = 3 * 1024 * 1024;
-const COMMANDS = new Set(["play", "pause", "toggle", "seek", "next", "prev", "volume", "load"]);
+const COMMANDS = new Set(["play", "pause", "toggle", "seek", "next", "prev", "volume", "load", "enqueue", "jump", "remove"]);
+const MAX_ENQUEUE = 1000; // tracks per `enqueue` command
 
 export class Hub {
   constructor(store) {
@@ -109,6 +110,12 @@ export class Hub {
       }
       case "command": {
         if (!COMMANDS.has(msg.cmd)) return;
+        if (msg.cmd === "enqueue") {
+          const tr = msg.args?.tracks;
+          if (!Array.isArray(tr) || !tr.length || tr.length > MAX_ENQUEUE) return;
+          if (msg.args.at !== "next" && msg.args.at !== "end") return;
+        }
+        if ((msg.cmd === "jump" || msg.cmd === "remove") && !Number.isInteger(msg.args?.index)) return;
         const t = room?.get(String(msg.target));
         if (t) t.conn.send({ type: "command", from, cmd: msg.cmd, args: msg.args });
         return;

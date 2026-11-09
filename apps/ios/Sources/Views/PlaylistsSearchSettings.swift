@@ -192,6 +192,22 @@ struct DevicesList: View {
                     Button { sync.command(to: active, "next") } label: { Image(systemName: "forward.fill") }
                 }
                 .buttonStyle(.borderless)
+                if sync.remoteQueue.count > 1 {
+                    DisclosureGroup(String(localized: "Queue") + " (\(sync.remoteQueue.count))") {
+                        ForEach(Array(sync.remoteQueue.enumerated()), id: \.offset) { i, q in
+                            HStack {
+                                Button { sync.jump(on: active, to: i) } label: {
+                                    Text("\(q.title) · \(q.artist)").lineLimit(1)
+                                        .foregroundStyle(i == sync.remoteIndex ? Theme.accent : Color.primary)
+                                }
+                                .buttonStyle(.plain)
+                                Spacer()
+                                Button(role: .destructive) { sync.remove(on: active, at: i) } label: { Image(systemName: "xmark") }
+                                    .buttonStyle(.borderless)
+                            }
+                        }
+                    }
+                }
             }
         }
     }

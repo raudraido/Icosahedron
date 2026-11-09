@@ -26,7 +26,9 @@ final class SyncModel {
     @ObservationIgnored private weak var player: PlayerModel?
     @ObservationIgnored private var wanted = false
     @ObservationIgnored private var retry = 0
-    @ObservationIgnored private var remoteQueue: [Track] = []
+    /// The active device's queue and position, for the jukebox queue view.
+    private(set) var remoteQueue: [Track] = []
+    private(set) var remoteIndex = 0
     @ObservationIgnored private var lastQueueIds: [String] = []
     @ObservationIgnored private var wasPlaying = false
     @ObservationIgnored private var timer: Timer?
@@ -174,6 +176,7 @@ final class SyncModel {
     private func applyRemoteState(_ s: [String: Any]) {
         if let q = s["queue"] as? [[String: Any]] { remoteQueue = q.compactMap { Track(wire: $0) } }
         let i = J.int(s, "index") ?? 0
+        remoteIndex = i
         remoteTrack = remoteQueue.indices.contains(i) ? remoteQueue[i] : nil
         remotePlaying = (s["playing"] as? Bool) ?? false
     }
@@ -195,6 +198,20 @@ final class SyncModel {
             let pos = ((s["positionMs"] as? Double) ?? 0) / 1000
             let playing = (s["playing"] as? Bool) ?? true
             player.play(tracks, at: tracks.indices.contains(i) ? i : 0, startPaused: !playing, startAt: pos)
+        case "enqueue":
+            guard let raw = args?["tracks"] as? [[String: Any]] else { return }
+            let tracks = raw.compactMap { Track(wire: $0) }
+            if (args?["at"] as? String) == "next" {
+                for t in tracks.reversed() { player.playNext(t) } // keeps the given order
+            } else {
+                for t in tracks { player.addToQueue(t) }
+            }
+        case "jump":
+            if let i = J.int(args ?? [:], "index"), player.queue.indices.contains(i) {
+                player.play(player.queue, at: i)
+            }
+        case "remove":
+            if let i = J.int(args ?? [:], "index") { player.removeFromQueue(at: i) }
         default:
             break
         }
@@ -275,5 +292,19 @@ final class SyncModel {
 
     func transfer(to target: String) {
         send(["type": "transfer", "target": target])
+    }
+
+    // Jukebox: edit another device's queue.
+    func enqueue(on target: String, _ tracks: [Track], next: Bool) {
+        send(["type": "command", "target": target, "cmd": "enqueue",
+              "args": ["at": next ? "next" : "end", "tracks": tracks.map { $0.wire() }]])
+    }
+
+    func jump(on target: String, to index: Int) {
+        send(["type": "command", "target": target, "cmd": "jump", "args": ["index": index]])
+    }
+
+    func remove(on target: String, at index: Int) {
+        send(["type": "command", "target": target, "cmd": "remove", "args": ["index": index]])
     }
 }

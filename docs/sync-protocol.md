@@ -68,6 +68,16 @@ The **active device** is the one that last published `playing: true` or was tran
 
 `cmd` is one of `play`, `pause`, `toggle`, `seek` (`args.positionMs`), `next`, `prev`, `volume` (`args.volume`), `load` (`args.state` — a playback state to start playing).
 
+Jukebox commands edit the target's queue (a remote acting as a controller for a device that just plays):
+
+| `cmd` | `args` |
+|---|---|
+| `enqueue` | `{ at: "next" \| "end", tracks: [track, …] }` — `next` inserts right after the current track in the given order; `end` appends. 1 to 1000 tracks. |
+| `jump` | `{ index }` — play item `index` of the target's queue |
+| `remove` | `{ index }` — remove item `index` from the target's queue |
+
+Invalid arguments are dropped by the engine. `index` refers to the queue the controller last saw (from `state`), so a stale view can hit the wrong item; the target ignores out-of-range indexes.
+
 `transfer`: the engine tells the previous active device to `pause`, sets the target active and sends it `load` with the stored state and `playing: true`. Commands and transfers only reach devices of the same user.
 
 ### Settings

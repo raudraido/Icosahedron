@@ -13,6 +13,15 @@ struct TrackMenuContent: View {
         if !isRadio {
             Button { app.player.playNext(track) } label: { Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") }
             Button { app.player.addToQueue(track) } label: { Label("Add to Queue", systemImage: "text.line.last.and.arrowtriangle.forward") }
+            let others = app.sync.status == "online" ? app.sync.devices.filter { $0.id != app.sync.deviceId } : []
+            if !others.isEmpty {
+                Menu {
+                    ForEach(others) { d in
+                        Button { app.sync.enqueue(on: d.id, [track], next: true) } label: { Label(d.name + ": " + String(localized: "Play Next"), systemImage: "text.line.first.and.arrowtriangle.forward") }
+                        Button { app.sync.enqueue(on: d.id, [track], next: false) } label: { Label(d.name + ": " + String(localized: "Add to Queue"), systemImage: "text.line.last.and.arrowtriangle.forward") }
+                    }
+                } label: { Label("Add to Device Queue", systemImage: "hifispeaker.2") }
+            }
             Button { app.instantMix(for: track) } label: { Label("Instant Mix", systemImage: "wand.and.stars") }
             Divider()
             if let album = Album(track: track) {

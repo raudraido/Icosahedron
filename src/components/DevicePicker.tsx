@@ -11,6 +11,7 @@ export function DevicePicker() {
   const [open, setOpen] = useState(false);
   const { status, devices, activeDeviceId, deviceId, remote, syncUrl } = useSync();
   const [urlDraft, setUrlDraft] = useState("");
+  const [showQueue, setShowQueue] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -68,6 +69,32 @@ export function DevicePicker() {
                     <button style={btn} onClick={() => ctrl("toggle")} title="Play / pause">{remote?.playing ? <Pause size={18} /> : <Play size={18} />}</button>
                     <button style={btn} onClick={() => ctrl("next")} title="Next"><SkipForward size={16} /></button>
                   </div>
+                  {remote?.queue && remote.queue.length > 1 && (
+                    <div style={{ marginTop: 6 }}>
+                      <button
+                        onClick={() => setShowQueue((v) => !v)}
+                        style={{ fontSize: 12, background: "transparent", border: "none", color: "var(--text-secondary)", cursor: "pointer", padding: 0 }}
+                      >{showQueue ? "Hide" : "Show"} queue ({remote.queue.length})</button>
+                      {showQueue && (
+                        <div style={{ maxHeight: 200, overflowY: "auto", marginTop: 4 }}>
+                          {remote.queue.map((t, i) => (
+                            <div key={`${t.id}-${i}`} className="flex items-center" style={{ gap: 4, padding: "2px 0", fontSize: 12 }}>
+                              <button
+                                onClick={() => activeDeviceId && syncActions.jump(activeDeviceId, i)}
+                                title="Play this"
+                                style={{ flex: 1, minWidth: 0, textAlign: "left", background: "transparent", border: "none", cursor: "pointer", color: i === remote.index ? "var(--accent)" : "inherit", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", padding: 0 }}
+                              >{t.title} <span style={{ color: "var(--text-secondary)" }}>· {t.artist}</span></button>
+                              <button
+                                onClick={() => activeDeviceId && syncActions.removeAt(activeDeviceId, i)}
+                                title="Remove from queue"
+                                style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-secondary)", padding: "0 4px" }}
+                              >✕</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

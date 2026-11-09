@@ -20,6 +20,8 @@ targets:
       path: Sources/Info.plist
       properties:
         CFBundleDisplayName: Icosahedron
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
         UIBackgroundModes: [audio]
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]

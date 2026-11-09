@@ -3,6 +3,7 @@ import { api, AudioEventPayload, Track, Album, Playlist, ServerProfile, CastDevi
 import type { QueueTab } from "../components/QueueBottomTabs";
 import { queryClient } from "../lib/queryClient";
 import { measureCastDelay } from "../lib/castCalibration";
+import { platform } from "../platform";
 
 export type Tab =
   | "home" | "nowPlaying" | "albums" | "artists" | "tracks" | "playlists" | "starred"
@@ -794,8 +795,7 @@ export const useStore = create<AppStore>((set, get) => ({
       username: user,
       activeServerId,
       activeTab: "home", navHistory: [{ tab: "home" }], navPos: 0,
-      coverUrl: (coverId, size = 200) =>
-        coverId ? `cover://localhost/${encodeURIComponent(coverId)}?size=${size}` : "",
+      coverUrl: (coverId, size = 200) => platform.coverUrl(coverId, size),
     });
     api.lastfmGetConnection(activeServerId ?? LASTFM_DEFAULT_SERVER_KEY)
       .then((conn) => get().setLastfmConnection(conn)).catch(() => {});
@@ -841,8 +841,7 @@ export const useStore = create<AppStore>((set, get) => ({
       username: result.username,
       activeServerId: id,
       activeTab: "home", navHistory: [{ tab: "home" }], navPos: 0,
-      coverUrl: (coverId, size = 200) =>
-        coverId ? `cover://localhost/${encodeURIComponent(coverId)}?size=${size}` : "",
+      coverUrl: (coverId, size = 200) => platform.coverUrl(coverId, size),
     });
     // Last.fm is scoped per server profile — the newly-active profile's own
     // connection/toggle state (or none at all) replaces whatever the
@@ -1527,7 +1526,7 @@ function handleAudioEvent(payload: AudioEventPayload) {
   }
 }
 
-window.electronAPI.onAudioEvent(handleAudioEvent);
+platform.onAudioEvent(handleAudioEvent);
 
 // Reconciles the single active cast session's state, pushed from
 // castManager.ts — structured like handleAudioEvent above (module-scope,
@@ -1577,13 +1576,13 @@ function handleCastEvent(payload: CastPush) {
   }
 }
 
-window.electronAPI.onCastStatus(handleCastEvent);
+platform.onCastStatus(handleCastEvent);
 
 // Live-refreshes the picker's device list when castManager.ts's background
 // rescan (triggered by discoverCastDevices finding its cache stale) resolves
 // — the picker itself doesn't need to be open/polling for this.
-window.electronAPI.onCastDevices((devices) => useStore.setState({ castDevices: devices }));
-window.electronAPI.onCastScanning((scanning) => useStore.setState({ castScanning: scanning }));
+platform.onCastDevices((devices) => useStore.setState({ castDevices: devices }));
+platform.onCastScanning((scanning) => useStore.setState({ castScanning: scanning }));
 
 // ── Window title ─────────────────────────────────────────────────────────
 // Matches the old app's update_window_title (player/mixins/visuals.py):
@@ -1659,8 +1658,7 @@ export async function tryAutoConnect() {
     serverUrl: result.url,
     username: result.username,
     activeServerId,
-    coverUrl: (coverId, size = 200) =>
-      coverId ? `cover://localhost/${encodeURIComponent(coverId)}?size=${size}` : "",
+      coverUrl: (coverId, size = 200) => platform.coverUrl(coverId, size),
   });
   try {
     await useStore.getState().restoreSession();

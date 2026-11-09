@@ -1,0 +1,12 @@
+services:
+  icosahedron:
+    build:
+      context: ../..
+      dockerfile: apps/server/Dockerfile
+    restart: unless-stopped
+    environment:
+      NAVIDROME_URL: http://navidrome:4533   # accounts = Navidrome accounts
+    volumes:
+      - ./data:/data
+    ports:
+      - "8080:8080"   # put behind a TLS reverse proxy for mobile/remote use

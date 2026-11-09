@@ -1,0 +1,6 @@
+Icosahedron.xcodeproj/
+Sources/Info.plist
+build/
+Payload/
+*.ipa
+build.log

@@ -8,6 +8,7 @@ import { PromptDialog } from "../components/PromptDialog";
 import { DEFAULT_HOTKEYS, loadHotkeyBindings, saveHotkeyBindings, bindingFromEvent } from "../lib/hotkeys";
 import { ScrollThumb } from "../components/ScrollThumb";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { platform } from "../platform";
 
 // New view (no old-app equivalent — Sonar's SettingsWindow is a single
 // two-column dialog with no tabs) opened via the footer bar's gear icon
@@ -115,8 +116,8 @@ function UpdateRow() {
   async function installNow() {
     setStatus("downloading");
     setProgress(null);
-    unsubRef.current = window.electronAPI.onUpdateDownloadProgress((p) => setProgress(p as UpdateDownloadProgress));
-    unsubLaunchingRef.current = window.electronAPI.onUpdateInstallerLaunching(() => setStatus("launching"));
+    unsubRef.current = platform.onUpdateDownloadProgress((p) => setProgress(p as UpdateDownloadProgress));
+    unsubLaunchingRef.current = platform.onUpdateInstallerLaunching(() => setStatus("launching"));
     try {
       await api.downloadAndInstallUpdate(info!.downloadUrl);
     } catch {
@@ -1096,7 +1097,7 @@ function BuilderRow({ label, labelWidth = 180, children }: { label: string; labe
 // under XDG_SESSION_TYPE=wayland) — Chromium's EyeDropper crashes the whole
 // renderer there, a known gap in Ozone/Wayland's implementation. XWayland
 // (Electron's default everywhere else on Linux) isn't affected.
-const isWaylandLinux = typeof window !== "undefined" && !!window.electronAPI?.isWaylandLinux;
+const isWaylandLinux = platform.isWaylandLinux;
 const hasEyeDropper = typeof window !== "undefined" && "EyeDropper" in window && !isWaylandLinux;
 
 // Matches toHex/fromHex's own strict "#rrggbb" shape.

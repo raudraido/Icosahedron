@@ -1,0 +1,1766 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "Play": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esita"
+          }
+        }
+      }
+    },
+    "Shuffle": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sega"
+          }
+        }
+      }
+    },
+    "Keep All Offline": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoia kõik võrguta"
+          }
+        }
+      }
+    },
+    "Remove Offline": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eemalda võrguta hoidmisest"
+          }
+        }
+      }
+    },
+    "Random mix": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Juhuslik segu"
+          }
+        }
+      }
+    },
+    "Home": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avaleht"
+          }
+        }
+      }
+    },
+    "Keep Album Offline": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoia album võrguta"
+          }
+        }
+      }
+    },
+    "Offline — only cached songs can be played": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ühendus puudub – esitada saab ainult vahemällu salvestatud lugusid"
+          }
+        }
+      }
+    },
+    "Library": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kogu"
+          }
+        }
+      }
+    },
+    "Artists": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esitajad"
+          }
+        }
+      }
+    },
+    "Albums": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Albumid"
+          }
+        }
+      }
+    },
+    "Newest Albums": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uusimad albumid"
+          }
+        }
+      }
+    },
+    "Recently Played": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hiljuti esitatud"
+          }
+        }
+      }
+    },
+    "Recently Played Albums": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hiljuti esitatud albumid"
+          }
+        }
+      }
+    },
+    "Playlists": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esitusloendid"
+          }
+        }
+      }
+    },
+    "Shuffle all": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sega kõik"
+          }
+        }
+      }
+    },
+    "Songs": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lood"
+          }
+        }
+      }
+    },
+    "No radio stations on this server": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sellel serveril pole raadiojaamu"
+          }
+        }
+      }
+    },
+    "Radios": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raadiod"
+          }
+        }
+      }
+    },
+    "All": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kõik"
+          }
+        }
+      }
+    },
+    "Kept Offline": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoitud võrguta"
+          }
+        }
+      }
+    },
+    "Cached Songs": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vahemällu salvestatud lood"
+          }
+        }
+      }
+    },
+    "Waiting": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ootab"
+          }
+        }
+      }
+    },
+    "Remove": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eemalda"
+          }
+        }
+      }
+    },
+    "Unpin": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lõpeta hoidmine"
+          }
+        }
+      }
+    },
+    "Keep": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoia"
+          }
+        }
+      }
+    },
+    "No lyrics found": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sõnu ei leitud"
+          }
+        }
+      }
+    },
+    "Lyrics": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sõnad"
+          }
+        }
+      }
+    },
+    "Devices": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seadmed"
+          }
+        }
+      }
+    },
+    "Done": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valmis"
+          }
+        }
+      }
+    },
+    "Speed": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kiirus"
+          }
+        }
+      }
+    },
+    "Keep Pitch": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoia helikõrgus"
+          }
+        }
+      }
+    },
+    "Queue": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Järjekord"
+          }
+        }
+      }
+    },
+    "Save Queue as Playlist": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salvesta järjekord esitusloendina"
+          }
+        }
+      }
+    },
+    "Clear Queue": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tühjenda järjekord"
+          }
+        }
+      }
+    },
+    "Remove from Queue": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eemalda järjekorrast"
+          }
+        }
+      }
+    },
+    "Rename": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nimeta ümber"
+          }
+        }
+      }
+    },
+    "Delete": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kustuta"
+          }
+        }
+      }
+    },
+    "No playlists yet": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esitusloendeid veel pole"
+          }
+        }
+      }
+    },
+    "Tracks": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lood"
+          }
+        }
+      }
+    },
+    "Search": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Otsing"
+          }
+        }
+      }
+    },
+    "Account": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konto"
+          }
+        }
+      }
+    },
+    "User": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kasutaja"
+          }
+        }
+      }
+    },
+    "Scrobbles go through your server, so one connection covers all your devices. Plays made offline are sent later. If your Navidrome is also linked to Last.fm, a play may be counted twice.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scrobble'id lähevad läbi sinu serveri, nii et üks ühendus katab kõik sinu seadmed. Võrguta kuulatud lood saadetakse hiljem. Kui sinu Navidrome on samuti Last.fm-iga seotud, võidakse üks kuulamine lugeda kaks korda."
+          }
+        }
+      }
+    },
+    "Lists": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nimekirjad"
+          }
+        }
+      }
+    },
+    "Show BPM in song lists": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Näita lugude nimekirjades BPM-i"
+          }
+        }
+      }
+    },
+    "Look up lyrics online (LRCLIB)": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Otsi sõnu internetist (LRCLIB)"
+          }
+        }
+      }
+    },
+    "Playback quality": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esituskvaliteet"
+          }
+        }
+      }
+    },
+    "Wi-Fi and wired use the Wi-Fi profile; cellular and iOS Low Data Mode use the Cellular one. Transcoding is done by your Navidrome server. A song already on the phone plays as it is. On cellular nothing is downloaded in the background unless you allow it.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wi-Fi ja juhtmega ühendus kasutavad Wi-Fi profiili; mobiilne ühendus ja iOS-i andmesäästurežiim kasutavad mobiilset profiili. Teisendamise teeb sinu Navidrome'i server. Telefonis juba olev lugu mängib nii, nagu ta on. Mobiilis ei laeta taustal midagi alla, kui sa seda ei luba."
+          }
+        }
+      }
+    },
+    "Offline cache": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vahemälu"
+          }
+        }
+      }
+    },
+    "Tracks are downloaded in the background — the next one right away — so they start instantly and play without a network. The oldest files are removed when the limit is reached; songs you keep offline are never removed.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lood laetakse taustal alla (järgmine kohe), nii et need algavad kohe ja mängivad ka ilma võrguta. Limiidi täitumisel eemaldatakse vanimad failid; võrguta hoitud lugusid ei eemaldata kunagi."
+          }
+        }
+      }
+    },
+    "Sign out": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Logi välja"
+          }
+        }
+      }
+    },
+    "Cache size": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vahemälu suurus"
+          }
+        }
+      }
+    },
+    "Off": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Väljas"
+          }
+        }
+      }
+    },
+    "Unlimited": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Piiramatu"
+          }
+        }
+      }
+    },
+    "Cache used": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vahemälu maht"
+          }
+        }
+      }
+    },
+    "Kept offline": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoitud võrguta"
+          }
+        }
+      }
+    },
+    "Clear Cache": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tühjenda vahemälu"
+          }
+        }
+      }
+    },
+    "Cellular": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mobiilne"
+          }
+        }
+      }
+    },
+    "Cache and download on cellular": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salvesta vahemällu ja laadi alla mobiilsides"
+          }
+        }
+      }
+    },
+    "Right now": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Praegu"
+          }
+        }
+      }
+    },
+    "Not available (needs the web engine)": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pole saadaval (vajab veebimootorit)"
+          }
+        }
+      }
+    },
+    "Not set up on the server": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serveris seadistamata"
+          }
+        }
+      }
+    },
+    "Connect to Last.fm": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ühenda Last.fm-iga"
+          }
+        }
+      }
+    },
+    "Approve the connection in the browser, then come back and finish.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kinnita ühendus brauseris, tule siis tagasi ja lõpeta."
+          }
+        }
+      }
+    },
+    "Finish connecting": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lõpeta ühendamine"
+          }
+        }
+      }
+    },
+    "Cancel": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tühista"
+          }
+        }
+      }
+    },
+    "Scrobble": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scrobble'i"
+          }
+        }
+      }
+    },
+    "Disconnect": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Katkesta ühendus"
+          }
+        }
+      }
+    },
+    "Server (https://music.example.com)": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server (https://muusika.naide.ee)"
+          }
+        }
+      }
+    },
+    "Username": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kasutajanimi"
+          }
+        }
+      }
+    },
+    "Password": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parool"
+          }
+        }
+      }
+    },
+    "Sign in": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Logi sisse"
+          }
+        }
+      }
+    },
+    "Play Next": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esita järgmisena"
+          }
+        }
+      }
+    },
+    "Add to Queue": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lisa järjekorda"
+          }
+        }
+      }
+    },
+    "Instant Mix": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kiirsegu"
+          }
+        }
+      }
+    },
+    "Show Album": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Näita albumit"
+          }
+        }
+      }
+    },
+    "Show Artist": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Näita esitajat"
+          }
+        }
+      }
+    },
+    "Keep Offline": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoia võrguta"
+          }
+        }
+      }
+    },
+    "Clear Rating": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eemalda hinnang"
+          }
+        }
+      }
+    },
+    "Share": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jaga"
+          }
+        }
+      }
+    },
+    "New Playlist…": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uus esitusloend…"
+          }
+        }
+      }
+    },
+    "Add to Playlist": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lisa esitusloendisse"
+          }
+        }
+      }
+    },
+    "Track Info": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loo info"
+          }
+        }
+      }
+    },
+    "Artists, albums, tracks": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esitajad, albumid, lood"
+          }
+        }
+      }
+    },
+    "Favorite Songs": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lemmiklood"
+          }
+        }
+      }
+    },
+    "Directories": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kaustad"
+          }
+        }
+      }
+    },
+    "Discover": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avasta"
+          }
+        }
+      }
+    },
+    "Recently added": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hiljuti lisatud"
+          }
+        }
+      }
+    },
+    "Most played": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enim esitatud"
+          }
+        }
+      }
+    },
+    "Nothing playing": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Midagi ei mängi"
+          }
+        }
+      }
+    },
+    "Nothing kept offline yet. Use \"Keep Offline\" in a track's menu.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Võrguta pole veel midagi hoitud. Kasuta loo menüüs valikut „Hoia võrguta“."
+          }
+        }
+      }
+    },
+    "No songs cached yet.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vahemällu pole veel lugusid salvestatud."
+          }
+        }
+      }
+    },
+    "Playing on %@": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mängib seadmes %@"
+          }
+        }
+      }
+    },
+    "another device": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "teine seade"
+          }
+        }
+      }
+    },
+    "Play here": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esita siin"
+          }
+        }
+      }
+    },
+    "Send": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saada"
+          }
+        }
+      }
+    },
+    "Connecting…": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ühendan…"
+          }
+        }
+      }
+    },
+    "Sync server not reachable": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sünkroonimisserver pole kättesaadav"
+          }
+        }
+      }
+    },
+    "(this phone)": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(see telefon)"
+          }
+        }
+      }
+    },
+    "Playing": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mängib"
+          }
+        }
+      }
+    },
+    "Active": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktiivne"
+          }
+        }
+      }
+    },
+    "Offline": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Võrguta"
+          }
+        }
+      }
+    },
+    "Low Data Mode": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Andmesäästurežiim"
+          }
+        }
+      }
+    },
+    "Title": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pealkiri"
+          }
+        }
+      }
+    },
+    "Artist": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esitaja"
+          }
+        }
+      }
+    },
+    "Track": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lugu"
+          }
+        }
+      }
+    },
+    "Year": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aasta"
+          }
+        }
+      }
+    },
+    "Genre": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Žanr"
+          }
+        }
+      }
+    },
+    "Format": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Formaat"
+          }
+        }
+      }
+    },
+    "Bitrate": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bitikiirus"
+          }
+        }
+      }
+    },
+    "Sample rate": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sämplimissagedus"
+          }
+        }
+      }
+    },
+    "Bit depth": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bitisügavus"
+          }
+        }
+      }
+    },
+    "Channels": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kanalid"
+          }
+        }
+      }
+    },
+    "Length": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kestus"
+          }
+        }
+      }
+    },
+    "File size": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faili suurus"
+          }
+        }
+      }
+    },
+    "Path": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tee"
+          }
+        }
+      }
+    },
+    "Plays": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esitusi"
+          }
+        }
+      }
+    },
+    "Added": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lisatud"
+          }
+        }
+      }
+    },
+    "Remove Favorite": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eemalda lemmikutest"
+          }
+        }
+      }
+    },
+    "Favorite": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lemmik"
+          }
+        }
+      }
+    },
+    "Rating": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hinnang"
+          }
+        }
+      }
+    },
+    "Year: %lld": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aasta: %lld"
+          }
+        }
+      }
+    },
+    "Genre: %@": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Žanr: %@"
+          }
+        }
+      }
+    },
+    "Length: %@": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kestus: %@"
+          }
+        }
+      }
+    },
+    "%lld albums": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Albumeid: %lld"
+          }
+        }
+      }
+    },
+    "%lld tracks": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lugusid: %lld"
+          }
+        }
+      }
+    },
+    "%lld plays waiting to be sent": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saatmist ootab %lld kuulamist"
+          }
+        }
+      }
+    },
+    "%lld songs · cache %@ · kept offline %@": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lugusid: %lld · vahemälu %@ · hoitud võrguta %@"
+          }
+        }
+      }
+    },
+    "%lld of %lld": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld / %2$lld"
+          }
+        }
+      }
+    },
+    "%@ of %@": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@"
+          }
+        }
+      }
+    },
+    "Direct (original)": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Otse (originaal)"
+          }
+        }
+      }
+    },
+    "cached": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "vahemälus"
+          }
+        }
+      }
+    },
+    "transcoded": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "teisendatud"
+          }
+        }
+      }
+    },
+    "Radio": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raadio"
+          }
+        }
+      }
+    },
+    "Last.fm did not answer": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last.fm ei vastanud"
+          }
+        }
+      }
+    },
+    "Could not reach the server": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serveriga ei saanud ühendust"
+          }
+        }
+      }
+    },
+    "Not approved yet — approve on Last.fm, then try again": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pole veel kinnitatud – kinnita Last.fm-is ja proovi uuesti"
+          }
+        }
+      }
+    },
+    "No similar songs found": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sarnaseid lugusid ei leitud"
+          }
+        }
+      }
+    },
+    "The server has no similar-song data for this track.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serveril pole selle loo kohta sarnaste lugude andmeid."
+          }
+        }
+      }
+    },
+    "Sharing is not available": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jagamine pole saadaval"
+          }
+        }
+      }
+    },
+    "Turn on sharing in the Navidrome server settings (ND_ENABLESHARING).": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lülita jagamine sisse Navidrome'i serveri seadetes (ND_ENABLESHARING)."
+          }
+        }
+      }
+    },
+    "New Playlist": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uus esitusloend"
+          }
+        }
+      }
+    },
+    "Name": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nimi"
+          }
+        }
+      }
+    },
+    "Create": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loo"
+          }
+        }
+      }
+    },
+    "Rename Playlist": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nimeta esitusloend ümber"
+          }
+        }
+      }
+    },
+    "Delete “%@”?": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kustutad „%@“?"
+          }
+        }
+      }
+    },
+    "The songs themselves are not deleted.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laule endid ei kustutata."
+          }
+        }
+      }
+    },
+    "Previous": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eelmine"
+          }
+        }
+      }
+    },
+    "Next": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Järgmine"
+          }
+        }
+      }
+    },
+    "Pause": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paus"
+          }
+        }
+      }
+    },
+    "Repeat": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kordus"
+          }
+        }
+      }
+    },
+    "On": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sees"
+          }
+        }
+      }
+    },
+    "More": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Veel"
+          }
+        }
+      }
+    },
+    "Playback position": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esituse asukoht"
+          }
+        }
+      }
+    },
+    "Play / Pause": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esita / Paus"
+          }
+        }
+      }
+    },
+    "Next Song": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Järgmine lugu"
+          }
+        }
+      }
+    },
+    "Previous Song": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eelmine lugu"
+          }
+        }
+      }
+    },
+    "Shuffle My Music": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sega minu muusika"
+          }
+        }
+      }
+    },
+    "Play My Favorites": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esita minu lemmikud"
+          }
+        }
+      }
+    },
+    "Play Search Result": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esita otsingutulemus"
+          }
+        }
+      }
+    },
+    "Favorite Current Song": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lisa praegune lugu lemmikuks"
+          }
+        }
+      }
+    },
+    "Search Result": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Otsingutulemus"
+          }
+        }
+      }
+    },
+    "OK": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        }
+      }
+    },
+    "Equalizer": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ekvalaiser"
+          }
+        }
+      }
+    },
+    "Sound": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heli"
+          }
+        }
+      }
+    },
+    "Reset": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lähtesta"
+          }
+        }
+      }
+    },
+    "Preamp": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eelvõimendus"
+          }
+        }
+      }
+    },
+    "Presets": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eelseaded"
+          }
+        }
+      }
+    },
+    "Flat": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lame"
+          }
+        }
+      }
+    },
+    "Bass Boost": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bassi võimendus"
+          }
+        }
+      }
+    },
+    "Treble Boost": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kõrgete võimendus"
+          }
+        }
+      }
+    },
+    "Vocal": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vokaal"
+          }
+        }
+      }
+    },
+    "Rock": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rokk"
+          }
+        }
+      }
+    },
+    "Electronic": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elektrooniline"
+          }
+        }
+      }
+    },
+    "Loudness": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valjus"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

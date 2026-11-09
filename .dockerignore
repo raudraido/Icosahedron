@@ -1,0 +1,9 @@
+node_modules
+**/node_modules
+out
+dist
+dist-web
+release
+.git
+native/audio-engine/target
+apps/server/data

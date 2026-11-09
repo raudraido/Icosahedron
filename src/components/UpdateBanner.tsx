@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, UpdateInfo, UpdateDownloadProgress } from "../lib/api";
+import { platform } from "../platform";
 
 // Lightweight "a new version is out" notice — checks once per app launch
 // (electron/main/updater.ts's checkForUpdate) and, if the user opts in,
@@ -40,8 +41,8 @@ export function UpdateBanner() {
   async function installNow() {
     setState("downloading");
     setProgress(null);
-    unsubRef.current = window.electronAPI.onUpdateDownloadProgress((p) => setProgress(p as UpdateDownloadProgress));
-    unsubLaunchingRef.current = window.electronAPI.onUpdateInstallerLaunching(() => setState("launching"));
+    unsubRef.current = platform.onUpdateDownloadProgress((p) => setProgress(p as UpdateDownloadProgress));
+    unsubLaunchingRef.current = platform.onUpdateInstallerLaunching(() => setState("launching"));
     try {
       await api.downloadAndInstallUpdate(info!.downloadUrl);
       // The main process quits the app a couple seconds after this resolves

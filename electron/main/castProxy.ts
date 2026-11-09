@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse, type Server } 
 import { networkInterfaces } from "node:os";
 import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
-import type { SubsonicClient } from "./subsonic";
+import type { SubsonicClient } from "../../src/lib/subsonic/client";
 
 // Chromecast/DLNA devices fetch media from a URL themselves (this app never
 // relays audio bytes through its own playback pipeline) — but SubsonicClient's

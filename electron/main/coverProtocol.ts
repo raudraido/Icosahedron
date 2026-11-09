@@ -2,7 +2,7 @@ import { protocol } from "electron";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import type { SubsonicClient } from "./subsonic";
+import type { SubsonicClient } from "../../src/lib/subsonic/client";
 
 function safeId(id: string): string {
   return id.replace(/[^a-zA-Z0-9-]/g, "_");
@@ -38,7 +38,7 @@ function safeId(id: string): string {
 const ABORT_GRACE_MS = 300;
 
 interface Entry {
-  promise: Promise<{ bytes: Buffer; contentType: string }>;
+  promise: Promise<{ bytes: Uint8Array; contentType: string }>;
   controller: AbortController;
   refCount: number;
   abortTimer: ReturnType<typeof setTimeout> | null;

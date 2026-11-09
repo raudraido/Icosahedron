@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store";
+import { platform } from "../platform";
+
+// In the browser the server is the site itself (the web engine proxies
+// Navidrome), so there is no URL to ask for and staying signed in is the
+// normal expectation rather than an opt-in.
+const IS_WEB = platform.kind === "web";
 
 const PROTOCOL_RE = /^(https?):\/\//i;
 
@@ -64,7 +70,7 @@ export function Login() {
   const [secure, setSecure] = useState(true);
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
-  const [remember, setRemember] = useState(false);
+  const [remember, setRemember] = useState(IS_WEB);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -85,7 +91,7 @@ export function Login() {
     setError("");
     setLoading(true);
     try {
-      const trimmed = url.trim();
+      const trimmed = IS_WEB ? location.origin : url.trim();
       const fullUrl = PROTOCOL_RE.test(trimmed) ? trimmed : `${secure ? "https" : "http"}://${trimmed}`;
       await connect(fullUrl, user.trim(), pass, remember);
     } catch (err) {
@@ -155,6 +161,7 @@ export function Login() {
         )}
 
         <div className="space-y-3">
+          {!IS_WEB && (
           <input
             className="w-full rounded-lg px-3 py-2 text-sm outline-none"
             style={inputStyle}
@@ -164,6 +171,8 @@ export function Login() {
             required
             autoFocus
           />
+          )}
+          {!IS_WEB && (
           <div className="flex items-center justify-end gap-1 text-xs" style={{ marginTop: -6 }}>
             {(["http", "https"] as const).map((proto) => {
               const active = secure === (proto === "https");
@@ -186,7 +195,13 @@ export function Login() {
               );
             })}
           </div>
+          )}
           <input
+            name="username"
+            autoComplete="username"
+            autoCapitalize="none"
+            autoCorrect="off"
+            autoFocus={IS_WEB}
             className="w-full rounded-lg px-3 py-2 text-sm outline-none"
             style={inputStyle}
             placeholder="Username"
@@ -196,6 +211,8 @@ export function Login() {
           />
           <input
             type="password"
+            name="password"
+            autoComplete="current-password"
             className="w-full rounded-lg px-3 py-2 text-sm outline-none"
             style={inputStyle}
             placeholder="Password"
@@ -212,7 +229,7 @@ export function Login() {
             onChange={(e) => setRemember(e.target.checked)}
             style={{ accentColor: "var(--accent)" }}
           />
-          Remember my credentials
+          {IS_WEB ? "Stay signed in on this device" : "Remember my credentials"}
         </label>
 
         {error && <p className="text-sm" style={{ color: "var(--error)" }}>{error}</p>}

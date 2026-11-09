@@ -12,6 +12,7 @@ import { loadJSON, saveJSON } from "./TrackTable";
 import { api, fmtDuration, Track } from "../lib/api";
 import { ContextMenu, MenuEntry } from "./ContextMenu";
 import { CastPicker } from "./CastPicker";
+import { DevicePicker } from "./DevicePicker";
 import { PromptDialog } from "./PromptDialog";
 import { TrackInfoDialog } from "./TrackInfoDialog";
 import { BpmMenu } from "./BpmMenu";
@@ -496,6 +497,8 @@ export function PlayerBar() {
           className="cursor-pointer shrink-0"
           style={{ width: 100, height: 5, accentColor: "var(--accent)" }}
         />
+
+        <DevicePicker />
 
         {/* Cast — accent when connected, muted-gray (disconnected tint) otherwise,
             matching Mute's own conditional tint. Opens CastPicker.tsx anchored to

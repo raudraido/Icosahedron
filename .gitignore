@@ -42,3 +42,4 @@ sonar/
 *.njsproj
 *.sln
 *.sw?
+dist-web

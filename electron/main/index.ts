@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, protocol, screen, shell, Tray } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { SubsonicClient } from "./subsonic";
+import { SubsonicClient } from "../../src/lib/subsonic/client";
 import { AudioEngineClient } from "./audioEngine";
 import { CastManager } from "./castManager";
 import { CALIBRATION_SECONDS } from "./castCalibration";
@@ -451,6 +451,7 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.handle("cover_art_url", (_e, { coverId, size }) => requireClient().coverArtUrl(coverId, size ?? undefined));
+  ipcMain.handle("sync_auth", () => requireClient().syncAuth());
   ipcMain.handle("stream_url", (_e, { songId }) => requireClient().streamUrl(songId));
 
   ipcMain.handle("get_scan_status", () => requireClient().getScanStatus());

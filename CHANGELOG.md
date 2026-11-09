@@ -1,5 +1,68 @@
 # Changelog
 
+## 0.15.3
+
+This release adds an optional **web engine** that keeps all your players in step, and a **platform layer** that lets the same UI run in a browser and in a new **iOS app**. Nothing changes for the desktop app unless you set up a sync server; every desktop feature below is opt-in.
+
+### Desktop app
+
+#### Sync across your devices (new, optional)
+- **Devices button** next to the cast button. The first time you open it you are asked for the address of your web engine (for example `https://music.example.com`); the address is kept on this device and can be cleared by saving an empty value.
+- **Device list:** every device signed in with the same Navidrome account (desktop, browser, phone) with its name and kind, and which one is playing.
+- **Continue on another device:** the queue and the position are stored on the engine, so a device that connects later can pick up where another left off. **Play here** and **Send** move playback between devices: the old device pauses, the new one loads the queue at the same position and plays.
+- **Remote control:** previous, play/pause and next on whichever device is playing, with the track shown in the panel.
+- **Only the playing device publishes its state**, so an idle device that just restored its saved queue can never overwrite the one in use. A pause or stop is still published once, and the position refreshes every 3 seconds while playing.
+- **Reconnects by itself** with a growing delay; a wrong password (the engine answers with a bad-credentials close) is not retried in a loop. The engine keeps the shared state in files, so it survives restarts.
+- **Sign-in uses your Navidrome account:** the app sends a salted Subsonic token, the engine replays it as a `ping` against Navidrome. The engine never sees or stores your password.
+
+#### Shared preferences
+These keep in step between your devices through the engine: theme and custom themes, equalizer, the scrobble / BPM-detection / lyrics-source toggles, whether the left panel shows Recently Played, Playlists and Daily Mix, tab order, home row order, "show remaining time", Bandsintown, and the artist/album sort choices.
+- Layout that depends on the screen (panel and column widths), hotkeys, saved logins, the play queue and game scores stay per device.
+- A change from another device is written to local storage and the window is reloaded to pick it up. While music plays, a small toast offers the reload instead, so playback is never cut off. Automatic reloads happen at most once a minute.
+- The first device to connect to an engine with no preferences uploads its own; later devices adopt what the engine holds.
+
+#### BPM is stored on the engine
+- Detections made by the native analyzer are uploaded; every other player reads them. Detection stays on the desktop (the engine only stores).
+- Your existing local BPM cache is uploaded once in one request the first time the app connects.
+- A manual correction always wins over a detected value.
+
+#### Equalizer
+- The equalizer settings use the shared `eq_settings` format, so a preset saved on one platform appears on the others after sync. Bands, Q and ranges are unchanged (ISO octaves 31 Hz to 16 kHz, Q 1.1, ±12 dB, preamp −12 to +6 dB).
+
+### Web app (new)
+The same UI, served by the engine and installable as a PWA.
+- Sign-in with your Navidrome account; stays signed in on the device by default and needs no server address (it is the site itself).
+- Playback with one persistent audio element, Media Session (lock-screen / notification controls, now-playing info, cover art as a `data:` URL), browser **equalizer** (WebAudio, same bands as the desktop; not on iOS Safari), Last.fm through the engine, BPM, shared preferences, the device list and remote control.
+- Installable: manifest, 192/512 px and maskable icons, apple-touch-icon, an offline UI shell (API, streams and sync always use the network).
+- A basic phone layout (header, bottom tabs, mini player, full-screen player; `?layout=mobile|desktop|auto` forces one).
+- Known limits: no gapless between tracks (one audio element), and iOS Safari does not show title and cover on the lock screen for any web page we tried; use the iOS app for that.
+
+### iOS app (new, SwiftUI, iOS 26.1 or later, iPhone and iPad)
+Built by the `iOS build` workflow as an unsigned `.ipa` (sign it with AltStore, SideStore or Sideloadly).
+- **Playback:** gapless, instant start, background audio, lock screen and Dynamic Island, playback speed 0.5× to 2× with "Keep Pitch", 10-band equalizer, queue with drag-to-reorder, AirPlay.
+- **Now Playing:** blurred cover background, "1 of N" and remaining time, favorite heart, "…" menu, info and synced lyrics under a cover that shrinks to the corner, quality line, landscape and iPad two-column layout.
+- **Library:** Artists, Albums, Newest, Recently Played, Songs, Favorites, Cached Songs, Directories, Playlists, Radios; Search; track menu (play next, add to queue, Instant Mix, show album/artist, keep offline, favorite, rating, share, add to playlist, info).
+- **Offline:** background cache (the next track is fetched in full ahead of time; size set in Settings), "Keep Offline" for songs you want to keep for good, "Cached Songs" works without a connection.
+- **Quality per connection:** separate Wi-Fi and Cellular profiles (direct play, or MP3/AAC 96 to 320 kbps transcoded by your Navidrome); Low Data Mode counts as cellular; nothing is downloaded in the background on cellular unless allowed.
+- **Plays:** counted after half the track or 4 minutes, stored on disk first and sent when online with their real time; Last.fm through the engine.
+- **Playlists:** create, rename, delete, reorder, remove tracks, save the queue as a playlist.
+- **Siri and Shortcuts** (no extension needed): play/pause, next, previous, shuffle my music, play my favorites, favorite the current song, play a search result.
+- Estonian translation, accessibility labels, shared preferences (lyrics lookup and equalizer).
+
+### Web engine (`apps/server`)
+- Node 22 container: WebSocket sync hub (`/sync`), same-origin Navidrome proxy (`/rest`, `/api`, `/auth`, Range requests supported), BPM store (`/bpm`, bulk upload), Last.fm (`/lastfm/*`, the API secret and each account's session key live on the engine, session file mode 600), static web UI.
+- Configuration by environment: `NAVIDROME_URL`, optional `LASTFM_API_KEY` and `LASTFM_API_SECRET`, `DATA_DIR`, `PORT`. See `apps/server/docker-compose.example.yml`.
+- 12 automated tests (`npm test` in `apps/server`).
+
+### Under the hood
+- The UI no longer talks to Electron directly: all access goes through `src/platform` (an Electron adapter and a browser adapter), including cover URLs and the new `sync_auth` command.
+- The Subsonic client and its models moved to `src/lib/subsonic` and are shared between the Electron main process and the browser (MD5 now comes from the `md5` package).
+- `electron/` and `tsconfig.json` no longer reference each other as TypeScript project references.
+
+### Notes
+- If your Navidrome is also linked to Last.fm and you scrobble through the engine too, a play can be counted twice.
+- If the engine is exposed to the internet without a login proxy in front, the Navidrome password is the only protection; consider rate-limiting `/auth/` and `/rest/ping`.
+
 ## 0.15.2
 
 ### AirPlay (Apple TV)

@@ -1,5 +1,7 @@
+import { platform } from "../platform";
+
 function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  return window.electronAPI.invoke(cmd, args);
+  return platform.invoke<T>(cmd, args);
 }
 
 export interface Artist {

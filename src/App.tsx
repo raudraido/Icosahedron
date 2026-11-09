@@ -17,6 +17,8 @@ import { Settings } from "./screens/Settings";
 import { PlayerBar } from "./components/PlayerBar";
 import { LeftPanel, NavArrow } from "./components/LeftPanel";
 import { QueuePanel } from "./components/QueuePanel";
+import { MobileApp } from "./mobile/MobileApp";
+import { useIsMobile } from "./lib/useIsMobile";
 import { Icon } from "./components/Icon";
 import { GlobalTooltip } from "./components/GlobalTooltip";
 import { GlobalHotkeys } from "./components/GlobalHotkeys";
@@ -185,7 +187,7 @@ function NavTab({
   );
 }
 
-function MainApp() {
+function DesktopApp() {
   const activeTab    = useStore((s) => s.activeTab);
   const setTab       = useStore((s) => s.setTab);
   const pushNav      = useStore((s) => s.pushNav);
@@ -430,6 +432,10 @@ function MainApp() {
       <PlayerBar />
     </div>
   );
+}
+
+function MainApp() {
+  return useIsMobile() ? <MobileApp /> : <DesktopApp />;
 }
 
 export default function App() {

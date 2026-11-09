@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import md5lib from "md5";
 import type {
   Artist, Album, Track, Playlist, ArtistDetail, SearchResult, Starred, ScanStatus, TrackFullInfo, PlayQueue, LyricsWordCue,
 } from "./models";
@@ -14,7 +14,7 @@ function randomSalt(len = 8): string {
 }
 
 function md5(s: string): string {
-  return createHash("md5").update(s, "utf8").digest("hex");
+  return md5lib(s);
 }
 
 function strField(v: any, key: string): string {
@@ -88,6 +88,12 @@ export class SubsonicClient {
     };
   }
 
+  /** Fresh salted token for the sync server, which replays it as a Subsonic ping. */
+  syncAuth(): { u: string; t: string; s: string } {
+    const { u, t, s } = this.authParams();
+    return { u, t, s };
+  }
+
   streamUrl(songId: string): string {
     const params = this.authParams();
     params.id = songId;
@@ -95,7 +101,7 @@ export class SubsonicClient {
     return `${this.baseUrl}/rest/stream?${qs}`;
   }
 
-  async fetchCoverArt(coverId: string, size?: number, signal?: AbortSignal): Promise<{ bytes: Buffer; contentType: string }> {
+  async fetchCoverArt(coverId: string, size?: number, signal?: AbortSignal): Promise<{ bytes: Uint8Array; contentType: string }> {
     const url = this.coverArtUrl(coverId, size);
     const resp = await fetch(url, { signal });
     const contentType = resp.headers.get("content-type") ?? "image/jpeg";
@@ -110,7 +116,7 @@ export class SubsonicClient {
     if (!resp.ok || !contentType.startsWith("image/")) {
       throw new Error(`cover art fetch failed: HTTP ${resp.status}, content-type ${contentType}`);
     }
-    const bytes = Buffer.from(await resp.arrayBuffer());
+    const bytes = new Uint8Array(await resp.arrayBuffer());
     if (bytes.length === 0) {
       throw new Error("cover art fetch returned empty body");
     }

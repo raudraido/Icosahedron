@@ -46,7 +46,8 @@ export function PlayerOnly() {
       <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
         {status === "online" ? "Connected" : status === "connecting" ? "Connecting…" : "Sync offline"}
       </div>
-      {!armed && (
+      {/* Only while the browser could still block audio: nothing playing yet and the page never touched. */}
+      {!armed && !playing && !(navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation?.hasBeenActive && (
         <button
           onClick={() => setArmed(true)}
           className="absolute inset-0"

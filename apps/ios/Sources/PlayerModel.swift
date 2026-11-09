@@ -1,4 +1,5 @@
 import AVFoundation
+import Combine
 import MediaPlayer
 import Observation
 import UIKit
@@ -24,7 +25,7 @@ final class PlayerModel {
     @ObservationIgnored private var playingItem: AVPlayerItem?
     @ObservationIgnored private var queuedNext: (item: AVPlayerItem, index: Int)?
     @ObservationIgnored private var timeObserver: Any?
-    @ObservationIgnored private var endObserver: NSObjectProtocol?
+    @ObservationIgnored private var itemObserver: AnyCancellable?
     @ObservationIgnored private var artworkTask: Task<Void, Never>?
     @ObservationIgnored private var artworkFor: String?
     @ObservationIgnored private var artwork: MPMediaItemArtwork?
@@ -38,9 +39,13 @@ final class PlayerModel {
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 600), queue: .main) { [weak self] time in
             self?.tick(time)
         }
-        endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: nil, queue: .main) { [weak self] note in
-            self?.itemFinished(note.object as? AVPlayerItem)
-        }
+        // The player is the source of truth for which track is playing: when its current item
+        // becomes the one we queued behind the old one (gapless), or empties (queue ran out),
+        // the model catches up. Comparing against our own state (not flags) keeps this
+        // race-free with our own load()/stop().
+        itemObserver = player.publisher(for: \.currentItem)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.currentItemChanged() }
     }
 
     // MARK: Transport
@@ -180,15 +185,16 @@ final class PlayerModel {
         queuedNext = (item, idx)
     }
 
-    /// An item played to its end. With a queued next one the player has already moved on
-    /// seamlessly — this only catches the model up (index, scrobbles, lock screen).
-    private func itemFinished(_ item: AVPlayerItem?) {
-        guard let item, item === playingItem else { return }
-        if let t = current, t.directURL == nil, let client {
-            let id = t.id
-            Task { try? await client.scrobble(id, submission: true) }
-        }
-        if let q = queuedNext {
+    /// The player moved to another item (or ran out). With our queued next item that is the
+    /// seamless gapless step — catch the model up: index, scrobbles, lock screen.
+    private func currentItemChanged() {
+        let cur = player.currentItem
+        if cur === playingItem { return } // our own load(), or nothing changed
+        if let q = queuedNext, cur === q.item {
+            if let t = current, t.directURL == nil, let client {
+                let id = t.id
+                Task { try? await client.scrobble(id, submission: true) } // the previous track played out
+            }
             queuedNext = nil
             index = q.index
             playingItem = q.item
@@ -201,15 +207,20 @@ final class PlayerModel {
                 Task { try? await client.scrobble(id, submission: false) }
             }
             preloadNext()
-        } else {
+            onChange?()
+        } else if cur == nil, playingItem != nil {
             // End of the queue.
-            player.removeAllItems()
+            if let t = current, t.directURL == nil, let client {
+                let id = t.id
+                Task { try? await client.scrobble(id, submission: true) }
+            }
             playingItem = nil
+            queuedNext = nil
             isPlaying = false
             position = 0
             updateNowPlaying()
+            onChange?()
         }
-        onChange?()
     }
 
     private func tick(_ time: CMTime) {
@@ -269,7 +280,8 @@ final class PlayerModel {
             MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0,
             MPNowPlayingInfoPropertyDefaultPlaybackRate: 1.0,
         ]
-        if let art = artwork, artworkFor == t.id { info[MPMediaItemPropertyArtwork] = art }
+        // Keep the previous cover until the new one has loaded, rather than flashing an empty one at every track change.
+        if let art = artwork { info[MPMediaItemPropertyArtwork] = art }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         if reloadArtwork || artworkFor != t.id { loadArtwork(for: t) }
     }

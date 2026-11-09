@@ -119,6 +119,12 @@ struct SettingsView: View {
                 } footer: {
                     Text("Scrobbles go through your server, so one connection covers all your devices. Plays made offline are sent later. If your Navidrome is also linked to Last.fm, a play may be counted twice.")
                 }
+                Section("Lists") {
+                    Toggle("Show BPM in song lists", isOn: Binding(
+                        get: { UserDefaults.standard.object(forKey: "showBPM") as? Bool ?? true },
+                        set: { UserDefaults.standard.set($0, forKey: "showBPM") }
+                    ))
+                }
                 Section("Lyrics") {
                     Toggle("Look up lyrics online (LRCLIB)", isOn: Binding(
                         get: { UserDefaults.standard.object(forKey: "lyricsOnline") as? Bool ?? true },

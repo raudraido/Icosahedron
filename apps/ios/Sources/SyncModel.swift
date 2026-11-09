@@ -30,6 +30,16 @@ final class SyncModel {
     @ObservationIgnored private var lastQueueIds: [String] = []
     @ObservationIgnored private var wasPlaying = false
     @ObservationIgnored private var timer: Timer?
+    /// The shared settings blob as the engine holds it (nil until it has been received: until then
+    /// nothing is published, or this phone would wipe the other devices' settings).
+    @ObservationIgnored private var settingsBlob: [String: String]?
+    @ObservationIgnored private var settingsObserver: NSObjectProtocol?
+    @ObservationIgnored private var settingsWork: DispatchWorkItem?
+
+    /// Settings this app shares with the web and desktop apps: web key -> UserDefaults key.
+    private static let sharedKeys: [(web: String, local: String)] = [
+        ("icosahedron_lyrics_lrclib_enabled", "lyricsOnline"),
+    ]
 
     init() {
         if let id = UserDefaults.standard.string(forKey: "deviceId") {
@@ -55,10 +65,16 @@ final class SyncModel {
         timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
             if self?.player?.isPlaying == true { self?.publish() }
         }
+        settingsObserver = NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.settingsMaybeChanged()
+        }
         open()
     }
 
     func stop() {
+        if let o = settingsObserver { NotificationCenter.default.removeObserver(o) }
+        settingsObserver = nil
+        settingsBlob = nil
         wanted = false
         timer?.invalidate()
         timer = nil
@@ -131,6 +147,9 @@ final class SyncModel {
             status = "online"
             applyDevices(m)
             if let s = m["state"] as? [String: Any] { applyRemoteState(s) }
+            if let st = m["settings"] as? [String: Any] { applySettings(st) }
+        case "settings":
+            if let st = m["settings"] as? [String: Any] { applySettings(st) }
         case "devices":
             applyDevices(m)
         case "state":
@@ -177,6 +196,45 @@ final class SyncModel {
         default:
             break
         }
+    }
+
+    // MARK: Shared settings
+
+    /// Takes over the values this app shares with the other platforms.
+    private func applySettings(_ st: [String: Any]) {
+        guard let values = st["values"] as? [String: Any] else { return }
+        var blob: [String: String] = [:]
+        for (k, v) in values { if let str = v as? String { blob[k] = str } }
+        settingsBlob = blob
+        for (web, local) in Self.sharedKeys {
+            guard let str = blob[web] else { continue }
+            let on = str == "true"
+            if UserDefaults.standard.object(forKey: local) as? Bool != on { UserDefaults.standard.set(on, forKey: local) }
+        }
+    }
+
+    private func settingsMaybeChanged() {
+        settingsWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.publishSettingsIfChanged() }
+        settingsWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: work)
+    }
+
+    /// Sends the whole blob back with only this app's keys changed.
+    private func publishSettingsIfChanged() {
+        guard status == "online", var blob = settingsBlob else { return }
+        var changed = false
+        for (web, local) in Self.sharedKeys {
+            guard let on = UserDefaults.standard.object(forKey: local) as? Bool else { continue }
+            let str = on ? "true" : "false"
+            if blob[web] != str {
+                blob[web] = str
+                changed = true
+            }
+        }
+        guard changed else { return }
+        settingsBlob = blob
+        send(["type": "settings", "settings": ["values": blob, "at": Int(Date().timeIntervalSince1970 * 1000)]])
     }
 
     // MARK: Outgoing

@@ -71,9 +71,15 @@ struct AlbumShelf: View {
 
 struct TrackRow: View {
     @Environment(AppModel.self) private var app
+    @AppStorage("showBPM") private var showBPM = true
     let track: Track
     var number: Int?
     var showCover = false
+
+    private var subtitle: String {
+        if showBPM, let b = app.bpm[track.id] { return track.artist + " · " + String(format: "%.0f BPM", b) }
+        return track.artist
+    }
 
     var body: some View {
         let playing = app.player.current?.id == track.id
@@ -88,7 +94,7 @@ struct TrackRow: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(track.title).lineLimit(1).foregroundStyle(playing ? Theme.accent : Color.primary)
-                Text(track.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 8)
             if playing && app.player.isPlaying {

@@ -13,6 +13,7 @@ struct TrackMenuContent: View {
         if !isRadio {
             Button { app.player.playNext(track) } label: { Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") }
             Button { app.player.addToQueue(track) } label: { Label("Add to Queue", systemImage: "text.line.last.and.arrowtriangle.forward") }
+            Button { app.instantMix(for: track) } label: { Label("Instant Mix", systemImage: "wand.and.stars") }
             Divider()
             if let album = Album(track: track) {
                 Button { app.router.show(album: album) } label: { Label("Show Album", systemImage: "square.stack") }

@@ -2,7 +2,7 @@ import SwiftUI
 
 @main
 struct IcosahedronApp: App {
-    @State private var app = AppModel()
+    @State private var app = AppModel.shared
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {

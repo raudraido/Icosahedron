@@ -5,6 +5,9 @@ import UIKit
 /// App-wide state: the signed-in server connection, the player and the sync link.
 @MainActor @Observable
 final class AppModel {
+    /// The one instance: the app's UI and Siri/Shortcuts actions share it.
+    static let shared = AppModel()
+
     var client: SubsonicClient?
     var restoring = true
     let player = PlayerModel()
@@ -12,6 +15,8 @@ final class AppModel {
     let router = Router()
     let net = NetworkMonitor()
     let lastfm = LastFmModel()
+    /// BPM by track id, from the web engine's store (it only stores; the desktop app detects).
+    var bpm: [String: Double] = [:]
     /// Favorite / rating changes made in the app, so every list and menu shows them at once.
     var starredOverrides: [String: Bool] = [:]
     var ratingOverrides: [String: Int] = [:]
@@ -76,6 +81,7 @@ final class AppModel {
         Task { await refreshPlaylists() }
         Task { await AudioCache.shared.fillMissingMetadata(client: c) }
         Task { await lastfm.refresh(client: c) }
+        Task { await loadBPM() }
         flushScrobbles()
         player.resumePins()
     }
@@ -102,6 +108,32 @@ final class AppModel {
 
     func removeOffline(_ ids: [String]) {
         AudioCache.shared.unpin(ids)
+    }
+
+    func loadBPM() async {
+        guard let c = client, let r = try? await c.engine("GET", "/bpm"), r.status == 200,
+              let obj = try? JSONSerialization.jsonObject(with: r.data) as? [String: Any] else { return }
+        var map: [String: Double] = [:]
+        for (k, v) in obj { if let d = v as? Double { map[k] = d } }
+        bpm = map
+    }
+
+    // MARK: Instant Mix
+
+    /// A mix built around a track: similar songs from the server; without them, random songs of
+    /// the same genre. The seed plays first.
+    func instantMix(for t: Track) {
+        guard let c = client else { return }
+        Task {
+            var mix = (try? await c.similarSongs(t.id, count: 50)) ?? []
+            if mix.isEmpty, let g = t.genre, !g.isEmpty { mix = (try? await c.randomSongs(50, genre: g)) ?? [] }
+            mix.removeAll { $0.id == t.id }
+            guard !mix.isEmpty else {
+                Presenter.alert("No similar songs found", "The server has no similar-song data for this track.")
+                return
+            }
+            player.play([t] + mix, at: 0)
+        }
     }
 
     // MARK: Plays (Navidrome + Last.fm)

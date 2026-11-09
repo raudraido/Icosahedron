@@ -139,8 +139,10 @@ final class SubsonicClient {
         return J.arr(s["song"]).compactMap { Track(subsonic: $0) }
     }
 
-    func randomSongs(_ count: Int = 100) async throws -> [Track] {
-        let r = try await call("getRandomSongs", [item("size", String(count))])
+    func randomSongs(_ count: Int = 100, genre: String? = nil) async throws -> [Track] {
+        var items = [item("size", String(count))]
+        if let genre { items.append(item("genre", genre)) }
+        let r = try await call("getRandomSongs", items)
         let s = (r["randomSongs"] as? [String: Any]) ?? [:]
         return J.arr(s["song"]).compactMap { Track(subsonic: $0) }
     }
@@ -292,5 +294,12 @@ final class SubsonicClient {
         }
         let (data, resp) = try await session.data(for: req)
         return ((resp as? HTTPURLResponse)?.statusCode ?? 0, data)
+    }
+
+    /// Songs similar to a song or artist (the server needs a similarity source such as Last.fm).
+    func similarSongs(_ id: String, count: Int = 50) async throws -> [Track] {
+        let r = try await call("getSimilarSongs2", [item("id", id), item("count", String(count))])
+        let s = (r["similarSongs2"] as? [String: Any]) ?? [:]
+        return J.arr(s["song"]).compactMap { Track(subsonic: $0) }
     }
 }

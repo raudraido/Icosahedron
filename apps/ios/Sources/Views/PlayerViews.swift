@@ -68,7 +68,7 @@ struct NowPlayingView: View {
                 QueueView()
             } else if showInfo {
                 infoHeader(p)
-                InfoPanel(track: p.current)
+                InfoTabs(track: p.current)
             } else {
                 Spacer(minLength: 0)
                 artwork(p)
@@ -218,7 +218,7 @@ struct NowPlayingView: View {
                 Spacer()
                 Text(qualityText(p.current)).font(.caption2)
                 Spacer()
-                Text("-" + formatTime(max(0, p.duration - (scrub ?? p.position))))
+                Text("-" + formatTime(max(0, p.duration - (scrub ?? p.position)) / max(p.speed, 0.1)))
             }
             .font(.caption).foregroundStyle(.white.opacity(0.7)).monospacedDigit()
         }
@@ -244,6 +244,25 @@ struct NowPlayingView: View {
         .padding(.vertical, 6)
     }
 
+    private static let speeds: [Double] = [0.5, 0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0]
+
+    private func speedLabel(_ v: Double) -> String { String(format: "%g×", v) }
+
+    /// Playback speed, plus "Keep Pitch" (off = the pitch follows the speed, like a record).
+    private func speedMenu(_ p: PlayerModel) -> some View {
+        Menu {
+            Picker("Speed", selection: Binding(get: { p.speed }, set: { p.setSpeed($0) })) {
+                ForEach(Self.speeds, id: \.self) { Text(speedLabel($0)).tag($0) }
+            }
+            Toggle("Keep Pitch", isOn: Binding(get: { p.keepPitch }, set: { p.setKeepPitch($0) }))
+        } label: {
+            Text(speedLabel(p.speed))
+                .font(.subheadline.weight(.bold)).monospacedDigit()
+                .foregroundStyle(p.speed == 1.0 ? Color.white.opacity(0.75) : Theme.accent)
+                .frame(minWidth: 40)
+        }
+    }
+
     private func bottomBar(_ p: PlayerModel) -> some View {
         HStack {
             Button { p.toggleShuffle() } label: { Image(systemName: "shuffle") }
@@ -251,6 +270,8 @@ struct NowPlayingView: View {
             Spacer()
             Button { p.toggleRepeat() } label: { Image(systemName: "repeat") }
                 .foregroundStyle(p.repeatAll ? Theme.accent : Color.white.opacity(0.75))
+            Spacer()
+            speedMenu(p)
             Spacer()
             AirPlayButton().frame(width: 30, height: 30)
             Spacer()

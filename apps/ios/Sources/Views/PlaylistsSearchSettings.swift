@@ -99,6 +99,12 @@ struct SettingsView: View {
                 Section("Devices") {
                     DevicesList()
                 }
+                Section("Lyrics") {
+                    Toggle("Look up lyrics online (LRCLIB)", isOn: Binding(
+                        get: { UserDefaults.standard.object(forKey: "lyricsOnline") as? Bool ?? true },
+                        set: { UserDefaults.standard.set($0, forKey: "lyricsOnline") }
+                    ))
+                }
                 Section {
                     CacheSettings()
                 } header: {

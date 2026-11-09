@@ -15,6 +15,9 @@ final class PlayerModel {
     var duration: Double = 0
     var shuffle = false
     var repeatAll = false
+    /// Playback speed (1 = normal) and whether the pitch is kept when it changes.
+    var speed: Double = UserDefaults.standard.object(forKey: "playbackSpeed") as? Double ?? 1.0
+    var keepPitch: Bool = UserDefaults.standard.object(forKey: "keepPitch") as? Bool ?? true
     var client: SubsonicClient?
     /// Fired when the queue, the current track or the play state changes (sync publishes from it).
     @ObservationIgnored var onChange: (() -> Void)?
@@ -43,6 +46,7 @@ final class PlayerModel {
         configureSession()
         configureRemoteCommands()
         player.actionAtItemEnd = .advance
+        player.defaultRate = Float(speed)
         cache.onCached = { [weak self] id in self?.trackCached(id) }
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 600), queue: .main) { [weak self] time in
             self?.tick(time)
@@ -196,6 +200,22 @@ final class PlayerModel {
         return max(0, duration - position) + after
     }
 
+    // MARK: Playback speed
+
+    func setSpeed(_ value: Double) {
+        speed = value
+        UserDefaults.standard.set(value, forKey: "playbackSpeed")
+        player.defaultRate = Float(value)
+        if isPlaying { player.rate = Float(value) }
+        updateNowPlaying()
+    }
+
+    func setKeepPitch(_ on: Bool) {
+        keepPitch = on
+        UserDefaults.standard.set(on, forKey: "keepPitch")
+        for item in player.items() { item.audioTimePitchAlgorithm = pitchAlgorithm }
+    }
+
     func toggleShuffle() {
         shuffle.toggle()
         preloadNext() // the track queued behind the current one may no longer be the right one
@@ -252,6 +272,14 @@ final class PlayerModel {
     /// then land exactly where the progress bar says, which AVPlayer only estimates for a
     /// stream of a VBR MP3 or a file without a seek table.
     private func makeItem(_ t: Track, client: SubsonicClient) -> AVPlayerItem {
+        let item = makeBaseItem(t, client: client)
+        item.audioTimePitchAlgorithm = pitchAlgorithm
+        return item
+    }
+
+    private var pitchAlgorithm: AVAudioTimePitchAlgorithm { keepPitch ? .spectral : .varispeed }
+
+    private func makeBaseItem(_ t: Track, client: SubsonicClient) -> AVPlayerItem {
         if let direct = t.directURL { return AVPlayerItem(url: direct) } // radio: live, no timeline
         if let local = cache.localURL(for: t) {
             cache.touch(t)
@@ -412,6 +440,11 @@ final class PlayerModel {
         c.togglePlayPauseCommand.addTarget { [weak self] _ in self?.toggle(); return .success }
         c.nextTrackCommand.addTarget { [weak self] _ in self?.next(); return .success }
         c.previousTrackCommand.addTarget { [weak self] _ in self?.previous(); return .success }
+        c.changePlaybackRateCommand.supportedPlaybackRates = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+        c.changePlaybackRateCommand.addTarget { [weak self] event in
+            if let e = event as? MPChangePlaybackRateCommandEvent { self?.setSpeed(Double(e.playbackRate)) }
+            return .success
+        }
         c.changePlaybackPositionCommand.addTarget { [weak self] event in
             if let e = event as? MPChangePlaybackPositionCommandEvent { self?.seek(to: e.positionTime) }
             return .success
@@ -426,8 +459,8 @@ final class PlayerModel {
             MPMediaItemPropertyAlbumTitle: t.album ?? "",
             MPMediaItemPropertyPlaybackDuration: duration,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: position,
-            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0,
-            MPNowPlayingInfoPropertyDefaultPlaybackRate: 1.0,
+            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? speed : 0.0,
+            MPNowPlayingInfoPropertyDefaultPlaybackRate: speed,
         ]
         // Keep the previous cover until the new one has loaded, rather than flashing an empty one at every track change.
         if let art = artwork { info[MPMediaItemPropertyArtwork] = art }

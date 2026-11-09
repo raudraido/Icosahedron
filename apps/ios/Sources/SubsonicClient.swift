@@ -193,4 +193,44 @@ final class SubsonicClient {
         let r = try await call("getSong", [item("id", id)])
         return Track(subsonic: (r["song"] as? [String: Any]) ?? [:])
     }
+
+    // MARK: Lyrics and BPM
+
+    /// Lyrics from the server (OpenSubsonic getLyricsBySongId); synced ones are preferred.
+    func structuredLyrics(songId: String) async throws -> [LyricsLine]? {
+        let r = try await call("getLyricsBySongId", [item("id", songId)])
+        let list = (r["lyricsList"] as? [String: Any]) ?? [:]
+        let all = J.arr(list["structuredLyrics"])
+        guard let pick = all.first(where: { ($0["synced"] as? Bool) == true }) ?? all.first else { return nil }
+        let synced = (pick["synced"] as? Bool) ?? false
+        let lines = J.arr(pick["line"]).map { d -> LyricsLine in
+            let start = J.int(d, "start")
+            return LyricsLine(time: synced ? start.map { Double($0) / 1000 } : nil, text: J.str(d, "value") ?? "")
+        }
+        return lines.isEmpty ? nil : lines
+    }
+
+    func plainLyrics(artist: String, title: String) async throws -> String? {
+        let r = try await call("getLyrics", [item("artist", artist), item("title", title)])
+        let l = (r["lyrics"] as? [String: Any]) ?? [:]
+        let v = J.str(l, "value")
+        return (v?.isEmpty == false) ? v : nil
+    }
+
+    /// BPM stored by the web engine (it only stores; the desktop app detects). nil when unknown
+    /// or when the server is a plain Navidrome without the engine.
+    func bpm(for id: String) async -> Double? {
+        guard let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+              let url = URL(string: baseURL.absoluteString + "/bpm/" + encoded) else { return nil }
+        var comps = URLComponents()
+        comps.queryItems = syncAuth().map { URLQueryItem(name: $0.key, value: $0.value) }
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 6
+        req.setValue("Subsonic " + (comps.percentEncodedQuery ?? ""), forHTTPHeaderField: "Authorization")
+        guard let (data, resp) = try? await session.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let b = obj["bpm"] as? Double else { return nil }
+        return b
+    }
 }

@@ -6,6 +6,7 @@ struct InfoPanel: View {
     @Environment(AppModel.self) private var app
     let track: Track?
     @State private var detail: Track?
+    @State private var bpm: Double?
 
     var body: some View {
         let t = detail ?? track
@@ -38,6 +39,13 @@ struct InfoPanel: View {
                         if let s = t.size { row("File size", ByteCountFormatter.string(fromByteCount: Int64(s), countStyle: .file)) }
                         if let p = t.path, !p.isEmpty { row("Path", p, small: true) }
                     }
+                    if bpm != nil || t.playCount != nil || t.created != nil {
+                        card {
+                            if let bpm { row("BPM", bpm == bpm.rounded() ? String(format: "%.0f", bpm) : String(format: "%.1f", bpm)) }
+                            if let n = t.playCount { row("Plays", String(n)) }
+                            if let d = addedDate(t.created) { row("Added", d) }
+                        }
+                    }
                 }
                 .padding(.vertical, 4)
             }
@@ -45,8 +53,12 @@ struct InfoPanel: View {
         .scrollIndicators(.hidden)
         .task(id: track?.id) {
             detail = nil
+            bpm = nil
             guard let id = track?.id, track?.directURL == nil else { return }
-            detail = try? await app.client?.song(id)
+            async let full = app.client?.song(id)
+            async let tempo = app.client?.bpm(for: id)
+            detail = try? await full
+            bpm = await tempo
         }
     }
 
@@ -82,6 +94,15 @@ struct InfoPanel: View {
             .overlay(alignment: .bottom) { Divider().overlay(.white.opacity(0.12)).padding(.leading, 14) }
         }
         .buttonStyle(.plain)
+    }
+
+    private func addedDate(_ iso: String?) -> String? {
+        guard let iso else { return nil }
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let g = ISO8601DateFormatter()
+        guard let date = f.date(from: iso) ?? g.date(from: iso) else { return nil }
+        return date.formatted(date: .abbreviated, time: .omitted)
     }
 
     private func sampleRate(_ hz: Int) -> String {

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.16.0
+## 0.15.3
 
 ### Sync across your devices (new, optional)
 - **Web engine:** a small Docker service (`apps/server`) that syncs all your players. Point the desktop app at it from the **devices** button next to the cast button; without it nothing changes.

@@ -1,12 +1,17 @@
+# Web engine. See docs/deploy-server.md.
 services:
   icosahedron:
-    build:
-      context: ../..
-      dockerfile: apps/server/Dockerfile
+    image: ghcr.io/raudraido/icosahedron-server:latest
+    # To build from a checkout instead of pulling the image:
+    # build:
+    #   context: ../..
+    #   dockerfile: apps/server/Dockerfile
     restart: unless-stopped
     environment:
       NAVIDROME_URL: http://navidrome:4533   # accounts = Navidrome accounts
+      # LASTFM_API_KEY: ...                  # optional, enables Last.fm
+      # LASTFM_API_SECRET: ...
     volumes:
       - ./data:/data
     ports:
-      - "8080:8080"   # put behind a TLS reverse proxy for mobile/remote use
+      - "8080:8080"   # put a TLS reverse proxy in front for remote use (it must pass WebSocket upgrades)

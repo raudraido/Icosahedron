@@ -1,0 +1,102 @@
+# Sync protocol and engine HTTP API
+
+Everything below is implemented in `apps/server/src/` (`hub.mjs`, `server.mjs`, `bpm.mjs`, `lastfm.mjs`) and covered by `apps/server/test/`.
+
+## Authentication
+
+HTTP requests carry the Subsonic credentials in a header; WebSocket clients send them in the first message.
+
+```
+Authorization: Subsonic u=<user>&t=<md5(password+salt)>&s=<salt>
+```
+
+The values are URL-encoded. The engine verifies them against Navidrome (`ping`).
+
+## WebSocket `/sync`
+
+JSON text frames, one object each. Max frame 4 MB.
+
+### Connecting
+
+The first message must be `hello` within 10 seconds:
+
+```json
+{ "type": "hello",
+  "auth":   { "u": "alice", "t": "…", "s": "…" },
+  "device": { "deviceId": "uuid", "name": "Alice's iPhone", "kind": "mobile" } }
+```
+
+`kind` is `electron`, `web` or `mobile`. A second connection with the same `deviceId` replaces the first.
+
+Close codes: `4001` no hello in time, `4002` first message was not `hello`, `4003` authentication failed, `4004` bad device.
+
+### Server → client
+
+| Message | Meaning |
+|---|---|
+| `{type:"welcome", deviceId, devices, state, activeDeviceId, settings}` | Sent after a successful hello: the user's devices, the stored playback state, the active device and the settings blob (`null` if none yet) |
+| `{type:"devices", devices, activeDeviceId}` | The set of devices or the active one changed |
+| `{type:"state", from, state}` | The active device published its state |
+| `{type:"command", from, cmd, args}` | Another device asks this one to do something |
+| `{type:"settings", from, settings}` | Another device changed the shared settings |
+
+### Client → server
+
+| Message | Meaning |
+|---|---|
+| `{type:"state", state}` | Publish this device's playback state |
+| `{type:"command", target, cmd, args?}` | Remote-control the device `target` |
+| `{type:"transfer", target}` | Hand playback to `target` ("Play here" / "Send") |
+| `{type:"settings", settings}` | Replace the shared settings blob |
+
+### Playback state
+
+```json
+{ "queue": [ /* track objects */ ], "index": 3, "positionMs": 83000,
+  "playing": true, "volume": 80, "updatedAt": 1731150000000 }
+```
+
+- `queue` is sent **only when it changed**; otherwise it is omitted and the engine keeps the stored one (a broadcast `state` also omits it when unchanged).
+- Queue items are opaque track objects (the desktop/web `Track` shape without `stream_url`: `id`, `title`, `artist`, `artist_id`, `album`, `album_id`, `track_number`, `disc_number`, `duration_secs`, `cover_id`, `starred`, …). The receiving device rebuilds stream URLs itself.
+- Limits: 20 000 tracks and 3 MB per queue.
+
+The **active device** is the one that last published `playing: true` or was transferred to. It is the source of truth for the position.
+
+**Only the playing device should publish.** An idle device that just restored its saved queue must not publish, or it would overwrite the state of the device in use. A pause or stop is still published once.
+
+### Commands
+
+`cmd` is one of `play`, `pause`, `toggle`, `seek` (`args.positionMs`), `next`, `prev`, `volume` (`args.volume`), `load` (`args.state` — a playback state to start playing).
+
+`transfer`: the engine tells the previous active device to `pause`, sets the target active and sends it `load` with the stored state and `playing: true`. Commands and transfers only reach devices of the same user.
+
+### Settings
+
+`settings` is an object `{ "values": { "<key>": "<string>" }, "at": <ms> }`, max 256 KB, stored per user and replaced as a whole. Because it is replaced whole, a client must **send back the keys it does not know**. A client without the previous blob (`welcome.settings === null` or not yet received) must not publish.
+
+Keys currently shared: see the whitelist in `src/lib/settingsSync.ts`; the iOS app shares `icosahedron_lyrics_lrclib_enabled` and `eq_settings`. The equalizer is a JSON string: `{"enabled":true,"preampDb":0,"bandsDb":[…10 numbers…]}`.
+
+## HTTP endpoints
+
+All need the `Authorization` header unless noted.
+
+| Method and path | Purpose |
+|---|---|
+| `GET /healthz` | Liveness, `ok` (no auth) |
+| `GET /config.json` | Tells the web app where Navidrome is (no auth) |
+| `/rest/*`, `/api/*`, `/auth/*` | Same-origin proxy to Navidrome (Range requests supported). Navidrome does its own authentication |
+| `GET /bpm` | `{ "<trackId>": bpm, … }` — all known BPM values |
+| `GET /bpm/<id>` | `{ "bpm": n }` or 404 |
+| `PUT /bpm/<id>` | Body `{bpm, manual?}`; 20 ≤ bpm ≤ 400. A `manual` value is not overwritten by a detected one (422) |
+| `POST /bpm` | Bulk upload `{ "<id>": bpm, … }` of detected values → `{stored: n}` |
+| `GET /lastfm/config` | `{configured, apiKey}` |
+| `GET/DELETE /lastfm/connection` | The user's Last.fm connection (`{username, historyEnabled, scrobbleEnabled}` or `null`) / disconnect |
+| `POST /lastfm/token` | Start connecting: `{token, authUrl}` — open `authUrl` in a browser |
+| `POST /lastfm/session` | Body `{token}` after the user approved → `{connected, username?}` |
+| `PUT /lastfm/toggles` | Body `{scrobbleEnabled?, historyEnabled?}` |
+| `POST /lastfm/nowplaying` | Body `{track: {title, artist, album, duration}}` |
+| `POST /lastfm/scrobble` | Body `{track, timestamp}` (Unix seconds) |
+
+Last.fm endpoints answer `503` when the engine has no API key/secret configured.
+
+Anything else is served from the web app (single-page-app fallback).

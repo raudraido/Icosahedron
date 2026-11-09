@@ -108,7 +108,7 @@ struct NowPlayingView: View {
             }
 
             HStack {
-                Button { p.shuffle.toggle() } label: { Image(systemName: "shuffle").font(.title3) }
+                Button { p.toggleShuffle() } label: { Image(systemName: "shuffle").font(.title3) }
                     .foregroundStyle(p.shuffle ? Theme.accent : Color.secondary)
                 Spacer()
                 Button { p.previous() } label: { Image(systemName: "backward.fill").font(.title) }
@@ -119,7 +119,7 @@ struct NowPlayingView: View {
                 Spacer()
                 Button { p.next() } label: { Image(systemName: "forward.fill").font(.title) }
                 Spacer()
-                Button { p.repeatAll.toggle() } label: { Image(systemName: "repeat").font(.title3) }
+                Button { p.toggleRepeat() } label: { Image(systemName: "repeat").font(.title3) }
                     .foregroundStyle(p.repeatAll ? Theme.accent : Color.secondary)
             }
             .foregroundStyle(.primary)

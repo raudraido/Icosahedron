@@ -18,7 +18,11 @@ final class PlayerModel {
     /// Fired when the queue, the current track or the play state changes (sync publishes from it).
     @ObservationIgnored var onChange: (() -> Void)?
 
-    @ObservationIgnored private let player = AVPlayer()
+    // AVQueuePlayer keeps the next track loaded behind the current one, which is what
+    // makes track changes gapless: the queued item starts the instant the current ends.
+    @ObservationIgnored private let player = AVQueuePlayer()
+    @ObservationIgnored private var playingItem: AVPlayerItem?
+    @ObservationIgnored private var queuedNext: (item: AVPlayerItem, index: Int)?
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var endObserver: NSObjectProtocol?
     @ObservationIgnored private var artworkTask: Task<Void, Never>?
@@ -30,8 +34,12 @@ final class PlayerModel {
     init() {
         configureSession()
         configureRemoteCommands()
+        player.actionAtItemEnd = .advance
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 600), queue: .main) { [weak self] time in
             self?.tick(time)
+        }
+        endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: nil, queue: .main) { [weak self] note in
+            self?.itemFinished(note.object as? AVPlayerItem)
         }
     }
 
@@ -46,6 +54,8 @@ final class PlayerModel {
 
     func resume() {
         guard current != nil else { return }
+        // Nothing loaded any more (the queue ran out): start the current track again.
+        if playingItem == nil { load(); return }
         player.play()
         isPlaying = true
         updateNowPlaying()
@@ -97,9 +107,21 @@ final class PlayerModel {
         onChange?()
     }
 
+    func toggleShuffle() {
+        shuffle.toggle()
+        preloadNext() // the track queued behind the current one may no longer be the right one
+    }
+
+    func toggleRepeat() {
+        repeatAll.toggle()
+        preloadNext()
+    }
+
     func stop() {
         player.pause()
-        player.replaceCurrentItem(with: nil)
+        player.removeAllItems()
+        playingItem = nil
+        queuedNext = nil
         queue = []
         index = -1
         isPlaying = false
@@ -113,11 +135,10 @@ final class PlayerModel {
     private func load(startPaused: Bool = false, startAt: Double = 0) {
         guard let t = current, let client else { return }
         let item = AVPlayerItem(url: client.streamURL(t.id))
-        if let e = endObserver { NotificationCenter.default.removeObserver(e) }
-        endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
-            self?.trackEnded()
-        }
-        player.replaceCurrentItem(with: item)
+        player.removeAllItems()
+        queuedNext = nil
+        playingItem = item
+        player.insert(item, after: nil)
         position = startAt
         duration = Double(t.duration)
         if startAt > 0 { player.seek(to: CMTime(seconds: startAt, preferredTimescale: 600)) }
@@ -131,14 +152,64 @@ final class PlayerModel {
         updateNowPlaying(reloadArtwork: true)
         let id = t.id
         Task { try? await client.scrobble(id, submission: false) } // "now playing"
+        preloadNext()
         onChange?()
     }
 
-    private func trackEnded() {
-        if let t = current, let client {
-            Task { try? await client.scrobble(t.id, submission: true) }
+    /// The index that follows the current one under shuffle/repeat, or nil at the end of the queue.
+    private func nextIndex() -> Int? {
+        guard !queue.isEmpty, index >= 0 else { return nil }
+        if shuffle, queue.count > 1 {
+            var n = Int.random(in: 0..<queue.count)
+            while n == index { n = Int.random(in: 0..<queue.count) }
+            return n
         }
-        next()
+        if index + 1 < queue.count { return index + 1 }
+        return repeatAll ? 0 : nil
+    }
+
+    /// Puts the next track behind the current one so it is already loaded when this one ends.
+    private func preloadNext() {
+        if let q = queuedNext {
+            player.remove(q.item)
+            queuedNext = nil
+        }
+        guard let client, playingItem != nil, let idx = nextIndex() else { return }
+        let item = AVPlayerItem(url: client.streamURL(queue[idx].id))
+        player.insert(item, after: player.items().last)
+        queuedNext = (item, idx)
+    }
+
+    /// An item played to its end. With a queued next one the player has already moved on
+    /// seamlessly — this only catches the model up (index, scrobbles, lock screen).
+    private func itemFinished(_ item: AVPlayerItem?) {
+        guard let item, item === playingItem else { return }
+        if let t = current, let client {
+            let id = t.id
+            Task { try? await client.scrobble(id, submission: true) }
+        }
+        if let q = queuedNext {
+            queuedNext = nil
+            index = q.index
+            playingItem = q.item
+            position = 0
+            duration = Double(current?.duration ?? 0)
+            isPlaying = true
+            updateNowPlaying(reloadArtwork: true)
+            if let t = current, let client {
+                let id = t.id
+                Task { try? await client.scrobble(id, submission: false) }
+            }
+            preloadNext()
+        } else {
+            // End of the queue.
+            player.removeAllItems()
+            playingItem = nil
+            isPlaying = false
+            position = 0
+            updateNowPlaying()
+        }
+        onChange?()
     }
 
     private func tick(_ time: CMTime) {

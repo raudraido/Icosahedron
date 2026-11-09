@@ -25,6 +25,7 @@ struct CoverImage: View {
                 }
             }
             .clipped()
+            .accessibilityHidden(true)
     }
 
     private var placeholder: some View {
@@ -49,7 +50,7 @@ struct AlbumCard: View {
 }
 
 struct AlbumShelf: View {
-    let title: String
+    let title: LocalizedStringKey
     let albums: [Album]
 
     var body: some View {
@@ -106,6 +107,7 @@ struct TrackRow: View {
             Text(formatTime(Double(track.duration))).font(.caption).foregroundStyle(.secondary).monospacedDigit()
         }
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
         .contextMenu { TrackMenuContent(track: track) }
     }
 }

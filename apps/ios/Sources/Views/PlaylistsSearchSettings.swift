@@ -163,19 +163,19 @@ struct DevicesList: View {
     var body: some View {
         let sync = app.sync
         if sync.status != "online" {
-            Text(sync.status == "connecting" ? "Connecting…" : "Sync server not reachable")
+            Text(sync.status == "connecting" ? String(localized: "Connecting…") : String(localized: "Sync server not reachable"))
                 .foregroundStyle(.secondary)
         }
         ForEach(sync.devices) { d in
             HStack {
                 Image(systemName: icon(d.kind)).foregroundStyle(d.id == sync.activeDeviceId ? Theme.accent : Color.secondary)
                 VStack(alignment: .leading) {
-                    Text(d.name + (d.id == sync.deviceId ? " (this phone)" : ""))
-                    if d.id == sync.activeDeviceId { Text(sync.remotePlaying ? "Playing" : "Active").font(.caption).foregroundStyle(.secondary) }
+                    Text(d.name + (d.id == sync.deviceId ? " " + String(localized: "(this phone)") : ""))
+                    if d.id == sync.activeDeviceId { Text(sync.remotePlaying ? String(localized: "Playing") : String(localized: "Active")).font(.caption).foregroundStyle(.secondary) }
                 }
                 Spacer()
                 if d.id != sync.activeDeviceId, sync.remoteTrack != nil {
-                    Button(d.id == sync.deviceId ? "Play here" : "Send") { sync.transfer(to: d.id) }
+                    Button(d.id == sync.deviceId ? String(localized: "Play here") : String(localized: "Send")) { sync.transfer(to: d.id) }
                         .buttonStyle(.bordered)
                 }
             }
@@ -263,9 +263,9 @@ struct QualitySection: View {
     private var nowText: String {
         let n = app.net
         switch n.kind {
-        case .offline: return "Offline"
-        case .wifi: return (n.isConstrained ? "Low Data Mode" : "Wi-Fi") + " · " + n.streamQuality.label
-        case .cellular: return "Cellular · " + n.streamQuality.label
+        case .offline: return String(localized: "Offline")
+        case .wifi: return (n.isConstrained ? String(localized: "Low Data Mode") : "Wi-Fi") + " · " + n.streamQuality.label
+        case .cellular: return String(localized: "Cellular") + " · " + n.streamQuality.label
         }
     }
 }

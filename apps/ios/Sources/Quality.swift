@@ -13,7 +13,7 @@ struct StreamQuality: Hashable {
     var rank: Int { isDirect ? 1_000_000 : bitrate }
     var storageKey: String { isDirect ? "raw" : "\(format)-\(bitrate)" }
     var fileExtension: String? { isDirect ? nil : (format == "aac" ? "aac" : "mp3") }
-    var label: String { isDirect ? "Direct (original)" : "\(format.uppercased()) \(bitrate) kbps" }
+    var label: String { isDirect ? String(localized: "Direct (original)") : "\(format.uppercased()) \(bitrate) kbps" }
 
     init(format: String, bitrate: Int) {
         self.format = format

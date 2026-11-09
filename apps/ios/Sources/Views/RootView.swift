@@ -35,6 +35,7 @@ struct MainTabs: View {
         }
         // The player is presented from here, not from the mini player: the system rebuilds the
         // accessory on every playback tick, which tore the player (and any sheet on it) down.
+        .tabViewStyle(.sidebarAdaptable)
         .tabViewBottomAccessory(isEnabled: showPlayer) { MiniPlayerBar(zoom: zoom) }
         .fullScreenCover(isPresented: Bindable(app.router).showPlayer) {
             NowPlayingView()

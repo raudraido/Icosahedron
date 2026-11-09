@@ -12,6 +12,21 @@ enum LibrarySection: String, Hashable, CaseIterable {
     case playlists = "Playlists"
     case radios = "Radios"
 
+    var title: LocalizedStringKey {
+        switch self {
+        case .artists: return "Artists"
+        case .albums: return "Albums"
+        case .newest: return "Newest Albums"
+        case .recent: return "Recently Played Albums"
+        case .songs: return "Songs"
+        case .favorites: return "Favorite Songs"
+        case .cached: return "Cached Songs"
+        case .directories: return "Directories"
+        case .playlists: return "Playlists"
+        case .radios: return "Radios"
+        }
+    }
+
     var icon: String {
         switch self {
         case .artists: return "music.mic"
@@ -42,7 +57,7 @@ struct LibraryView: View {
                 ForEach(LibrarySection.allCases, id: \.self) { section in
                     NavigationLink(value: section) {
                         Label {
-                            Text(section.rawValue).font(.title3)
+                            Text(section.title).font(.title3)
                         } icon: {
                             Image(systemName: section.icon).foregroundStyle(Theme.accent).frame(width: 34)
                         }
@@ -68,11 +83,11 @@ struct LibraryView: View {
         case .newest:
             AlbumsGrid(type: "newest").navigationTitle("Newest Albums").navigationBarTitleDisplayMode(.inline)
         case .recent:
-            AlbumsGrid(type: "recent").navigationTitle("Recently Played").navigationBarTitleDisplayMode(.inline)
+            AlbumsGrid(type: "recent").navigationTitle("Recently Played Albums").navigationBarTitleDisplayMode(.inline)
         case .songs:
             SongsScreen()
         case .favorites:
-            TrackListScreen(title: "Favorite Songs") { try await app.client?.starred() ?? [] }
+            TrackListScreen(title: String(localized: "Favorite Songs")) { try await app.client?.starred() ?? [] }
         case .cached:
             CachedSongsScreen()
         case .directories:

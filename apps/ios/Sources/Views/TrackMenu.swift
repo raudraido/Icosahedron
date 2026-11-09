@@ -28,7 +28,7 @@ struct TrackMenuContent: View {
                 Button { app.keepOffline([track]) } label: { Label("Keep Offline", systemImage: "arrow.down.circle") }
             }
             Button { app.toggleStar(track) } label: {
-                Label(app.isStarred(track) ? "Remove Favorite" : "Favorite", systemImage: app.isStarred(track) ? "heart.slash" : "heart")
+                Label(app.isStarred(track) ? String(localized: "Remove Favorite") : String(localized: "Favorite"), systemImage: app.isStarred(track) ? "heart.slash" : "heart")
             }
             Menu {
                 ForEach(1...5, id: \.self) { n in
@@ -38,7 +38,7 @@ struct TrackMenuContent: View {
                 }
                 if app.rating(track) > 0 { Button("Clear Rating", role: .destructive) { app.setRating(track, 0) } }
             } label: {
-                Label(app.rating(track) > 0 ? "Rating: " + String(repeating: "★", count: app.rating(track)) : "Rating", systemImage: "star")
+                Label(app.rating(track) > 0 ? String(localized: "Rating") + ": " + String(repeating: "★", count: app.rating(track)) : String(localized: "Rating"), systemImage: "star")
             }
             Button { app.share(track) } label: { Label("Share", systemImage: "square.and.arrow.up") }
             Menu {
@@ -60,10 +60,10 @@ struct TrackMenuContent: View {
         var rows: [String] = []
         let quality = [track.format?.uppercased(), track.bitrate.map { "\($0) kbps" }].compactMap { $0 }.joined(separator: " · ")
         if !quality.isEmpty { rows.append(quality) }
-        if let a = track.album { rows.append("Album: \(a)") }
-        if let y = track.year { rows.append("Year: \(y)") }
-        if let g = track.genre { rows.append("Genre: \(g)") }
-        rows.append("Length: " + formatTime(Double(track.duration)))
+        if let a = track.album { rows.append(String(localized: "Album: \(a)")) }
+        if let y = track.year { rows.append(String(localized: "Year: \(y)")) }
+        if let g = track.genre { rows.append(String(localized: "Genre: \(g)")) }
+        rows.append(String(localized: "Length: \(formatTime(Double(track.duration)))"))
         return rows
     }
 }

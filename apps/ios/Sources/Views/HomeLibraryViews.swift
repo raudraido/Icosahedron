@@ -12,7 +12,7 @@ struct HomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     NavigationLink {
-                        TrackListScreen(title: "Random mix") { try await app.client?.randomSongs(100) ?? [] }
+                        TrackListScreen(title: String(localized: "Random mix")) { try await app.client?.randomSongs(100) ?? [] }
                     } label: {
                         Label("Random mix", systemImage: "shuffle")
                             .frame(maxWidth: .infinity, minHeight: 44)

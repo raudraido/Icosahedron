@@ -21,7 +21,7 @@ enum Presenter {
 
     static func alert(_ title: String, _ message: String? = nil) {
         let a = UIAlertController(title: title, message: message, preferredStyle: .alert)
-        a.addAction(UIAlertAction(title: "OK", style: .default))
+        a.addAction(UIAlertAction(title: String(localized: "OK"), style: .default))
         top()?.present(a, animated: true)
     }
 
@@ -33,7 +33,7 @@ enum Presenter {
             f.text = text
             f.autocapitalizationType = .sentences
         }
-        a.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        a.addAction(UIAlertAction(title: String(localized: "Cancel"), style: .cancel))
         a.addAction(UIAlertAction(title: action, style: .default) { _ in
             let value = (a.textFields?.first?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             if !value.isEmpty { done(value) }
@@ -43,7 +43,7 @@ enum Presenter {
 
     static func confirm(title: String, message: String? = nil, destructive: String, _ done: @escaping () -> Void) {
         let a = UIAlertController(title: title, message: message, preferredStyle: .alert)
-        a.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        a.addAction(UIAlertAction(title: String(localized: "Cancel"), style: .cancel))
         a.addAction(UIAlertAction(title: destructive, style: .destructive) { _ in done() })
         top()?.present(a, animated: true)
     }

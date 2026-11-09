@@ -69,7 +69,7 @@ struct InfoPanel: View {
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
     }
 
-    private func row(_ label: String, _ value: String, small: Bool = false) -> some View {
+    private func row(_ label: LocalizedStringKey, _ value: String, small: Bool = false) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text(label).foregroundStyle(.white.opacity(0.65))
             Spacer(minLength: 8)
@@ -82,7 +82,7 @@ struct InfoPanel: View {
         .overlay(alignment: .bottom) { Divider().overlay(.white.opacity(0.12)).padding(.leading, 14) }
     }
 
-    private func tappable(_ label: String, _ value: String, action: @escaping () -> Void) -> some View {
+    private func tappable(_ label: LocalizedStringKey, _ value: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Text(label).foregroundStyle(.white.opacity(0.65))

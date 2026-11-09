@@ -319,13 +319,13 @@ final class PlayerModel {
 
     private func updateQualityLabel() {
         guard let t = current else { qualityLabel = ""; return }
-        if t.directURL != nil { qualityLabel = "Radio"; return }
-        if playingLocal, let l = cache.qualityLabel(for: t) { qualityLabel = l + " · cached"; return }
+        if t.directURL != nil { qualityLabel = String(localized: "Radio"); return }
+        if playingLocal, let l = cache.qualityLabel(for: t) { qualityLabel = l + " · " + String(localized: "cached"); return }
         let q = wantedQuality()
         if q.isDirect {
             qualityLabel = [t.format?.uppercased(), t.bitrate.map { "\($0) kbps" }].compactMap { $0 }.joined(separator: " ")
         } else {
-            qualityLabel = "\(q.format.uppercased()) \(q.bitrate) kbps · transcoded"
+            qualityLabel = "\(q.format.uppercased()) \(q.bitrate) kbps · " + String(localized: "transcoded")
         }
     }
 

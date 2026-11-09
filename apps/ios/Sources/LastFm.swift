@@ -42,13 +42,13 @@ final class LastFmModel {
             guard r.status == 200,
                   let o = try JSONSerialization.jsonObject(with: r.data) as? [String: Any],
                   let token = o["token"] as? String, let s = o["authUrl"] as? String, let url = URL(string: s) else {
-                message = "Last.fm did not answer"
+                message = String(localized: "Last.fm did not answer")
                 return
             }
             pendingToken = token
             await UIApplication.shared.open(url)
         } catch {
-            message = "Could not reach the server"
+            message = String(localized: "Could not reach the server")
         }
     }
 
@@ -62,10 +62,10 @@ final class LastFmModel {
                 message = nil
                 await refresh(client: client)
             } else {
-                message = "Not approved yet — approve on Last.fm, then try again"
+                message = String(localized: "Not approved yet — approve on Last.fm, then try again")
             }
         } catch {
-            message = "Could not reach the server"
+            message = String(localized: "Could not reach the server")
         }
     }
 

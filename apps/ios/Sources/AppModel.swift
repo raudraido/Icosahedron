@@ -129,7 +129,7 @@ final class AppModel {
             if mix.isEmpty, let g = t.genre, !g.isEmpty { mix = (try? await c.randomSongs(50, genre: g)) ?? [] }
             mix.removeAll { $0.id == t.id }
             guard !mix.isEmpty else {
-                Presenter.alert("No similar songs found", "The server has no similar-song data for this track.")
+                Presenter.alert(String(localized: "No similar songs found"), String(localized: "The server has no similar-song data for this track."))
                 return
             }
             player.play([t] + mix, at: 0)
@@ -197,7 +197,7 @@ final class AppModel {
             if let url = try? await c.createShare(t.id) {
                 Presenter.share(url)
             } else {
-                Presenter.alert("Sharing is not available", "Turn on sharing in the Navidrome server settings (ND_ENABLESHARING).")
+                Presenter.alert(String(localized: "Sharing is not available"), String(localized: "Turn on sharing in the Navidrome server settings (ND_ENABLESHARING)."))
             }
         }
     }
@@ -205,7 +205,7 @@ final class AppModel {
     // MARK: Playlists
 
     func newPlaylist(with tracks: [Track] = []) {
-        Presenter.prompt(title: "New Playlist", placeholder: "Name", action: "Create") { [weak self] name in
+        Presenter.prompt(title: String(localized: "New Playlist"), placeholder: String(localized: "Name"), action: String(localized: "Create")) { [weak self] name in
             guard let self, let c = self.client else { return }
             Task {
                 try? await c.createPlaylist(name: name, songIds: tracks.map { $0.id })
@@ -215,7 +215,7 @@ final class AppModel {
     }
 
     func renamePlaylist(_ p: Playlist) {
-        Presenter.prompt(title: "Rename Playlist", placeholder: "Name", text: p.name, action: "Rename") { [weak self] name in
+        Presenter.prompt(title: String(localized: "Rename Playlist"), placeholder: String(localized: "Name"), text: p.name, action: String(localized: "Rename")) { [weak self] name in
             guard let self, let c = self.client else { return }
             Task {
                 try? await c.renamePlaylist(p.id, name: name)
@@ -225,7 +225,7 @@ final class AppModel {
     }
 
     func deletePlaylist(_ p: Playlist) {
-        Presenter.confirm(title: "Delete \"\(p.name)\"?", message: "The songs themselves are not deleted.", destructive: "Delete") { [weak self] in
+        Presenter.confirm(title: String(localized: "Delete “\(p.name)”?"), message: String(localized: "The songs themselves are not deleted."), destructive: String(localized: "Delete")) { [weak self] in
             guard let self, let c = self.client else { return }
             Task {
                 try? await c.deletePlaylist(p.id)

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.16.0
+
+### Sync across your devices (new, optional)
+- **Web engine:** a small Docker service (`apps/server`) that syncs all your players. Point the desktop app at it from the **devices** button next to the cast button; without it nothing changes.
+- **Continue on another device:** the queue and position follow you; "Play here" / "Send" moves playback between your desktop, browser and phone.
+- **Remote control:** play, pause, next and previous on whichever device is playing.
+- **Shared preferences:** theme, EQ, Last.fm/lyrics/BPM toggles, left-panel visibility, tab and row orders and sort choices are kept in step between devices (screen-dependent layout, hotkeys and logins stay per device).
+- **BPM is stored on the engine:** what this app detects is uploaded (existing detections too, in one go) and every other player reads it; manual corrections win over detections.
+
+### Under the hood
+- The Subsonic client and the UI's access to the host now go through a shared platform layer, so the same UI also runs in the browser (and powers the new iOS app). Desktop behaviour is unchanged.
+
 ## 0.15.2
 
 ### AirPlay (Apple TV)

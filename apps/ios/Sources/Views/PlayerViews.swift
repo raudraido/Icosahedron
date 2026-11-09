@@ -60,6 +60,7 @@ struct NowPlayingView: View {
     @State private var showQueue = false
     @State private var showDevices = false
     @State private var showInfo = false
+    @State private var showEQ = false
     @Namespace private var artNS
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -80,6 +81,7 @@ struct NowPlayingView: View {
         }
         .background { background(p.current) }
         .foregroundStyle(.white)
+        .sheet(isPresented: $showEQ) { EqualizerSheet() }
         .sheet(isPresented: $showDevices) {
             NavigationStack {
                 List { DevicesList() }
@@ -331,6 +333,10 @@ struct NowPlayingView: View {
             speedMenu(p)
             Spacer()
             AirPlayButton().frame(width: 30, height: 30).accessibilityLabel("AirPlay")
+            Spacer()
+            Button { showEQ = true } label: { Image(systemName: "slider.vertical.3") }
+                .foregroundStyle(EQManager.shared.settings.enabled ? Theme.accent : Color.white.opacity(0.75))
+                .accessibilityLabel("Equalizer")
             Spacer()
             Button { showDevices = true } label: { Image(systemName: "laptopcomputer.and.iphone") }
                 .accessibilityLabel("Devices")

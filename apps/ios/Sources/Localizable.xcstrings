@@ -1640,6 +1640,126 @@
           }
         }
       }
+    },
+    "Equalizer": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ekvalaiser"
+          }
+        }
+      }
+    },
+    "Sound": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heli"
+          }
+        }
+      }
+    },
+    "Reset": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lähtesta"
+          }
+        }
+      }
+    },
+    "Preamp": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eelvõimendus"
+          }
+        }
+      }
+    },
+    "Presets": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eelseaded"
+          }
+        }
+      }
+    },
+    "Flat": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lame"
+          }
+        }
+      }
+    },
+    "Bass Boost": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bassi võimendus"
+          }
+        }
+      }
+    },
+    "Treble Boost": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kõrgete võimendus"
+          }
+        }
+      }
+    },
+    "Vocal": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vokaal"
+          }
+        }
+      }
+    },
+    "Rock": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rokk"
+          }
+        }
+      }
+    },
+    "Electronic": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elektrooniline"
+          }
+        }
+      }
+    },
+    "Loudness": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valjus"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

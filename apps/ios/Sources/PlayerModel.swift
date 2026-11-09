@@ -57,6 +57,11 @@ final class PlayerModel {
         player.actionAtItemEnd = .advance
         player.defaultRate = Float(speed)
         cache.onCached = { [weak self] id in self?.trackCached(id) }
+        // Switching the EQ on mid-track: the items already in the queue get it too.
+        EQManager.shared.onEnabled = { [weak self] in
+            guard let self else { return }
+            for item in self.player.items() { EQManager.shared.attach(to: item) }
+        }
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 600), queue: .main) { [weak self] time in
             self?.tick(time)
         }
@@ -296,6 +301,7 @@ final class PlayerModel {
     private func makeItem(_ t: Track, client: SubsonicClient) -> AVPlayerItem {
         let item = makeBaseItem(t, client: client)
         item.audioTimePitchAlgorithm = pitchAlgorithm
+        EQManager.shared.attach(to: item)
         return item
     }
 

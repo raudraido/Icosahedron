@@ -44,6 +44,17 @@ class WebAudio {
   private ticker: number | null = null;
   private announceSwitch = false;
 
+  // ── Equalizer (same bands as the desktop engine: ISO octaves, Q 1.1, RBJ peaking) ──
+  // The audio element is only routed through WebAudio once the EQ is actually switched on, so the
+  // default playback path stays the plain element. iOS Safari is left alone: WebAudio output stops
+  // when the page goes to the background there.
+  private static readonly EQ_FREQS = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+  private ctx: AudioContext | null = null;
+  private eqSrc: MediaElementAudioSourceNode | null = null;
+  private eqPre: GainNode | null = null;
+  private eqBands: BiquadFilterNode[] = [];
+  private eqRouted: boolean | null = null;
+
   constructor(private emit: (p: AudioEventPayload) => void) {
     const el = (this.el = document.createElement("audio"));
     el.preload = "auto";
@@ -71,6 +82,42 @@ class WebAudio {
     document.body.appendChild(el);
   }
 
+  setEq(enabled: boolean, preampDb: number, bandsDb: number[]) {
+    if (/iP(hone|ad|od)/.test(navigator.userAgent)) return;
+    if (!enabled && !this.ctx) return; // never touch the audio path unless the EQ is used
+    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    if (!this.ctx) {
+      const ctx = (this.ctx = new Ctx());
+      this.eqSrc = ctx.createMediaElementSource(this.el);
+      this.eqPre = ctx.createGain();
+      let prev: AudioNode = this.eqPre;
+      this.eqBands = WebAudio.EQ_FREQS.map((f) => {
+        const b = ctx.createBiquadFilter();
+        b.type = "peaking";
+        b.frequency.value = f;
+        b.Q.value = 1.1;
+        prev.connect(b);
+        prev = b;
+        return b;
+      });
+      prev.connect(ctx.destination);
+    }
+    const ctx = this.ctx;
+    if (this.eqRouted !== enabled) {
+      this.eqSrc!.disconnect();
+      this.eqSrc!.connect(enabled ? this.eqPre! : ctx.destination);
+      this.eqRouted = enabled;
+    }
+    this.eqPre!.gain.value = Math.pow(10, preampDb / 20);
+    this.eqBands.forEach((b, i) => {
+      const f = WebAudio.EQ_FREQS[i];
+      // bands the sample rate cannot realise stay flat, like the desktop engine
+      b.gain.value = f < ctx.sampleRate * 0.45 ? (bandsDb[i] ?? 0) : 0;
+    });
+    void ctx.resume();
+  }
+
   private startTicker() {
     if (this.ticker != null) return;
     this.ticker = window.setInterval(() => {
@@ -91,6 +138,7 @@ class WebAudio {
     el.volume = volume;
     this.startTicker();
     this.emit({ kind: "playing", duration: durationHint });
+    void this.ctx?.resume();
     if (!startPaused) await el.play();
   }
   chainPreload(url: string) { this.chainUrl = url; }
@@ -262,7 +310,7 @@ export function createWebPlatform(): Platform {
     audio_stop: () => audio.stop(),
     audio_seek: ({ seconds }) => audio.seek(seconds),
     audio_set_volume: ({ volume }) => audio.setVolume(volume),
-    audio_set_eq: inert(undefined),
+    audio_set_eq: (a) => audio.setEq(!!a.enabled, Number(a.preampDb) || 0, Array.isArray(a.bandsDb) ? a.bandsDb.map(Number) : []),
     get_bpm: unsupported("get_bpm"),
     set_bpm_override: inert(undefined),
     get_bpm_cache_all: inert({}),

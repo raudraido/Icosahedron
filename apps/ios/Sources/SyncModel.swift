@@ -37,8 +37,10 @@ final class SyncModel {
     @ObservationIgnored private var settingsWork: DispatchWorkItem?
 
     /// Settings this app shares with the web and desktop apps: web key -> UserDefaults key.
-    private static let sharedKeys: [(web: String, local: String)] = [
-        ("icosahedron_lyrics_lrclib_enabled", "lyricsOnline"),
+    private enum SharedKind { case bool, string }
+    private static let sharedKeys: [(web: String, local: String, kind: SharedKind)] = [
+        ("icosahedron_lyrics_lrclib_enabled", "lyricsOnline", .bool),
+        ("eq_settings", "eq_settings", .string),
     ]
 
     init() {
@@ -206,10 +208,18 @@ final class SyncModel {
         var blob: [String: String] = [:]
         for (k, v) in values { if let str = v as? String { blob[k] = str } }
         settingsBlob = blob
-        for (web, local) in Self.sharedKeys {
+        for (web, local, kind) in Self.sharedKeys {
             guard let str = blob[web] else { continue }
-            let on = str == "true"
-            if UserDefaults.standard.object(forKey: local) as? Bool != on { UserDefaults.standard.set(on, forKey: local) }
+            switch kind {
+            case .bool:
+                let on = str == "true"
+                if UserDefaults.standard.object(forKey: local) as? Bool != on { UserDefaults.standard.set(on, forKey: local) }
+            case .string:
+                if UserDefaults.standard.string(forKey: local) != str {
+                    UserDefaults.standard.set(str, forKey: local)
+                    if local == EQSettings.defaultsKey { EQManager.shared.reloadFromDefaults() }
+                }
+            }
         }
     }
 
@@ -224,11 +234,14 @@ final class SyncModel {
     private func publishSettingsIfChanged() {
         guard status == "online", var blob = settingsBlob else { return }
         var changed = false
-        for (web, local) in Self.sharedKeys {
-            guard let on = UserDefaults.standard.object(forKey: local) as? Bool else { continue }
-            let str = on ? "true" : "false"
-            if blob[web] != str {
-                blob[web] = str
+        for (web, local, kind) in Self.sharedKeys {
+            let value: String?
+            switch kind {
+            case .bool: value = (UserDefaults.standard.object(forKey: local) as? Bool).map { $0 ? "true" : "false" }
+            case .string: value = UserDefaults.standard.string(forKey: local)
+            }
+            if let value, blob[web] != value {
+                blob[web] = value
                 changed = true
             }
         }

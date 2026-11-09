@@ -119,6 +119,9 @@ struct SettingsView: View {
                 } footer: {
                     Text("Scrobbles go through your server, so one connection covers all your devices. Plays made offline are sent later. If your Navidrome is also linked to Last.fm, a play may be counted twice.")
                 }
+                Section("Sound") {
+                    NavigationLink("Equalizer") { EqualizerContent().navigationTitle("Equalizer").navigationBarTitleDisplayMode(.inline) }
+                }
                 Section("Lists") {
                     Toggle("Show BPM in song lists", isOn: Binding(
                         get: { UserDefaults.standard.object(forKey: "showBPM") as? Bool ?? true },

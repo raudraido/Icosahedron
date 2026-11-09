@@ -2,7 +2,8 @@
 # Build context is the repository root:
 #   docker build -f apps/server/Dockerfile -t icosahedron .
 
-FROM node:22-alpine AS web
+# The web app is static: build it once on the build host, not per target architecture.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS web
 WORKDIR /repo
 COPY package.json package-lock.json ./
 COPY native/audio-engine/package.json native/audio-engine/

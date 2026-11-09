@@ -1,18 +1,27 @@
 name: iOS build
 
-# Builds an UNSIGNED .ipa on a GitHub macOS runner (Xcode isn't available on the
-# Linux dev box). Sign it for your own device with AltStore / Sideloadly.
+# Builds an UNSIGNED .ipa on a GitHub macOS runner (no Mac needed). Sign it for your own
+# device with AltStore / SideStore / Sideloadly / iloader. On a `v*` tag the .ipa is attached
+# to the release. The version is the repository's (root package.json).
 on:
   push:
-    branches: [feat/platform-adapter, master]
+    branches: [master]
+    paths: ["apps/ios/**", "package.json", ".github/workflows/ios.yml"]
+    tags: ["v*"]
+  pull_request:
     paths: ["apps/ios/**", ".github/workflows/ios.yml"]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: macos-26
+    permissions:
+      contents: write   # attach the .ipa to a release on tags
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+
+      - name: Version
+        run: echo "VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -29,6 +38,7 @@ jobs:
             -project Icosahedron.xcodeproj -scheme Icosahedron \
             -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
             -derivedDataPath build \
+            MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             build 2>&1 | tee build.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
           APP=build/Build/Products/Release-iphoneos/Icosahedron.app
@@ -41,15 +51,21 @@ jobs:
         run: |
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/Icosahedron.app Payload/
-          zip -qry Icosahedron.ipa Payload
+          zip -qry "Icosahedron-$VERSION-unsigned.ipa" Payload
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: Icosahedron-unsigned-ipa
-          path: apps/ios/Icosahedron.ipa
+          path: apps/ios/Icosahedron-*-unsigned.ipa
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: build-log
           path: apps/ios/build.log
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apps/ios/Icosahedron-*-unsigned.ipa

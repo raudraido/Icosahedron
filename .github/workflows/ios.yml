@@ -30,8 +30,11 @@ jobs:
             -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            build 2>&1 | tee build.log | grep -E "error:|warning: unre|BUILD (SUCCEEDED|FAILED)" || true
-          test -d build/Build/Products/Release-iphoneos/Icosahedron.app
+            build 2>&1 | tee build.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+          APP=build/Build/Products/Release-iphoneos/Icosahedron.app
+          ls -la "$APP"
+          # An .app without its executable is not a build: fail loudly instead of shipping it.
+          test -f "$APP/Icosahedron"
 
       - name: Package IPA
         working-directory: apps/ios
@@ -46,7 +49,7 @@ jobs:
           path: apps/ios/Icosahedron.ipa
 
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: always()
         with:
           name: build-log
           path: apps/ios/build.log

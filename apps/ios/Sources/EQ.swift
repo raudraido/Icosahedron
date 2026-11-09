@@ -209,14 +209,14 @@ final class EQManager: @unchecked Sendable {
                 version: kMTAudioProcessingTapCallbacksVersion_0,
                 clientInfo: Unmanaged.passRetained(proc).toOpaque(),
                 init: tapInit, finalize: tapFinalize, prepare: tapPrepare, unprepare: tapUnprepare, process: tapProcess)
-            var tapRef: Unmanaged<MTAudioProcessingTap>?
-            let status = MTAudioProcessingTapCreate(kCFAllocatorDefault, &callbacks, kMTAudioProcessingTapCreationFlag_PostEffects, &tapRef)
-            guard status == noErr, let tapRef else {
+            var tapOut: MTAudioProcessingTap?
+            let status = MTAudioProcessingTapCreate(kCFAllocatorDefault, &callbacks, kMTAudioProcessingTapCreationFlag_PostEffects, &tapOut)
+            guard status == noErr, let tap = tapOut else {
                 Unmanaged.passUnretained(proc).release() // balance passRetained: the tap was not created
                 return
             }
             let params = AVMutableAudioMixInputParameters(track: track)
-            params.audioTapProcessor = tapRef.takeRetainedValue()
+            params.audioTapProcessor = tap
             let mix = AVMutableAudioMix()
             mix.inputParameters = [params]
             await MainActor.run {

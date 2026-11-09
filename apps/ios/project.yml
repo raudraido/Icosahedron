@@ -2,7 +2,7 @@ name: Icosahedron
 options:
   bundleIdPrefix: cloud.raud
   deploymentTarget:
-    iOS: "26.0"
+    iOS: "26.1"
   createIntermediateGroups: true
 settings:
   base:

@@ -100,6 +100,13 @@ struct SettingsView: View {
                     DevicesList()
                 }
                 Section {
+                    CacheSettings()
+                } header: {
+                    Text("Offline cache")
+                } footer: {
+                    Text("Tracks are downloaded in the background — the next one right away — so they start instantly and play without a network. The oldest files are removed when the limit is reached.")
+                }
+                Section {
                     Button("Sign out", role: .destructive) { app.signOut() }
                 }
             }
@@ -152,6 +159,42 @@ struct DevicesList: View {
         case "mobile": return "iphone"
         case "electron": return "desktopcomputer"
         default: return "laptopcomputer"
+        }
+    }
+}
+
+struct CacheSettings: View {
+    @AppStorage(AudioCache.limitKey) private var limitMB = 2048
+    @State private var used: Int64 = 0
+
+    var body: some View {
+        Picker("Cache size", selection: $limitMB) {
+            Text("Off").tag(0)
+            Text("500 MB").tag(500)
+            Text("1 GB").tag(1024)
+            Text("2 GB").tag(2048)
+            Text("5 GB").tag(5120)
+            Text("10 GB").tag(10240)
+            Text("20 GB").tag(20480)
+            Text("50 GB").tag(51200)
+            Text("Unlimited").tag(-1)
+        }
+        .onChange(of: limitMB) { _, new in
+            if new == 0 { AudioCache.shared.clear() } else { AudioCache.shared.enforceLimit() }
+            refresh()
+        }
+        LabeledContent("Used", value: ByteCountFormatter.string(fromByteCount: used, countStyle: .file))
+        Button("Clear Cache", role: .destructive) {
+            AudioCache.shared.clear()
+            refresh()
+        }
+        .task { refresh() }
+    }
+
+    private func refresh() {
+        Task.detached {
+            let size = AudioCache.shared.totalSize()
+            await MainActor.run { used = size }
         }
     }
 }

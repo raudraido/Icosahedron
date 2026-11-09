@@ -4,7 +4,7 @@ import SwiftUI
 /// this phone but another device is playing, shows that instead (with "Play here").
 struct MiniPlayerBar: View {
     @Environment(AppModel.self) private var app
-    @Namespace private var zoom
+    let zoom: Namespace.ID
 
     var body: some View {
         let p = app.player
@@ -23,10 +23,6 @@ struct MiniPlayerBar: View {
                     next: { app.sync.command(to: active, "next") },
                     open: { app.sync.transfer(to: app.sync.deviceId) })
             }
-        }
-        .fullScreenCover(isPresented: Bindable(router).showPlayer) {
-            NowPlayingView()
-                .navigationTransition(.zoom(sourceID: "cover", in: zoom))
         }
     }
 
@@ -76,7 +72,6 @@ struct NowPlayingView: View {
             }
             progress(p)
             controls(p)
-            if !showQueue { volume }
             bottomBar(p)
         }
         .padding(.horizontal, 24)
@@ -214,14 +209,6 @@ struct NowPlayingView: View {
         }
         .buttonStyle(.plain)
         .padding(.vertical, 6)
-    }
-
-    private var volume: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "speaker.fill").font(.footnote).foregroundStyle(.white.opacity(0.7))
-            SystemVolumeSlider().frame(height: 30)
-            Image(systemName: "speaker.wave.3.fill").font(.footnote).foregroundStyle(.white.opacity(0.7))
-        }
     }
 
     private func bottomBar(_ p: PlayerModel) -> some View {

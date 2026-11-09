@@ -27,6 +27,10 @@ final class PlayerModel {
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var itemObserver: AnyCancellable?
     @ObservationIgnored private var seeking = false
+    @ObservationIgnored private let cache = AudioCache.shared
+    /// True when the current item plays from a cached local file (exact timing) rather than a stream.
+    @ObservationIgnored private var playingLocal = false
+    @ObservationIgnored private var handlingFailure = false
     /// A track the user asked to play next; wins over shuffle for the very next step.
     @ObservationIgnored private var nextOverrideId: String?
     @ObservationIgnored private var artworkTask: Task<Void, Never>?
@@ -39,6 +43,7 @@ final class PlayerModel {
         configureSession()
         configureRemoteCommands()
         player.actionAtItemEnd = .advance
+        cache.onCached = { [weak self] id in self?.trackCached(id) }
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 600), queue: .main) { [weak self] time in
             self?.tick(time)
         }
@@ -104,6 +109,10 @@ final class PlayerModel {
 
     func seek(to seconds: Double) {
         let t = max(0, seconds)
+        if let cur = current, cur.directURL == nil, !playingLocal, cache.localURL(for: cur) != nil {
+            load(startPaused: !isPlaying, startAt: t, silent: true) // now from the exact local copy
+            return
+        }
         // The periodic clock keeps reporting the old time until the seek has finished; ignore it
         // meanwhile, otherwise the progress bar jumps back for a moment.
         seeking = true
@@ -212,8 +221,9 @@ final class PlayerModel {
 
     // MARK: Internals
 
-    private func load(startPaused: Bool = false, startAt: Double = 0) {
+    private func load(startPaused: Bool = false, startAt: Double = 0, silent: Bool = false) {
         guard let t = current, let client else { return }
+        playingLocal = t.directURL == nil && cache.localURL(for: t) != nil
         let item = makeItem(t, client: client)
         player.removeAllItems()
         queuedNext = nil
@@ -231,19 +241,50 @@ final class PlayerModel {
         }
         updateNowPlaying(reloadArtwork: true)
         let id = t.id
-        if t.directURL == nil { Task { try? await client.scrobble(id, submission: false) } } // "now playing"
+        if t.directURL == nil, !silent { Task { try? await client.scrobble(id, submission: false) } } // "now playing"
         preloadNext()
+        cacheCurrentSoon()
         onChange?()
     }
 
-    /// A stream item with exact duration and timing. Without it AVPlayer *estimates* the
-    /// position of a seek from the byte offset (wrong for VBR MP3 and files without a seek
-    /// table): it then reports the requested time while the audio comes from somewhere else,
-    /// so the real end of the track arrives at a different time than the progress bar says.
+    /// Streams start at once (no precise-timing scan: that makes AVFoundation read the whole
+    /// file before it plays). A cached local file is cheap to scan, so there it is used: seeks
+    /// then land exactly where the progress bar says, which AVPlayer only estimates for a
+    /// stream of a VBR MP3 or a file without a seek table.
     private func makeItem(_ t: Track, client: SubsonicClient) -> AVPlayerItem {
         if let direct = t.directURL { return AVPlayerItem(url: direct) } // radio: live, no timeline
-        let asset = AVURLAsset(url: client.streamURL(t.id), options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
-        return AVPlayerItem(asset: asset)
+        if let local = cache.localURL(for: t) {
+            cache.touch(t)
+            let asset = AVURLAsset(url: local, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
+            return AVPlayerItem(asset: asset)
+        }
+        return AVPlayerItem(url: client.streamURL(t.id))
+    }
+
+    /// What must stay on disk / keep downloading: the playing track and the queued next one.
+    private func protectedIds() -> Set<String> {
+        var ids = Set<String>()
+        if let t = current { ids.insert(t.id) }
+        if let q = queuedNext, queue.indices.contains(q.index) { ids.insert(queue[q.index].id) }
+        return ids
+    }
+
+    /// The current track is cached too, a few seconds in (a skipped track shouldn't cost a download).
+    private func cacheCurrentSoon() {
+        guard let t = current, let client, t.directURL == nil, cache.localURL(for: t) == nil else { return }
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard let self, self.current?.id == t.id else { return }
+            self.cache.prefetch(t, client: client)
+        }
+    }
+
+    /// A track finished downloading. If it is the queued next one, swap its stream item for the
+    /// local file so the gapless step needs no network.
+    private func trackCached(_ id: String) {
+        if let q = queuedNext, queue.indices.contains(q.index), queue[q.index].id == id {
+            preloadNext(reuseIndex: q.index)
+        }
     }
 
     /// The index that follows the current one under shuffle/repeat, or nil at the end of the queue.
@@ -260,15 +301,20 @@ final class PlayerModel {
     }
 
     /// Puts the next track behind the current one so it is already loaded when this one ends.
-    private func preloadNext() {
+    private func preloadNext(reuseIndex: Int? = nil) {
         if let q = queuedNext {
             player.remove(q.item)
             queuedNext = nil
         }
-        guard let client, playingItem != nil, let idx = nextIndex() else { return }
+        guard let client, playingItem != nil, let idx = reuseIndex ?? nextIndex(), queue.indices.contains(idx) else {
+            cache.setProtected(protectedIds())
+            return
+        }
         let item = makeItem(queue[idx], client: client)
         player.insert(item, after: player.items().last)
         queuedNext = (item, idx)
+        cache.setProtected(protectedIds())
+        cache.prefetch(queue[idx], client: client) // the next track is fetched in full right away
     }
 
     /// The player moved to another item (or ran out). With our queued next item that is the
@@ -293,7 +339,9 @@ final class PlayerModel {
                 let id = t.id
                 Task { try? await client.scrobble(id, submission: false) }
             }
+            playingLocal = current.map { $0.directURL == nil && cache.localURL(for: $0) != nil } ?? false
             preloadNext()
+            cacheCurrentSoon()
             onChange?()
         } else if cur == nil, playingItem != nil {
             // Possibly the end of the queue — but the player can also be empty for a moment
@@ -320,6 +368,14 @@ final class PlayerModel {
         let s = time.seconds
         if s.isFinite, !seeking { position = s }
         if let d = player.currentItem?.duration.seconds, d.isFinite, d > 0 { duration = d }
+        if let item = player.currentItem, item.status == .failed, let cur = current, !handlingFailure {
+            handlingFailure = true
+            if playingLocal { cache.remove(cur) }
+            let resumeAt = position
+            let wasPlaying = isPlaying
+            if playingLocal { load(startPaused: !wasPlaying, startAt: resumeAt, silent: true) } else { isPlaying = false; onChange?() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.handlingFailure = false }
+        }
         // Pick up pauses/resumes that happened outside the app's own buttons.
         let playing = player.timeControlStatus != .paused
         if playing != isPlaying, current != nil {

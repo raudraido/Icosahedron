@@ -19,6 +19,7 @@ struct RootView: View {
 
 struct MainTabs: View {
     @Environment(AppModel.self) private var app
+    @Namespace private var zoom
 
     private var showPlayer: Bool {
         if app.player.current != nil { return true }
@@ -32,7 +33,13 @@ struct MainTabs: View {
             Tab("Library", systemImage: "music.note.square.stack.fill", value: Router.AppTab.library) { LibraryView() }
             Tab("Search", systemImage: "magnifyingglass", value: Router.AppTab.search, role: .search) { SearchView() }
         }
-        .tabViewBottomAccessory(isEnabled: showPlayer) { MiniPlayerBar() }
+        // The player is presented from here, not from the mini player: the system rebuilds the
+        // accessory on every playback tick, which tore the player (and any sheet on it) down.
+        .tabViewBottomAccessory(isEnabled: showPlayer) { MiniPlayerBar(zoom: zoom) }
+        .fullScreenCover(isPresented: Bindable(app.router).showPlayer) {
+            NowPlayingView()
+                .navigationTransition(.zoom(sourceID: "cover", in: zoom))
+        }
         .tabBarMinimizeBehavior(.onScrollDown)
     }
 }

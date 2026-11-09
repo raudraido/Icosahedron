@@ -1102,6 +1102,7 @@ export function TrackTable({
     return [{
       label: "Add to Device Queue", icon: "img/queue.png",
       submenu: others.flatMap((d) => [
+        { label: `${d.name}: Play Now`, icon: "img/sub_play.png", onClick: () => syncActions.enqueue(d.deviceId, [track], "now") },
         { label: `${d.name}: Play Next`, icon: "img/sub_next.png", onClick: () => syncActions.enqueue(d.deviceId, [track], "next") },
         { label: `${d.name}: Add to Queue`, icon: "img/queue.png", onClick: () => syncActions.enqueue(d.deviceId, [track], "end") },
       ]),

@@ -31,6 +31,7 @@ struct MainTabs: View {
         TabView(selection: Bindable(app.router).tab) {
             Tab("Home", systemImage: "house.fill", value: Router.AppTab.home) { HomeView() }
             Tab("Library", systemImage: "music.note.square.stack.fill", value: Router.AppTab.library) { LibraryView() }
+            Tab("Jukebox", systemImage: "hifispeaker.2.fill", value: Router.AppTab.jukebox) { JukeboxTab() }
             Tab("Search", systemImage: "magnifyingglass", value: Router.AppTab.search, role: .search) { SearchView() }
         }
         // The player is presented from here, not from the mini player: the system rebuilds the

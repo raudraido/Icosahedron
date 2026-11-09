@@ -19,6 +19,10 @@ final class SyncModel {
     /// The active device's track and state, for the "playing on …" display.
     var remoteTrack: Track?
     var remotePlaying = false
+    /// The active device's position when its state arrived. Not observed: views that show it
+    /// tick on their own timer instead of re-rendering on every state message.
+    @ObservationIgnored private(set) var remotePositionMs: Double = 0
+    @ObservationIgnored private(set) var remoteStamp = Date()
 
     let deviceId: String
     @ObservationIgnored private var task: URLSessionWebSocketTask?
@@ -174,11 +178,20 @@ final class SyncModel {
     }
 
     private func applyRemoteState(_ s: [String: Any]) {
-        if let q = s["queue"] as? [[String: Any]] { remoteQueue = q.compactMap { Track(wire: $0) } }
+        // Only assign what really changed: this arrives every few seconds, and an assignment
+        // (even of an equal value) re-renders every view that shows it, which made lists flicker.
+        if let q = s["queue"] as? [[String: Any]] {
+            let tracks = q.compactMap { Track(wire: $0) }
+            if tracks != remoteQueue { remoteQueue = tracks }
+        }
         let i = J.int(s, "index") ?? 0
-        remoteIndex = i
-        remoteTrack = remoteQueue.indices.contains(i) ? remoteQueue[i] : nil
-        remotePlaying = (s["playing"] as? Bool) ?? false
+        if i != remoteIndex { remoteIndex = i }
+        let track = remoteQueue.indices.contains(i) ? remoteQueue[i] : nil
+        if track != remoteTrack { remoteTrack = track }
+        let playing = (s["playing"] as? Bool) ?? false
+        if playing != remotePlaying { remotePlaying = playing }
+        remotePositionMs = (s["positionMs"] as? Double) ?? 0
+        remoteStamp = Date()
     }
 
     private func handleCommand(_ cmd: String, _ args: [String: Any]?) {
@@ -201,10 +214,17 @@ final class SyncModel {
         case "enqueue":
             guard let raw = args?["tracks"] as? [[String: Any]] else { return }
             let tracks = raw.compactMap { Track(wire: $0) }
-            if (args?["at"] as? String) == "next" {
-                for t in tracks.reversed() { player.playNext(t) } // keeps the given order
-            } else {
+            let at = (args?["at"] as? String) ?? "end"
+            if player.current == nil { // nothing queued: just start
+                if !tracks.isEmpty { player.play(tracks, at: 0) }
+                return
+            }
+            let first = player.index + 1 // where the first inserted track lands
+            if at == "end" {
                 for t in tracks { player.addToQueue(t) }
+            } else {
+                for t in tracks.reversed() { player.playNext(t) } // keeps the given order
+                if at == "now", player.queue.indices.contains(first) { player.play(player.queue, at: first) }
             }
         case "jump":
             if let i = J.int(args ?? [:], "index"), player.queue.indices.contains(i) {
@@ -290,14 +310,30 @@ final class SyncModel {
         send(["type": "command", "target": target, "cmd": cmd])
     }
 
+    /// The active device's position in seconds, moving on locally while it plays.
+    func remotePosition(at now: Date = Date()) -> Double {
+        let base = remotePositionMs / 1000
+        let pos = remotePlaying ? base + now.timeIntervalSince(remoteStamp) : base
+        let limit = Double(remoteTrack?.duration ?? 0)
+        return limit > 0 ? min(pos, limit) : pos
+    }
+
+    func seek(on target: String, to seconds: Double) {
+        send(["type": "command", "target": target, "cmd": "seek", "args": ["positionMs": Int(seconds * 1000)]])
+        remotePositionMs = seconds * 1000
+        remoteStamp = Date()
+    }
+
     func transfer(to target: String) {
         send(["type": "transfer", "target": target])
     }
 
     // Jukebox: edit another device's queue.
-    func enqueue(on target: String, _ tracks: [Track], next: Bool) {
+    enum QueueAt: String { case now, next, end }
+
+    func enqueue(on target: String, _ tracks: [Track], at: QueueAt) {
         send(["type": "command", "target": target, "cmd": "enqueue",
-              "args": ["at": next ? "next" : "end", "tracks": tracks.map { $0.wire() }]])
+              "args": ["at": at.rawValue, "tracks": tracks.map { $0.wire() }]])
     }
 
     func jump(on target: String, to index: Int) {

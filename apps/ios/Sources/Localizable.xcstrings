@@ -741,6 +741,86 @@
         }
       }
     },
+    "Play Now": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mängi kohe"
+          }
+        }
+      }
+    },
+    "Open Jukebox": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ava jukebox"
+          }
+        }
+      }
+    },
+    "No other device is playing": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ükski teine seade ei mängi"
+          }
+        }
+      }
+    },
+    "Start music on another device, or send a track there from its menu.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Käivita muusika teises seadmes või saada sinna lugu selle menüüst."
+          }
+        }
+      }
+    },
+    "Jukebox": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jukebox"
+          }
+        }
+      }
+    },
+    "Idle": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ootel"
+          }
+        }
+      }
+    },
+    "Paused": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pausil"
+          }
+        }
+      }
+    },
+    "No other devices online.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Teisi seadmeid pole võrgus."
+          }
+        }
+      }
+    },
     "Add to Device Queue": {
       "localizations": {
         "et": {

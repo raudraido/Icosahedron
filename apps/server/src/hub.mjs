@@ -113,7 +113,7 @@ export class Hub {
         if (msg.cmd === "enqueue") {
           const tr = msg.args?.tracks;
           if (!Array.isArray(tr) || !tr.length || tr.length > MAX_ENQUEUE) return;
-          if (msg.args.at !== "next" && msg.args.at !== "end") return;
+          if (!["now", "next", "end"].includes(msg.args.at)) return;
         }
         if ((msg.cmd === "jump" || msg.cmd === "remove") && !Number.isInteger(msg.args?.index)) return;
         const t = room?.get(String(msg.target));

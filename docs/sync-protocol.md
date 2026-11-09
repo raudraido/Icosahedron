@@ -72,7 +72,7 @@ Jukebox commands edit the target's queue (a remote acting as a controller for a 
 
 | `cmd` | `args` |
 |---|---|
-| `enqueue` | `{ at: "next" \| "end", tracks: [track, …] }` — `next` inserts right after the current track in the given order; `end` appends. 1 to 1000 tracks. |
+| `enqueue` | `{ at: "now" \| "next" \| "end", tracks: [track, …] }` — `next` inserts right after the current track in the given order; `now` does the same and starts playing the first inserted track; `end` appends. With an empty queue the tracks just start playing. 1 to 1000 tracks. |
 | `jump` | `{ index }` — play item `index` of the target's queue |
 | `remove` | `{ index }` — remove item `index` from the target's queue |
 

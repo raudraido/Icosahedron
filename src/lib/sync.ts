@@ -80,10 +80,10 @@ export const syncActions = {
   command: (target: string, cmd: string, args?: unknown) => send({ type: "command", target, cmd, args }),
   transfer: (target: string) => send({ type: "transfer", target }),
   /** Jukebox: add tracks to `target`'s queue, right after the current one or at the end. */
-  enqueue: (target: string, tracks: Track[], at: "next" | "end") => {
+  enqueue: (target: string, tracks: Track[], at: "now" | "next" | "end") => {
     send({ type: "command", target, cmd: "enqueue", args: { at, tracks: tracks.map(toWire) } });
     const what = tracks.length === 1 ? `"${tracks[0].title}"` : `${tracks.length} tracks`;
-    notify(`${at === "next" ? "Playing next on" : "Added to queue on"} ${deviceLabel(target)}: ${what}`);
+    notify(`${at === "now" ? "Playing now on" : at === "next" ? "Playing next on" : "Added to queue on"} ${deviceLabel(target)}: ${what}`);
   },
   /** Jukebox: play item `index` of `target`'s queue. */
   jump: (target: string, index: number) => send({ type: "command", target, cmd: "jump", args: { index } }),
@@ -159,8 +159,15 @@ async function handleCommand(cmd: string, args: any): Promise<void> {
       const wire = args?.tracks as Omit<Track, "stream_url">[] | undefined;
       if (!Array.isArray(wire) || !wire.length) break;
       const tracks: Track[] = await Promise.all(wire.map(async (t) => ({ ...t, stream_url: await api.streamUrl(t.id) }) as Track));
-      if (args.at === "next") for (const t of [...tracks].reverse()) s.addTrackNext(t); // keeps the given order
-      else useStore.getState().appendToQueue(tracks);
+      const cur = useStore.getState();
+      if (!cur.queue.length) { cur.playTrack(tracks[0], tracks); break; } // nothing queued: just start
+      if (args.at === "end") { cur.appendToQueue(tracks); break; }
+      const first = cur.currentIndex + 1; // where the first inserted track lands
+      for (const t of [...tracks].reverse()) useStore.getState().addTrackNext(t); // keeps the given order
+      if (args.at === "now") {
+        const q = useStore.getState().queue;
+        if (q[first]) useStore.getState().playTrack(q[first], q);
+      }
       break;
     }
     case "jump": {

@@ -64,27 +64,26 @@ struct NowPlayingView: View {
 
     var body: some View {
         let p = app.player
-        ZStack {
-            background(p.current)
-            VStack(spacing: 14) {
-                header(p)
-                if showQueue {
-                    QueueView()
-                } else {
-                    Spacer(minLength: 0)
-                    artwork(p)
-                    Spacer(minLength: 0)
-                    titleRow(p)
-                }
-                progress(p)
-                controls(p)
-                if !showQueue { volume }
-                bottomBar(p)
+        VStack(spacing: 14) {
+            header(p)
+            if showQueue {
+                QueueView()
+            } else {
+                Spacer(minLength: 0)
+                artwork(p)
+                Spacer(minLength: 0)
+                titleRow(p)
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 14)
-            .padding(.bottom, 8)
+            progress(p)
+            controls(p)
+            if !showQueue { volume }
+            bottomBar(p)
         }
+        .padding(.horizontal, 24)
+        .padding(.top, 14)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background { background(p.current) }
         .foregroundStyle(.white)
         .sheet(isPresented: $showDevices) {
             NavigationStack {
@@ -100,15 +99,16 @@ struct NowPlayingView: View {
     // MARK: Pieces
 
     private func background(_ t: Track?) -> some View {
-        ZStack {
-            Theme.background
-            CoverImage(id: t?.coverArt, size: 200)
-                .scaleEffect(1.6)
-                .blur(radius: 70)
-                .opacity(0.9)
-            Color.black.opacity(0.35)
-        }
-        .ignoresSafeArea()
+        Theme.background
+            .overlay {
+                CoverImage(id: t?.coverArt, size: 200)
+                    .scaleEffect(1.6)
+                    .blur(radius: 70)
+                    .opacity(0.9)
+            }
+            .overlay { Color.black.opacity(0.35) }
+            .clipped()
+            .ignoresSafeArea()
     }
 
     private func header(_ p: PlayerModel) -> some View {

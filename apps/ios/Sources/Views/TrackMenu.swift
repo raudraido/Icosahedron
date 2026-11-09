@@ -17,8 +17,9 @@ struct TrackMenuContent: View {
             if !others.isEmpty {
                 Menu {
                     ForEach(others) { d in
-                        Button { app.sync.enqueue(on: d.id, [track], next: true) } label: { Label(d.name + ": " + String(localized: "Play Next"), systemImage: "text.line.first.and.arrowtriangle.forward") }
-                        Button { app.sync.enqueue(on: d.id, [track], next: false) } label: { Label(d.name + ": " + String(localized: "Add to Queue"), systemImage: "text.line.last.and.arrowtriangle.forward") }
+                        Button { app.sync.enqueue(on: d.id, [track], at: .now) } label: { Label(d.name + ": " + String(localized: "Play Now"), systemImage: "play.fill") }
+                        Button { app.sync.enqueue(on: d.id, [track], at: .next) } label: { Label(d.name + ": " + String(localized: "Play Next"), systemImage: "text.line.first.and.arrowtriangle.forward") }
+                        Button { app.sync.enqueue(on: d.id, [track], at: .end) } label: { Label(d.name + ": " + String(localized: "Add to Queue"), systemImage: "text.line.last.and.arrowtriangle.forward") }
                     }
                 } label: { Label("Add to Device Queue", systemImage: "hifispeaker.2") }
             }

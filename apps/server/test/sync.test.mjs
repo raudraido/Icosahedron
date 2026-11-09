@@ -87,6 +87,9 @@ test("jukebox commands are validated and forwarded", async () => {
   assert.equal(e.args.tracks.length, 2);
   assert.equal(e.args.at, "next");
 
+  b.send({ type: "command", target: "player", cmd: "enqueue", args: { at: "now", tracks } });
+  assert.equal((await a.next((m) => m.type === "command")).args.at, "now");
+
   b.send({ type: "command", target: "player", cmd: "jump", args: { index: 3 } });
   assert.equal((await a.next((m) => m.type === "command")).args.index, 3);
   b.send({ type: "command", target: "player", cmd: "remove", args: { index: 0 } });

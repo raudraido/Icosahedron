@@ -66,12 +66,25 @@ function send(msg: unknown): void {
   if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
 }
 
+/** A short confirmation ("Added to Jukebox") for actions that otherwise show nothing here. */
+export const useSyncNotice = create<{ text: string }>(() => ({ text: "" }));
+let noticeTimer: number | undefined;
+function notify(text: string): void {
+  useSyncNotice.setState({ text });
+  clearTimeout(noticeTimer);
+  noticeTimer = window.setTimeout(() => useSyncNotice.setState({ text: "" }), 2500);
+}
+const deviceLabel = (id: string) => useSync.getState().devices.find((d) => d.deviceId === id)?.name ?? "device";
+
 export const syncActions = {
   command: (target: string, cmd: string, args?: unknown) => send({ type: "command", target, cmd, args }),
   transfer: (target: string) => send({ type: "transfer", target }),
   /** Jukebox: add tracks to `target`'s queue, right after the current one or at the end. */
-  enqueue: (target: string, tracks: Track[], at: "next" | "end") =>
-    send({ type: "command", target, cmd: "enqueue", args: { at, tracks: tracks.map(toWire) } }),
+  enqueue: (target: string, tracks: Track[], at: "next" | "end") => {
+    send({ type: "command", target, cmd: "enqueue", args: { at, tracks: tracks.map(toWire) } });
+    const what = tracks.length === 1 ? `"${tracks[0].title}"` : `${tracks.length} tracks`;
+    notify(`${at === "next" ? "Playing next on" : "Added to queue on"} ${deviceLabel(target)}: ${what}`);
+  },
   /** Jukebox: play item `index` of `target`'s queue. */
   jump: (target: string, index: number) => send({ type: "command", target, cmd: "jump", args: { index } }),
   /** Jukebox: remove item `index` from `target`'s queue. */

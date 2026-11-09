@@ -15,6 +15,10 @@ export function PlayerOnly() {
   const [armed, setArmed] = useState(false);
   const track = useStore((s) => s.queue[s.currentIndex]);
   const playing = useStore((s) => s.playing);
+  const queue = useStore((s) => s.queue);
+  const index = useStore((s) => s.currentIndex);
+  const upNext = queue.slice(index + 1, index + 6);
+  const queueLength = queue.length;
   const status = useSync((s) => s.status);
 
   return (
@@ -29,10 +33,21 @@ export function PlayerOnly() {
       ) : (
         <div style={{ fontSize: 20, color: "var(--text-secondary)" }}>Jukebox ready. Send music here from another device.</div>
       )}
+      {upNext.length > 0 && (
+        <div style={{ width: "min(90vw, 480px)", textAlign: "left" }}>
+          <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>Up next ({queueLength - index - 1} in queue)</div>
+          {upNext.map((t, i) => (
+            <div key={`${t.id}-${i}`} style={{ fontSize: 14, padding: "2px 0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {t.title} <span style={{ color: "var(--text-secondary)" }}>· {t.artist}</span>
+            </div>
+          ))}
+        </div>
+      )}
       <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
         {status === "online" ? "Connected" : status === "connecting" ? "Connecting…" : "Sync offline"}
       </div>
-      {!armed && (
+      {/* Only while the browser could still block audio: nothing playing yet and the page never touched. */}
+      {!armed && !playing && !(navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation?.hasBeenActive && (
         <button
           onClick={() => setArmed(true)}
           className="absolute inset-0"

@@ -37,6 +37,8 @@ struct Track: Identifiable, Hashable {
     var genre: String?
     var bitrate: Int?
     var format: String?
+    /// Set for internet radio: plays this URL instead of a Subsonic stream.
+    var directURL: URL?
 
     /// From a Subsonic `song` / `entry` object.
     init?(subsonic d: [String: Any]) {
@@ -56,6 +58,7 @@ struct Track: Identifiable, Hashable {
         genre = J.str(d, "genre")
         bitrate = J.int(d, "bitRate")
         format = J.str(d, "suffix")
+        directURL = nil
     }
 
     /// From the sync protocol's track object (the web/desktop Track shape).
@@ -76,6 +79,7 @@ struct Track: Identifiable, Hashable {
         genre = J.str(d, "genre")
         bitrate = J.int(d, "bitrate")
         format = J.str(d, "format")
+        directURL = nil
     }
 
     func wire() -> [String: Any] {
@@ -145,4 +149,56 @@ func formatTime(_ seconds: Double) -> String {
     guard seconds.isFinite, seconds >= 0 else { return "0:00" }
     let s = Int(seconds)
     return String(format: "%d:%02d", s / 60, s % 60)
+}
+
+struct RadioStation: Identifiable, Hashable {
+    let id: String
+    var name: String
+    var streamURL: URL
+    var homepage: String?
+
+    init?(subsonic d: [String: Any]) {
+        guard let id = J.str(d, "id"), let s = J.str(d, "streamUrl"), let url = URL(string: s) else { return nil }
+        self.id = id
+        name = J.str(d, "name") ?? "Radio"
+        streamURL = url
+        homepage = J.str(d, "homePageUrl")
+    }
+}
+
+extension Track {
+    init(radio r: RadioStation) {
+        id = "radio-" + r.id
+        title = r.name
+        artist = "Internet radio"
+        artistId = nil
+        album = nil
+        albumId = nil
+        trackNumber = 0
+        discNumber = 0
+        duration = 0
+        coverArt = nil
+        starred = false
+        year = nil
+        genre = nil
+        bitrate = nil
+        format = nil
+        directURL = r.streamURL
+    }
+}
+
+/// A folder or a track in Navidrome's folder (directory) view.
+struct DirEntry: Identifiable, Hashable {
+    let id: String
+    var title: String
+    var isDir: Bool
+    var track: Track?
+
+    init?(subsonic d: [String: Any]) {
+        guard let id = J.str(d, "id") else { return nil }
+        self.id = id
+        title = J.str(d, "title") ?? J.str(d, "name") ?? ""
+        isDir = (d["isDir"] as? Bool) ?? false
+        track = isDir ? nil : Track(subsonic: d)
+    }
 }

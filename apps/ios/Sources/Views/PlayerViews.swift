@@ -28,32 +28,25 @@ struct MiniPlayerBar: View {
 
     private func bar(title: String, subtitle: String, cover: String?, progress: Double, playing: Bool,
                      toggle: @escaping () -> Void, next: @escaping () -> Void, open: @escaping () -> Void) -> some View {
-        VStack(spacing: 0) {
-            GeometryReader { g in
-                Rectangle().fill(Theme.accent).frame(width: g.size.width * min(max(progress, 0), 1), height: 2)
-            }
-            .frame(height: 2)
-            HStack(spacing: 12) {
-                Button(action: open) {
-                    HStack(spacing: 12) {
-                        CoverImage(id: cover, size: 100)
-                            .frame(width: 44, height: 44).clipShape(RoundedRectangle(cornerRadius: 6))
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(title).font(.subheadline.weight(.semibold)).lineLimit(1)
-                            Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                        }
-                        Spacer(minLength: 0)
+        HStack(spacing: 10) {
+            Button(action: open) {
+                HStack(spacing: 10) {
+                    CoverImage(id: cover, size: 100)
+                        .frame(width: 36, height: 36).clipShape(RoundedRectangle(cornerRadius: 6))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                        Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
-                    .contentShape(Rectangle())
+                    Spacer(minLength: 0)
                 }
-                .buttonStyle(.plain)
-                Button(action: toggle) { Image(systemName: playing ? "pause.fill" : "play.fill").font(.title2).frame(width: 40, height: 40) }
-                Button(action: next) { Image(systemName: "forward.fill").font(.title3).frame(width: 40, height: 40) }
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 12).padding(.vertical, 8)
-            .foregroundStyle(.primary)
+            .buttonStyle(.plain)
+            Button(action: toggle) { Image(systemName: playing ? "pause.fill" : "play.fill").font(.title3).frame(width: 36, height: 36) }
+            Button(action: next) { Image(systemName: "forward.fill").font(.title3).frame(width: 36, height: 36) }
         }
-        .background(.ultraThinMaterial)
+        .padding(.horizontal, 12)
+        .foregroundStyle(.primary)
     }
 }
 

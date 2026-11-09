@@ -18,14 +18,22 @@ struct RootView: View {
 }
 
 struct MainTabs: View {
+    @Environment(AppModel.self) private var app
+
+    private var showPlayer: Bool {
+        if app.player.current != nil { return true }
+        if let active = app.sync.activeDeviceId, active != app.sync.deviceId, app.sync.remoteTrack != nil { return true }
+        return false
+    }
+
     var body: some View {
         TabView {
-            HomeView().tabItem { Label("Home", systemImage: "house") }
-            LibraryView().tabItem { Label("Library", systemImage: "square.stack") }
-            SearchView().tabItem { Label("Search", systemImage: "magnifyingglass") }
-            PlaylistsView().tabItem { Label("Playlists", systemImage: "music.note.list") }
-            SettingsView().tabItem { Label("More", systemImage: "ellipsis") }
+            Tab("Home", systemImage: "house.fill") { HomeView() }
+            Tab("Library", systemImage: "music.note.square.stack.fill") { LibraryView() }
+            Tab("Search", systemImage: "magnifyingglass", role: .search) { SearchView() }
         }
+        .tabViewBottomAccessory(isEnabled: showPlayer) { MiniPlayerBar() }
+        .tabBarMinimizeBehavior(.onScrollDown)
     }
 }
 

@@ -1,37 +1,27 @@
 import SwiftUI
 
-struct PlaylistsView: View {
+struct PlaylistsList: View {
     @Environment(AppModel.self) private var app
     @State private var playlists: [Playlist] = []
 
     var body: some View {
-        NavigationStack {
-            List {
-                NavigationLink {
-                    TrackListScreen(title: "Favorites") { try await app.client?.starred() ?? [] }
-                } label: {
-                    Label("Favorites", systemImage: "heart.fill").foregroundStyle(Theme.accent)
-                }
-                ForEach(playlists) { p in
-                    NavigationLink(value: p) {
-                        HStack(spacing: 12) {
-                            CoverImage(id: p.coverArt, size: 100)
-                                .frame(width: 48, height: 48).clipShape(RoundedRectangle(cornerRadius: 6))
-                            VStack(alignment: .leading) {
-                                Text(p.name)
-                                Text("\(p.songCount) tracks").font(.caption).foregroundStyle(.secondary)
-                            }
+        List {
+            ForEach(playlists) { p in
+                NavigationLink(value: p) {
+                    HStack(spacing: 12) {
+                        CoverImage(id: p.coverArt, size: 100)
+                            .frame(width: 48, height: 48).clipShape(RoundedRectangle(cornerRadius: 6))
+                        VStack(alignment: .leading) {
+                            Text(p.name)
+                            Text("\(p.songCount) tracks").font(.caption).foregroundStyle(.secondary)
                         }
                     }
                 }
             }
-            .listStyle(.plain)
-            .navigationTitle("Playlists")
-            .libraryDestinations()
-            .task { playlists = (try? await app.client?.playlists()) ?? [] }
-            .refreshable { playlists = (try? await app.client?.playlists()) ?? [] }
         }
-        .withMiniPlayer()
+        .listStyle(.plain)
+        .task { playlists = (try? await app.client?.playlists()) ?? [] }
+        .refreshable { playlists = (try? await app.client?.playlists()) ?? [] }
     }
 }
 
@@ -92,12 +82,12 @@ struct SearchView: View {
                 if let r = try? await app.client?.search(q) { (artists, albums, tracks) = (r.artists, r.albums, r.tracks) }
             }
         }
-        .withMiniPlayer()
     }
 }
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
@@ -113,9 +103,10 @@ struct SettingsView: View {
                     Button("Sign out", role: .destructive) { app.signOut() }
                 }
             }
-            .navigationTitle("More")
+            .navigationTitle("Account")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
-        .withMiniPlayer()
     }
 }
 

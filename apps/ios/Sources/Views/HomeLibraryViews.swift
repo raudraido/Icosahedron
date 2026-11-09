@@ -29,10 +29,10 @@ struct HomeView: View {
             }
             .navigationTitle("Home")
             .libraryDestinations()
+            .profileButton()
             .task { await load() }
             .refreshable { await load() }
         }
-        .withMiniPlayer()
     }
 
     private func load() async {
@@ -49,29 +49,12 @@ struct HomeView: View {
     }
 }
 
-struct LibraryView: View {
-    enum Mode: String, CaseIterable { case albums = "Albums", artists = "Artists" }
-    @State private var mode: Mode = .albums
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                Picker("", selection: $mode) {
-                    ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .padding([.horizontal, .bottom])
-                if mode == .albums { AlbumsGrid() } else { ArtistsList() }
-            }
-            .navigationTitle("Library")
-            .libraryDestinations()
-        }
-        .withMiniPlayer()
-    }
-}
-
 struct AlbumsGrid: View {
     @Environment(AppModel.self) private var app
+    let type: String
+
+    init(type: String = "alphabeticalByName") { self.type = type }
+
     @State private var albums: [Album] = []
     @State private var done = false
     @State private var loading = false
@@ -96,7 +79,7 @@ struct AlbumsGrid: View {
     private func loadMore() async {
         guard !loading, !done, let c = app.client else { return }
         loading = true
-        if let page = try? await c.albums(type: "alphabeticalByName", size: pageSize, offset: albums.count) {
+        if let page = try? await c.albums(type: type, size: pageSize, offset: albums.count) {
             albums += page
             if page.count < pageSize { done = true }
         }

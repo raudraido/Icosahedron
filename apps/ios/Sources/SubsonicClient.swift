@@ -145,4 +145,37 @@ final class SubsonicClient {
     func scrobble(_ id: String, submission: Bool) async throws {
         _ = try await call("scrobble", [item("id", id), item("submission", submission ? "true" : "false")])
     }
+
+    /// All songs, paged (Navidrome answers an empty search with the whole library).
+    func songs(offset: Int, size: Int) async throws -> [Track] {
+        let r = try await call("search3", [item("query", ""), item("artistCount", "0"), item("albumCount", "0"),
+                                           item("songCount", String(size)), item("songOffset", String(offset))])
+        let s = (r["searchResult3"] as? [String: Any]) ?? [:]
+        return J.arr(s["song"]).compactMap { Track(subsonic: $0) }
+    }
+
+    /// Top level of the folder view.
+    func directoryRoot() async throws -> [DirEntry] {
+        let r = try await call("getIndexes")
+        let root = (r["indexes"] as? [String: Any]) ?? [:]
+        var out = J.arr(root["index"]).flatMap { J.arr($0["artist"]) }.compactMap { d -> DirEntry? in
+            guard var e = DirEntry(subsonic: d) else { return nil }
+            e.isDir = true
+            return e
+        }
+        out += J.arr(root["child"]).compactMap { DirEntry(subsonic: $0) }
+        return out
+    }
+
+    func directory(_ id: String) async throws -> [DirEntry] {
+        let r = try await call("getMusicDirectory", [item("id", id)])
+        let d = (r["directory"] as? [String: Any]) ?? [:]
+        return J.arr(d["child"]).compactMap { DirEntry(subsonic: $0) }
+    }
+
+    func radios() async throws -> [RadioStation] {
+        let r = try await call("getInternetRadioStations")
+        let s = (r["internetRadioStations"] as? [String: Any]) ?? [:]
+        return J.arr(s["internetRadioStation"]).compactMap { RadioStation(subsonic: $0) }
+    }
 }

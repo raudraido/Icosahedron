@@ -134,7 +134,7 @@ final class PlayerModel {
 
     private func load(startPaused: Bool = false, startAt: Double = 0) {
         guard let t = current, let client else { return }
-        let item = AVPlayerItem(url: client.streamURL(t.id))
+        let item = AVPlayerItem(url: t.directURL ?? client.streamURL(t.id))
         player.removeAllItems()
         queuedNext = nil
         playingItem = item
@@ -151,7 +151,7 @@ final class PlayerModel {
         }
         updateNowPlaying(reloadArtwork: true)
         let id = t.id
-        Task { try? await client.scrobble(id, submission: false) } // "now playing"
+        if t.directURL == nil { Task { try? await client.scrobble(id, submission: false) } } // "now playing"
         preloadNext()
         onChange?()
     }
@@ -175,7 +175,7 @@ final class PlayerModel {
             queuedNext = nil
         }
         guard let client, playingItem != nil, let idx = nextIndex() else { return }
-        let item = AVPlayerItem(url: client.streamURL(queue[idx].id))
+        let item = AVPlayerItem(url: queue[idx].directURL ?? client.streamURL(queue[idx].id))
         player.insert(item, after: player.items().last)
         queuedNext = (item, idx)
     }
@@ -184,7 +184,7 @@ final class PlayerModel {
     /// seamlessly — this only catches the model up (index, scrobbles, lock screen).
     private func itemFinished(_ item: AVPlayerItem?) {
         guard let item, item === playingItem else { return }
-        if let t = current, let client {
+        if let t = current, t.directURL == nil, let client {
             let id = t.id
             Task { try? await client.scrobble(id, submission: true) }
         }
@@ -196,7 +196,7 @@ final class PlayerModel {
             duration = Double(current?.duration ?? 0)
             isPlaying = true
             updateNowPlaying(reloadArtwork: true)
-            if let t = current, let client {
+            if let t = current, t.directURL == nil, let client {
                 let id = t.id
                 Task { try? await client.scrobble(id, submission: false) }
             }

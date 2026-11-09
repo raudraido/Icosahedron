@@ -140,16 +140,30 @@ struct TrackListScreen: View {
 }
 
 extension View {
-    /// Mini player above the tab bar, plus the navigation targets every tab shares.
-    func withMiniPlayer() -> some View {
-        safeAreaInset(edge: .bottom, spacing: 0) { MiniPlayerBar() }
-    }
+    /// Top-left account button (opens settings / devices) for the main tabs.
+    func profileButton() -> some View { modifier(ProfileButton()) }
 
+    /// The navigation targets every tab shares.
     func libraryDestinations() -> some View {
         navigationDestination(for: Album.self) { AlbumDetailView(album: $0) }
             .navigationDestination(for: Artist.self) { ArtistDetailView(artist: $0) }
             .navigationDestination(for: Playlist.self) { p in
                 PlaylistScreen(playlist: p)
             }
+            .navigationDestination(for: DirEntry.self) { DirectoryScreen(entry: $0) }
+    }
+}
+
+struct ProfileButton: ViewModifier {
+    @State private var show = false
+
+    func body(content: Content) -> some View {
+        content
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { show = true } label: { Image(systemName: "person.crop.circle.fill").font(.title2) }
+                }
+            }
+            .sheet(isPresented: $show) { SettingsView() }
     }
 }

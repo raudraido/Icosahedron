@@ -3,7 +3,8 @@
 //      six-digit `code` (shown on its screen);
 //   2. a user who is already signed in somewhere enters the code and authorizes it;
 //   3. the device, which polls with its secret, then claims the sign-in.
-// Requests live in memory for ten minutes. Off unless the operator enables it (QUICK_CONNECT=true).
+// Requests live in memory for ten minutes. Off until switched on: by an administrator in Settings
+// (kept in settings.json) or, taking precedence and locking the switch, by QUICK_CONNECT in the environment.
 import { randomBytes, randomInt } from "node:crypto";
 
 export const QC_TIMEOUT_MS = 10 * 60 * 1000;
@@ -13,7 +14,8 @@ const FAILED_AUTHORIZE_PER_MINUTE = 10; // per user: guessing codes
 
 const clip = (v, n = 64) => String(v ?? "").slice(0, n);
 
-export function createQuickConnect({ enabled = false, now = () => Date.now() } = {}) {
+export function createQuickConnect({ enabled = false, locked = false, onChange, now = () => Date.now() } = {}) {
+  let on = !!enabled;
   /** code -> request */
   const requests = new Map();
   /** secret -> { at, auth } */
@@ -34,11 +36,22 @@ export function createQuickConnect({ enabled = false, now = () => Date.now() } =
   }
 
   return {
-    get enabled() { return enabled; },
+    get enabled() { return on; },
+    /** True when the environment decides (QUICK_CONNECT set): the switch in the settings is then read-only. */
+    get locked() { return locked; },
+
+    /** Switches it on or off (an administrator, from Settings). Switching off drops every pending request. */
+    setEnabled(value) {
+      if (locked) return false;
+      on = !!value;
+      if (!on) { requests.clear(); authorized.clear(); }
+      onChange?.(on);
+      return true;
+    },
 
     /** A device asks to connect. Returns {secret, code, expiresIn} or {error}. */
     initiate(device, address = "") {
-      if (!enabled) return { error: "disabled" };
+      if (!on) return { error: "disabled" };
       expire();
       if (requests.size >= MAX_PENDING) return { error: "busy" };
       const hits = recent(initiations, address, 60_000);
@@ -54,7 +67,7 @@ export function createQuickConnect({ enabled = false, now = () => Date.now() } =
 
     /** What the device polls: has someone authorized it yet. null = unknown or expired. */
     status(secret) {
-      if (!enabled) return null;
+      if (!on) return null;
       expire();
       for (const r of requests.values()) {
         if (r.secret === secret) return { authenticated: r.authenticated, code: r.code, device: r.device };
@@ -64,7 +77,7 @@ export function createQuickConnect({ enabled = false, now = () => Date.now() } =
 
     /** A signed-in user authorizes a code (`auth` = their verified {u,t,s}). "ok" | "unknown" | "already" | "rate" | "disabled". */
     authorize(code, auth) {
-      if (!enabled) return "disabled";
+      if (!on) return "disabled";
       expire();
       const fails = recent(failures, auth.u, 60_000);
       if (fails.length >= FAILED_AUTHORIZE_PER_MINUTE) return "rate";
@@ -79,7 +92,7 @@ export function createQuickConnect({ enabled = false, now = () => Date.now() } =
 
     /** The device claims its sign-in once; null when nothing was authorized for the secret. */
     claim(secret) {
-      if (!enabled) return null;
+      if (!on) return null;
       expire();
       const a = authorized.get(secret);
       if (!a) return null;

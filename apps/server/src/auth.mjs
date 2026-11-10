@@ -5,6 +5,21 @@
 
 const API_VERSION = "1.16.1";
 
+/** Whether the (already verified) account is a Navidrome administrator: Subsonic `getUser` reports `adminRole`. */
+export async function isNavidromeAdmin(baseUrl, cred, fetchImpl = fetch) {
+  const q = new URLSearchParams({
+    u: cred.u, t: cred.t, s: cred.s, v: API_VERSION, c: "IcosahedronSync", f: "json", username: cred.u,
+  });
+  try {
+    const res = await fetchImpl(`${baseUrl}/rest/getUser?${q}`, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return false;
+    const body = await res.json();
+    return body?.["subsonic-response"]?.user?.adminRole === true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * @param {string} baseUrl  Navidrome base URL (no trailing slash)
  * @param {{u:string,t:string,s:string}} cred

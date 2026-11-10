@@ -4,25 +4,16 @@ The engine is a single small container (Node 22). It serves the web app, keeps y
 
 ## Quick start
 
-```yaml
-# docker-compose.yml
-services:
-  icosahedron:
-    image: ghcr.io/raudraido/icosahedron-server:latest
-    restart: unless-stopped
-    environment:
-      NAVIDROME_URL: http://navidrome:4533
-    volumes:
-      - ./data:/data
-    ports:
-      - "8080:8080"
-```
+The engine, the web app it serves and the LAN discovery helper are set up **together** by one compose file and one `.env`. Take [docker-compose.example.yml](../apps/server/docker-compose.example.yml) as `docker-compose.yml` and [.env.example](../apps/server/.env.example) as `.env`, set `NAVIDROME_URL` (and `PUBLIC_URL` if you have an address outside your LAN), then:
 
 ```bash
 docker compose up -d
 ```
 
-If Navidrome runs in another compose project, put both on the same Docker network (for example declare the network `external: true` here and use Navidrome's service name in `NAVIDROME_URL`). Open `http://<host>:8080` and sign in with your Navidrome account.
+- **`icosahedron`**: the engine and the web app (one container, one image).
+- **`discovery`**: answers the broadcast of apps looking for the server on the LAN; see [below](#lan-discovery). Delete it if you do not want it.
+
+If Navidrome runs in another compose project, put both on the same Docker network (declare it `external: true` and use Navidrome's service name in `NAVIDROME_URL`). Open `http://<host>:8080` and sign in with your Navidrome account.
 
 Images are published for `linux/amd64` and `linux/arm64`. `latest` is the newest release, `X.Y.Z` pins a version, `edge` follows the `master` branch.
 
@@ -35,7 +26,7 @@ Images are published for `linux/amd64` and `linux/arm64`. `latest` is the newest
 | `DATA_DIR` | `/data` | Where state is kept (mount a volume!) |
 | `WEB_ROOT` | `/app/web` (image) | The web app's static files |
 | `LASTFM_API_KEY`, `LASTFM_API_SECRET` | unset | Enable Last.fm (see below) |
-| `QUICK_CONNECT` | off | `true` lets devices without a keyboard (a TV) sign in with a six-digit code, see [quick-connect.md](quick-connect.md) |
+| `QUICK_CONNECT` | unset | Normally unset: a server administrator switches Quick Connect on and off in **Settings → Sync Server** (kept in `settings.json`). Setting `true` / `false` here decides instead and locks that switch. See [quick-connect.md](quick-connect.md) |
 
 ## Data
 
@@ -46,6 +37,7 @@ Everything is in `DATA_DIR`:
 | `<hash>.json` | One per user: play queue, position, active device, shared settings |
 | `bpm.json` | BPM values (shared by all users) |
 | `lastfm.json` | Last.fm session keys, mode `600` — **protect this volume** |
+| `settings.json` | Server-wide settings an administrator changes in the apps (Quick Connect on or off) |
 
 Back up the directory to keep these; losing it only resets sync state and BPM.
 
@@ -70,21 +62,9 @@ If the proxy puts a login page in front (SSO), exclude `/manifest.webmanifest`, 
 
 ## LAN discovery
 
-So a TV app can find the server by itself (and Quick Connect needs nothing typed), run the same image a second time **on the host network**; a Docker bridge network does not deliver the UDP broadcast the apps send. Add to the compose file:
+So a TV app can find the server by itself (Quick Connect then needs nothing typed), the compose file runs the same image a second time, **on the host network**, as the `discovery` service: a Docker bridge network does not deliver the UDP broadcast the apps send. It listens on UDP 7360 (Jellyfin uses 7359, so both can run) and answers with `PUBLIC_URL` when that is set, else with the server's own address on the asker's subnet and `ENGINE_PORT`.
 
-```yaml
-  discovery:
-    image: ghcr.io/raudraido/icosahedron-server:latest
-    command: ["node", "src/discovery.mjs"]
-    network_mode: host
-    restart: unless-stopped
-    environment:
-      PUBLIC_URL: https://music.example.com   # what the apps should use; without it the LAN address is answered
-      ENGINE_PORT: "8080"                      # the published port of the engine (used without PUBLIC_URL)
-      ENGINE_NAME: Home
-```
-
-It listens on UDP 7360 (Jellyfin uses 7359, so both can run). It is optional.
+Host networking works on Linux; on Docker Desktop (Mac, Windows) the service starts but cannot see your network, so type the address in the app. The service is optional.
 
 ## Last.fm
 

@@ -1,5 +1,9 @@
-# Web engine. See docs/deploy-server.md.
+# Icosahedron server: the sync engine, the web app it serves and the LAN discovery helper, set up
+# together. Copy this file as docker-compose.yml and .env.example as .env, edit .env, then
+#   docker compose up -d
+# See docs/deploy-server.md.
 services:
+  # The engine and the web app (one container). Accounts are your Navidrome accounts.
   icosahedron:
     image: ghcr.io/raudraido/icosahedron-server:latest
     # To build from a checkout instead of pulling the image:
@@ -8,20 +12,31 @@ services:
     #   dockerfile: apps/server/Dockerfile
     restart: unless-stopped
     environment:
-      NAVIDROME_URL: http://navidrome:4533   # accounts = Navidrome accounts
-      # LASTFM_API_KEY: ...                  # optional, enables Last.fm
-      # LASTFM_API_SECRET: ...
+      NAVIDROME_URL: ${NAVIDROME_URL:?set NAVIDROME_URL in .env}
+      LASTFM_API_KEY: ${LASTFM_API_KEY:-}      # optional, enables Last.fm
+      LASTFM_API_SECRET: ${LASTFM_API_SECRET:-}
+      # QUICK_CONNECT: "true"   # normally an administrator switches it in Settings → Sync Server;
+      #                         # setting it here decides instead and locks that switch
     volumes:
       - ./data:/data
     ports:
-      - "8080:8080"   # put a TLS reverse proxy in front for remote use (it must pass WebSocket upgrades)
+      - "${ENGINE_PORT:-8080}:8080"   # put a TLS reverse proxy in front for remote use (it must pass WebSocket upgrades)
+    # If Navidrome runs in another compose project, join its network and use its service name in NAVIDROME_URL:
+    # networks: [navidrome_net]
 
-# Optional: lets the apps find this server on the LAN (see docs/deploy-server.md#lan-discovery).
-#  discovery:
-#    image: ghcr.io/raudraido/icosahedron-server:latest
-#    command: ["node", "src/discovery.mjs"]
-#    network_mode: host
-#    restart: unless-stopped
-#    environment:
-#      PUBLIC_URL: https://music.example.com
-#      ENGINE_PORT: "8080"
+  # Lets the apps find the server on the LAN (the Android TV app asks the network "who is Icosahedron?").
+  # It has to be on the host network: a Docker bridge network does not deliver broadcasts. Optional:
+  # delete this service if you do not want it (the address can always be typed).
+  discovery:
+    image: ghcr.io/raudraido/icosahedron-server:latest
+    command: ["node", "src/discovery.mjs"]
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      PUBLIC_URL: ${PUBLIC_URL:-}              # what the apps should use; empty: the server's LAN address
+      ENGINE_PORT: ${ENGINE_PORT:-8080}
+      ENGINE_NAME: ${ENGINE_NAME:-Icosahedron}
+
+# networks:
+#   navidrome_net:
+#     external: true

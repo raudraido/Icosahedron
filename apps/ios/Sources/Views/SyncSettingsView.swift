@@ -12,6 +12,8 @@ struct SyncSettingsView: View {
     @State private var renameDraft = ""
     @State private var confirm: ClearKind?
     @State private var qcEnabled = false
+    @State private var qcCanChange = false
+    @State private var qcFromEnv = false
     @State private var qcCode = ""
     @State private var qcMessage: String?
     @State private var qcBusy = false
@@ -64,14 +66,25 @@ struct SyncSettingsView: View {
                     Text("Playback off: the other players do not see this phone and cannot control it. Theme, library layout and BPM belong to the desktop and web apps and are not changed from here.")
                 }
 
-                if qcEnabled {
+                if qcEnabled || qcCanChange {
                     Section {
-                        TextField("123456", text: $qcCode)
-                            .keyboardType(.numberPad)
-                            .onChange(of: qcCode) { _, v in qcCode = String(v.filter(\.isNumber).prefix(6)) }
-                        Button("Authorize") { Task { await authorizeQuickConnect() } }
-                            .disabled(qcCode.count != 6 || qcBusy)
-                        if let qcMessage { Text(qcMessage).font(.footnote).foregroundStyle(.secondary) }
+                        if qcCanChange {
+                            Toggle("Allow devices to sign in with a code", isOn: Binding(
+                                get: { qcEnabled },
+                                set: { v in Task { await setQuickConnect(v) } }
+                            ))
+                        }
+                        if qcFromEnv {
+                            Text("Switched by the server's environment (QUICK_CONNECT), not from here.").font(.footnote).foregroundStyle(.secondary)
+                        }
+                        if qcEnabled {
+                            TextField("123456", text: $qcCode)
+                                .keyboardType(.numberPad)
+                                .onChange(of: qcCode) { _, v in qcCode = String(v.filter(\.isNumber).prefix(6)) }
+                            Button("Authorize") { Task { await authorizeQuickConnect() } }
+                                .disabled(qcCode.count != 6 || qcBusy)
+                            if let qcMessage { Text(qcMessage).font(.footnote).foregroundStyle(.secondary) }
+                        }
                     } header: {
                         Text("Quick Connect")
                     } footer: {
@@ -119,11 +132,19 @@ struct SyncSettingsView: View {
         }
     }
 
-    /// Quick Connect is only offered when the server has it switched on.
+    /// Quick Connect: the code entry when the server has it on; the switch for a server administrator.
     private func loadQuickConnect() async {
-        guard let r = try? await app.client?.engine("GET", "/quickconnect/enabled"), r.status == 200,
-              let on = try? JSONSerialization.jsonObject(with: r.data, options: .fragmentsAllowed) as? Bool else { return }
-        qcEnabled = on
+        guard let r = try? await app.client?.engine("GET", "/quickconnect/settings"), r.status == 200,
+              let o = try? JSONSerialization.jsonObject(with: r.data) as? [String: Any] else { return }
+        qcEnabled = (o["enabled"] as? Bool) ?? false
+        qcCanChange = (o["canChange"] as? Bool) ?? false
+        qcFromEnv = (o["source"] as? String) == "env"
+    }
+
+    private func setQuickConnect(_ on: Bool) async {
+        guard let r = try? await app.client?.engine("PUT", "/quickconnect/settings", json: ["enabled": on]), r.status == 200,
+              let o = try? JSONSerialization.jsonObject(with: r.data) as? [String: Any] else { return }
+        qcEnabled = (o["enabled"] as? Bool) ?? on
     }
 
     private func authorizeQuickConnect() async {

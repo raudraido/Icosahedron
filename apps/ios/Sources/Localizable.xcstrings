@@ -821,6 +821,246 @@
         }
       }
     },
+    "Sync Server": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sünkroonimisserver"
+          }
+        }
+      }
+    },
+    "Connection": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ühendus"
+          }
+        }
+      }
+    },
+    "Server": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server"
+          }
+        }
+      }
+    },
+    "Status": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Olek"
+          }
+        }
+      }
+    },
+    "The sync server is the address you signed in with. To use a different one, sign out and sign in with it.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sünkroonimisserver on aadress, millega sisse logisid. Teise kasutamiseks logi välja ja logi sisse selle aadressiga."
+          }
+        }
+      }
+    },
+    "This phone": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "See telefon"
+          }
+        }
+      }
+    },
+    "Save": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salvesta"
+          }
+        }
+      }
+    },
+    "Registered players": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registreeritud pleierid"
+          }
+        }
+      }
+    },
+    "Every player signed in with your account. Players that stay offline for 90 days are removed automatically. Forgetting is housekeeping, not a lock-out: a player that is still signed in comes back when it connects.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kõik sinu kontoga sisse logitud pleierid. 90 päeva offline olnud pleierid eemaldatakse ise. Unustamine on korrastamine, mitte väljalukustamine: pleier, mis on endiselt sisse logitud, tuleb ühendudes tagasi."
+          }
+        }
+      }
+    },
+    "Playback and remote control": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taasesitus ja kaugjuhtimine"
+          }
+        }
+      }
+    },
+    "Lyrics source": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sõnade allikas"
+          }
+        }
+      }
+    },
+    "What this phone keeps in sync": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mida see telefon sünkroonis hoiab"
+          }
+        }
+      }
+    },
+    "Playback off: the other players do not see this phone and cannot control it. Theme, library layout and BPM belong to the desktop and web apps and are not changed from here.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taasesitus väljas: teised pleierid ei näe seda telefoni ega saa seda juhtida. Teema, raamatukogu paigutus ja BPM kuuluvad desktopi ja veebi rakendusele ning siit neid ei muudeta."
+          }
+        }
+      }
+    },
+    "Clear stored queue": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kustuta salvestatud järjekord"
+          }
+        }
+      }
+    },
+    "Clear shared preferences": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kustuta jagatud eelistused"
+          }
+        }
+      }
+    },
+    "Server data": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serveri andmed"
+          }
+        }
+      }
+    },
+    "What the sync server stores for your account. Clearing does not touch anything on your players.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mida sünkroonimisserver sinu konto jaoks hoiab. Kustutamine ei puuduta midagi sinu pleieritel."
+          }
+        }
+      }
+    },
+    "Clear the stored queue?": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kustutada salvestatud järjekord?"
+          }
+        }
+      }
+    },
+    "Clear the shared preferences?": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kustutada jagatud eelistused?"
+          }
+        }
+      }
+    },
+    "Clear": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kustuta"
+          }
+        }
+      }
+    },
+    "Forget": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unusta"
+          }
+        }
+      }
+    },
+    "Online": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Võrgus"
+          }
+        }
+      }
+    },
+    "Last seen": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Viimati nähtud"
+          }
+        }
+      }
+    },
+    "Connected": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ühendatud"
+          }
+        }
+      }
+    },
     "Add to Device Queue": {
       "localizations": {
         "et": {

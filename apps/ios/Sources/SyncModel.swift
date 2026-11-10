@@ -52,6 +52,9 @@ final class SyncModel {
     /// The active device's queue and position, for the jukebox queue view.
     private(set) var remoteQueue: [Track] = []
     private(set) var remoteIndex = 0
+    /// The active device's shuffle / repeat, for the player screen while it is the target.
+    private(set) var remoteShuffle = false
+    private(set) var remoteRepeat = false
     @ObservationIgnored private var lastQueueIds: [String] = []
     @ObservationIgnored private var wasPlaying = false
     @ObservationIgnored private var timer: Timer?
@@ -241,6 +244,10 @@ final class SyncModel {
         if track != remoteTrack { remoteTrack = track }
         let playing = (s["playing"] as? Bool) ?? false
         if playing != remotePlaying { remotePlaying = playing }
+        let shuffle = (s["shuffle"] as? Bool) ?? false
+        if shuffle != remoteShuffle { remoteShuffle = shuffle }
+        let rep = (s["repeat"] as? Bool) ?? false
+        if rep != remoteRepeat { remoteRepeat = rep }
         remotePositionMs = (s["positionMs"] as? Double) ?? 0
         remoteStamp = Date()
     }
@@ -283,6 +290,15 @@ final class SyncModel {
             }
         case "remove":
             if let i = J.int(args ?? [:], "index") { player.removeFromQueue(at: i) }
+        case "shuffle":
+            if let on = args?["on"] as? Bool, player.shuffle != on { player.toggleShuffle() }
+        case "repeat": // iOS loops the queue
+            if let on = args?["on"] as? Bool, player.repeatAll != on { player.toggleRepeat() }
+        case "move":
+            if let from = J.int(args ?? [:], "from"), let to = J.int(args ?? [:], "to"),
+               player.queue.indices.contains(from), player.queue.indices.contains(to), from != to {
+                player.moveInQueue(from: IndexSet(integer: from), to: to > from ? to + 1 : to)
+            }
         default:
             break
         }
@@ -349,6 +365,7 @@ final class SyncModel {
         let ids = player.queue.map { $0.id }
         var state: [String: Any] = [
             "index": player.index, "positionMs": Int(player.position * 1000), "playing": player.isPlaying,
+            "shuffle": player.shuffle, "repeat": player.repeatAll,
         ]
         if ids != lastQueueIds || !isActiveHere {
             state["queue"] = player.queue.map { $0.wire() }
@@ -416,6 +433,18 @@ final class SyncModel {
     func enqueue(on target: String, _ tracks: [Track], at: QueueAt) {
         send(["type": "command", "target": target, "cmd": "enqueue",
               "args": ["at": at.rawValue, "tracks": tracks.map { $0.wire() }]])
+    }
+
+    func shuffle(on target: String, _ on: Bool) {
+        send(["type": "command", "target": target, "cmd": "shuffle", "args": ["on": on]])
+    }
+
+    func repeatMode(on target: String, _ on: Bool) {
+        send(["type": "command", "target": target, "cmd": "repeat", "args": ["on": on]])
+    }
+
+    func move(on target: String, from: Int, to: Int) {
+        send(["type": "command", "target": target, "cmd": "move", "args": ["from": from, "to": to]])
     }
 
     func jump(on target: String, to index: Int) {

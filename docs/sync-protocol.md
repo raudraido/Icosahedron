@@ -62,7 +62,7 @@ Close codes: `4001` no hello in time, `4002` first message was not `hello`, `400
 
 ```json
 { "queue": [ /* track objects */ ], "index": 3, "positionMs": 83000,
-  "playing": true, "volume": 80, "updatedAt": 1731150000000 }
+  "playing": true, "volume": 80, "shuffle": false, "repeat": false, "updatedAt": 1731150000000 }
 ```
 
 - `queue` is sent **only when it changed**; otherwise it is omitted and the engine keeps the stored one (a broadcast `state` also omits it when unchanged).
@@ -86,6 +86,9 @@ Jukebox commands edit the target's queue (a remote acting as a controller for a 
 | `enqueue` | `{ at: "now" \| "next" \| "end", tracks: [track, …] }` — `next` inserts right after the current track in the given order; `now` does the same and starts playing the first inserted track; `end` appends. With an empty queue the tracks just start playing. 1 to 1000 tracks. |
 | `jump` | `{ index }` — play item `index` of the target's queue |
 | `remove` | `{ index }` — remove item `index` from the target's queue |
+| `move` | `{ from, to }` — move queue item `from` so that it ends up at index `to` (array-move semantics) |
+| `shuffle` | `{ on: boolean }` |
+| `repeat` | `{ on: boolean }` — each player applies its own meaning: the desktop repeats the track, the iOS app loops the queue |
 
 Invalid arguments are dropped by the engine. `index` refers to the queue the controller last saw (from `state`), so a stale view can hit the wrong item; the target ignores out-of-range indexes.
 

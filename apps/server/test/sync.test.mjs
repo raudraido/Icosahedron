@@ -90,6 +90,15 @@ test("jukebox commands are validated and forwarded", async () => {
   b.send({ type: "command", target: "player", cmd: "enqueue", args: { at: "now", tracks } });
   assert.equal((await a.next((m) => m.type === "command")).args.at, "now");
 
+  b.send({ type: "command", target: "player", cmd: "shuffle", args: { on: "yes" } }); // not a boolean: dropped
+  b.send({ type: "command", target: "player", cmd: "move", args: { from: 1 } }); // no target index: dropped
+  b.send({ type: "command", target: "player", cmd: "shuffle", args: { on: true } });
+  assert.deepEqual((await a.next((m) => m.type === "command")).args, { on: true });
+  b.send({ type: "command", target: "player", cmd: "repeat", args: { on: false } });
+  assert.equal((await a.next((m) => m.type === "command")).cmd, "repeat");
+  b.send({ type: "command", target: "player", cmd: "move", args: { from: 2, to: 0 } });
+  assert.deepEqual((await a.next((m) => m.type === "command")).args, { from: 2, to: 0 });
+
   b.send({ type: "command", target: "player", cmd: "jump", args: { index: 3 } });
   assert.equal((await a.next((m) => m.type === "command")).args.index, 3);
   b.send({ type: "command", target: "player", cmd: "remove", args: { index: 0 } });

@@ -242,11 +242,13 @@ final class PlayerModel {
     func toggleShuffle() {
         shuffle.toggle()
         preloadNext() // the track queued behind the current one may no longer be the right one
+        onChange?()
     }
 
     func toggleRepeat() {
         repeatAll.toggle()
         preloadNext()
+        onChange?()
     }
 
     func stop() {

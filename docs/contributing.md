@@ -13,7 +13,7 @@ native/audio-engine/   Rust audio engine (desktop)
 apps/server/           web engine (Node, Docker)
 apps/ios/              iOS app (SwiftUI, XcodeGen)
 .github/workflows/     build.yml (desktop), ios.yml, server.yml
-scripts/               bump-version.mjs, AppStream generation
+scripts/               bump-version.mjs (per product), release-notes.mjs, AppStream generation
 ```
 
 ## Working on each part

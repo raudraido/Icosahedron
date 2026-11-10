@@ -54,7 +54,7 @@ xcodegen generate          # creates Icosahedron.xcodeproj from project.yml
 open Icosahedron.xcodeproj # build and run from Xcode (iOS 26 SDK)
 ```
 
-The version comes from the repository's root `package.json`, so the whole project shares one version.
+The version is in `apps/ios/VERSION` (the iOS app has its own version and releases under the tag `ios-vX.Y.Z`); see [releasing.md](releasing.md).
 
 ## Code map
 

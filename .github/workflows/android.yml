@@ -1,13 +1,13 @@
 name: Android TV build
 
 # Builds the Google TV / Android TV app (apps/android-tv) into an APK on a GitHub runner. On a `v*`
-# tag the APK is attached to the release. Without the signing secrets it is signed with the debug
+# tag the APK is published as its own release (tag `android-vX.Y.Z`, which must match apps/android-tv/VERSION). Without the signing secrets it is signed with the debug
 # key (an update then needs the old app uninstalled first); see docs/android-tv.md for a fixed key.
 on:
   push:
     branches: [master]
-    paths: ["apps/android-tv/**", "package.json", ".github/workflows/android.yml"]
-    tags: ["v*"]
+    paths: ["apps/android-tv/**", ".github/workflows/android.yml"]
+    tags: ["android-v*"]
   pull_request:
     paths: ["apps/android-tv/**", ".github/workflows/android.yml"]
   workflow_dispatch:
@@ -22,10 +22,14 @@ jobs:
 
       - name: Version
         run: |
-          VERSION="$(node -p "require('./package.json').version")"
+          VERSION="$(tr -d '[:space:]' < apps/android-tv/VERSION)"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          # 0.15.9 -> 1509: grows with every release, which is what an APK update needs
-          echo "VERSION_CODE=$(node -p "const [a,b,c]=require('./package.json').version.split('.').map(Number); a*10000+b*100+c")" >> "$GITHUB_ENV"
+          # 0.1.0 -> 100, 0.15.9 -> 1509: grows with every release, which is what an APK update needs
+          echo "VERSION_CODE=$(node -p "const [a,b,c]='$VERSION'.split('.').map(Number); a*10000+b*100+c")" >> "$GITHUB_ENV"
+
+      - name: The tag matches the version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: test "${GITHUB_REF_NAME#android-v}" = "$VERSION"
 
       - uses: actions/setup-java@v4
         with:
@@ -72,8 +76,14 @@ jobs:
           name: android-build-log
           path: apps/android-tv/build.log
 
-      - name: Attach to the release
+      - name: Release notes
+        if: startsWith(github.ref, 'refs/tags/')
+        run: node scripts/release-notes.mjs apps/android-tv/CHANGELOG.md "$VERSION" > release-notes.md
+
+      - name: Publish the release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
+          name: Android TV app ${{ env.VERSION }}
+          body_path: release-notes.md
           files: apps/android-tv/Icosahedron-TV-*.apk

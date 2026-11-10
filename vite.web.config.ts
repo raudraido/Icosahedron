@@ -6,7 +6,8 @@ import tailwindcss from "@tailwindcss/vite";
 
 // Browser build served by apps/server (the web engine). The Electron build is
 // electron.vite.config.ts; both share src/ through the platform adapter.
-const version: string = JSON.parse(readFileSync(resolve(__dirname, "package.json"), "utf8")).version;
+// The web app is served by the server image and is released with it: it carries the server's version.
+const version: string = JSON.parse(readFileSync(resolve(__dirname, "apps/server/package.json"), "utf8")).version;
 
 export default defineConfig({
   root: ".",

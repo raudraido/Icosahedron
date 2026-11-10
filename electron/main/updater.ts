@@ -63,11 +63,15 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
   const suffix = assetSuffixForPlatform();
   if (!suffix) return null;
   try {
-    const resp = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
+    // The repository also releases the iOS, Android TV and server apps (tags ios-v*, android-v*,
+    // server-v*), so "latest" could be any of them: pick the newest desktop release (tag vX.Y.Z).
+    const resp = await fetch(`https://api.github.com/repos/${REPO}/releases?per_page=30`, {
       headers: { "User-Agent": "Icosahedron-App", Accept: "application/vnd.github+json" },
     });
     if (!resp.ok) return null;
-    const data = await resp.json();
+    const releases: Array<{ tag_name?: string; draft?: boolean; prerelease?: boolean }> = await resp.json();
+    const data = releases.find((r) => !r.draft && !r.prerelease && /^v\d+\.\d+\.\d+$/.test(r.tag_name ?? "")) as any;
+    if (!data) return null;
     const tag: string = data.tag_name ?? "";
     if (!tag || !isNewer(tag, app.getVersion())) return null;
     const asset = (data.assets ?? []).find(

@@ -81,7 +81,7 @@ The native audio engine can be rebuilt on its own with `npm run build:native` â€
 
 ## Releases
 
-One version for everything. A `v*` tag builds and publishes the desktop packages, the iOS `.ipa`, the Android TV APK and the Docker image. See [docs/releasing.md](docs/releasing.md) and the [CHANGELOG](CHANGELOG.md).
+Every app has its own version and its own release: a `vX.Y.Z` tag publishes the desktop app, `server-vX.Y.Z` the Docker image (engine and web app), `ios-vX.Y.Z` the iOS `.ipa`, `android-vX.Y.Z` the Android TV APK. See [docs/releasing.md](docs/releasing.md), [docs/compatibility.md](docs/compatibility.md) and the changelogs ([desktop](CHANGELOG.md), [server](apps/server/CHANGELOG.md), [iOS](apps/ios/CHANGELOG.md), [Android TV](apps/android-tv/CHANGELOG.md)).
 
 ## License
 

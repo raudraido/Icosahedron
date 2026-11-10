@@ -7,7 +7,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.core.content.ContextCompat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -110,10 +109,15 @@ object Playback {
             .build()
     }
 
-    /** Keeps the media service running so playback survives leaving the app (it may refuse from the background). */
+    /**
+     * Keeps the media service running so playback survives leaving the app (it may refuse from the
+     * background). A plain start, not startForegroundService: Media3 moves the service to the foreground
+     * itself once music plays, and a foreground start that is not answered with startForeground within a
+     * few seconds (the track is still buffering, or fails) kills the app.
+     */
     private fun ensureService() {
         try {
-            ContextCompat.startForegroundService(appContext, Intent(appContext, PlaybackService::class.java))
+            appContext.startService(Intent(appContext, PlaybackService::class.java))
         } catch (_: Exception) { /* playback itself does not depend on it */ }
     }
 

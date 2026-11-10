@@ -2,6 +2,12 @@
 
 A native app (Kotlin, Jetpack Compose for TV, Media3) for Google TV and Android TV: [docs/android-tv.md](../../docs/android-tv.md).
 
+## 0.1.2
+
+**Fixes the app closing by itself** when you start a song, seen on Android 14 (Chromecast with Google TV). Install it over 0.1.1: the signing key is the same.
+
+- **No more crash when playing.** The playback service was started as a foreground service and Android ended the app when it was not promoted within a few seconds (while the track was still loading). It is started normally now and Android's media notification takes it to the foreground when music plays.
+
 ## 0.1.1
 
 Finds the server in more situations. Needs the [server](../server/CHANGELOG.md) 0.16.4 for mDNS.

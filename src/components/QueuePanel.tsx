@@ -17,6 +17,7 @@ import { LyricsPanel } from "./LyricsPanel";
 import { ScrollThumb } from "./ScrollThumb";
 import { ArtistInfoPanel } from "./ArtistInfoPanel";
 import { SearchBox } from "./SearchBox";
+import { ProfileButton } from "./Avatar";
 import { ResizeHandle } from "./ResizeHandle";
 import { loadJSON, saveJSON } from "./TrackTable";
 
@@ -532,6 +533,7 @@ export function QueuePanel() {
           placeholder="Search queue…"
           expandedWidth={122}
         />
+        <ProfileButton />
       </div>
 
       {/* All three tabs stay mounted (just hidden via display:none) rather

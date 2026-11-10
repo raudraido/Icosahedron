@@ -1,4 +1,6 @@
 import { platform } from "../platform";
+import type { NdUser } from "./subsonic/client";
+export type { NdUser };
 
 function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   return platform.invoke<T>(cmd, args);
@@ -298,6 +300,14 @@ export const api = {
     invoke<void>("set_favorite", { itemId, active, idParam }),
   createShare: (itemId: string, resourceType: "song" | "album" | "playlist", expiresDays: number | null, downloadable: boolean) =>
     invoke<string>("create_share", { itemId, resourceType, expiresDays, downloadable }),
+
+  // User administration (administrators only; Settings → Users).
+  usersIsAdmin: () => invoke<boolean>("users_is_admin"),
+  usersList: () => invoke<NdUser[]>("users_list"),
+  usersCreate: (u: { userName: string; name: string; email: string; password: string; isAdmin: boolean }) => invoke<NdUser>("users_create", { u }),
+  usersUpdate: (id: string, patch: { name?: string; email?: string; isAdmin?: boolean; password?: string }, current: NdUser) =>
+    invoke<NdUser>("users_update", { id, patch, current }),
+  usersDelete: (id: string) => invoke<void>("users_delete", { id }),
 
   scrobble: (trackId: string, submission: boolean) =>
     invoke<void>("scrobble", { trackId, submission }),

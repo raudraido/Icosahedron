@@ -37,7 +37,7 @@ Everything is in `DATA_DIR`:
 | `<hash>.json` | One per user: play queue, position, active device, shared settings |
 | `bpm.json` | BPM values (shared by all users) |
 | `lastfm.json` | Last.fm session keys, mode `600` — **protect this volume** |
-| `avatar-<hash>.bin` | A user's profile picture (set in the apps, up to 512 kB) |
+| `avatar-<hash>.bin` | A user's profile picture (set in the apps, up to 512 kB). Every signed-in user can look at anyone's (`GET /avatar/<user name>`), only the owner changes it |
 | `settings.json` | Server-wide settings an administrator changes in the apps (Quick Connect on or off) |
 
 Back up the directory to keep these; losing it only resets sync state and BPM.

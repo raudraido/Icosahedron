@@ -19,7 +19,7 @@ export function createEngine(getAuth: () => Promise<{ u: string; t: string; s: s
     try {
       return await fetch(root + path, {
         ...init,
-        headers: { ...(init.headers as Record<string, string>), authorization: await header(), "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...(init.headers as Record<string, string>), authorization: await header() },
         signal: AbortSignal.timeout(10000),
       });
     } catch { return null; } // engine offline — callers fall back to local behaviour

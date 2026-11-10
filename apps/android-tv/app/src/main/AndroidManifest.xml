@@ -2,6 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Search by voice: the microphone of the remote, through the speech recognizer -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <!-- Finding the server with mDNS (NsdManager) -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
@@ -13,6 +16,10 @@
     <!-- A TV app: needs the leanback launcher, no touch screen. -->
     <uses-feature android:name="android.software.leanback" android:required="true" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+
+    <queries>
+        <intent><action android:name="android.speech.RecognitionService" /></intent>
+    </queries>
 
     <application
         android:name=".App"

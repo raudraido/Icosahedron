@@ -11,6 +11,7 @@
 // toast offers the reload so music is never cut off.
 import { create } from "zustand";
 import { useStore } from "../store";
+import { keyEnabled, syncOptions, PREF_GROUPS } from "./syncOptions";
 
 export const SYNC_KEYS: readonly string[] = [
   "icosahedron_theme", "icosahedron_custom_themes", "eq_settings",
@@ -31,13 +32,34 @@ let enabled = false; // only after the first reconcile, so boot-time writes aren
 let applying = false; // our own writes must not echo back
 let timer: number | undefined;
 let patched = false;
+/** What the engine last held. The blob is replaced whole, so keys this player does not manage
+ *  (another player's groups, keys it does not know) are sent back exactly as they were. */
+let lastRemote: Record<string, string> = {};
 
+const anyGroupOn = () => PREF_GROUPS.some((g) => syncOptions().prefs[g]);
+
+/** The synced keys this player shares (the groups switched on in Settings > Sync Server). */
 function snapshot(): Record<string, string> {
   const out: Record<string, string> = {};
   for (const k of SYNC_KEYS) {
+    if (!keyEnabled(k)) continue;
     try { const v = localStorage.getItem(k); if (v !== null) out[k] = v; } catch { /* storage unavailable */ }
   }
   return out;
+}
+
+/** Only the part of a remote blob that this player takes over. */
+function enabledOf(values: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const k of SYNC_KEYS) if (keyEnabled(k) && typeof values[k] === "string") out[k] = values[k];
+  return out;
+}
+
+/** The whole blob to send: what the engine held for the keys we do not manage, plus our own. */
+function fullValues(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(lastRemote)) if (!keyEnabled(k)) out[k] = v;
+  return { ...out, ...snapshot() };
 }
 
 const same = (a: Record<string, string>, b: Record<string, string>) => {
@@ -46,9 +68,13 @@ const same = (a: Record<string, string>, b: Record<string, string>) => {
 };
 
 function schedulePublish() {
-  if (!enabled || applying) return;
+  if (!enabled || applying || !anyGroupOn()) return;
   clearTimeout(timer);
-  timer = window.setTimeout(() => send?.({ values: snapshot(), at: Date.now() }), 1000);
+  timer = window.setTimeout(() => {
+    const values = fullValues();
+    lastRemote = values;
+    send?.({ values, at: Date.now() });
+  }, 1000);
 }
 
 /** Watches writes to the synced keys; installed once. */
@@ -58,11 +84,11 @@ function patchStorage() {
   const set = Storage.prototype.setItem, remove = Storage.prototype.removeItem;
   Storage.prototype.setItem = function (k: string, v: string) {
     set.call(this, k, v);
-    if (this === localStorage && KEYSET.has(k)) schedulePublish();
+    if (this === localStorage && KEYSET.has(k) && keyEnabled(k)) schedulePublish();
   };
   Storage.prototype.removeItem = function (k: string) {
     remove.call(this, k);
-    if (this === localStorage && KEYSET.has(k)) schedulePublish();
+    if (this === localStorage && KEYSET.has(k) && keyEnabled(k)) schedulePublish();
   };
 }
 
@@ -70,6 +96,7 @@ function applyRemote(values: Record<string, string>) {
   applying = true;
   try {
     for (const k of SYNC_KEYS) {
+      if (!keyEnabled(k)) continue; // a group this player does not share is left alone
       if (k in values && typeof values[k] === "string") localStorage.setItem(k, values[k]);
       else localStorage.removeItem(k);
     }
@@ -89,13 +116,16 @@ function applyRemote(values: Record<string, string>) {
 export function reconcileSettings(remote: SettingsBlob | null, sendFn: (b: SettingsBlob) => void) {
   send = sendFn;
   patchStorage();
-  const local = snapshot();
-  const rv = remote?.values;
-  if (!rv || !Object.keys(rv).length) {
-    // The engine has nothing yet: this device's preferences become the shared ones.
-    if (Object.keys(local).length) sendFn({ values: local, at: Date.now() });
-  } else if (!same(local, rv)) {
-    applyRemote(rv);
+  lastRemote = { ...(remote?.values ?? {}) };
+  if (anyGroupOn()) {
+    const local = snapshot();
+    const rv = remote?.values;
+    if (!rv || !Object.keys(rv).length) {
+      // The engine has nothing yet: this device's preferences become the shared ones.
+      if (Object.keys(local).length) { lastRemote = local; sendFn({ values: local, at: Date.now() }); }
+    } else if (!same(local, enabledOf(rv))) {
+      applyRemote(rv);
+    }
   }
   enabled = true;
 }
@@ -103,8 +133,24 @@ export function reconcileSettings(remote: SettingsBlob | null, sendFn: (b: Setti
 /** Another device changed its preferences. */
 export function remoteSettingsChanged(remote: SettingsBlob | null) {
   const rv = remote?.values;
-  if (!rv || same(snapshot(), rv)) return;
+  if (rv) lastRemote = { ...rv };
+  if (!rv || !anyGroupOn() || same(snapshot(), enabledOf(rv))) return;
   applyRemote(rv);
+}
+
+/** A preference group was switched on or off: when it was switched on, take over what the engine holds for it. */
+export function settingsOptionsChanged() {
+  if (!enabled || !anyGroupOn()) return;
+  const rv = enabledOf(lastRemote);
+  // The engine holds nothing for the groups now on: this player's values become the shared ones
+  // (never wipe local values just because nobody has shared that group yet).
+  if (!Object.keys(rv).length) { schedulePublish(); return; }
+  if (!same(snapshot(), rv)) applyRemote(lastRemote);
+}
+
+/** The engine's stored preferences were wiped; keep sending only what we manage. */
+export function remoteSettingsCleared() {
+  lastRemote = {};
 }
 
 export function settingsDisconnected() {

@@ -7,6 +7,7 @@
 import type { Platform } from "./index";
 import { createEngine } from "./engineApi";
 import { getEngineBase } from "./syncUrl";
+import { syncOptions } from "../lib/syncOptions";
 
 type Conn = { username: string; historyEnabled: boolean; scrobbleEnabled: boolean } | null;
 type EngineState = { configured: boolean; apiKey: string; conn: Conn };
@@ -48,7 +49,7 @@ export function withEngineLastFm(base: Platform): Platform {
   return {
     ...base,
     invoke: async (cmd, args) => {
-      if (!cmd.startsWith("lastfm_")) return base.invoke(cmd, args);
+      if (!cmd.startsWith("lastfm_") || !syncOptions().lastfm) return base.invoke(cmd, args);
       const st = await state();
       const viaEngine = !!st?.conn; // the engine holds the connection: it does the scrobbling
       switch (cmd) {

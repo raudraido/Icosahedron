@@ -3,6 +3,7 @@
 // app's native analyzer). A player that can't detect (browser) just reads.
 import type { Platform } from "./index";
 import { createEngine } from "./engineApi";
+import { syncOptions } from "../lib/syncOptions";
 
 export function withEngineBpm(base: Platform): Platform {
   const engine = createEngine(() => base.invoke("sync_auth"));
@@ -12,6 +13,7 @@ export function withEngineBpm(base: Platform): Platform {
   return {
     ...base,
     invoke: async (cmd, args) => {
+      if (!syncOptions().bpm) return base.invoke(cmd, args); // BPM sync is switched off on this player
       switch (cmd) {
         case "get_bpm": {
           const id = String((args as any)?.trackId);

@@ -431,16 +431,6 @@
         }
       }
     },
-    "Scrobbles go through your server, so one connection covers all your devices. Plays made offline are sent later. If your Navidrome is also linked to Last.fm, a play may be counted twice.": {
-      "localizations": {
-        "et": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Scrobble'id lähevad läbi sinu serveri, nii et üks ühendus katab kõik sinu seadmed. Võrguta kuulatud lood saadetakse hiljem. Kui sinu Navidrome on samuti Last.fm-iga seotud, võidakse üks kuulamine lugeda kaks korda."
-          }
-        }
-      }
-    },
     "Lists": {
       "localizations": {
         "et": {
@@ -617,16 +607,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pole saadaval (vajab veebimootorit)"
-          }
-        }
-      }
-    },
-    "Not set up on the server": {
-      "localizations": {
-        "et": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Serveris seadistamata"
           }
         }
       }
@@ -2217,6 +2197,86 @@
           "stringUnit": {
             "state": "translated",
             "value": "Valjus"
+          }
+        }
+      }
+    },
+    "Scrobbles go through your server, so one connection covers all your devices. If the Icosahedron desktop app is connected to Last.fm, it shares that connection with the server and it shows up here. Plays made offline are sent later. If your Navidrome is also linked to Last.fm, a play may be counted twice.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scrobble'id lähevad läbi sinu serveri, nii et üks ühendus katab kõik seadmed. Kui Icosahedroni desktop-rakendus on Last.fm-iga ühendatud, jagab see ühenduse serveriga ja see ilmub siia. Ilma võrguta kuulatud lood saadetakse hiljem. Kui ka sinu Navidrome on Last.fm-iga seotud, võib esitus kahekordselt kirja minna."
+          }
+        }
+      }
+    },
+    "The sync server has no Last.fm API key yet. Update it to 0.16.2 or newer, or set LASTFM_API_KEY and LASTFM_API_SECRET on it.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sünkroonimisserveril pole veel Last.fm API võtit. Uuenda see versioonile 0.16.2 või uuemale või sea sellel LASTFM_API_KEY ja LASTFM_API_SECRET."
+          }
+        }
+      }
+    },
+    "Not reachable": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pole kättesaadav"
+          }
+        }
+      }
+    },
+    "Add photo": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lisa foto"
+          }
+        }
+      }
+    },
+    "Change photo": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muuda fotot"
+          }
+        }
+      }
+    },
+    "That picture could not be used": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seda pilti ei saanud kasutada"
+          }
+        }
+      }
+    },
+    "The sync server needs updating (0.16.2 or newer)": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sünkroonimisserver vajab uuendamist (0.16.2 või uuem)"
+          }
+        }
+      }
+    },
+    "The server did not accept the picture": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server ei võtnud pilti vastu"
           }
         }
       }

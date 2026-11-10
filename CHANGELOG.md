@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.16.2
+
+**Update the server first** (0.16.2), then this app. The Last.fm connection you already made here is now shared with the server.
+
+- **Your Last.fm connection reaches all your devices.** With a sync server, the desktop app hands its existing Last.fm connection to the server once; the server then scrobbles for every device (phone, web, TV) and they all show "Connected as …" without approving again. The desktop stops scrobbling by itself while the server does it, so nothing is counted twice. Disconnecting here disconnects it everywhere. Without a sync server nothing changes.
+
 ## 0.16.1
 
 A small addition to Quick Connect. **Update the server first** (0.16.1), then this app; the switch needs it.

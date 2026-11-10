@@ -9,6 +9,7 @@ import { isProxied, proxyToNavidrome } from "./proxy.mjs";
 import { createBpmStore } from "./bpm.mjs";
 import { createLastFm } from "./lastfm.mjs";
 import { createQuickConnect } from "./quickconnect.mjs";
+import { createAvatarStore, imageType, AVATAR_MAX_BYTES } from "./avatar.mjs";
 
 // The engine's own version (apps/server/package.json; the web app it serves is the same product) and
 // the sync protocol it speaks: the apps check compatibility by protocol, not by version number.
@@ -24,7 +25,7 @@ const MIME = {
 /**
  * @param {{navidromeUrl:string, webRoot?:string, store:any, verify?:Function}} opts
  */
-export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmStore(), lastfm = createLastFm({}), verify = verifySubsonic, isAdmin = isNavidromeAdmin, quickConnect = createQuickConnect() }) {
+export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmStore(), lastfm = createLastFm({}), verify = verifySubsonic, isAdmin = isNavidromeAdmin, quickConnect = createQuickConnect(), avatars = createAvatarStore() }) {
   const hub = new Hub(store);
   const authCache = new Map(); // "u|t|s" -> expiry; tokens stay valid, so re-verifying each call is wasted
 
@@ -70,6 +71,11 @@ export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmSt
     if (!lastfm.configured) { res.writeHead(503).end(); return; }
     try {
       if (route === "/connection" && m === "GET") return json(200, lastfm.connection(user));
+      if (route === "/connection" && m === "PUT") {
+        const b = await readJson(req);
+        if (typeof b.sessionKey !== "string" || !/^[\w-]{8,64}$/.test(b.sessionKey)) { res.writeHead(400).end(); return; }
+        return json(200, await lastfm.importSession(user, b));
+      }
       if (route === "/connection" && m === "DELETE") { lastfm.disconnect(user); res.writeHead(204).end(); return; }
       if (route === "/token" && m === "POST") return json(200, await lastfm.startAuth());
       if (route === "/session" && m === "POST") {
@@ -173,12 +179,39 @@ export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmSt
     res.writeHead(405).end();
   }
 
+  // The profile picture of the signed-in user (GET it, PUT a new one as the raw image, DELETE it).
+  async function handleAvatar(req, res) {
+    const user = await authed(req);
+    if (!user) { res.writeHead(401).end(); return; }
+    if (req.method === "GET") {
+      const a = avatars.get(user);
+      if (!a) { res.writeHead(404).end(); return; }
+      if (req.headers["if-none-match"] === a.etag) { res.writeHead(304).end(); return; }
+      res.writeHead(200, { "content-type": a.type, etag: a.etag, "cache-control": "private, no-cache" });
+      res.end(a.buf);
+      return;
+    }
+    if (req.method === "PUT") {
+      const chunks = [];
+      let n = 0;
+      for await (const c of req) { n += c.length; if (n > AVATAR_MAX_BYTES) { res.writeHead(413).end(); return; } chunks.push(c); }
+      const buf = Buffer.concat(chunks);
+      if (!imageType(buf)) { res.writeHead(415).end(); return; }
+      avatars.set(user, buf);
+      res.writeHead(204).end();
+      return;
+    }
+    if (req.method === "DELETE") { avatars.delete(user); res.writeHead(204).end(); return; }
+    res.writeHead(405).end();
+  }
+
   const http = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://x");
     if (isProxied(url.pathname)) { proxyToNavidrome(navidromeUrl, req, res); return; }
     if (url.pathname === "/bpm" || url.pathname.startsWith("/bpm/")) { handleBpm(req, res, url).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); }); return; }
     if (url.pathname.startsWith("/quickconnect/")) { handleQuickConnect(req, res, url).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); }); return; }
     if (url.pathname.startsWith("/lastfm/")) { handleLastfm(req, res, url).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); }); return; }
+    if (url.pathname === "/avatar") { handleAvatar(req, res).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); }); return; }
     if (url.pathname === "/healthz") { res.writeHead(200).end("ok"); return; }
     if (url.pathname === "/config.json") {
       // The web UI reads this to learn which Subsonic server to talk to.

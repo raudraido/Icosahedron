@@ -2,6 +2,14 @@
 
 A native SwiftUI app for iPhone and iPad (iOS 26.1 or later), built as an unsigned `.ipa` (sign it with SideStore, AltStore, Sideloadly or iloader: [docs/ios.md](../../docs/ios.md)). It has been part of the shared releases 0.15.3 to 0.15.9 (see the [main changelog](../../CHANGELOG.md)); from here it has its **own version, release and changelog**. What works with which server: [docs/compatibility.md](../../docs/compatibility.md).
 
+## 0.1.2
+
+Needs the [server](../server/CHANGELOG.md) 0.16.2 for the profile picture and the shared Last.fm connection.
+
+- **Profile picture.** Choose a photo in Settings (Account); the sync server keeps it, so it is the same on every device. The round button on top of the lists shows it. Without a picture it shows the first letter of your name.
+- **Last.fm: connected once for all.** If the desktop app is connected to Last.fm it shares that with the server, and the phone shows "Connected as …" without approving again. When the server has no Last.fm yet, the message now says what to do.
+- **Settings in a better order.** About first, Account next, and **Sync Server** is a section of its own and shows whether it is connected.
+
 ## 0.1.1
 
 Needs the [server](../server/CHANGELOG.md) 0.16.1 for the switch.

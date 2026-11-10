@@ -15,6 +15,7 @@ function fakeLastFm() {
     const reply = (o) => ({ json: async () => o });
     if (q.method === "auth.getToken") return reply({ token: "TOK" });
     if (q.method === "auth.getSession") return q.token === "approved" ? reply({ session: { key: "SK", name: "bobfm" } }) : reply({ error: 14, message: "unauthorized token" });
+    if (q.method === "user.getInfo") return q.sk === "GOODSESSION" ? reply({ user: { name: "bobfm" } }) : reply({ error: 9, message: "Invalid session key" });
     return reply({});
   };
   return { calls, lastfm: createLastFm({ apiKey: "KEY", apiSecret: "SECRET", fetchImpl }) };
@@ -65,5 +66,19 @@ test("unconfigured engine answers 503 and reports it", async () => {
   const { app, base } = await boot(createLastFm({}));
   assert.deepEqual(await (await call(base, "GET", "/lastfm/config")).json(), { configured: false, apiKey: "" });
   assert.equal((await call(base, "POST", "/lastfm/token")).status, 503);
+  app.close();
+});
+
+test("a device hands over its session: checked with Last.fm, then the engine scrobbles with it", async () => {
+  const { calls, lastfm } = fakeLastFm();
+  const { app, base } = await boot(lastfm);
+  assert.equal((await call(base, "PUT", "/lastfm/connection", { sessionKey: "no" })).status, 400);
+  assert.equal((await call(base, "PUT", "/lastfm/connection", { sessionKey: "BADSESSION1" })).status, 502);
+  assert.equal(await (await call(base, "GET", "/lastfm/connection")).json(), null);
+  const ok = await call(base, "PUT", "/lastfm/connection", { sessionKey: "GOODSESSION", scrobbleEnabled: true });
+  assert.deepEqual(await ok.json(), { username: "bobfm" });
+  assert.deepEqual(await (await call(base, "GET", "/lastfm/connection")).json(), { username: "bobfm", historyEnabled: false, scrobbleEnabled: true });
+  await call(base, "POST", "/lastfm/scrobble", { track: { title: "S", artist: "A" }, timestamp: 1700000000 });
+  assert.equal(calls.at(-1).sk, "GOODSESSION");
   app.close();
 });

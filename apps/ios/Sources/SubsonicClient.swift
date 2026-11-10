@@ -296,6 +296,24 @@ final class SubsonicClient {
         return ((resp as? HTTPURLResponse)?.statusCode ?? 0, data)
     }
 
+    /// Like `engine`, for bodies that are not JSON (a picture) and answers that carry an ETag.
+    func engineRaw(_ method: String, _ path: String, body: Data? = nil, contentType: String? = nil, etag: String? = nil) async throws -> (status: Int, data: Data, etag: String?) {
+        guard let url = URL(string: baseURL.absoluteString + path) else { throw SubsonicError.badResponse }
+        var comps = URLComponents()
+        comps.queryItems = syncAuth().map { URLQueryItem(name: $0.key, value: $0.value) }
+        var req = URLRequest(url: url)
+        req.httpMethod = method
+        req.timeoutInterval = 20
+        req.cachePolicy = .reloadIgnoringLocalCacheData
+        req.setValue("Subsonic " + (comps.percentEncodedQuery ?? ""), forHTTPHeaderField: "Authorization")
+        if let etag { req.setValue(etag, forHTTPHeaderField: "If-None-Match") }
+        if let contentType { req.setValue(contentType, forHTTPHeaderField: "Content-Type") }
+        req.httpBody = body
+        let (data, resp) = try await session.data(for: req)
+        let http = resp as? HTTPURLResponse
+        return (http?.statusCode ?? 0, data, http?.value(forHTTPHeaderField: "ETag"))
+    }
+
     /// Songs similar to a song or artist (the server needs a similarity source such as Last.fm).
     func similarSongs(_ id: String, count: Int = 50) async throws -> [Track] {
         let r = try await call("getSimilarSongs2", [item("id", id), item("count", String(count))])

@@ -15,6 +15,7 @@ final class AppModel {
     let router = Router()
     let net = NetworkMonitor()
     let lastfm = LastFmModel()
+    let avatar = AvatarModel()
     /// BPM by track id, from the web engine's store (it only stores; the desktop app detects).
     var bpm: [String: Double] = [:]
     /// Favorite / rating changes made in the app, so every list and menu shows them at once.
@@ -81,6 +82,7 @@ final class AppModel {
         Task { await refreshPlaylists() }
         Task { await AudioCache.shared.fillMissingMetadata(client: c) }
         Task { await lastfm.refresh(client: c) }
+        Task { await avatar.refresh(client: c) }
         Task { await loadBPM() }
         flushScrobbles()
         player.resumePins()
@@ -265,6 +267,7 @@ final class AppModel {
         player.stop()
         player.client = nil
         client = nil
+        avatar.clear()
         Keychain.delete(savedUser)
         UserDefaults.standard.removeObject(forKey: userKey)
     }

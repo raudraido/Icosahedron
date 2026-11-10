@@ -25,7 +25,7 @@ Images are published for `linux/amd64` and `linux/arm64`. `latest` is the newest
 | `PORT` | `8080` | Listening port inside the container |
 | `DATA_DIR` | `/data` | Where state is kept (mount a volume!) |
 | `WEB_ROOT` | `/app/web` (image) | The web app's static files |
-| `LASTFM_API_KEY`, `LASTFM_API_SECRET` | unset | Enable Last.fm (see below) |
+| `LASTFM_API_KEY`, `LASTFM_API_SECRET` | the Icosahedron app's own Last.fm account | Your own Last.fm API account instead (see below). Normally leave unset |
 | `QUICK_CONNECT` | unset | Normally unset: a server administrator switches Quick Connect on and off in **Settings → Sync Server** (kept in `settings.json`). Setting `true` / `false` here decides instead and locks that switch. See [quick-connect.md](quick-connect.md) |
 
 ## Data
@@ -37,6 +37,7 @@ Everything is in `DATA_DIR`:
 | `<hash>.json` | One per user: play queue, position, active device, shared settings |
 | `bpm.json` | BPM values (shared by all users) |
 | `lastfm.json` | Last.fm session keys, mode `600` — **protect this volume** |
+| `avatar-<hash>.bin` | A user's profile picture (set in the apps, up to 512 kB) |
 | `settings.json` | Server-wide settings an administrator changes in the apps (Quick Connect on or off) |
 
 Back up the directory to keep these; losing it only resets sync state and BPM.
@@ -70,10 +71,11 @@ Host networking works on Linux; on Docker Desktop (Mac, Windows) the service sta
 
 The engine holds the Last.fm API secret and each user's session key, so one connection covers all devices and the secret never leaves the server.
 
-1. Register an API account at last.fm/api and set `LASTFM_API_KEY` and `LASTFM_API_SECRET`.
-2. In a client (web app settings, iOS settings) choose *Connect to Last.fm*, approve in the browser, finish.
+Nothing to set up: the engine uses the Icosahedron app's own Last.fm API account (the one the desktop app carries). Set `LASTFM_API_KEY` and `LASTFM_API_SECRET` (an API account from last.fm/api) only if you want your own; a session made with one key does not work with the other.
 
-The desktop app uses the engine's connection too once it has the engine's address (Devices button) and the engine holds a connection: connect once on any device. A desktop that already has its own local Last.fm session keeps using it until the engine has one; only one side scrobbles a play. Without an engine (or if it is unreachable) the desktop scrobbles on its own as before.
+- **Connect once, anywhere:** in a client (web app settings, iOS settings) choose *Connect to Last.fm*, approve in the browser, finish.
+- **Or from the desktop app:** a desktop that is already connected to Last.fm hands its session to the engine by itself once it has the engine's address (Devices button). Phone, web and TV then show "Connected as …" with nothing to approve. The engine checks the session with Last.fm first (`PUT /lastfm/connection`); with your own API key set, a desktop session is refused and stays local.
+- Once the engine holds the connection it does all the scrobbling and the desktop stops; only one side scrobbles a play. Disconnecting in the desktop app disconnects the engine too. Without an engine (or if it is unreachable) the desktop scrobbles on its own as before.
 
 If Navidrome is also linked to Last.fm, a play can be counted twice.
 
@@ -103,5 +105,5 @@ The image builds the web app (`vite.web.config.ts`) and bundles it with the engi
 
 - `GET /healthz` → `ok`.
 - Page loads but the devices button says offline: the proxy does not pass WebSocket upgrades.
-- Last.fm answers `503`: the key/secret are not set.
+- Last.fm answers `503`: an old server (before 0.16.2) without `LASTFM_API_KEY`/`LASTFM_API_SECRET`; update it.
 - Sign-in fails: `NAVIDROME_URL` must be reachable from inside the container (`docker exec … wget -qO- $NAVIDROME_URL/rest/ping?...`).

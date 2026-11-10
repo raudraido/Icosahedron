@@ -2,12 +2,12 @@ name: iOS build
 
 # Builds an UNSIGNED .ipa on a GitHub macOS runner (no Mac needed). Sign it for your own
 # device with AltStore / SideStore / Sideloadly / iloader. On a `v*` tag the .ipa is attached
-# to the release. The version is the repository's (root package.json).
+# to its own release. The version is apps/ios/VERSION and the tag `ios-vX.Y.Z` must match it.
 on:
   push:
     branches: [master]
-    paths: ["apps/ios/**", "package.json", ".github/workflows/ios.yml"]
-    tags: ["v*"]
+    paths: ["apps/ios/**", ".github/workflows/ios.yml"]
+    tags: ["ios-v*"]
   pull_request:
     paths: ["apps/ios/**", ".github/workflows/ios.yml"]
   workflow_dispatch:
@@ -21,7 +21,11 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Version
-        run: echo "VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
+        run: echo "VERSION=$(tr -d '[:space:]' < apps/ios/VERSION)" >> "$GITHUB_ENV"
+
+      - name: The tag matches the version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: test "${GITHUB_REF_NAME#ios-v}" = "$VERSION"
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -64,8 +68,14 @@ jobs:
           name: build-log
           path: apps/ios/build.log
 
-      - name: Attach to the release
+      - name: Release notes
+        if: startsWith(github.ref, 'refs/tags/')
+        run: node scripts/release-notes.mjs apps/ios/CHANGELOG.md "$VERSION" > release-notes.md
+
+      - name: Publish the release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
+          name: iOS app ${{ env.VERSION }}
+          body_path: release-notes.md
           files: apps/ios/Icosahedron-*-unsigned.ipa

@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { join, extname, normalize, sep } from "node:path";
 import { WebSocketServer } from "ws";
 import { Hub } from "./hub.mjs";
@@ -8,6 +9,11 @@ import { isProxied, proxyToNavidrome } from "./proxy.mjs";
 import { createBpmStore } from "./bpm.mjs";
 import { createLastFm } from "./lastfm.mjs";
 import { createQuickConnect } from "./quickconnect.mjs";
+
+// The engine's own version (apps/server/package.json; the web app it serves is the same product) and
+// the sync protocol it speaks: the apps check compatibility by protocol, not by version number.
+const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
+export const PROTOCOL = 2;
 
 const MIME = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".mjs": "text/javascript",
@@ -150,7 +156,7 @@ export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmSt
     if (url.pathname === "/config.json") {
       // The web UI reads this to learn which Subsonic server to talk to.
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ navidromeUrl, sync: "/sync" }));
+      res.end(JSON.stringify({ navidromeUrl, sync: "/sync", version: VERSION, protocol: PROTOCOL }));
       return;
     }
     if (!webRoot) { res.writeHead(404).end("web UI not bundled"); return; }

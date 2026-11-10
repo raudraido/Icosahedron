@@ -4,7 +4,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// The version comes from the repository's root package.json (CI passes it as -PversionName=...).
+// The version comes from apps/android-tv/VERSION (CI passes it as -PversionName=... and -PversionCode=...).
 val appVersionName = (project.findProperty("versionName") as String?) ?: "0.0.0-dev"
 val appVersionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
 

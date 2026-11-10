@@ -1,9 +1,52 @@
 # Changelog
 
-## Unreleased
+## 0.16.0
 
-- **Quick Connect.** Sign a TV in without typing a password: it shows a six-digit code, you enter it in **Settings → Sync Server → Quick Connect** in an app where you are signed in (web, desktop, iOS). Off unless the engine has `QUICK_CONNECT=true`. The Android TV app can also find your server on the network (an optional discovery container on the host network answers its broadcast). See [docs/quick-connect.md](docs/quick-connect.md).
-- **Android TV / Google TV app (new).** A native app that plays through the TV, browses your library with the remote and appears as a TV in the other apps' device lists (they can start music on it, control it and send their playback to it). Sideload the APK from the release; see [docs/android-tv.md](docs/android-tv.md). The engine knows the device kind `tv` (update the server image to get the TV icon; older engines show it as a laptop).
+**What's new since 0.15.1.** The desktop app can now work together with your other devices: sync, remote control, a jukebox, signing a TV in with a code. Everything new is **optional**: without a sync server the app behaves as before.
+
+From this release **every app has its own version, release and changelog**: this one is the desktop app (Linux and Windows); the server (with the web app it serves), the iOS app and the Android TV app are separate. The entries below `## 0.16.0` describe the shared releases 0.15.1 to 0.15.9 and cover all apps. See [docs/releasing.md](docs/releasing.md) and [docs/compatibility.md](docs/compatibility.md).
+
+### Your devices work together
+Set the address of your sync server once (the **Devices** button next to the cast button) and the desktop app, the web app, the iOS app and the Android TV app see each other. The server is optional: [docs/deploy-server.md](docs/deploy-server.md).
+
+- **Every device with what it plays.** The Devices popover lists all players of your account (desktop, browsers, phone, TV) and what each is doing right now.
+- **Players are independent.** Music at home and in the car can play at the same time; starting one never pauses another.
+- **Control any device.** Click a device and the **normal bottom bar and queue panel show and control that device**: seek bar and waveform, shuffle, repeat, volume (not for the phone), the queue (click to play, ✕ to remove, drag to reorder). "Controlling X" appears in the corner and the Devices button is highlighted. Play, play next and add to queue from anywhere in the app go to that device. Things that only make sense for this machine (cast, equalizer, stop, BPM analysis, the lyrics and artist tabs, clearing the queue) stay in place but inactive. Choosing a device only controls it.
+- **Move your music.** *Send* moves this device's playback to another (the old one pauses, the new one continues at the same position); *Play here* brings another device's music to this one.
+- **Jukebox.** **Add to Device Queue** in the track menu: pick a device, then *Play Now*, *Play Next* or *Add to Queue*. Open `/?player=1` of your server on a screen that only plays (a tablet, a spare PC); it registers as "Jukebox" and takes commands from your other devices.
+- **Quick Connect.** Sign a TV (or any device with an awkward keyboard) in with a six-digit code: **Settings → Sync Server → Quick Connect**, enter the code the device shows. The server has it off until `QUICK_CONNECT=true`. See [docs/quick-connect.md](docs/quick-connect.md).
+
+### Sync Server settings
+**Settings → Sync Server** collects everything about the link:
+- join or leave the server (the address), the name of this player, **every registered player** (online or not, last seen; rename, forget the offline ones; players offline for 90 days disappear by themselves);
+- **what this player keeps in sync**, per player: playback and remote control, four groups of preferences (appearance, equalizer, library layout, scrobbling and lyrics), BPM, Last.fm through the server;
+- clear what the server stores (the queue, the shared preferences).
+
+### Shared between your devices
+- **Preferences:** theme and custom themes, equalizer, the scrobble / BPM-detection / lyrics-source toggles, what the left panel shows (Recently Played, Playlists, Daily Mix), tab order, home row order, "show remaining time", Bandsintown, and the artist/album sort choices. Layout that depends on the screen, hotkeys, saved logins, the queue and game scores stay per device. A change from another device reloads the window, or, while music plays, offers a toast so playback is never cut off.
+- **BPM:** detections of the native analyzer are stored on the server and read by every player (a manual correction always wins). Your existing local cache is uploaded once.
+- **Last.fm through the server:** connect once for all devices; a desktop that already has its own Last.fm session keeps it until the server has one.
+- **Equalizer** presets use one format on every platform.
+
+### Casting and AirPlay (0.15.1 and 0.15.2)
+- AirPlay 2 casting next to Chromecast and DLNA, with PIN pairing for devices such as the Apple TV (the code shows on the TV; paired devices are remembered).
+- Faster start, track change and seek (about 1.3 s instead of 9 to 23 s), no silence after the first track, 96 kHz tracks at the right speed, mono and multichannel converted to stereo, title / artist / cover and a moving seek bar on the TV, the Apple TV remote controls the player, lost connections are noticed.
+- Output sync: the player's own speakers are held back so they are heard together with the cast device; **Calibrate** in the cast picker measures the offset with the microphone, a slider sets it by hand, the offset is remembered per device.
+- While casting there is a short pause between tracks (a cast device cannot follow gapless playback).
+
+### Smaller things
+- The version number is shown in Settings → System → About in every app.
+- The desktop reports its playback position in fractions of a second, so other devices show a steadier progress.
+- The list of devices keeps a fixed order (this device first, the rest by name); a TV has its own icon.
+- The update check now only looks at desktop releases (tags `vX.Y.Z`), since the other apps release separately.
+
+### The other apps (separate versions and changelogs)
+- **Server** (engine and web app): [apps/server/CHANGELOG.md](apps/server/CHANGELOG.md), 0.16.0.
+- **iOS app:** [apps/ios/CHANGELOG.md](apps/ios/CHANGELOG.md), 0.1.0.
+- **Android TV app:** [apps/android-tv/CHANGELOG.md](apps/android-tv/CHANGELOG.md), 0.1.0.
+
+### Updating
+Update the **server first** (`docker compose pull && docker compose up -d`), then the apps. An app newer than its server still works for everything the server knows; only the features that need the server are missing.
 
 ## 0.15.9
 

@@ -17,13 +17,13 @@ struct MiniPlayerBar: View {
                     TimelineView(.periodic(from: .now, by: 1)) { ctx in
                         bar(title: t.title, subtitle: String(localized: "Playing on \(name)"), cover: t.coverArt,
                             progress: t.duration > 0 ? app.sync.remotePosition(at: ctx.date) / Double(t.duration) : 0,
-                            playing: app.sync.remotePlaying,
+                            playing: app.sync.remotePlaying, accent: true,
                             toggle: { app.sync.command(to: target, "toggle") },
                             next: { app.sync.command(to: target, "next") },
                             open: { router.showPlayer = true })
                     }
                 } else {
-                    bar(title: name, subtitle: String(localized: "Nothing playing"), cover: nil, progress: 0, playing: false,
+                    bar(title: name, subtitle: String(localized: "Nothing playing"), cover: nil, progress: 0, playing: false, accent: true,
                         toggle: {}, next: {}, open: { router.showPlayer = true })
                 }
             } else if let t = p.current {
@@ -42,7 +42,7 @@ struct MiniPlayerBar: View {
         }
     }
 
-    private func bar(title: String, subtitle: String, cover: String?, progress: Double, playing: Bool,
+    private func bar(title: String, subtitle: String, cover: String?, progress: Double, playing: Bool, accent: Bool = false,
                      toggle: @escaping () -> Void, next: @escaping () -> Void, open: @escaping () -> Void) -> some View {
         HStack(spacing: 10) {
             Button(action: open) {
@@ -52,7 +52,11 @@ struct MiniPlayerBar: View {
                         .matchedTransitionSource(id: "cover", in: zoom)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(title).font(.subheadline.weight(.semibold)).lineLimit(1)
-                        Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        HStack(spacing: 4) {
+                            if accent { Image(systemName: "hifispeaker.fill").font(.caption2) }
+                            Text(subtitle).lineLimit(1)
+                        }
+                        .font(.caption).foregroundStyle(accent ? Theme.accent : Color.secondary)
                     }
                     Spacer(minLength: 0)
                 }
@@ -81,13 +85,13 @@ struct NowPlayingView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        let p = app.player
+        let s = app.nowPlaying
         GeometryReader { g in
             Group {
                 if g.size.width > g.size.height {
-                    wideLayout(p, g.size)
+                    wideLayout(s, g.size)
                 } else {
-                    narrowLayout(p)
+                    narrowLayout(s)
                 }
             }
             .padding(.horizontal, 24)
@@ -95,7 +99,7 @@ struct NowPlayingView: View {
             .padding(.bottom, 8)
             .frame(width: g.size.width, height: g.size.height)
         }
-        .background { background(p.current) }
+        .background { background(s.current) }
         .foregroundStyle(.white)
         .sheet(isPresented: $showEQ) { EqualizerSheet() }
         .sheet(isPresented: $showDevices) {
@@ -112,50 +116,50 @@ struct NowPlayingView: View {
     // MARK: Layouts
 
     /// Portrait: everything in one column; the cover shrinks to the corner for info/lyrics.
-    private func narrowLayout(_ p: PlayerModel) -> some View {
+    private func narrowLayout(_ s: NowPlayingSource) -> some View {
         VStack(spacing: 14) {
-            header(p)
+            header(s)
             if showQueue {
                 QueueView()
-            } else if showInfo {
-                infoHeader(p)
-                InfoTabs(track: p.current)
+            } else if showInfo, s.current != nil {
+                infoHeader(s)
+                InfoTabs(track: s.current)
             } else {
                 Spacer(minLength: 0)
-                artwork(p)
+                artwork(s)
                 Spacer(minLength: 0)
-                titleRow(p)
+                titleRow(s)
             }
-            progress(p)
-            controls(p)
-            bottomBar(p)
+            progress(s)
+            controls(s)
+            bottomBar(s)
         }
     }
 
     /// Landscape and iPad: the cover on the left, everything else on the right.
-    private func wideLayout(_ p: PlayerModel, _ size: CGSize) -> some View {
+    private func wideLayout(_ s: NowPlayingSource, _ size: CGSize) -> some View {
         let side = max(160, min(size.height - 90, size.width * 0.42))
         return HStack(spacing: 32) {
             VStack {
                 Spacer(minLength: 0)
-                artwork(p).frame(width: side)
+                artwork(s).frame(width: side)
                 Spacer(minLength: 0)
             }
             .frame(width: side)
             VStack(spacing: 12) {
-                header(p)
+                header(s)
                 if showQueue {
                     QueueView()
-                } else if showInfo {
-                    InfoTabs(track: p.current)
+                } else if showInfo, s.current != nil {
+                    InfoTabs(track: s.current)
                 } else {
                     Spacer(minLength: 0)
-                    titleRow(p)
+                    titleRow(s)
                     Spacer(minLength: 0)
                 }
-                progress(p)
-                controls(p)
-                bottomBar(p)
+                progress(s)
+                controls(s)
+                bottomBar(s)
             }
         }
     }
@@ -175,11 +179,13 @@ struct NowPlayingView: View {
             .ignoresSafeArea()
     }
 
-    private func header(_ p: PlayerModel) -> some View {
-        HStack {
-            pill("\(max(p.index + 1, 0)) of \(p.queue.count)")
-            Spacer()
-            pill("-\(formatLong(p.queueRemaining)) / \(formatLong(p.queueTotal))")
+    private func header(_ s: NowPlayingSource) -> some View {
+        TimelineView(.periodic(from: .now, by: 1)) { ctx in
+            HStack {
+                pill("\(max(s.index + 1, 0)) of \(s.queue.count)")
+                Spacer()
+                pill("-\(formatLong(s.queueRemaining(at: ctx.date))) / \(formatLong(s.queueTotal))")
+            }
         }
         .overlay(Capsule().fill(.white.opacity(0.45)).frame(width: 40, height: 5)) // drag handle hint
     }
@@ -191,32 +197,32 @@ struct NowPlayingView: View {
             .background(.ultraThinMaterial, in: Capsule())
     }
 
-    private func artwork(_ p: PlayerModel) -> some View {
-        CoverImage(id: p.current?.coverArt, size: 800)
+    private func artwork(_ s: NowPlayingSource) -> some View {
+        CoverImage(id: s.current?.coverArt, size: 800)
             .aspectRatio(1, contentMode: .fit)
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .matchedGeometryEffect(id: "art", in: artNS)
             .shadow(color: .black.opacity(0.5), radius: 26, y: 12)
-            .scaleEffect(p.isPlaying || reduceMotion ? 1 : 0.86)
-            .animation(reduceMotion ? nil : .spring(response: 0.45, dampingFraction: 0.75), value: p.isPlaying)
+            .scaleEffect(s.isPlaying || reduceMotion ? 1 : 0.86)
+            .animation(reduceMotion ? nil : .spring(response: 0.45, dampingFraction: 0.75), value: s.isPlaying)
             .contentShape(Rectangle())
-            .onTapGesture { toggleInfo() }
+            .onTapGesture { if s.current != nil { toggleInfo() } }
     }
 
     /// Info mode: the cover has shrunk to the top-left corner, title and actions beside it.
-    private func infoHeader(_ p: PlayerModel) -> some View {
+    private func infoHeader(_ s: NowPlayingSource) -> some View {
         HStack(spacing: 12) {
-            CoverImage(id: p.current?.coverArt, size: 300)
+            CoverImage(id: s.current?.coverArt, size: 300)
                 .frame(width: 84, height: 84)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .matchedGeometryEffect(id: "art", in: artNS)
                 .onTapGesture { toggleInfo() }
             VStack(alignment: .leading, spacing: 3) {
-                Text(p.current?.title ?? String(localized: "Nothing playing")).font(.headline).lineLimit(2)
-                subtitle(p.current)
+                Text(s.current?.title ?? emptyTitle(s)).font(.headline).lineLimit(2)
+                subtitle(s.current)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            if let t = p.current, t.directURL == nil { actionButtons(t, p, size: 38) }
+            if let t = s.current, t.directURL == nil { actionButtons(t, size: 38) }
         }
     }
 
@@ -224,18 +230,24 @@ struct NowPlayingView: View {
         withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { showInfo.toggle() }
     }
 
-    private func titleRow(_ p: PlayerModel) -> some View {
+    /// "Nothing playing", or which device has nothing when another one is the target.
+    private func emptyTitle(_ s: NowPlayingSource) -> String {
+        if let name = s.targetName { return String(localized: "Nothing playing on \(name)") }
+        return String(localized: "Nothing playing")
+    }
+
+    private func titleRow(_ s: NowPlayingSource) -> some View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(p.current?.title ?? String(localized: "Nothing playing")).font(.title2.bold()).lineLimit(1)
-                subtitle(p.current)
+                Text(s.current?.title ?? emptyTitle(s)).font(.title2.bold()).lineLimit(2)
+                subtitle(s.current)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            if let t = p.current, t.directURL == nil { actionButtons(t, p, size: 44) }
+            if let t = s.current, t.directURL == nil { actionButtons(t, size: 44) }
         }
     }
 
-    private func actionButtons(_ t: Track, _ p: PlayerModel, size: CGFloat) -> some View {
+    private func actionButtons(_ t: Track, size: CGFloat) -> some View {
         HStack(spacing: 10) {
             Button { app.toggleStar(t) } label: {
                 Image(systemName: app.isStarred(t) ? "heart.fill" : "heart")
@@ -269,27 +281,36 @@ struct NowPlayingView: View {
         }
     }
 
-    private func progress(_ p: PlayerModel) -> some View {
-        VStack(spacing: 2) {
-            Slider(
-                value: Binding(get: { scrub ?? p.position }, set: { scrub = $0 }),
-                in: 0...max(p.duration, 1),
-                onEditingChanged: { editing in
-                    if !editing, let s = scrub { p.seek(to: s); scrub = nil }
+    private func progress(_ s: NowPlayingSource) -> some View {
+        TimelineView(.periodic(from: .now, by: 0.5)) { ctx in
+            let pos = scrub ?? s.position(at: ctx.date)
+            VStack(spacing: 2) {
+                Slider(
+                    value: Binding(get: { pos }, set: { scrub = $0 }),
+                    in: 0...max(s.duration, 1),
+                    onEditingChanged: { editing in
+                        if !editing, let v = scrub { s.seek(to: v); scrub = nil }
+                    }
+                )
+                .tint(.white)
+                .disabled(s.current == nil)
+                .accessibilityLabel("Playback position")
+                .accessibilityValue(String(localized: "\(formatTime(pos)) of \(formatTime(s.duration))"))
+                HStack {
+                    Text(formatTime(pos))
+                    Spacer()
+                    Text(qualityLine(s)).font(.caption2)
+                    Spacer()
+                    Text("-" + formatTime(max(0, s.duration - pos) / (s.isRemote ? 1 : max(app.player.speed, 0.1))))
                 }
-            )
-            .tint(.white)
-            .accessibilityLabel("Playback position")
-            .accessibilityValue(String(localized: "\(formatTime(scrub ?? p.position)) of \(formatTime(p.duration))"))
-            HStack {
-                Text(formatTime(scrub ?? p.position))
-                Spacer()
-                Text(p.qualityLabel.isEmpty ? qualityText(p.current) : p.qualityLabel).font(.caption2)
-                Spacer()
-                Text("-" + formatTime(max(0, p.duration - (scrub ?? p.position)) / max(p.speed, 0.1)))
+                .font(.caption).foregroundStyle(.white.opacity(0.7)).monospacedDigit()
             }
-            .font(.caption).foregroundStyle(.white.opacity(0.7)).monospacedDigit()
         }
+    }
+
+    private func qualityLine(_ s: NowPlayingSource) -> String {
+        if !s.isRemote, !app.player.qualityLabel.isEmpty { return app.player.qualityLabel }
+        return qualityText(s.current)
     }
 
     private func qualityText(_ t: Track?) -> String {
@@ -298,20 +319,22 @@ struct NowPlayingView: View {
         return [t.format?.uppercased(), t.bitrate.map { "\($0) kbps" }].compactMap { $0 }.joined(separator: " ")
     }
 
-    private func controls(_ p: PlayerModel) -> some View {
+    private func controls(_ s: NowPlayingSource) -> some View {
         HStack {
             Spacer()
-            Button { p.previous() } label: { Image(systemName: "backward.fill").font(.system(size: 34)) }
+            Button { s.previous() } label: { Image(systemName: "backward.fill").font(.system(size: 34)) }
                 .accessibilityLabel("Previous")
             Spacer()
-            Button { p.toggle() } label: { Image(systemName: p.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 54)) }
-                .accessibilityLabel(LocalizedStringKey(p.isPlaying ? "Pause" : "Play"))
+            Button { s.toggle() } label: { Image(systemName: s.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 54)) }
+                .accessibilityLabel(LocalizedStringKey(s.isPlaying ? "Pause" : "Play"))
             Spacer()
-            Button { p.next() } label: { Image(systemName: "forward.fill").font(.system(size: 34)) }
+            Button { s.next() } label: { Image(systemName: "forward.fill").font(.system(size: 34)) }
                 .accessibilityLabel("Next")
             Spacer()
         }
         .buttonStyle(.plain)
+        .disabled(s.current == nil)
+        .opacity(s.current == nil ? 0.4 : 1)
         .padding(.vertical, 6)
     }
 
@@ -334,29 +357,35 @@ struct NowPlayingView: View {
         }
     }
 
-    private func bottomBar(_ p: PlayerModel) -> some View {
+    private func bottomBar(_ s: NowPlayingSource) -> some View {
         HStack {
-            Button { p.toggleShuffle() } label: { Image(systemName: "shuffle") }
+            Button { s.toggleShuffle() } label: { Image(systemName: "shuffle") }
                 .accessibilityLabel("Shuffle")
-                .accessibilityValue(LocalizedStringKey(p.shuffle ? "On" : "Off"))
-                .foregroundStyle(p.shuffle ? Theme.accent : Color.white.opacity(0.75))
+                .accessibilityValue(LocalizedStringKey(s.shuffle ? "On" : "Off"))
+                .foregroundStyle(s.shuffle ? Theme.accent : Color.white.opacity(0.75))
             Spacer()
-            Button { p.toggleRepeat() } label: { Image(systemName: "repeat") }
+            Button { s.toggleRepeat() } label: { Image(systemName: "repeat") }
                 .accessibilityLabel("Repeat")
-                .accessibilityValue(LocalizedStringKey(p.repeatAll ? "On" : "Off"))
-                .foregroundStyle(p.repeatAll ? Theme.accent : Color.white.opacity(0.75))
+                .accessibilityValue(LocalizedStringKey(s.repeatOn ? "On" : "Off"))
+                .foregroundStyle(s.repeatOn ? Theme.accent : Color.white.opacity(0.75))
+            // Speed, AirPlay and the equalizer act on this phone's own sound: while another device is
+            // the target they stay in place but inactive.
             Spacer()
-            speedMenu(p)
+            speedMenu(app.player)
+                .disabled(s.isRemote)
+                .opacity(s.isRemote ? 0.3 : 1)
             Spacer()
             AirPlayButton().frame(width: 30, height: 30).accessibilityLabel("AirPlay")
+                .allowsHitTesting(!s.isRemote)
+                .opacity(s.isRemote ? 0.3 : 1)
             Spacer()
             Button { showEQ = true } label: { Image(systemName: "slider.vertical.3") }
                 .foregroundStyle(EQManager.shared.settings.enabled ? Theme.accent : Color.white.opacity(0.75))
                 .accessibilityLabel("Equalizer")
+                .disabled(s.isRemote)
+                .opacity(s.isRemote ? 0.3 : 1)
             Spacer()
-            Button { showDevices = true } label: { Image(systemName: "laptopcomputer.and.iphone") }
-                .accessibilityLabel("Devices")
-                .foregroundStyle(app.sync.status == "online" ? Color.white.opacity(0.75) : Color.white.opacity(0.35))
+            devicesButton(s)
             Spacer()
             Button { withAnimation(.snappy) { showQueue.toggle(); if showQueue { showInfo = false } } } label: {
                 Image(systemName: "list.bullet")
@@ -369,6 +398,20 @@ struct NowPlayingView: View {
         .font(.title3)
         .buttonStyle(.plain)
     }
+
+    /// The devices button: highlighted, with the device's name, while another device is the target.
+    private func devicesButton(_ s: NowPlayingSource) -> some View {
+        Button { showDevices = true } label: {
+            VStack(spacing: 1) {
+                Image(systemName: s.isRemote ? "hifispeaker.fill" : "laptopcomputer.and.iphone")
+                if let name = s.targetName {
+                    Text(name).font(.system(size: 9, weight: .semibold)).lineLimit(1).frame(maxWidth: 70)
+                }
+            }
+        }
+        .accessibilityLabel("Devices")
+        .foregroundStyle(s.isRemote ? Theme.accent : (app.sync.status == "online" ? Color.white.opacity(0.75) : Color.white.opacity(0.35)))
+    }
 }
 
 func formatLong(_ seconds: Double) -> String {
@@ -379,47 +422,50 @@ func formatLong(_ seconds: Double) -> String {
 }
 
 /// The play queue: the current track highlighted, tracks before and after it. Drag the handles
-/// to reorder, long-press a row for the track menu, tap to jump.
+/// to reorder, long-press a row for the track menu, tap to jump. While another device is the
+/// target this is that device's queue and every change is sent to it.
 struct QueueView: View {
     @Environment(AppModel.self) private var app
 
     var body: some View {
-        let p = app.player
+        let s = app.nowPlaying
         VStack(spacing: 6) {
             HStack {
                 Text("Queue").font(.headline)
                 Spacer()
                 Menu {
-                    Button { app.saveQueueAsPlaylist() } label: { Label("Save Queue as Playlist", systemImage: "text.badge.plus") }
-                    Button(role: .destructive) { p.clearQueue() } label: { Label("Clear Queue", systemImage: "trash") }
+                    Button { app.newPlaylist(with: s.queue) } label: { Label("Save Queue as Playlist", systemImage: "text.badge.plus") }
+                        .disabled(s.queue.isEmpty)
+                    Button(role: .destructive) { app.player.clearQueue() } label: { Label("Clear Queue", systemImage: "trash") }
+                        .disabled(s.isRemote) // only this phone's own queue can be cleared
                 } label: { Image(systemName: "ellipsis.circle").font(.title3) }
             }
-            queueList(p)
+            queueList(s)
         }
     }
 
-    private func queueList(_ p: PlayerModel) -> some View {
+    private func queueList(_ s: NowPlayingSource) -> some View {
         ScrollViewReader { proxy in
             List {
-                ForEach(Array(p.queue.enumerated()), id: \.offset) { i, t in
-                    Button { p.play(p.queue, at: i) } label: { queueRow(t, current: i == p.index) }
+                ForEach(Array(s.queue.enumerated()), id: \.offset) { i, t in
+                    Button { s.jump(to: i) } label: { queueRow(t, current: i == s.index) }
                         .buttonStyle(.plain)
-                        .listRowBackground(i == p.index ? Color.white.opacity(0.14) : Color.clear)
+                        .listRowBackground(i == s.index ? Color.white.opacity(0.14) : Color.clear)
                         .listRowSeparatorTint(.white.opacity(0.15))
                         .contextMenu {
                             TrackMenuContent(track: t)
                             Divider()
-                            Button(role: .destructive) { p.removeFromQueue(at: i) } label: { Label("Remove from Queue", systemImage: "minus.circle") }
+                            Button(role: .destructive) { s.remove(at: i) } label: { Label("Remove from Queue", systemImage: "minus.circle") }
                         }
                         .deleteDisabled(true)
                         .id(i)
                 }
-                .onMove { p.moveInQueue(from: $0, to: $1) }
+                .onMove { s.move(from: $0, to: $1) }
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .environment(\.editMode, .constant(.active)) // shows the reorder handles
-            .onAppear { proxy.scrollTo(max(p.index - 1, 0), anchor: .top) }
+            .onAppear { proxy.scrollTo(max(s.index - 1, 0), anchor: .top) }
         }
     }
 

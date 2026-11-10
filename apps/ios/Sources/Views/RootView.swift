@@ -32,7 +32,7 @@ struct MainTabs: View {
         TabView(selection: Bindable(app.router).tab) {
             Tab("Home", systemImage: "house.fill", value: Router.AppTab.home) { HomeView() }
             Tab("Library", systemImage: "music.note.square.stack.fill", value: Router.AppTab.library) { LibraryView() }
-            Tab("Jukebox", systemImage: "hifispeaker.2.fill", value: Router.AppTab.jukebox) { JukeboxTab() }
+            Tab("Devices", systemImage: "hifispeaker.2.fill", value: Router.AppTab.devices) { DevicesTab() }
             Tab("Search", systemImage: "magnifyingglass", value: Router.AppTab.search, role: .search) { SearchView() }
         }
         // The player is presented from here, not from the mini player: the system rebuilds the
@@ -40,10 +40,8 @@ struct MainTabs: View {
         .tabViewStyle(.sidebarAdaptable)
         .tabViewBottomAccessory(isEnabled: showPlayer) { MiniPlayerBar(zoom: zoom) }
         .fullScreenCover(isPresented: Bindable(app.router).showPlayer) {
-            Group {
-                if app.sync.remoteTarget != nil { RemotePlayerCover() } else { NowPlayingView() }
-            }
-            .navigationTransition(.zoom(sourceID: "cover", in: zoom))
+            NowPlayingView()
+                .navigationTransition(.zoom(sourceID: "cover", in: zoom))
         }
         .tabBarMinimizeBehavior(.onScrollDown)
     }

@@ -2,6 +2,22 @@
 
 A native app (Kotlin, Jetpack Compose for TV, Media3) for Google TV and Android TV: [docs/android-tv.md](../../docs/android-tv.md).
 
+## 0.2.0
+
+**The screen is redone.** Install it over 0.1.2 (same signing key).
+
+- **Now Playing is always at the top right**, with the name of the song that plays, so it is one step up from wherever you are. The tabs (Home, Albums, Artists, Playlists, Search, Settings) and the logo stay on screen too.
+- **Back goes one step at a time and never closes the app at once:** out of an album, artist or playlist to the list before it; from anywhere in the content (also far down a 100-song list) up to the top bar; from another tab to Home; on Home a second Back within two seconds closes the app ("Press Back again to exit"). The **Menu** key of the remote opens Now Playing from anywhere.
+- **The real logo** instead of a drawn placeholder: in the top bar, on the sign-in screen, as the app icon and on the Google TV home screen tile.
+- **You can scrub with the progress bar:** focus it in Now Playing and press Left / Right (10 seconds a press, faster when held; the fast-forward and rewind keys jump 30 seconds).
+- **Text you can read:** the active and the focused button no longer lose their text (it was white on white), and headings and song titles are no longer dark on dark. The song that plays is marked with a note.
+
+## 0.1.2
+
+**Fixes the app closing by itself** when you start a song, seen on Android 14 (Chromecast with Google TV). Install it over 0.1.1: the signing key is the same.
+
+- **No more crash when playing.** The playback service was started as a foreground service and Android ended the app when it was not promoted within a few seconds (while the track was still loading). It is started normally now and Android's media notification takes it to the foreground when music plays.
+
 ## 0.1.1
 
 Finds the server in more situations. Needs the [server](../server/CHANGELOG.md) 0.16.4 for mDNS.

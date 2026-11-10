@@ -35,15 +35,15 @@ struct DeviceRow: View {
     var body: some View {
         let sync = app.sync
         let isMe = d.id == sync.deviceId
-        let isActive = d.id == sync.activeDeviceId
         let selected = (sync.remoteTarget ?? sync.deviceId) == d.id
-        let track = isMe ? app.player.current : (isActive ? sync.remoteTrack : nil)
-        let playing = isMe ? app.player.isPlaying : sync.remotePlaying
+        let remote = sync.state(of: d.id)
+        let track = isMe ? app.player.current : remote?.track
+        let playing = isMe ? app.player.isPlaying : (remote?.playing ?? false)
         HStack(spacing: 12) {
             Button { sync.setTarget(isMe ? nil : d.id) } label: {
                 HStack(spacing: 12) {
                     Image(systemName: icon(d.kind)).font(.title3)
-                        .foregroundStyle(isActive ? Theme.accent : Color.secondary).frame(width: 28)
+                        .foregroundStyle(playing ? Theme.accent : Color.secondary).frame(width: 28)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(d.name + (isMe ? " " + String(localized: "(this phone)") : ""))
                             .foregroundStyle(selected ? Theme.accent : Color.primary)
@@ -60,8 +60,12 @@ struct DeviceRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            if isMe, !isActive, sync.remoteTrack != nil {
-                Button(String(localized: "Play here")) { sync.setTarget(nil); sync.transfer(to: sync.deviceId) }
+            // Moving music is explicit: pull the controlled device's playback here, or push this phone's there.
+            if isMe, let t = sync.remoteTarget, sync.state(of: t)?.track != nil {
+                Button(String(localized: "Play here")) { sync.transfer(from: t, to: sync.deviceId); sync.setTarget(nil) }
+                    .buttonStyle(.bordered)
+            } else if !isMe, app.player.current != nil {
+                Button(String(localized: "Send")) { sync.transfer(from: sync.deviceId, to: d.id); sync.setTarget(d.id) }
                     .buttonStyle(.bordered)
             }
         }

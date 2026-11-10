@@ -15,14 +15,14 @@
 //     {type:"registry", devices} / {type:"renamed", name} / {type:"cleared", state, settings}
 //
 // state = {queue:[trackId], index, positionMs, playing, volume?, updatedAt}
-// The device that last published `playing:true` (or was transferred to) is the
-// "active" one; it is the source of truth for position.
+// Every player publishes its own state; the hub keeps them per player (online ones) and forwards each
+// to the others. `activeDeviceId` / `state` remain for players that follow a single state: the player
+// that last started playing (or was transferred to).
 
 const MAX_QUEUE = 20000;
 const MAX_QUEUE_BYTES = 3 * 1024 * 1024;
 const COMMANDS = new Set(["play", "pause", "toggle", "seek", "next", "prev", "volume", "load", "enqueue", "jump", "remove", "shuffle", "repeat", "move"]);
 const MAX_ENQUEUE = 1000; // tracks per `enqueue` command
-const FENCE_MS = 5000; // a player that was just displaced may still have "playing" updates in flight
 const PLAYBACK_MESSAGES = new Set(["state", "devices"]);
 const FORGET_AFTER_MS = 90 * 24 * 3600 * 1000; // offline devices are dropped from the registry after this
 
@@ -33,8 +33,8 @@ export class Hub {
     this.users = new Map();
     /** @type {Map<string, {state:any, activeDeviceId:string|null, settings:any}>} */
     this.data = new Map();
-    /** "user\0device" -> until: players that were just paused because another one took over. */
-    this.fences = new Map();
+    /** Each online player's own playback state: user -> deviceId -> state. Players play independently. */
+    this.states = new Map();
   }
 
   _data(user) {
@@ -47,17 +47,21 @@ export class Hub {
     return d;
   }
 
-  _fence(user, id, on) {
-    const key = user + "\0" + id;
-    if (on) this.fences.set(key, Date.now() + FENCE_MS); else this.fences.delete(key);
+  _states(user) {
+    let m = this.states.get(user);
+    if (!m) this.states.set(user, (m = new Map()));
+    return m;
   }
 
-  _fenced(user, id) {
-    const until = this.fences.get(user + "\0" + id);
-    if (until === undefined) return false;
-    if (Date.now() < until) return true;
-    this.fences.delete(user + "\0" + id);
-    return false;
+  /** A player's state to everyone who follows playback. Players that predate per-player states
+   *  (`proto` 1) understand one state only, the active player's. */
+  _broadcastState(user, from, state) {
+    const activeId = this._data(user).activeDeviceId;
+    for (const [id, e] of this.users.get(user) ?? []) {
+      if (id === from || !e.info.playback) continue;
+      if (e.info.proto < 2 && from !== activeId) continue;
+      e.conn.send({ type: "state", from, state });
+    }
   }
 
   /** Online players that take part in playback sync (what remote control and "Play here" show). */
@@ -115,14 +119,19 @@ export class Hub {
     // The first hello names the player; after that the registry decides (it is renamed from the settings).
     const name = d.devices[deviceId]?.name ?? (String(info.name || "Unknown").slice(0, 64) || "Unknown");
     // `playback:false`: the player only takes part in preference sync — not listed, not controlled, publishes nothing.
-    const clean = { deviceId, name, kind, playback: info.playback !== false };
+    const clean = { deviceId, name, kind, playback: info.playback !== false, proto: Number(info.proto) >= 2 ? 2 : 1 };
     d.devices[deviceId] = { name, kind, lastSeen: Date.now() };
     this.store.save(user, d);
     room.set(deviceId, { conn, info: clean });
-    conn.send({
+    const welcome = {
       type: "welcome", deviceId, name, devices: this._devices(user),
       state: clean.playback ? d.state : null, activeDeviceId: clean.playback ? d.activeDeviceId : null, settings: d.settings,
-    });
+    };
+    if (clean.proto >= 2) { // the other players' own states
+      welcome.states = {};
+      if (clean.playback) for (const [id, st] of this._states(user)) if (id !== deviceId && room.get(id)?.info.playback) welcome.states[id] = st;
+    }
+    conn.send(welcome);
     conn.send({ type: "registry", devices: this._registry(user) });
     this._sendRegistry(user, deviceId);
     this._broadcast(user, { type: "devices", devices: this._devices(user), activeDeviceId: d.activeDeviceId }, deviceId);
@@ -133,6 +142,7 @@ export class Hub {
         const cur = room.get(deviceId);
         if (!cur || cur.conn !== conn) return; // already replaced
         room.delete(deviceId);
+        this._states(user).delete(deviceId);
         if (d.devices[deviceId]) d.devices[deviceId].lastSeen = Date.now();
         if (d.activeDeviceId === deviceId) d.activeDeviceId = null;
         this.store.save(user, d);
@@ -159,32 +169,26 @@ export class Hub {
         // stay tiny.
         const hasQueue = Array.isArray(s.queue);
         if (hasQueue && (s.queue.length > MAX_QUEUE || JSON.stringify(s.queue).length > MAX_QUEUE_BYTES)) return;
-        const queue = hasQueue ? s.queue : d.state?.queue;
+        const states = this._states(user);
+        // Players publish their own state, so nobody overwrites anybody else's.
+        const queue = hasQueue ? s.queue : (states.get(from)?.queue ?? (d.activeDeviceId === from ? d.state?.queue : undefined));
         if (!queue) return; // nothing to attach a position to yet
-        // One active player per account: only the active one (or one that starts playing, which takes
-        // over) may change the stored state. A pause from a player that is no longer the active one would
-        // otherwise overwrite the real state with its own position.
-        if (!s.playing && d.activeDeviceId && d.activeDeviceId !== from) { this._fence(user, from, false); return; }
-        if (s.playing && this._fenced(user, from)) return; // stale update of a player that was just displaced
-        d.state = {
+        const st = {
           queue, index: Number(s.index) | 0,
           positionMs: Math.max(0, Number(s.positionMs) || 0), playing: !!s.playing,
           volume: typeof s.volume === "number" ? s.volume : undefined,
           shuffle: !!s.shuffle, repeat: !!s.repeat,
           updatedAt: Date.now(),
         };
-        const becameActive = d.state.playing && d.activeDeviceId !== from;
-        if (becameActive) {
-          const prev = d.activeDeviceId ? room?.get(d.activeDeviceId) : null;
-          if (prev) { // the previous player stops: one player at a time
-            prev.conn.send({ type: "command", from, cmd: "pause" });
-            this._fence(user, d.activeDeviceId, true);
-          }
-          this._fence(user, from, false);
-          d.activeDeviceId = from;
-        }
-        this.store.save(user, d);
-        this._broadcast(user, { type: "state", from, state: hasQueue ? d.state : { ...d.state, queue: undefined } }, from);
+        const wasPlaying = !!states.get(from)?.playing;
+        states.set(from, st);
+        // Kept for players that follow one state only: the one of the player that last STARTED playing
+        // (a player that keeps playing does not keep taking the role back).
+        const becameActive = st.playing && d.activeDeviceId !== from && (!wasPlaying || !d.activeDeviceId);
+        if (becameActive) d.activeDeviceId = from;
+        if (d.activeDeviceId === from || !d.activeDeviceId) { d.state = st; this.store.save(user, d); }
+        else if (becameActive) this.store.save(user, d);
+        this._broadcastState(user, from, hasQueue ? st : { ...st, queue: undefined });
         if (becameActive) this._broadcast(user, { type: "devices", devices: this._devices(user), activeDeviceId: from });
         return;
       }
@@ -203,16 +207,18 @@ export class Hub {
         return;
       }
       case "transfer": {
-        const t = room?.get(String(msg.target));
-        if (!t || !t.info.playback || !d.state) return;
-        // Previous owner pauses; target loads the stored state and plays.
-        const prev = d.activeDeviceId && d.activeDeviceId !== msg.target ? room.get(d.activeDeviceId) : null;
-        prev?.conn.send({ type: "command", from, cmd: "pause" });
-        if (prev) this._fence(user, d.activeDeviceId, true);
-        this._fence(user, String(msg.target), false);
-        d.activeDeviceId = String(msg.target);
+        // Moves a player's playback to another: the source pauses, the target loads its state and plays.
+        // `source` defaults to the player that last started playing.
+        const target = String(msg.target);
+        const t = room?.get(target);
+        const sourceId = msg.source ? String(msg.source) : d.activeDeviceId;
+        const src = (sourceId && this._states(user).get(sourceId)) || (sourceId === d.activeDeviceId ? d.state : null) || d.state;
+        if (!t || !t.info.playback || !src) return;
+        if (sourceId && sourceId !== target) room.get(sourceId)?.conn.send({ type: "command", from, cmd: "pause" });
+        d.activeDeviceId = target;
+        d.state = src;
         this.store.save(user, d);
-        t.conn.send({ type: "command", from, cmd: "load", args: { state: { ...d.state, playing: true } } });
+        t.conn.send({ type: "command", from, cmd: "load", args: { state: { ...src, playing: true } } });
         this._broadcast(user, { type: "devices", devices: this._devices(user), activeDeviceId: d.activeDeviceId });
         return;
       }
@@ -249,7 +255,7 @@ export class Hub {
       case "clear": {
         // Wipes what the engine holds for this user: the playback state and/or the shared preferences.
         const state = msg.state === true, settings = msg.settings === true;
-        if (state) { d.state = null; d.activeDeviceId = null; }
+        if (state) { d.state = null; d.activeDeviceId = null; this._states(user).clear(); }
         if (settings) d.settings = null;
         if (state || settings) {
           this.store.save(user, d);

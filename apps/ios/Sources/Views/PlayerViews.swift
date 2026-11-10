@@ -13,11 +13,11 @@ struct MiniPlayerBar: View {
             if let target = app.sync.remoteTarget {
                 // The controls act on another device: show what it plays.
                 let name = app.sync.devices.first(where: { $0.id == target })?.name ?? String(localized: "another device")
-                if app.sync.activeDeviceId == target, let t = app.sync.remoteTrack {
+                if let st = app.sync.state(of: target), let t = st.track {
                     TimelineView(.periodic(from: .now, by: 1)) { ctx in
                         bar(title: t.title, subtitle: String(localized: "Playing on \(name)"), cover: t.coverArt,
-                            progress: t.duration > 0 ? app.sync.remotePosition(at: ctx.date) / Double(t.duration) : 0,
-                            playing: app.sync.remotePlaying, accent: true,
+                            progress: t.duration > 0 ? app.sync.position(of: target, at: ctx.date) / Double(t.duration) : 0,
+                            playing: st.playing, accent: true,
                             toggle: { app.sync.command(to: target, "toggle") },
                             next: { app.sync.command(to: target, "next") },
                             open: { router.showPlayer = true })
@@ -31,13 +31,14 @@ struct MiniPlayerBar: View {
                     progress: p.duration > 0 ? p.position / p.duration : 0,
                     playing: p.isPlaying,
                     toggle: { p.toggle() }, next: { p.next() }, open: { router.showPlayer = true })
-            } else if let t = app.sync.remoteTrack, let active = app.sync.activeDeviceId, active != app.sync.deviceId {
-                let name = app.sync.devices.first(where: { $0.id == active })?.name ?? String(localized: "another device")
+            } else if let other = app.sync.otherPlaying, let t = other.state.track {
+                // Silent here, but another device plays: show it; opening it makes it the one to control.
+                let name = app.sync.devices.first(where: { $0.id == other.id })?.name ?? String(localized: "another device")
                 bar(title: t.title, subtitle: String(localized: "Playing on \(name)"), cover: t.coverArt, progress: 0,
-                    playing: app.sync.remotePlaying,
-                    toggle: { app.sync.command(to: active, "toggle") },
-                    next: { app.sync.command(to: active, "next") },
-                    open: { app.sync.transfer(to: app.sync.deviceId) })
+                    playing: true,
+                    toggle: { app.sync.command(to: other.id, "toggle") },
+                    next: { app.sync.command(to: other.id, "next") },
+                    open: { app.sync.setTarget(other.id); router.showPlayer = true })
             }
         }
     }

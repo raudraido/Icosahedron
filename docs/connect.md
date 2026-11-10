@@ -4,15 +4,18 @@ Every app lets you choose **which of your devices plays**, and then controls tha
 
 ## Model
 
-- A **player** is a device that makes the sound. The account has **one active player at a time**.
-- Every app has a **target**: the device its playback controls act on. It is the app's own choice (a phone can control the desktop while the desktop's own app keeps its own target) and defaults to *this device*.
+- A **player** is a device that makes the sound. **Players are independent**: the one at home and the one in the car can play different music at the same time. Nothing ever pauses another player.
+- Every player keeps its **own playback state** (queue, position, playing). The engine keeps them per player and forwards each to the others, so every app can show what every other device is doing.
+- Every app has a **target**: the device its playback controls act on and whose now-playing it shows. It is the app's own choice and defaults to *this device*. Choosing a target **only controls**; it never moves music.
+- **Moving music is a separate, explicit action:** *Send my playback to X* and *Play here* (a pull from the device being controlled). The old player pauses and the new one continues at the same position.
 - **Browsing stays local** (search, library, albums). What a track or album does when you press play, play next or add to queue goes to the target.
 
-## Engine rule (one active player)
+## Engine
 
-- A player that starts playing becomes the active one. The previous active player is sent `pause` and is *fenced* for 5 seconds: its in-flight "playing" updates are ignored, so two players cannot take the role back and forth.
-- Only the active player (or one that starts playing) changes the stored state. A pause from a player that is no longer active is ignored; it would overwrite the real state with its own position.
-- `transfer` does the same: the old player pauses, the target loads the stored state and plays.
+- `state` messages are per player: a player's state is stored under its own id and forwarded to everyone who follows playback. A pause or position of one player never changes another's.
+- `welcome.states` gives a newly connected app the states of the other online players. Apps publish their state when they connect (if they hold a queue) and while they play.
+- `transfer { source?, target }` moves `source`'s playback (default: the player that last started playing) to `target`.
+- Players that predate this (hello without `proto: 2`) follow one state only: `activeDeviceId` / `state`, the player that last **started** playing. Update all players to get the full behaviour.
 
 ## Controlling a target
 
@@ -28,11 +31,11 @@ When the target is another device the app shows **that device's** now-playing (t
 | Jump to / remove / reorder a queue item | `jump`, `remove`, `move` |
 | Shuffle, repeat | `shuffle`, `repeat` (the target publishes its own state in `shuffle` / `repeat`) |
 
-Choosing a different target while this device is playing **transfers** the playback to it (the music follows you); choosing *this device* while another plays offers *Play here* (a transfer back).
+Choosing a different target does not move this device's music. To move it, use *Send playback here* on the other device's row; to bring the other device's music to this one, *Play here*.
 
 ## Building it
 
-1. Engine: the one-active-player rule. **Done.**
+1. Engine: independent players with per-player states. **Done.**
 2. iOS: a target in the app model, the device picker, mini player and Now Playing for the target, every play action routed to it.
 3. Desktop and web: the same.
 

@@ -2,6 +2,10 @@
 
 A native SwiftUI app for iPhone and iPad (iOS 26.1 or later), built as an unsigned `.ipa` (sign it with SideStore, AltStore, Sideloadly or iloader: [docs/ios.md](../../docs/ios.md)). It has been part of the shared releases 0.15.3 to 0.15.9 (see the [main changelog](../../CHANGELOG.md)); from here it has its **own version, release and changelog**. What works with which server: [docs/compatibility.md](../../docs/compatibility.md).
 
+## Unreleased
+
+- **Quick Connect switch** in Settings → Sync Server for a server administrator (the code entry stays for everyone while it is on).
+
 ## 0.1.0
 
 **The first release with the app's own version number.** It includes everything the app has done since 0.15.3. The sync features need the [server](../server/CHANGELOG.md) (update it first); without it the app plays straight from Navidrome.

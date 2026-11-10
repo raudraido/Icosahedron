@@ -12,6 +12,26 @@ export async function quickConnectEnabled(): Promise<boolean> {
   try { return (await r.json()) === true; } catch { return false; }
 }
 
+export interface QuickConnectSettings {
+  enabled: boolean;
+  /** Only a server administrator can switch it, and not when the server's environment decides (QUICK_CONNECT). */
+  canChange: boolean;
+  source: "env" | "setting";
+}
+
+export async function quickConnectSettings(): Promise<QuickConnectSettings | null> {
+  const r = await engine("/quickconnect/settings");
+  if (!r?.ok) return null;
+  try { return (await r.json()) as QuickConnectSettings; } catch { return null; }
+}
+
+/** Switches Quick Connect on the server (administrators only). Returns the new state, or null when refused. */
+export async function setQuickConnectEnabled(enabled: boolean): Promise<boolean | null> {
+  const r = await engine("/quickconnect/settings", { method: "PUT", body: JSON.stringify({ enabled }) });
+  if (!r?.ok) return null;
+  try { return ((await r.json()) as { enabled: boolean }).enabled; } catch { return null; }
+}
+
 export type AuthorizeResult = "ok" | "unknown" | "already" | "rate" | "offline" | "error";
 
 export async function authorizeQuickConnect(code: string): Promise<AuthorizeResult> {

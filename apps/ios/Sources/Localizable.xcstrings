@@ -1171,6 +1171,26 @@
         }
       }
     },
+    "Allow devices to sign in with a code": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Luba seadmetel koodiga sisse logida"
+          }
+        }
+      }
+    },
+    "Switched by the server's environment (QUICK_CONNECT), not from here.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lülitatakse serveri keskkonnamuutujaga (QUICK_CONNECT), mitte siit."
+          }
+        }
+      }
+    },
     "Add to Device Queue": {
       "localizations": {
         "et": {

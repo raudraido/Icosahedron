@@ -9,8 +9,11 @@ import { startDiscovery, addressFor, DISCOVERY_QUERY } from "../src/discovery.mj
 const verify = async (_url, a) => a?.t === "good";
 const AUTH = { authorization: "Subsonic u=alice&t=good&s=abc" };
 
+const ADMIN = { authorization: "Subsonic u=root&t=good&s=abc" };
+const isAdmin = async (_url, c) => c.u === "root";
+
 async function boot(quickConnect) {
-  const app = createApp({ navidromeUrl: "http://nav", store: memoryStore(), verify, quickConnect });
+  const app = createApp({ navidromeUrl: "http://nav", store: memoryStore(), verify, isAdmin, quickConnect });
   await new Promise((r) => app.http.listen(0, r));
   const base = `http://127.0.0.1:${app.http.address().port}`;
   const call = async (method, path, { body, headers } = {}) => {
@@ -92,4 +95,48 @@ test("discovery: without a public URL it uses this host's address on the asker's
   };
   assert.equal(addressFor("10.0.0.50", { enginePort: 8484 }, interfaces), "http://10.0.0.18:8484");
   assert.equal(addressFor("192.168.9.9", { enginePort: 8484 }, interfaces), null);
+});
+
+test("settings: everyone signed in sees the state, only an administrator switches it", async () => {
+  const saved = [];
+  const { app, call } = await boot(createQuickConnect({ enabled: false, onChange: (on) => saved.push(on) }));
+  assert.equal((await call("GET", "/quickconnect/settings")).status, 401);
+  assert.deepEqual((await call("GET", "/quickconnect/settings", { headers: AUTH })).json, { enabled: false, canChange: false, source: "setting" });
+  assert.deepEqual((await call("GET", "/quickconnect/settings", { headers: ADMIN })).json, { enabled: false, canChange: true, source: "setting" });
+
+  assert.equal((await call("PUT", "/quickconnect/settings", { body: { enabled: true }, headers: AUTH })).status, 403);
+  assert.equal((await call("GET", "/quickconnect/enabled")).json, false);
+
+  assert.deepEqual((await call("PUT", "/quickconnect/settings", { body: { enabled: true }, headers: ADMIN })).json, { enabled: true });
+  assert.equal((await call("GET", "/quickconnect/enabled")).json, true);
+  assert.deepEqual(saved, [true]); // persisted by the caller
+
+  // switching off drops what was pending
+  const init = (await call("POST", "/quickconnect/initiate", { body: { name: "TV" } })).json;
+  assert.equal((await call("GET", `/quickconnect/connect?secret=${init.secret}`)).status, 200);
+  await call("PUT", "/quickconnect/settings", { body: { enabled: false }, headers: ADMIN });
+  assert.equal((await call("POST", "/quickconnect/initiate", { body: {} })).status, 403);
+  assert.deepEqual(saved, [true, false]);
+  app.close();
+});
+
+test("settings: the environment locks the switch", async () => {
+  const { app, call } = await boot(createQuickConnect({ enabled: true, locked: true }));
+  assert.deepEqual((await call("GET", "/quickconnect/settings", { headers: ADMIN })).json, { enabled: true, canChange: false, source: "env" });
+  assert.equal((await call("PUT", "/quickconnect/settings", { body: { enabled: false }, headers: ADMIN })).status, 409);
+  assert.equal((await call("GET", "/quickconnect/enabled")).json, true);
+  app.close();
+});
+
+test("settings.json keeps the switch across restarts", async () => {
+  const { mkdtempSync, readFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { fileSettings } = await import("../src/settings.mjs");
+  const dir = mkdtempSync(join(tmpdir(), "ico-settings-"));
+  const a = fileSettings(dir);
+  assert.equal(a.get("quickConnect"), undefined);
+  a.set("quickConnect", true);
+  assert.equal(fileSettings(dir).get("quickConnect"), true);
+  assert.deepEqual(JSON.parse(readFileSync(join(dir, "settings.json"), "utf8")), { quickConnect: true });
 });

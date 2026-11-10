@@ -2,6 +2,11 @@
 
 The server is the **sync engine and the web app it serves** (one Docker image, `ghcr.io/raudraido/icosahedron-server`). Versions before 0.16.0 shared one number with the other apps (0.15.3 to 0.15.9); the full text of those releases is in the [main changelog](../../CHANGELOG.md). What each version needs and gives: [docs/compatibility.md](../../docs/compatibility.md).
 
+## Unreleased
+
+- **Quick Connect switch.** A server administrator (a Navidrome admin account) switches Quick Connect on and off in **Settings → Sync Server → Quick Connect**; the choice is kept in `settings.json` in the data directory and switching off drops pending codes. `GET /quickconnect/settings` tells any signed-in app the state; `PUT` changes it (administrators only). `QUICK_CONNECT` in the environment still works and, when set, decides and locks the switch. See [docs/quick-connect.md](../../docs/quick-connect.md).
+- **One compose file for everything.** [docker-compose.example.yml](docker-compose.example.yml) now sets up the engine (with the web app) and the LAN discovery helper together, both driven by one [.env](.env.example) (`NAVIDROME_URL`, `PUBLIC_URL`, `ENGINE_PORT`, `ENGINE_NAME`, Last.fm). See [docs/deploy-server.md](../../docs/deploy-server.md).
+
 ## 0.16.0
 
 **What's new since the first engine (0.15.3).** The engine keeps your players in step, lets any of them control another, signs a TV in with a code and finds itself on your network. Update with `docker compose pull && docker compose up -d`; the web app is part of the image, so it updates too (reload the page, hard reload `Ctrl+Shift+R` if the browser keeps the old one).

@@ -3,7 +3,7 @@ import { Laptop, Monitor, Smartphone, Tv } from "lucide-react";
 import { useSync, syncActions, setSyncUrl, type RegistryDevice } from "../lib/sync";
 import { useSyncOptions, setSyncOption, setPrefGroup, type PrefGroup } from "../lib/syncOptions";
 import { platform } from "../platform";
-import { quickConnectEnabled, authorizeQuickConnect, type AuthorizeResult } from "../lib/quickConnect";
+import { quickConnectSettings, setQuickConnectEnabled, authorizeQuickConnect, type AuthorizeResult, type QuickConnectSettings } from "../lib/quickConnect";
 import { Section, ToggleRow } from "./SettingsParts";
 
 // Settings > Sync Server: the connection, this player's name, the players the
@@ -77,16 +77,29 @@ const QC_MESSAGES: Record<AuthorizeResult, string> = {
   error: "Something went wrong.",
 };
 
-/** Sign another device in with the six-digit code it shows (a TV, for example). Only when the server has Quick Connect on. */
+/** Sign another device in with the six-digit code it shows (a TV, for example). A server administrator switches it on and off here. */
 function QuickConnectSection() {
-  const [enabled, setEnabled] = useState(false);
+  const [cfg, setCfg] = useState<QuickConnectSettings | null>(null);
   const [code, setCode] = useState("");
   const [result, setResult] = useState<AuthorizeResult | null>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { void quickConnectEnabled().then(setEnabled); }, []);
-  if (!enabled) return null;
+  useEffect(() => { void quickConnectSettings().then(setCfg); }, []);
+  if (!cfg || (!cfg.enabled && !cfg.canChange)) return null; // nothing to do for someone who cannot switch it on
   return (
     <Section title="Quick Connect">
+      {cfg.canChange && (
+        <ToggleRow
+          label="Allow devices to sign in with a code"
+          description="Server setting for everyone on this server. Off by default."
+          checked={cfg.enabled}
+          onChange={async (v) => { const now = await setQuickConnectEnabled(v); if (now !== null) setCfg({ ...cfg, enabled: now }); }}
+        />
+      )}
+      {cfg.source === "env" && (
+        <div style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>Switched by the server's environment (QUICK_CONNECT), not from here.</div>
+      )}
+      {cfg.enabled && (
+      <>
       <div style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
         A TV or another device shows a six-digit code. Enter it here to sign that device in with your account.
       </div>
@@ -110,6 +123,8 @@ function QuickConnectSection() {
         <button type="submit" disabled={code.length !== 6 || busy} style={{ ...button, opacity: code.length === 6 && !busy ? 1 : 0.5 }}>Authorize</button>
       </form>
       {result && <div style={{ fontSize: "var(--fs-small)", color: result === "ok" ? "var(--accent)" : "var(--error)" }}>{QC_MESSAGES[result]}</div>}
+      </>
+      )}
     </Section>
   );
 }

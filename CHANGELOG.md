@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Quick Connect on/off in Settings → Sync Server** for a server administrator (the code entry stays for everyone while it is on). See the [server changelog](apps/server/CHANGELOG.md).
+
 ## 0.16.0
 
 **What's new since 0.15.1.** The desktop app can now work together with your other devices: sync, remote control, a jukebox, signing a TV in with a code. Everything new is **optional**: without a sync server the app behaves as before.

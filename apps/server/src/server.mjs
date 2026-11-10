@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { join, extname, normalize, sep } from "node:path";
 import { WebSocketServer } from "ws";
 import { Hub } from "./hub.mjs";
-import { verifySubsonic } from "./auth.mjs";
+import { verifySubsonic, isNavidromeAdmin } from "./auth.mjs";
 import { isProxied, proxyToNavidrome } from "./proxy.mjs";
 import { createBpmStore } from "./bpm.mjs";
 import { createLastFm } from "./lastfm.mjs";
@@ -24,7 +24,7 @@ const MIME = {
 /**
  * @param {{navidromeUrl:string, webRoot?:string, store:any, verify?:Function}} opts
  */
-export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmStore(), lastfm = createLastFm({}), verify = verifySubsonic, quickConnect = createQuickConnect() }) {
+export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmStore(), lastfm = createLastFm({}), verify = verifySubsonic, isAdmin = isNavidromeAdmin, quickConnect = createQuickConnect() }) {
   const hub = new Hub(store);
   const authCache = new Map(); // "u|t|s" -> expiry; tokens stay valid, so re-verifying each call is wasted
 
@@ -42,6 +42,17 @@ export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmSt
     return cred;
   }
   const authed = async (req) => (await authedCred(req))?.u ?? null;
+
+  const adminCache = new Map(); // "u|t|s" -> {at, admin}: roles rarely change, so ask Navidrome once in a while
+  async function isAdminCred(cred) {
+    const key = `${cred.u}|${cred.t}|${cred.s}`;
+    const hit = adminCache.get(key);
+    if (hit && hit.at > Date.now() - 5 * 60 * 1000) return hit.admin;
+    const admin = await isAdmin(navidromeUrl, cred);
+    adminCache.set(key, { at: Date.now(), admin });
+    if (adminCache.size > 200) adminCache.delete(adminCache.keys().next().value);
+    return admin;
+  }
 
   async function readJson(req, limit = 16 * 1024) {
     let body = "";
@@ -87,6 +98,22 @@ export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmSt
     const route = url.pathname.slice("/quickconnect".length);
     const m = req.method;
     if (route === "/enabled" && m === "GET") return json(200, quickConnect.enabled);
+    // The switch: anyone signed in sees the state, only an administrator changes it (and not when the environment decides).
+    if (route === "/settings") {
+      const cred = await authedCred(req);
+      if (!cred) return json(401, { error: "Sign in first" });
+      const admin = await isAdminCred(cred);
+      if (m === "GET") return json(200, { enabled: quickConnect.enabled, canChange: admin && !quickConnect.locked, source: quickConnect.locked ? "env" : "setting" });
+      if (m === "PUT") {
+        if (!admin) return json(403, { error: "Only an administrator can change this" });
+        if (quickConnect.locked) return json(409, { error: "Set by the server's environment (QUICK_CONNECT)" });
+        const b = await readJson(req);
+        quickConnect.setEnabled(b.enabled === true);
+        return json(200, { enabled: quickConnect.enabled });
+      }
+      res.writeHead(405).end();
+      return;
+    }
     if (!quickConnect.enabled) return json(403, { error: "Quick Connect is disabled on this server" });
     try {
       if (route === "/initiate" && m === "POST") {

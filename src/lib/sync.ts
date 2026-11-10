@@ -18,6 +18,7 @@ export interface SyncDevice { deviceId: string; name: string; kind: "electron" |
 export interface RegistryDevice { deviceId: string; name: string; kind: SyncDevice["kind"]; online: boolean; lastSeen: number }
 export interface RemoteState {
   queue?: Omit<Track, "stream_url">[]; index: number; positionMs: number; playing: boolean; updatedAt: number;
+  shuffle?: boolean; repeat?: boolean;
 }
 
 interface SyncStore {
@@ -99,6 +100,11 @@ export const syncActions = {
   forget: (target: string) => send({ type: "forget", target }),
   /** Wipe what the engine stores: the playback state and/or the shared preferences. */
   clear: (what: { state?: boolean; settings?: boolean }) => send({ type: "clear", ...what }),
+  /** Remote: shuffle / repeat of `target`. Each player applies its own meaning of repeat (desktop repeats the track, iOS loops the queue). */
+  shuffle: (target: string, on: boolean) => send({ type: "command", target, cmd: "shuffle", args: { on } }),
+  repeat: (target: string, on: boolean) => send({ type: "command", target, cmd: "repeat", args: { on } }),
+  /** Remote: move queue item `from` so that it ends up at `to` (array-move semantics). */
+  move: (target: string, from: number, to: number) => send({ type: "command", target, cmd: "move", args: { from, to } }),
   /** Jukebox: remove item `index` from `target`'s queue. */
   removeAt: (target: string, index: number) => send({ type: "command", target, cmd: "remove", args: { index } }),
 };
@@ -218,6 +224,15 @@ async function handleCommand(cmd: string, args: any): Promise<void> {
       if (t) s.removeFromQueue(t.id);
       break;
     }
+    case "shuffle": if (typeof args?.on === "boolean" && s.shuffle !== args.on) s.toggleShuffle(); break;
+    case "repeat": if (typeof args?.on === "boolean" && s.repeat !== args.on) s.toggleRepeat(); break;
+    case "move": {
+      const t = s.queue[args?.from];
+      const to = args?.to;
+      // reorderQueue takes the insertion index in the queue as it is before the item is removed
+      if (t && Number.isInteger(to) && to >= 0 && to < s.queue.length) s.reorderQueue(t.id, to > args.from ? to + 1 : to);
+      break;
+    }
   }
 }
 
@@ -260,6 +275,7 @@ function publish(forceQueue: boolean): void {
     state: {
       ...(forceQueue ? { queue: s.queue.map(toWire) } : {}),
       index: s.currentIndex, positionMs: Math.round(s.currentTime * 1000), playing: s.playing, volume: s.volume,
+      shuffle: s.shuffle, repeat: s.repeat,
     },
   });
 }
@@ -271,7 +287,7 @@ function onStoreChange(): void {
   lastQueue = s.queue;
   // Idle devices stay silent; a pause/stop is still published once.
   if (!s.playing && !wasPlaying) return;
-  const key = `${s.currentIndex}|${s.playing}|${s.queue.length}|${s.queue[s.currentIndex]?.id}`;
+  const key = `${s.currentIndex}|${s.playing}|${s.queue.length}|${s.queue[s.currentIndex]?.id}|${s.shuffle}|${s.repeat}`;
   if (!queueChanged && key === lastPublishedKey && s.playing === wasPlaying) return;
   wasPlaying = s.playing;
   lastPublishedKey = key;

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Remote control grows:** new commands `shuffle`, `repeat` and `move` (reorder the queue) on the engine, the desktop/web app and iOS; every player now also publishes its shuffle and repeat state. See [docs/sync-protocol.md](docs/sync-protocol.md).
 - **iOS: Settings → Sync Server.** Name this phone, see and rename the registered players (forget offline ones), choose what the phone keeps in sync (playback and remote control, equalizer, lyrics source) and clear the queue or preferences the server stores. Needs the 0.15.5 engine.
 
 ## 0.15.5

@@ -20,7 +20,7 @@
 
 const MAX_QUEUE = 20000;
 const MAX_QUEUE_BYTES = 3 * 1024 * 1024;
-const COMMANDS = new Set(["play", "pause", "toggle", "seek", "next", "prev", "volume", "load", "enqueue", "jump", "remove"]);
+const COMMANDS = new Set(["play", "pause", "toggle", "seek", "next", "prev", "volume", "load", "enqueue", "jump", "remove", "shuffle", "repeat", "move"]);
 const MAX_ENQUEUE = 1000; // tracks per `enqueue` command
 const FENCE_MS = 5000; // a player that was just displaced may still have "playing" updates in flight
 const PLAYBACK_MESSAGES = new Set(["state", "devices"]);
@@ -170,6 +170,7 @@ export class Hub {
           queue, index: Number(s.index) | 0,
           positionMs: Math.max(0, Number(s.positionMs) || 0), playing: !!s.playing,
           volume: typeof s.volume === "number" ? s.volume : undefined,
+          shuffle: !!s.shuffle, repeat: !!s.repeat,
           updatedAt: Date.now(),
         };
         const becameActive = d.state.playing && d.activeDeviceId !== from;
@@ -195,6 +196,8 @@ export class Hub {
           if (!["now", "next", "end"].includes(msg.args.at)) return;
         }
         if ((msg.cmd === "jump" || msg.cmd === "remove") && !Number.isInteger(msg.args?.index)) return;
+        if ((msg.cmd === "shuffle" || msg.cmd === "repeat") && typeof msg.args?.on !== "boolean") return;
+        if (msg.cmd === "move" && !(Number.isInteger(msg.args?.from) && Number.isInteger(msg.args?.to))) return;
         const t = room?.get(String(msg.target));
         if (t?.info.playback) t.conn.send({ type: "command", from, cmd: msg.cmd, args: msg.args });
         return;

@@ -25,7 +25,8 @@ When the target is another device the app shows **that device's** now-playing (t
 | Play these tracks now (a track, an album, a playlist) | `load` with `{ queue, index, positionMs: 0, playing: true }` |
 | Play next, add to queue | `enqueue` (`next`, `end`) |
 | Play one track right after the current one and start it | `enqueue` (`now`) |
-| Jump to / remove a queue item | `jump`, `remove` |
+| Jump to / remove / reorder a queue item | `jump`, `remove`, `move` |
+| Shuffle, repeat | `shuffle`, `repeat` (the target publishes its own state in `shuffle` / `repeat`) |
 
 Choosing a different target while this device is playing **transfers** the playback to it (the music follows you); choosing *this device* while another plays offers *Play here* (a transfer back).
 
@@ -35,7 +36,9 @@ Choosing a different target while this device is playing **transfers** the playb
 2. iOS: a target in the app model, the device picker, mini player and Now Playing for the target, every play action routed to it.
 3. Desktop and web: the same.
 
-## Not decided
+## The player screen
 
-- Shuffle and repeat of the target (no commands yet).
+The full-screen player looks the same whether it plays here or controls another device: cover, progress, queue, lyrics, info, favorite and the track menu all work on the target's track and queue. The **devices button is highlighted** with the target's name; tapping it switches target. Controls that only make sense for this phone's own sound (AirPlay, equalizer, playback speed) are hidden while another device is the target. A target with nothing playing shows an empty state with the devices button still available. The *Devices* tab is the overview: every device with what it plays; tapping one makes it the target.
+
+## Not decided
 - Whether the choice of target is remembered across launches (today: every launch starts on *this device*).

@@ -2,6 +2,14 @@
 
 The server is the **sync engine and the web app it serves** (one Docker image, `ghcr.io/raudraido/icosahedron-server`). Versions before 0.16.0 shared one number with the other apps (0.15.3 to 0.15.9); the full text of those releases is in the [main changelog](../../CHANGELOG.md). What each version needs and gives: [docs/compatibility.md](../../docs/compatibility.md).
 
+## 0.16.3
+
+The web app gets profile pictures and user management. **Update with** `docker compose pull && docker compose up -d` (the web app is in the image; reload the page, `Ctrl+Shift+R` if the browser keeps the old one).
+
+- **Profile picture in the web app.** A round button at the top right of the queue panel shows who is signed in (your picture, or the first letter of your name); click it to add, change or remove the picture, or open Settings. The picture is also in **Settings → System → Active Connection**.
+- **Everyone can see everyone's picture.** `GET /avatar/<user name>` now answers for any signed-in user (changing or removing stays with the owner: `PUT` and `DELETE` on `/avatar`).
+- **Settings → Users** (administrators): list the accounts with their pictures, add a user, reset a password, make someone an administrator or a plain user, delete a user. It uses Navidrome's own user API with the sign-in the app already has, so no password is asked.
+
 ## 0.16.2
 
 Last.fm connects once for all your devices, and the server keeps your profile picture. **Update with** `docker compose pull && docker compose up -d`. Nothing to configure.

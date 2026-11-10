@@ -180,9 +180,16 @@ export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmSt
   }
 
   // The profile picture of the signed-in user (GET it, PUT a new one as the raw image, DELETE it).
-  async function handleAvatar(req, res) {
-    const user = await authed(req);
-    if (!user) { res.writeHead(401).end(); return; }
+  // Any signed-in user may also GET another user's picture: /avatar/<user name>.
+  async function handleAvatar(req, res, url) {
+    const me = await authed(req);
+    if (!me) { res.writeHead(401).end(); return; }
+    let user = me;
+    const other = url.pathname.slice("/avatar".length).replace(/^\//, "");
+    if (other) {
+      if (req.method !== "GET") { res.writeHead(405).end(); return; }
+      try { user = decodeURIComponent(other); } catch { res.writeHead(400).end(); return; }
+    }
     if (req.method === "GET") {
       const a = avatars.get(user);
       if (!a) { res.writeHead(404).end(); return; }
@@ -211,7 +218,7 @@ export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmSt
     if (url.pathname === "/bpm" || url.pathname.startsWith("/bpm/")) { handleBpm(req, res, url).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); }); return; }
     if (url.pathname.startsWith("/quickconnect/")) { handleQuickConnect(req, res, url).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); }); return; }
     if (url.pathname.startsWith("/lastfm/")) { handleLastfm(req, res, url).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); }); return; }
-    if (url.pathname === "/avatar") { handleAvatar(req, res).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); }); return; }
+    if (url.pathname === "/avatar" || url.pathname.startsWith("/avatar/")) { handleAvatar(req, res, url).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); }); return; }
     if (url.pathname === "/healthz") { res.writeHead(200).end("ok"); return; }
     if (url.pathname === "/config.json") {
       // The web UI reads this to learn which Subsonic server to talk to.

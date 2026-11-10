@@ -11,6 +11,10 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { platform } from "../platform";
 import { Section, Row, ToggleRow } from "./SettingsParts";
 import { SyncServerTab } from "./SyncSettings";
+import { useSync } from "../lib/sync";
+import { UsersTab } from "./UsersTab";
+import { Avatar, changeMyPicture } from "../components/Avatar";
+import { useAvatar, removeMyAvatar } from "../lib/avatar";
 
 // New view (no old-app equivalent — Sonar's SettingsWindow is a single
 // two-column dialog with no tabs) opened via the footer bar's gear icon
@@ -53,16 +57,6 @@ function SideTabButton({ label, active, onClick }: { label: string; active: bool
     >
       {label}
     </button>
-  );
-}
-
-function ComingSoon({ label }: { label: string }) {
-  return (
-    <div className="flex-1 flex items-center justify-center">
-      <span style={{ color: "var(--text-primary)", opacity: 0.25, fontSize: "var(--fs-small)", letterSpacing: 1, textTransform: "uppercase" }}>
-        {label} — Coming Soon™
-      </span>
-    </div>
   );
 }
 
@@ -495,6 +489,30 @@ function AppearanceTab() {
   );
 }
 
+// The profile picture: kept by the sync server and shown on every device (queue panel button, phone).
+function ProfilePictureRow() {
+  const username = useStore((s) => s.username);
+  const hasSync = useSync((s) => !!s.syncUrl);
+  const mine = useAvatar(username);
+  const btn = {
+    background: "transparent", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: 4,
+    padding: "5px 12px", cursor: "pointer", fontSize: "var(--fs-secondary)",
+  } as const;
+  return (
+    <div className="flex items-center" style={{ gap: 14, padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
+      <Avatar user={username} size={56} />
+      {hasSync ? (
+        <div className="flex items-center" style={{ gap: 8 }}>
+          <button style={btn} onClick={() => void changeMyPicture()}>{mine ? "Change photo" : "Add photo"}</button>
+          {mine && <button style={btn} onClick={() => void removeMyAvatar()}>Remove</button>}
+        </div>
+      ) : (
+        <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>A profile picture is kept by the sync server (Settings → Sync Server).</span>
+      )}
+    </div>
+  );
+}
+
 function SystemTab() {
   const serverUrl = useStore((s) => s.serverUrl);
   const username = useStore((s) => s.username);
@@ -512,6 +530,7 @@ function SystemTab() {
         <UpdateRow />
       </Section>
       <Section title="Active Connection">
+        <ProfilePictureRow />
         <Row label="Server" value={serverUrl} />
         <Row label="Username" value={username} />
         <button
@@ -1770,7 +1789,7 @@ export function Settings() {
             {tab === "appearance" && <AppearanceTab />}
             {tab === "themes" && <ThemesTab />}
             {tab === "servers" && <ServersTab />}
-            {tab === "users" && <ComingSoon label="Users" />}
+            {tab === "users" && <UsersTab />}
             {tab === "themeBuilder" && <ThemeBuilderTab />}
             {tab === "hotkeys" && <HotkeysTab />}
           </div>

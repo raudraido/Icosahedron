@@ -411,6 +411,12 @@ function registerIpcHandlers(): void {
   ipcMain.handle("create_share", (_e, { itemId, resourceType, expiresDays, downloadable }) =>
     requireClient().createShare(itemId, resourceType, expiresDays, downloadable));
 
+  ipcMain.handle("users_is_admin", () => requireClient().isAdmin());
+  ipcMain.handle("users_list", () => requireClient().listUsers());
+  ipcMain.handle("users_create", (_e, { u }) => requireClient().createUser(u));
+  ipcMain.handle("users_update", (_e, { id, patch, current }) => requireClient().updateUser(id, patch, current));
+  ipcMain.handle("users_delete", (_e, { id }) => requireClient().deleteUser(id));
+
   ipcMain.handle("scrobble", (_e, { trackId, submission }) => requireClient().scrobble(trackId, submission));
 
   ipcMain.handle("get_play_queue", () => requireClient().getPlayQueue());

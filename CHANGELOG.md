@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.16.3
+
+**Update the server first** (0.16.3), then this app.
+
+- **Profile picture.** A round button at the top right of the queue panel shows who is signed in; click it to add, change or remove your picture (or open Settings). It is the same picture on every device, kept by the sync server, and also in Settings → System → Active Connection.
+- **Settings → Users** (for a Navidrome administrator): list accounts with their pictures, add users, reset passwords, change who is an administrator, delete users. The tab that said "coming soon" now works. Other accounts see "only a server administrator can manage users".
+- Needs a sync server for the pictures; user management works with plain Navidrome.
+
 ## 0.16.2
 
 **Update the server first** (0.16.2), then this app. The Last.fm connection you already made here is now shared with the server.

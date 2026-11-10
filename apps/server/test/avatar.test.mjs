@@ -28,6 +28,13 @@ test("profile picture: put, get with ETag, replace, delete, per user", async () 
   assert.equal(again.status, 304);
 
   assert.equal((await fetch(`${base}/avatar`, { headers: OTHER })).status, 404); // each user has their own
+  // ...but anyone signed in can look at another user's picture, never change it
+  const seen = await fetch(`${base}/avatar/bob`, { headers: OTHER });
+  assert.equal(seen.status, 200);
+  assert.deepEqual(Buffer.from(await seen.arrayBuffer()), JPEG);
+  assert.equal((await fetch(`${base}/avatar/bob`, { headers: { authorization: "Subsonic u=amy&t=bad&s=x" } })).status, 401);
+  assert.equal((await fetch(`${base}/avatar/bob`, { method: "PUT", headers: OTHER, body: JPEG })).status, 405);
+  assert.equal((await fetch(`${base}/avatar/nobody`, { headers: OTHER })).status, 404);
 
   assert.equal((await fetch(`${base}/avatar`, { method: "DELETE", headers: AUTH })).status, 204);
   assert.equal((await fetch(`${base}/avatar`, { headers: AUTH })).status, 404);

@@ -77,7 +77,7 @@ function send(msg: unknown): void {
 /** A short confirmation ("Added to Jukebox") for actions that otherwise show nothing here. */
 export const useSyncNotice = create<{ text: string }>(() => ({ text: "" }));
 let noticeTimer: number | undefined;
-function notify(text: string): void {
+export function notify(text: string): void {
   useSyncNotice.setState({ text });
   clearTimeout(noticeTimer);
   noticeTimer = window.setTimeout(() => useSyncNotice.setState({ text: "" }), 2500);

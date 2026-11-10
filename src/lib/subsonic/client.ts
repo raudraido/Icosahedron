@@ -42,6 +42,12 @@ const MUSIC_FOLDER_ENDPOINTS = new Set([
   "getArtists", "getIndexes", "getAlbumList2", "search3", "getStarred2", "getRandomSongs",
 ]);
 
+/** A Navidrome account as the native API lists it. */
+export interface NdUser {
+  id: string; userName: string; name: string; email: string; isAdmin: boolean;
+  lastLoginAt?: string | null; lastAccessAt?: string | null; createdAt?: string;
+}
+
 export class SubsonicClient {
   private baseUrl: string;
   private username: string;
@@ -644,6 +650,50 @@ export class SubsonicClient {
     const url = asArray(root.shares?.share)[0]?.url;
     if (typeof url !== "string" || !url) throw new Error("Server did not return a share URL — is sharing enabled?");
     return url;
+  }
+
+  // --- User administration (Navidrome's native /api/user, administrators only) ---
+  // The Subsonic API cannot create or change users, and the native one wants the JWT this client gets
+  // from its own sign-in, so it needs no extra password.
+
+  private async nativeJson(method: string, path: string, body?: unknown): Promise<any> {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await this.authenticateNative();
+      const resp = await fetch(`${this.baseUrl}/api${path}`, {
+        method,
+        headers: { "content-type": "application/json", "x-nd-authorization": `Bearer ${this.nativeJwt}` },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      if (resp.status === 401 && attempt === 0) { this.nativeJwt = null; this.nativeJwtPromise = null; continue; } // the token expired
+      if (!resp.ok) {
+        const msg = await resp.json().then((j) => j?.error ?? j?.message, () => undefined);
+        throw new Error(typeof msg === "string" && msg ? msg : `HTTP ${resp.status}`);
+      }
+      return resp.status === 204 ? null : resp.json().catch(() => null);
+    }
+  }
+
+  async isAdmin(): Promise<boolean> {
+    const root = await this.get("getUser", { username: this.username });
+    return root.user?.adminRole === true;
+  }
+
+  async listUsers(): Promise<NdUser[]> {
+    const data = await this.nativeJson("GET", "/user?_start=0&_end=1000&_sort=userName&_order=ASC");
+    return Array.isArray(data) ? data : [];
+  }
+
+  createUser(u: { userName: string; name: string; email: string; password: string; isAdmin: boolean }): Promise<NdUser> {
+    return this.nativeJson("POST", "/user", u);
+  }
+
+  /** Changes what is given; `password` resets the password. */
+  updateUser(id: string, patch: { name?: string; email?: string; isAdmin?: boolean; password?: string }, current: NdUser): Promise<NdUser> {
+    return this.nativeJson("PUT", `/user/${encodeURIComponent(id)}`, { ...current, ...patch });
+  }
+
+  deleteUser(id: string): Promise<void> {
+    return this.nativeJson("DELETE", `/user/${encodeURIComponent(id)}`);
   }
 
   /** Server-side queue sync (upload/download icons in QueuePanel) — lets the

@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Quick Connect (docs/quick-connect.md): this TV shows a six-digit code, a signed-in app authorizes
- * it, the TV claims the sign-in. The server answers on /quickconnect/* and has it off by default.
+ * it, the TV claims the sign-in. The server answers under /quickconnect/ and has it off by default.
  */
 class QuickConnectClient(baseUrl: String) {
     data class Initiated(val secret: String, val code: String, val expiresInSeconds: Int)

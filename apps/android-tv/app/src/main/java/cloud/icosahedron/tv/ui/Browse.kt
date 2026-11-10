@@ -2,6 +2,20 @@
 
 package cloud.icosahedron.tv.ui
 
+import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.speech.RecognizerIntent
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.res.painterResource
+import androidx.tv.material3.Button
+import androidx.tv.material3.ButtonDefaults
+import androidx.tv.material3.Icon
+import cloud.icosahedron.tv.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -26,6 +40,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Card
@@ -119,7 +135,7 @@ private fun ArtistCard(artist: Artist, onClick: () -> Unit) {
     Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
             Text(artist.name, maxLines = 1, fontSize = 16.sp)
-            Text("${artist.albumCount} albums", fontSize = 12.sp, color = Dim)
+            Text("${artist.albumCount} albums", fontSize = 12.sp, color = dim())
         }
     }
 }
@@ -144,7 +160,7 @@ fun PlaylistsScreen(go: (Screen) -> Unit) {
                         Cover(p.coverArt, 56.dp, px = 120)
                         Column {
                             Text(p.name, fontSize = 18.sp)
-                            Text("${p.songCount} songs", fontSize = 12.sp, color = Dim)
+                            Text("${p.songCount} songs", fontSize = 12.sp, color = dim())
                         }
                     }
                 }
@@ -158,6 +174,13 @@ fun SearchScreen(go: (Screen) -> Unit) {
     val client = LocalClient.current
     var query by remember { mutableStateOf("") }
     var result by remember { mutableStateOf<Result<Triple<List<Artist>, List<Album>, List<Track>>>?>(null) }
+    // Voice search with the app's own screen (VoiceSearch.kt); the words become the search text.
+    val voice = rememberVoiceSearch { query = it }
+    BackHandler(enabled = voice.listening) { voice.cancel() }
+    // The microphone has the focus when Search opens: the text field would open the keyboard at once, and with
+    // it open the Left key moves the cursor, so the microphone could not be reached any more.
+    val micFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { micFocus.requestFocus() } }
     LaunchedEffect(query) {
         if (query.trim().length < 2) { result = null; return@LaunchedEffect }
         delay(450) // wait for the typing to stop
@@ -165,18 +188,33 @@ fun SearchScreen(go: (Screen) -> Unit) {
     }
     LazyColumn(Modifier.fillMaxSize()) {
         item {
-            OutlinedTextField(
-                value = query, onValueChange = { query = it }, singleLine = true,
-                label = { Text("Search artists, albums, songs") },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 48.dp, vertical = 8.dp),
-                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = androidx.compose.ui.graphics.Color.White,
-                    unfocusedTextColor = androidx.compose.ui.graphics.Color.White,
-                    focusedBorderColor = Accent, unfocusedBorderColor = Dim,
-                    focusedLabelColor = Accent, unfocusedLabelColor = Dim, cursorColor = Accent,
-                ),
-            )
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 48.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Button(
+                    onClick = { voice.toggle() },
+                    modifier = Modifier.focusRequester(micFocus),
+                    shape = ButtonDefaults.shape(CircleShape),
+                    contentPadding = PaddingValues(14.dp),
+                    colors = chipColors(false),
+                ) { Icon(painterResource(R.drawable.ic_mic), contentDescription = "Search by voice", modifier = Modifier.size(24.dp)) }
+                OutlinedTextField(
+                    value = query, onValueChange = { query = it }, singleLine = true,
+                    label = { Text("Search artists, albums, songs") },
+                    modifier = Modifier.weight(1f),
+                    colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = androidx.compose.ui.graphics.Color.White,
+                        unfocusedTextColor = androidx.compose.ui.graphics.Color.White,
+                        focusedBorderColor = Accent, unfocusedBorderColor = Dim,
+                        focusedLabelColor = Accent, unfocusedLabelColor = Dim, cursorColor = Accent,
+                    ),
+                )
+            }
         }
+        if (voice.listening) item { ListeningPanel(voice.heard) }
+        voice.message?.let { m -> item { Message(m) } }
         val r = result
         if (r != null && r.isFailure) item { Message(r.exceptionOrNull()?.message ?: "Search failed") }
         val found = r?.getOrNull()

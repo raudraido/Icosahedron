@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -21,7 +22,10 @@ fun SettingsScreen() {
     val app = App.instance
     val session = app.session ?: return
     Column(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 16.dp)) {
-        Text("Settings", fontSize = 30.sp, modifier = Modifier.padding(bottom = 16.dp))
+        Row(Modifier.padding(bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            ProfileAvatar(72.dp)
+            Text(session.user, fontSize = 30.sp, modifier = Modifier.padding(start = 20.dp))
+        }
         Field("Version", BuildConfig.VERSION_NAME)
         Field("Server", session.url)
         Field("User", session.user)

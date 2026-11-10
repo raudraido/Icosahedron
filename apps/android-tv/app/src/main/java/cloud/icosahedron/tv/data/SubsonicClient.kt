@@ -53,6 +53,18 @@ class SubsonicClient(val baseUrl: String, val user: String, val salt: String, va
 
     suspend fun ping() { call("ping") }
 
+    /**
+     * The song's lyrics from the server (OpenSubsonic `getLyricsBySongId`): the timed version when there is
+     * one, else the plain one. Empty when the server has none or does not support it.
+     */
+    suspend fun lyrics(id: String): List<LyricLine> {
+        val lists = call("getLyricsBySongId", "id" to id).optJSONObject("lyricsList")?.objs("structuredLyrics") ?: return emptyList()
+        val pick = lists.firstOrNull { it.optBoolean("synced") } ?: lists.firstOrNull() ?: return emptyList()
+        val synced = pick.optBoolean("synced")
+        val offset = pick.optLong("offset", 0)
+        return pick.objs("line").map { LyricLine(if (synced) it.optLong("start") + offset else null, it.optString("value")) }
+    }
+
     suspend fun albums(type: String, size: Int = 40, offset: Int = 0): List<Album> =
         call("getAlbumList2", "type" to type, "size" to size.toString(), "offset" to offset.toString())
             .optJSONObject("albumList2")?.objs("album")?.mapNotNull { Album.fromSubsonic(it) } ?: emptyList()

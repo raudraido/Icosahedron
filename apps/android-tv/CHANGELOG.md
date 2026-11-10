@@ -2,6 +2,21 @@
 
 A native app (Kotlin, Jetpack Compose for TV, Media3) for Google TV and Android TV: [docs/android-tv.md](../../docs/android-tv.md).
 
+## 0.2.0
+
+**The screen is redone.** Install it over 0.1.2 (same signing key).
+
+- **Now Playing is always at the top right** as a small card, like Spotify's: the cover, the song and the artist on two lines, and bars that dance while it plays. It is one step up from wherever you are. It is only there while something plays. The tabs (Home, Albums, Artists, Playlists, Search) and the logo stay on screen too.
+- **No strip at the bottom any more:** the card at the top right already shows what plays; pause and next are in the player.
+- **Search by voice:** a microphone button in Search (it has the focus when Search opens; Right goes to the text field). Android asks once to allow the microphone. A pulsing microphone and the words as you say them show on the app's own screen, then the search runs; Back cancels. No system search bar pops up.
+- **Your profile button** next to it shows your picture (the one you set in another Icosahedron app, kept by the server; the first letter of your name without one) and opens Settings.
+- **Back goes one step at a time and never closes the app at once:** out of an album, artist or playlist to the list before it; from anywhere in the content (also far down a 100-song list) up to the top bar; from another tab to Home; on Home a second Back within two seconds closes the app ("Press Back again to exit"). The **Menu** key of the remote opens Now Playing from anywhere.
+- **The real logo** instead of a drawn placeholder: in the top bar, on the sign-in screen, as the app icon and on the Google TV home screen tile.
+- **The player screen is almost empty:** the cover in the middle on a background that takes its colours from the cover (it changes smoothly with the song), the title and artist under it, a progress bar across the screen and a row of controls (shuffle, previous, play / pause, next, repeat). **Lyrics** and the **queue** open as a panel at the right (Back closes it). Lyrics come from the server if it has them, else from LRCLIB, and the line that is sung is highlighted and followed.
+- **Nothing stays lit on an OLED screen:** after 20 seconds without a key press everything but the cover goes (the top bar too; lyrics stay if you are reading them); the first key press only brings it back. The picture also drifts a few pixels over minutes.
+- **You can scrub with the progress bar:** it has the focus when the player opens (it grows and shows a round knob, no frame). Left / Right scrub (10 seconds a press, faster when held; the fast-forward and rewind keys jump 30 seconds) and **OK pauses and resumes**.
+- **Text you can read:** the active and the focused button no longer lose their text (it was white on white), and headings and song titles are no longer dark on dark. The song that plays is marked with a note.
+
 ## 0.1.2
 
 **Fixes the app closing by itself** when you start a song, seen on Android 14 (Chromecast with Google TV). Install it over 0.1.1: the signing key is the same.

@@ -1,7 +1,7 @@
 {
   "name": "icosahedron-server",
   "private": true,
-  "version": "0.16.3",
+  "version": "0.16.4",
   "license": "GPL-3.0-or-later",
   "description": "Web engine: serves the Icosahedron web UI and syncs every player (queue, position, remote control).",
   "type": "module",
@@ -11,6 +11,7 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
+    "multicast-dns": "^7.2.5",
     "ws": "^8.18.0"
   },
   "engines": {

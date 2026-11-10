@@ -2,6 +2,14 @@
 
 A native app (Kotlin, Jetpack Compose for TV, Media3) for Google TV and Android TV: [docs/android-tv.md](../../docs/android-tv.md).
 
+## 0.1.1
+
+Finds the server in more situations. Needs the [server](../server/CHANGELOG.md) 0.16.4 for mDNS.
+
+- **Finds the server with mDNS as well as the broadcast**, so it works when the TV is on another network (a VLAN) than the server and the router forwards mDNS (UniFi: Gateway mDNS Proxy). Both searches run at once.
+- **Remembers the server** you used last: the next sign-in starts with it, even after signing out.
+- **A clearer message** when no server is found: it says what to try.
+
 ## 0.1.0
 
 **The first version.** It plays through the TV, browses your library with the remote and is one more player of your account, so the other apps can start music on it and control it.

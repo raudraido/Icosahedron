@@ -65,6 +65,11 @@ If the proxy puts a login page in front (SSO), exclude `/manifest.webmanifest`, 
 
 So a TV app can find the server by itself (Quick Connect then needs nothing typed), the compose file runs the same image a second time, **on the host network**, as the `discovery` service: a Docker bridge network does not deliver the UDP broadcast the apps send. It listens on UDP 7360 (Jellyfin uses 7359, so both can run) and answers with `PUBLIC_URL` when that is set, else with the server's own address on the asker's subnet and `ENGINE_PORT`.
 
+It also answers **mDNS / DNS-SD** (`_icosahedron._tcp`, switch it off with `DISCOVERY_MDNS=false`), which firewalls let through by default and routers can forward between networks. If the apps do not find the server:
+
+- **Host firewall** blocks UDP 7360 (`ufw` has no rule for it): `sudo ufw allow 7360/udp`, optionally `from <your subnet>`. The broadcast of a device on another subnet than the rule's is dropped silently.
+- **The TV is on another network** (VLAN, guest or IoT Wi-Fi): broadcasts do not cross; forward mDNS in the router (UniFi: Gateway mDNS Proxy, *Custom*, both networks, all services) or type the address once. See [quick-connect.md](quick-connect.md#when-the-tv-is-on-another-network).
+
 Host networking works on Linux; on Docker Desktop (Mac, Windows) the service starts but cannot see your network, so type the address in the app. The service is optional.
 
 ## Last.fm

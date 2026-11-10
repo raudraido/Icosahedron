@@ -10,6 +10,7 @@ The apps and the server are versioned separately, so a version number says nothi
 | Sync, remote control, shared preferences | 1 | Desktop 0.15.3, Server 0.15.3, iOS 0.15.3 |
 | Independent players (each player's own state), choosing a device to control | 2 | Server 0.15.6 |
 | Quick Connect, the `tv` device kind, LAN discovery | 2 | Server 0.16.0, Android TV 0.1.0 |
+| Finding the server with mDNS (works across networks a router forwards mDNS between) | 2 | Server 0.16.4, Android TV 0.1.1 |
 | Quick Connect switched on and off by an administrator in Settings (`/quickconnect/settings`) | 2 | Server 0.16.1, Desktop 0.16.1, iOS 0.1.1 |
 | Everyone's profile picture (`GET /avatar/<user>`), user management in Settings → Users | 2 | Server 0.16.3, Desktop 0.16.3 (web app: server 0.16.3) |
 | Last.fm handed from the desktop to the server (`PUT /lastfm/connection`), profile picture (`/avatar`) | 2 | Server 0.16.2, Desktop 0.16.2 (Last.fm), iOS 0.1.2 (picture) |

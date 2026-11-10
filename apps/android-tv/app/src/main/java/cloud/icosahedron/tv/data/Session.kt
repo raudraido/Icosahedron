@@ -23,6 +23,13 @@ class SessionStore(context: Context) {
         prefs.edit().putString("url", s.url).putString("user", s.user).putString("salt", s.salt).putString("token", s.token).apply()
     }
 
+    /** The server used last, kept even after signing out, so the next sign-in starts with it. */
+    fun lastServer(): String = prefs.getString("lastServer", "") ?: ""
+
+    fun saveLastServer(url: String) {
+        prefs.edit().putString("lastServer", url).apply()
+    }
+
     fun clear() {
         prefs.edit().remove("url").remove("user").remove("salt").remove("token").apply()
     }

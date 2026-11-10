@@ -2,6 +2,13 @@
 
 The server is the **sync engine and the web app it serves** (one Docker image, `ghcr.io/raudraido/icosahedron-server`). Versions before 0.16.0 shared one number with the other apps (0.15.3 to 0.15.9); the full text of those releases is in the [main changelog](../../CHANGELOG.md). What each version needs and gives: [docs/compatibility.md](../../docs/compatibility.md).
 
+## 0.16.4
+
+The discovery helper also announces the server with **mDNS**, so a TV on another network (a VLAN) can find it when the router forwards mDNS. **Update with** `docker compose pull && docker compose up -d` (both containers). Nothing to configure; `DISCOVERY_MDNS=false` switches it off.
+
+- **mDNS / DNS-SD announcement** of the service `_icosahedron._tcp` (TXT: `address`, `id`, `name`) from the `discovery` container, next to the UDP 7360 answer. Firewalls (`ufw` by default) let mDNS through and routers can forward it between networks; a UDP broadcast can do neither.
+- **Docs:** what to do when the apps do not find the server (host firewall, TV on another network, UniFi's Gateway mDNS Proxy). See [docs/quick-connect.md](../../docs/quick-connect.md#when-the-tv-is-on-another-network).
+
 ## 0.16.3
 
 The web app gets profile pictures and user management. **Update with** `docker compose pull && docker compose up -d` (the web app is in the image; reload the page, `Ctrl+Shift+R` if the browser keeps the old one).

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **iOS: steadier progress while controlling another device.** The bar moves on by itself between the other player's reports and no longer jumps back by a fraction of a second at each report; a state that was already on its way no longer pulls the bar back right after a seek. The desktop reports its position in fractions of a second instead of whole seconds.
+
 ## 0.15.6
 
 Players are now **independent**: music at home and in the car can play at the same time, and any device can be chosen and controlled from another. **Update the engine first** (`docker compose pull && docker compose up -d`) and then the iOS app; the desktop and web apps keep working as before (they follow one player only until their own device mode arrives). Design: [docs/connect.md](docs/connect.md).

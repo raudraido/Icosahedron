@@ -61,6 +61,9 @@ final class SyncModel {
     /// Each player's position when its state arrived. Not observed: views that show it tick on
     /// their own timer.
     @ObservationIgnored private var remotePositions: [String: (ms: Double, at: Date)] = [:]
+    /// When this phone last sought on a player: a state that was already on its way would put the
+    /// bar back where it was, so positions are ignored for a moment after a seek.
+    @ObservationIgnored private var lastSeek: [String: Date] = [:]
 
     let deviceId: String
     @ObservationIgnored private var task: URLSessionWebSocketTask?
@@ -269,7 +272,20 @@ final class SyncModel {
             shuffle: (s["shuffle"] as? Bool) ?? false, repeatOn: (s["repeat"] as? Bool) ?? false
         )
         if next != prev { remoteStates[id] = next } // only when it changed: no re-render per position tick
-        remotePositions[id] = (((s["positionMs"] as? Double) ?? 0), Date())
+        let now = Date()
+        if let t = lastSeek[id], now.timeIntervalSince(t) < 2 { return } // an in-flight state from before our seek
+        let reported = ((s["positionMs"] as? Double) ?? 0)
+        // A player reports its position every few seconds (whole seconds, a little late). Between
+        // reports the bar moves on by itself; a report that only differs a little must not pull it
+        // back: that made the time jump back and forth. A real jump (seek, new track, pause) is taken as is.
+        if let old = remotePositions[id], let was = prev, was.playing, next.playing, was.track?.id == next.track?.id {
+            let expected = old.ms + now.timeIntervalSince(old.at) * 1000
+            if abs(reported - expected) < 1500 {
+                remotePositions[id] = (max(reported, expected), now)
+                return
+            }
+        }
+        remotePositions[id] = (reported, now)
     }
 
     /// Another player's state, or nil when it has none (idle, nothing queued, offline).
@@ -473,6 +489,7 @@ final class SyncModel {
     func seek(on target: String, to seconds: Double) {
         send(["type": "command", "target": target, "cmd": "seek", "args": ["positionMs": Int(seconds * 1000)]])
         remotePositions[target] = (seconds * 1000, Date())
+        lastSeek[target] = Date()
     }
 
     /// Moves `source`'s playback to `target`: the source pauses, the target continues where it was.

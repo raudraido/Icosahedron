@@ -274,7 +274,7 @@ function publish(forceQueue: boolean): void {
     type: "state",
     state: {
       ...(forceQueue ? { queue: s.queue.map(toWire) } : {}),
-      index: s.currentIndex, positionMs: Math.round(s.currentTime * 1000), playing: s.playing, volume: s.volume,
+      index: s.currentIndex, positionMs: Math.round((s.currentTimeRaw ?? s.currentTime) * 1000), playing: s.playing, volume: s.volume,
       shuffle: s.shuffle, repeat: s.repeat,
     },
   });

@@ -132,7 +132,7 @@ fun SeekBar(
     }
 }
 
-private enum class Panel { None, Queue, Lyrics }
+private enum class SidePanel { None, Queue, Lyrics }
 
 /**
  * The player: an almost empty screen, the cover in the middle on a background taken from its colours, the
@@ -147,11 +147,11 @@ fun NowPlayingScreen(idle: Boolean) {
         Message("Nothing playing. Pick something from Home, Albums or Search, or play to this TV from another device.")
         return
     }
-    var panel by remember { mutableStateOf(Panel.None) }
+    var panel by remember { mutableStateOf(SidePanel.None) }
     val seekFocus = remember { FocusRequester() }
     val chrome by animateFloatAsState(if (idle) 0f else 1f, tween(600), label = "chrome")
     LaunchedEffect(Unit) { runCatching { seekFocus.requestFocus() } }
-    BackHandler(enabled = panel != Panel.None) { panel = Panel.None } // Back closes the panel before it leaves the screen
+    BackHandler(enabled = panel != SidePanel.None) { panel = SidePanel.None } // Back closes the panel before it leaves the screen
 
     // The picture drifts a few pixels over minutes, so that it never rests on the same pixels of an OLED screen.
     val drift = rememberInfiniteTransition(label = "drift")
@@ -161,7 +161,7 @@ fun NowPlayingScreen(idle: Boolean) {
     Column(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 8.dp)) {
         Row(Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Cover(t.coverArt, if (panel == Panel.None) 240.dp else 190.dp, px = 700, modifier = Modifier.offset(dx.dp, dy.dp))
+                Cover(t.coverArt, if (panel == SidePanel.None) 240.dp else 190.dp, px = 700, modifier = Modifier.offset(dx.dp, dy.dp))
                 Column(Modifier.padding(top = 10.dp).alpha(chrome), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(t.title, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
                     Text(
@@ -171,9 +171,9 @@ fun NowPlayingScreen(idle: Boolean) {
                 }
             }
             when (panel) {
-                Panel.None -> {}
-                Panel.Queue -> Box(Modifier.width(330.dp).fillMaxHeight().alpha(chrome)) { QueuePanel() }
-                Panel.Lyrics -> Box(Modifier.width(330.dp).fillMaxHeight()) { LyricsPanel(t) }
+                SidePanel.None -> {}
+                SidePanel.Queue -> Box(Modifier.width(330.dp).fillMaxHeight().alpha(chrome)) { QueuePanel() }
+                SidePanel.Lyrics -> Box(Modifier.width(330.dp).fillMaxHeight()) { LyricsPanel(t) }
             }
         }
         Column(Modifier.alpha(chrome)) {
@@ -193,8 +193,8 @@ fun NowPlayingScreen(idle: Boolean) {
                 RoundButton(R.drawable.ic_next, "Next") { Playback.next() }
                 RoundButton(R.drawable.ic_repeat, "Repeat", on = Playback.repeatAll) { Playback.repeatTo(!Playback.repeatAll) }
                 Spacer(Modifier.width(28.dp))
-                RoundButton(R.drawable.ic_lyrics, "Lyrics", on = panel == Panel.Lyrics) { panel = if (panel == Panel.Lyrics) Panel.None else Panel.Lyrics }
-                RoundButton(R.drawable.ic_queue, "Queue", on = panel == Panel.Queue) { panel = if (panel == Panel.Queue) Panel.None else Panel.Queue }
+                RoundButton(R.drawable.ic_lyrics, "Lyrics", on = panel == SidePanel.Lyrics) { panel = if (panel == SidePanel.Lyrics) SidePanel.None else SidePanel.Lyrics }
+                RoundButton(R.drawable.ic_queue, "Queue", on = panel == SidePanel.Queue) { panel = if (panel == SidePanel.Queue) SidePanel.None else SidePanel.Queue }
             }
         }
     }

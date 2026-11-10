@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -85,6 +86,7 @@ fun MainScreen() {
     val bar = remember { FocusRequester() } // the button of the tab you are on
     var contentHasFocus by remember { mutableStateOf(false) }
     var lastBack by remember { mutableLongStateOf(0L) }
+    var refocusBar by remember { mutableStateOf(false) } // after Back to Home: focus the Home tab
     fun go(s: Screen) { stack = stack + s }
     fun tab(s: Screen) { stack = listOf(s) }
 
@@ -92,7 +94,7 @@ fun MainScreen() {
         when {
             stack.size > 1 -> stack = stack.dropLast(1)
             contentHasFocus -> runCatching { bar.requestFocus() }
-            screen != Screen.Home -> tab(Screen.Home)
+            screen != Screen.Home -> { tab(Screen.Home); refocusBar = true }
             else -> {
                 val now = SystemClock.elapsedRealtime()
                 if (now - lastBack < EXIT_WINDOW_MS) {
@@ -102,6 +104,13 @@ fun MainScreen() {
                     Toast.makeText(context, "Press Back again to exit", Toast.LENGTH_SHORT).show()
                 }
             }
+        }
+    }
+
+    LaunchedEffect(screen) {
+        if (refocusBar) {
+            refocusBar = false
+            runCatching { bar.requestFocus() }
         }
     }
 

@@ -103,7 +103,7 @@ fun NowPlayingScreen() {
     Row(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
         Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
             Cover(t.coverArt, 300.dp, px = 700)
-            Text(t.title, fontSize = 32.sp, maxLines = 2, modifier = Modifier.padding(top = 16.dp))
+            Text(t.title, fontSize = 32.sp, lineHeight = 38.sp, maxLines = 2, modifier = Modifier.padding(top = 16.dp))
             Text(listOfNotNull(t.artist, t.album).joinToString(" · "), color = Dim, maxLines = 1)
             SeekBar(Playback.positionMs, Playback.durationMs, onSeek = { Playback.seekTo(it) }, modifier = Modifier.padding(top = 16.dp))
             Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

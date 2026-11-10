@@ -37,6 +37,17 @@ fun navColors(selected: Boolean): ButtonColors = ButtonDefaults.colors(
     pressedContentColor = Bg,
 )
 
+/** The Now Playing card and the profile button: the one you are on is a little lighter, a focused one white. */
+@Composable
+fun chipColors(selected: Boolean): ButtonColors = ButtonDefaults.colors(
+    containerColor = if (selected) PanelHi else Panel,
+    contentColor = Color.White,
+    focusedContainerColor = Color.White,
+    focusedContentColor = Bg,
+    pressedContainerColor = Color.White,
+    pressedContentColor = Bg,
+)
+
 @Composable
 fun IcoTheme(content: @Composable () -> Unit) {
     MaterialTheme(

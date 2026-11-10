@@ -11,12 +11,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -37,10 +40,12 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Button
+import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import cloud.icosahedron.tv.App
@@ -60,10 +65,10 @@ sealed interface Screen {
     data class PlaylistDetail(val id: String, val name: String) : Screen
 }
 
-/** The tabs of the top bar; Now Playing has its own button at the right end. */
+/** The tabs of the top bar; Now Playing and the profile (Settings) have their own buttons at the right end. */
 private val tabs = listOf(
     "Home" to Screen.Home, "Albums" to Screen.Albums, "Artists" to Screen.Artists, "Playlists" to Screen.Playlists,
-    "Search" to Screen.Search, "Settings" to Screen.Settings,
+    "Search" to Screen.Search,
 )
 
 private const val EXIT_WINDOW_MS = 2000L
@@ -135,11 +140,18 @@ fun MainScreen() {
                         ) { Text(label) }
                     }
                 }
-                NowPlayingButton(
+                NowPlayingCard(
                     selected = screen == Screen.NowPlaying,
                     modifier = if (screen == Screen.NowPlaying) Modifier.focusRequester(bar) else Modifier,
                     onClick = { tab(Screen.NowPlaying) },
                 )
+                Button(
+                    onClick = { tab(Screen.Settings) },
+                    colors = chipColors(screen == Screen.Settings),
+                    shape = ButtonDefaults.shape(CircleShape),
+                    contentPadding = PaddingValues(4.dp),
+                    modifier = Modifier.padding(start = 12.dp).then(if (screen == Screen.Settings) Modifier.focusRequester(bar) else Modifier),
+                ) { ProfileAvatar(40.dp) }
             }
             Box(Modifier.weight(1f).fillMaxWidth().onFocusChanged { contentHasFocus = it.hasFocus }) {
                 when (screen) {
@@ -160,17 +172,32 @@ fun MainScreen() {
     }
 }
 
-/** Top right, always there: opens the player, and says what plays. */
+/**
+ * Top right, always there: a small card with the cover, the song and the artist on two lines, and bars that
+ * dance while it plays; one click opens the player. Without a song it only says "Now Playing".
+ */
 @Composable
-private fun NowPlayingButton(selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun NowPlayingCard(selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val t = Playback.current
-    Button(onClick = onClick, colors = navColors(selected), modifier = modifier) {
-        Text(
-            if (t != null) (if (Playback.isPlaying) "♪  " else "❚❚  ") + t.title else "Now Playing",
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = 320.dp),
-        )
+    Button(
+        onClick = onClick,
+        colors = chipColors(selected),
+        shape = ButtonDefaults.shape(RoundedCornerShape(10.dp)),
+        contentPadding = PaddingValues(6.dp),
+        modifier = modifier,
+    ) {
+        if (t == null) {
+            Text("Now Playing", modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Cover(t.coverArt, 44.dp, px = 100)
+                Column(Modifier.widthIn(min = 110.dp, max = 220.dp)) {
+                    Text(t.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text(t.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, color = dim())
+                }
+                EqualizerBars(Playback.isPlaying, Accent, Modifier.padding(end = 6.dp))
+            }
+        }
     }
 }
 

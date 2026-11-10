@@ -6,7 +6,8 @@ A native app (Kotlin, Jetpack Compose for TV, Media3) for Google TV and Android 
 
 **The screen is redone.** Install it over 0.1.2 (same signing key).
 
-- **Now Playing is always at the top right**, with the name of the song that plays, so it is one step up from wherever you are. The tabs (Home, Albums, Artists, Playlists, Search, Settings) and the logo stay on screen too.
+- **Now Playing is always at the top right** as a small card, like Spotify's: the cover, the song and the artist on two lines, and bars that dance while it plays. It is one step up from wherever you are. The tabs (Home, Albums, Artists, Playlists, Search) and the logo stay on screen too.
+- **Your profile button** next to it shows your picture (the one you set in another Icosahedron app, kept by the server; the first letter of your name without one) and opens Settings.
 - **Back goes one step at a time and never closes the app at once:** out of an album, artist or playlist to the list before it; from anywhere in the content (also far down a 100-song list) up to the top bar; from another tab to Home; on Home a second Back within two seconds closes the app ("Press Back again to exit"). The **Menu** key of the remote opens Now Playing from anywhere.
 - **The real logo** instead of a drawn placeholder: in the top bar, on the sign-in screen, as the app icon and on the Google TV home screen tile.
 - **You can scrub with the progress bar:** focus it in Now Playing and press Left / Right (10 seconds a press, faster when held; the fast-forward and rewind keys jump 30 seconds).

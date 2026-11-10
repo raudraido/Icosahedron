@@ -30,6 +30,14 @@ final class SyncModel {
     }
 
     var status = "off" // off | connecting | online
+    /// The device the playback controls act on; nil = this phone. Chosen in the device lists
+    /// (docs/connect.md). Falls back to this phone when that device goes offline.
+    private(set) var targetId: String?
+    /// The other device being controlled, or nil when the controls act on this phone.
+    var remoteTarget: String? {
+        guard let t = targetId, t != deviceId else { return nil }
+        return t
+    }
     /// This phone's name as the engine knows it (renamable in Settings > Sync Server).
     var name: String?
     var registry: [RegistryDevice] = []
@@ -210,6 +218,8 @@ final class SyncModel {
             return (a.name.lowercased(), a.id) < (b.name.lowercased(), b.id)
         }
         activeDeviceId = m["activeDeviceId"] as? String
+        // The target went offline (or stopped taking part in playback sync): back to this phone.
+        if let t = targetId, !devices.contains(where: { $0.id == t }) { targetId = nil }
     }
 
     private func applyRegistry(_ m: [String: Any]) {
@@ -355,6 +365,25 @@ final class SyncModel {
             lastQueueIds = ids
         }
         send(["type": "state", "state": state])
+    }
+
+    // MARK: Playing on a device
+
+    /// Chooses the device the controls act on. Picking another device while this phone plays moves
+    /// the music there (the phone pauses); picking this phone just points the controls back.
+    func setTarget(_ id: String?) {
+        let new = (id == deviceId) ? nil : id
+        targetId = new
+        if let new, player?.isPlaying == true { transfer(to: new) }
+    }
+
+    /// Starts `tracks` on another device (the whole list, or a window of it when it is very long).
+    func playOn(_ target: String, _ tracks: [Track], at index: Int) {
+        guard !tracks.isEmpty else { return }
+        let start = max(0, index - 20)
+        let window = Array(tracks.dropFirst(start).prefix(1000))
+        send(["type": "command", "target": target, "cmd": "load",
+              "args": ["state": ["queue": window.map { $0.wire() }, "index": index - start, "positionMs": 0, "playing": true]]])
     }
 
     // MARK: Sync Server settings

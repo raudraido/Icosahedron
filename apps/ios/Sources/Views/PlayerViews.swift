@@ -10,7 +10,23 @@ struct MiniPlayerBar: View {
         let p = app.player
         let router = app.router
         Group {
-            if let t = p.current {
+            if let target = app.sync.remoteTarget {
+                // The controls act on another device: show what it plays.
+                let name = app.sync.devices.first(where: { $0.id == target })?.name ?? String(localized: "another device")
+                if app.sync.activeDeviceId == target, let t = app.sync.remoteTrack {
+                    TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                        bar(title: t.title, subtitle: String(localized: "Playing on \(name)"), cover: t.coverArt,
+                            progress: t.duration > 0 ? app.sync.remotePosition(at: ctx.date) / Double(t.duration) : 0,
+                            playing: app.sync.remotePlaying,
+                            toggle: { app.sync.command(to: target, "toggle") },
+                            next: { app.sync.command(to: target, "next") },
+                            open: { router.showPlayer = true })
+                    }
+                } else {
+                    bar(title: name, subtitle: String(localized: "Nothing playing"), cover: nil, progress: 0, playing: false,
+                        toggle: {}, next: {}, open: { router.showPlayer = true })
+                }
+            } else if let t = p.current {
                 bar(title: t.title, subtitle: t.artist, cover: t.coverArt,
                     progress: p.duration > 0 ? p.position / p.duration : 0,
                     playing: p.isPlaying,

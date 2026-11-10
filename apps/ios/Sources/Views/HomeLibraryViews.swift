@@ -124,9 +124,9 @@ struct AlbumDetailView: View {
                 Text(album.name).font(.title3.bold()).multilineTextAlignment(.center)
                 Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
                 HStack(spacing: 12) {
-                    Button { app.player.play(tracks, at: 0) } label: { Label("Play", systemImage: "play.fill").frame(maxWidth: .infinity) }
+                    Button { app.play(tracks, at: 0) } label: { Label("Play", systemImage: "play.fill").frame(maxWidth: .infinity) }
                         .buttonStyle(.borderedProminent)
-                    Button { app.player.play(tracks.shuffled(), at: 0) } label: { Label("Shuffle", systemImage: "shuffle").frame(maxWidth: .infinity) }
+                    Button { app.play(tracks.shuffled(), at: 0) } label: { Label("Shuffle", systemImage: "shuffle").frame(maxWidth: .infinity) }
                         .buttonStyle(.bordered)
                 }
                 .disabled(tracks.isEmpty)
@@ -135,7 +135,7 @@ struct AlbumDetailView: View {
             .listRowSeparator(.hidden)
 
             ForEach(Array(tracks.enumerated()), id: \.offset) { i, t in
-                Button { app.player.play(tracks, at: i) } label: { TrackRow(track: t, number: i + 1) }
+                Button { app.play(tracks, at: i) } label: { TrackRow(track: t, number: i + 1) }
                     .buttonStyle(.plain)
             }
         }

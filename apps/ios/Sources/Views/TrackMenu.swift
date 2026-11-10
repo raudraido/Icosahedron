@@ -11,8 +11,8 @@ struct TrackMenuContent: View {
     var body: some View {
         let isRadio = track.directURL != nil
         if !isRadio {
-            Button { app.player.playNext(track) } label: { Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") }
-            Button { app.player.addToQueue(track) } label: { Label("Add to Queue", systemImage: "text.line.last.and.arrowtriangle.forward") }
+            Button { app.playNext(track) } label: { Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") }
+            Button { app.addToQueue(track) } label: { Label("Add to Queue", systemImage: "text.line.last.and.arrowtriangle.forward") }
             let others = app.sync.status == "online" ? app.sync.devices.filter { $0.id != app.sync.deviceId } : []
             if !others.isEmpty {
                 Menu {

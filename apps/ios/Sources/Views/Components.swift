@@ -135,7 +135,7 @@ struct TrackListScreen: View {
                 .listRowSeparator(.hidden)
             }
             ForEach(Array(tracks.enumerated()), id: \.offset) { i, t in
-                Button { app.player.play(tracks, at: i) } label: { TrackRow(track: t, showCover: true) }
+                Button { app.play(tracks, at: i) } label: { TrackRow(track: t, showCover: true) }
                     .buttonStyle(.plain)
             }
             .onDelete(perform: playlist == nil ? nil : { offsets in
@@ -184,7 +184,7 @@ struct TrackListScreen: View {
     private func start(shuffled: Bool) {
         guard !tracks.isEmpty else { return }
         let list = shuffled ? tracks.shuffled() : tracks
-        app.player.play(list, at: 0)
+        app.play(list, at: 0)
     }
 }
 

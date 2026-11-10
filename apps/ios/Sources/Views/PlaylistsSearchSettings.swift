@@ -77,7 +77,7 @@ struct SearchView: View {
                 if !tracks.isEmpty {
                     Section("Tracks") {
                         ForEach(Array(tracks.enumerated()), id: \.offset) { i, t in
-                            Button { app.player.play(tracks, at: i) } label: { TrackRow(track: t, showCover: true) }
+                            Button { app.play(tracks, at: i) } label: { TrackRow(track: t, showCover: true) }
                                 .buttonStyle(.plain)
                         }
                     }
@@ -170,20 +170,7 @@ struct DevicesList: View {
             Text(sync.status == "connecting" ? String(localized: "Connecting…") : String(localized: "Sync server not reachable"))
                 .foregroundStyle(.secondary)
         }
-        ForEach(sync.devices) { d in
-            HStack {
-                Image(systemName: icon(d.kind)).foregroundStyle(d.id == sync.activeDeviceId ? Theme.accent : Color.secondary)
-                VStack(alignment: .leading) {
-                    Text(d.name + (d.id == sync.deviceId ? " " + String(localized: "(this phone)") : ""))
-                    if d.id == sync.activeDeviceId { Text(sync.remotePlaying ? String(localized: "Playing") : String(localized: "Active")).font(.caption).foregroundStyle(.secondary) }
-                }
-                Spacer()
-                if d.id != sync.activeDeviceId, sync.remoteTrack != nil {
-                    Button(d.id == sync.deviceId ? String(localized: "Play here") : String(localized: "Send")) { sync.transfer(to: d.id) }
-                        .buttonStyle(.bordered)
-                }
-            }
-        }
+        ForEach(sync.devices) { d in DeviceRow(d: d) }
         if let active = sync.activeDeviceId, active != sync.deviceId, let t = sync.remoteTrack {
             VStack(alignment: .leading, spacing: 6) {
                 Text("\(t.title) — \(t.artist)").lineLimit(1)

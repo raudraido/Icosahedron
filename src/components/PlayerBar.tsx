@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useStore } from "../store";
-import { useSmoothDisplaySeconds } from "../hooks/useSmoothDisplaySeconds";
+import { usePlaybackView } from "../lib/playbackView";
 import { CoverArt } from "./CoverArt";
 import { Icon } from "./Icon";
 import { PlayRingButton } from "./PlayRingButton";
@@ -66,21 +66,16 @@ function TBtn({
 }
 
 export function PlayerBar() {
-  const queue          = useStore((s) => s.queue);
-  const currentIndex   = useStore((s) => s.currentIndex);
-  const playing        = useStore((s) => s.playing);
-  const shuffle        = useStore((s) => s.shuffle);
-  const repeat         = useStore((s) => s.repeat);
-  const volume         = useStore((s) => s.volume);
-  const currentTime    = useSmoothDisplaySeconds();
-  const duration       = useStore((s) => s.duration);
-  const playPause      = useStore((s) => s.playPause);
-  const next           = useStore((s) => s.next);
-  const prev           = useStore((s) => s.prev);
-  const setCurrentTime = useStore((s) => s.setCurrentTime);
-  const setVolume      = useStore((s) => s.setVolume);
-  const toggleShuffle  = useStore((s) => s.toggleShuffle);
-  const toggleRepeat   = useStore((s) => s.toggleRepeat);
+  // This device's player, or the device being controlled (docs/connect.md): the same bar shows either.
+  const view = usePlaybackView();
+  const { queue, currentIndex, playing, shuffle, repeat, volume, currentTime, duration } = view;
+  const { playPause, next, prev, toggleShuffle, toggleRepeat, setVolume } = view;
+  const setCurrentTime = view.seek;
+  const remote = view.remote;
+  // Parts that act on this device's own sound or files are inactive while another device is controlled.
+  const localOnly = remote ? { opacity: 0.35, pointerEvents: "none" as const } : undefined;
+  const volumeInactive = remote && view.targetKind === "mobile"; // the phone app has no volume control
+  const [remoteWaveUrl, setRemoteWaveUrl] = useState("");
 
   // Remembers the last non-zero volume so unmuting restores the actual
   // previous level instead of always jumping back to a hardcoded 80 —
@@ -140,6 +135,14 @@ export function PlayerBar() {
 
   const track = queue[currentIndex] ?? null;
 
+  // The other device's track has no stream URL here; the waveform of the same track is decoded from the server.
+  useEffect(() => {
+    if (!remote || !track) { setRemoteWaveUrl(""); return; }
+    let cancelled = false;
+    api.streamUrl(track.id).then((u) => { if (!cancelled) setRemoteWaveUrl(u); }).catch(() => { if (!cancelled) setRemoteWaveUrl(""); });
+    return () => { cancelled = true; };
+  }, [remote, track?.id]);
+
   // On-device BPM detection (native QM-DSP, native/audio-engine/src/bpm.rs) —
   // ported from the old app's BPMWorker/bpm_cache.json. Results live in the
   // global store's bpmCache (keyed by track id), not local state, so once a
@@ -157,7 +160,7 @@ export function PlayerBar() {
 
   useEffect(() => {
     setBpmLoading(false);
-    if (!track || useStore.getState().bpmCache[track.id] != null) return;
+    if (remote || !track || useStore.getState().bpmCache[track.id] != null) return; // no local file to analyse for another device's track
     // Settings > Playback's "Detect BPM" toggle — only gates *new* native
     // on-device analysis; a track's ID3 tag or an already-cached value
     // (effectiveBpm below) still shows regardless of this setting.
@@ -170,7 +173,7 @@ export function PlayerBar() {
         .catch(() => { if (gen === bpmGenRef.current) setBpmLoading(false); });
     }, 350);
     return () => clearTimeout(timer);
-  }, [track?.id]);
+  }, [track?.id, remote]);
 
   const effectiveBpm = (track ? bpmCache[track.id] : undefined) ?? track?.bpm ?? null;
 
@@ -285,11 +288,20 @@ export function PlayerBar() {
       ref={barRef}
       className="flex items-center shrink-0"
       style={{
+        position: "relative",
         height: 132, background: "var(--footer-bg)",
         borderTop: "1px solid var(--border)",
         paddingLeft: 8, paddingRight: 12,
       }}
     >
+      {remote && (
+        <div
+          className="truncate"
+          style={{ position: "absolute", top: 5, left: 10, zIndex: 2, maxWidth: "30%", fontSize: 11, fontWeight: 600, color: "var(--accent)", pointerEvents: "none" }}
+        >
+          Controlling {view.targetName}
+        </div>
+      )}
       {/* ── LEFT: art + track info — matches footer_bar.qml's leftBlock: 19% of the
           footer's own width, floored at 160px, so it shrinks/grows with window size
           instead of a fixed pixel column (leaves more room for the waveform on wide
@@ -335,7 +347,7 @@ export function PlayerBar() {
         <div className="min-w-0 flex flex-col justify-center gap-0.5" style={{ overflow: "visible" }}>
           <p
             ref={titleRef}
-            onClick={() => track && setTab("nowPlaying")}
+            onClick={() => track && !remote && setTab("nowPlaying")}
             onContextMenu={(e) => { if (track) { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }); } }}
             onMouseEnter={() => track && setTitleHov(true)}
             onMouseLeave={() => setTitleHov(false)}
@@ -344,8 +356,8 @@ export function PlayerBar() {
               fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)", color: "var(--accent)",
               width: titleMaxWidth != null ? Math.max(titleMaxWidth, 0) : undefined,
               maxWidth: titleMaxWidth == null ? "100%" : undefined,
-              cursor: track ? "pointer" : "default",
-              textDecorationLine: titleHov ? "underline" : "none",
+              cursor: track && !remote ? "pointer" : "default",
+              textDecorationLine: titleHov && !remote ? "underline" : "none",
               textUnderlineOffset: "2px", textDecorationThickness: "1px", textDecorationColor: "var(--accent)",
             }}
           >
@@ -396,7 +408,7 @@ export function PlayerBar() {
         {/* Transport row — matches QML controlsRow: 40×40 buttons (36×36 for
             stop/repeat), 58×58 play ring, 20px gaps */}
         <div ref={controlsRowRef} className="flex items-center" style={{ gap: 20, pointerEvents: "auto" }}>
-          <TBtn icon="img/stop.png"    iconSize={16} btnSize={36} radius={18} onClick={stop}          title="Stop" />
+          <div style={localOnly}><TBtn icon="img/stop.png"    iconSize={16} btnSize={36} radius={18} onClick={stop}          title="Stop" /></div>
           <TBtn icon="img/shuffle.png" iconSize={18} btnSize={40} radius={20} onClick={toggleShuffle} dot={shuffle} title="Shuffle" />
           <TBtn icon="img/prev.png"    iconSize={16} btnSize={40} radius={20} onClick={prev}          title="Previous" />
 
@@ -422,12 +434,13 @@ export function PlayerBar() {
           <span className="tabular-nums text-right shrink-0" style={{ minWidth: 56, fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)", color: "var(--accent)" }}>
             {fmtDuration(currentTime)}
           </span>
-          {track ? (
+          {track && (remote ? remoteWaveUrl : track.stream_url) ? (
             <Waveform
-              streamUrl={track.stream_url}
+              streamUrl={remote ? remoteWaveUrl : track.stream_url}
               trackId={track.id}
               duration={duration}
               onSeek={setCurrentTime}
+              getPosition={remote ? view.getPosition : undefined}
             />
           ) : (
             <div className="flex-1" style={{ height: 60 }} />
@@ -459,7 +472,7 @@ export function PlayerBar() {
           }}
           title="Equalizer"
           className="flex items-center justify-center shrink-0"
-          style={{ width: 40, height: 40, borderRadius: 20, background: "transparent", border: "none", cursor: "pointer", color: "var(--accent)" }}
+          style={{ width: 40, height: 40, borderRadius: 20, background: "transparent", border: "none", cursor: "pointer", color: "var(--accent)", ...localOnly }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
         >
@@ -483,7 +496,7 @@ export function PlayerBar() {
           onClick={toggleMute}
           title={volume === 0 ? "Unmute" : "Mute"}
           className="flex items-center justify-center shrink-0"
-          style={{ width: 40, height: 40, borderRadius: 20, background: "transparent", border: "none", cursor: "pointer", color: volume === 0 ? "var(--text-secondary)" : "var(--accent)" }}
+          style={{ width: 40, height: 40, borderRadius: 20, background: "transparent", border: "none", cursor: "pointer", color: volume === 0 ? "var(--text-secondary)" : "var(--accent)", ...(volumeInactive ? { opacity: 0.35, pointerEvents: "none" as const } : {}) }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
         >
@@ -495,7 +508,7 @@ export function PlayerBar() {
           type="range" min={0} max={100} value={volume}
           onChange={(e) => setVolume(Number(e.target.value))}
           className="cursor-pointer shrink-0"
-          style={{ width: 100, height: 5, accentColor: "var(--accent)" }}
+          style={{ width: 100, height: 5, accentColor: "var(--accent)", ...(volumeInactive ? { opacity: 0.35, pointerEvents: "none" as const } : {}) }}
         />
 
         <DevicePicker />
@@ -515,7 +528,7 @@ export function PlayerBar() {
           }}
           title={castConnected ? `Casting to ${castDevice?.name}` : "Cast"}
           className="flex items-center justify-center shrink-0"
-          style={{ width: 40, height: 40, borderRadius: 20, background: "transparent", border: "none", cursor: "pointer", color: castConnected ? "var(--accent)" : "var(--text-secondary)" }}
+          style={{ width: 40, height: 40, borderRadius: 20, background: "transparent", border: "none", cursor: "pointer", color: castConnected ? "var(--accent)" : "var(--text-secondary)", ...localOnly }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
         >

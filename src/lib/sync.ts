@@ -19,7 +19,7 @@ export interface SyncDevice { deviceId: string; name: string; kind: "electron" |
 export interface RegistryDevice { deviceId: string; name: string; kind: SyncDevice["kind"]; online: boolean; lastSeen: number }
 export interface RemoteState {
   queue?: Omit<Track, "stream_url">[]; index: number; positionMs: number; playing: boolean; updatedAt: number;
-  shuffle?: boolean; repeat?: boolean;
+  shuffle?: boolean; repeat?: boolean; volume?: number;
 }
 
 interface SyncStore {

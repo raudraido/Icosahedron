@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Desktop and web: the same player bar and queue panel for another device.** Controlling another device no longer swaps in a different bar: the normal bar and queue panel show that device's track, position (waveform too), shuffle, repeat, volume and queue, with "Controlling X" in the corner and the devices button highlighted. Cast, equalizer, stop, BPM analysis, the lyrics / artist tabs and clearing the queue stay in place but inactive.
 - **The version number is visible everywhere:** in the web app (Settings → System → About) and in the iOS app (Settings → About); the desktop app already showed it.
 
 ## 0.15.7

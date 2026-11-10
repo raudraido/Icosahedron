@@ -2,6 +2,19 @@
 
 package cloud.icosahedron.tv.ui
 
+import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.res.painterResource
+import androidx.tv.material3.Button
+import androidx.tv.material3.ButtonDefaults
+import androidx.tv.material3.Icon
+import cloud.icosahedron.tv.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -158,6 +171,27 @@ fun SearchScreen(go: (Screen) -> Unit) {
     val client = LocalClient.current
     var query by remember { mutableStateOf("") }
     var result by remember { mutableStateOf<Result<Triple<List<Artist>, List<Album>, List<Track>>>?>(null) }
+    // Voice search: the system's own speech recognizer (the one the remote's microphone button uses) listens and
+    // hands back what was said, which becomes the search text.
+    var voiceMessage by remember { mutableStateOf<String?>(null) }
+    val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        val said = r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+        if (r.resultCode == Activity.RESULT_OK && !said.isNullOrBlank()) {
+            query = said.trim()
+            voiceMessage = null
+        }
+    }
+    fun listen() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(RecognizerIntent.EXTRA_PROMPT, "Say an artist, an album or a song")
+        try {
+            voiceMessage = null
+            speech.launch(intent)
+        } catch (_: ActivityNotFoundException) {
+            voiceMessage = "Voice search is not available on this TV."
+        }
+    }
     LaunchedEffect(query) {
         if (query.trim().length < 2) { result = null; return@LaunchedEffect }
         delay(450) // wait for the typing to stop
@@ -165,18 +199,31 @@ fun SearchScreen(go: (Screen) -> Unit) {
     }
     LazyColumn(Modifier.fillMaxSize()) {
         item {
-            OutlinedTextField(
-                value = query, onValueChange = { query = it }, singleLine = true,
-                label = { Text("Search artists, albums, songs") },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 48.dp, vertical = 8.dp),
-                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = androidx.compose.ui.graphics.Color.White,
-                    unfocusedTextColor = androidx.compose.ui.graphics.Color.White,
-                    focusedBorderColor = Accent, unfocusedBorderColor = Dim,
-                    focusedLabelColor = Accent, unfocusedLabelColor = Dim, cursorColor = Accent,
-                ),
-            )
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 48.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Button(
+                    onClick = { listen() },
+                    shape = ButtonDefaults.shape(CircleShape),
+                    contentPadding = PaddingValues(14.dp),
+                    colors = chipColors(false),
+                ) { Icon(painterResource(R.drawable.ic_mic), contentDescription = "Search by voice", modifier = Modifier.size(24.dp)) }
+                OutlinedTextField(
+                    value = query, onValueChange = { query = it }, singleLine = true,
+                    label = { Text("Search artists, albums, songs") },
+                    modifier = Modifier.weight(1f),
+                    colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = androidx.compose.ui.graphics.Color.White,
+                        unfocusedTextColor = androidx.compose.ui.graphics.Color.White,
+                        focusedBorderColor = Accent, unfocusedBorderColor = Dim,
+                        focusedLabelColor = Accent, unfocusedLabelColor = Dim, cursorColor = Accent,
+                    ),
+                )
+            }
         }
+        voiceMessage?.let { m -> item { Message(m) } }
         val r = result
         if (r != null && r.isFailure) item { Message(r.exceptionOrNull()?.message ?: "Search failed") }
         val found = r?.getOrNull()

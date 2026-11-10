@@ -37,7 +37,7 @@ Choosing a different target does not move this device's music. To move it, use *
 
 1. Engine: independent players with per-player states. **Done.**
 2. iOS: a target in the app model, the device picker, mini player and Now Playing for the target, every play action routed to it.
-3. Desktop and web: the same.
+3. Desktop and web: the same. **Done** for the bottom bar, the queue panel and the device list; the Now Playing tab, the left-panel cover and the phone layout of the web app still show this device only.
 
 ## The player screen
 

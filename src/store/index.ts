@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { api, AudioEventPayload, Track, Album, Playlist, ServerProfile, CastDevice, CastPush } from "../lib/api";
+import { routePlay, routeNext, routeEnd } from "../lib/target";
 import type { QueueTab } from "../components/QueueBottomTabs";
 import { queryClient } from "../lib/queryClient";
 import { measureCastDelay } from "../lib/castCalibration";
@@ -238,7 +239,8 @@ interface AppStore {
    *  call would be a no-op and it must restart playback via playTrack instead. */
   _stopped: boolean;
 
-  playTrack: (track: Track, queue?: Track[]) => void;
+  /** With another device as the target a UI call is sent there; `local` is for the player's own steps. */
+  playTrack: (track: Track, queue?: Track[], opts?: { local?: boolean }) => void;
   playPause: () => void;
   stop: () => void;
   next: () => void;
@@ -956,8 +958,9 @@ export const useStore = create<AppStore>((set, get) => ({
   castSyncOffsetMs: 0,
   castCalibration: { running: false, message: null },
 
-  playTrack: (track, queue) => {
+  playTrack: (track, queue, opts) => {
     const resolvedQueue = queue ?? [track];
+    if (!opts?.local && routePlay(resolvedQueue, Math.max(0, resolvedQueue.findIndex((t) => t.id === track.id)))) return;
     const idx = resolvedQueue.findIndex((t) => t.id === track.id);
     const { volume, queue: prevQueue, currentIndex: prevIndex, currentTime, duration } = get();
 
@@ -1028,7 +1031,7 @@ export const useStore = create<AppStore>((set, get) => ({
     // silently do nothing after Stop. Restart properly instead.
     if (!playing && _stopped) {
       const track = queue[currentIndex];
-      if (track) playTrack(track, queue);
+      if (track) playTrack(track, queue, { local: true });
       return;
     }
     // Resuming a cast device restarts its stream (resolving once it is up), so
@@ -1068,7 +1071,7 @@ export const useStore = create<AppStore>((set, get) => ({
   next: () => {
     const { queue, currentIndex, shuffle, repeat, playTrack } = get();
     const picked = computeNextTrack(queue, currentIndex, shuffle, repeat);
-    if (picked) playTrack(picked.track, queue);
+    if (picked) playTrack(picked.track, queue, { local: true });
   },
 
   prev: () => {
@@ -1079,7 +1082,7 @@ export const useStore = create<AppStore>((set, get) => ({
       return;
     }
     const prevTrack = queue[currentIndex - 1];
-    if (prevTrack) playTrack(prevTrack, queue);
+    if (prevTrack) playTrack(prevTrack, queue, { local: true });
   },
 
   setCurrentTime: (secs) => {
@@ -1156,8 +1159,9 @@ export const useStore = create<AppStore>((set, get) => ({
   // playing track without interrupting playback; if nothing's queued yet,
   // falls back to just playing it (there's no "current" to insert after).
   addTrackNext: (track) => {
+    if (routeNext(track)) return;
     const { queue, currentIndex, playTrack } = get();
-    if (!queue.length) { playTrack(track, [track]); return; }
+    if (!queue.length) { playTrack(track, [track], { local: true }); return; }
     const newQueue = [...queue];
     newQueue.splice(currentIndex + 1, 0, track);
     set({ queue: newQueue });
@@ -1166,11 +1170,13 @@ export const useStore = create<AppStore>((set, get) => ({
   // Matches the old app's add_track_to_queue: always just appends, never
   // auto-plays even if the queue was empty.
   addTrackToQueue: (track) => {
+    if (routeEnd([track])) return;
     set((s) => ({ queue: [...s.queue, track] }));
   },
 
   appendToQueue: (tracks) => {
     if (!tracks.length) return;
+    if (routeEnd(tracks)) return;
     set((s) => ({ queue: [...s.queue, ...tracks] }));
   },
 
@@ -1507,7 +1513,7 @@ function handleAudioEvent(payload: AudioEventPayload) {
         // cast stream and local playback together.
         const picked = computeNextTrack(s.queue, s.currentIndex, s.shuffle, s.repeat);
         if (picked) {
-          s.playTrack(picked.track, s.queue);
+          s.playTrack(picked.track, s.queue, { local: true });
           break;
         }
         api.castStop();

@@ -20,6 +20,10 @@ import { QueuePanel } from "./components/QueuePanel";
 import { MobileApp } from "./mobile/MobileApp";
 import { useIsMobile } from "./lib/useIsMobile";
 import { PlayerOnly, isPlayerMode } from "./components/PlayerOnly";
+import { RemotePlayerBar } from "./components/RemotePlayerBar";
+import { RemoteQueuePanel } from "./components/RemoteQueuePanel";
+import { useTarget } from "./lib/target";
+import { useSync } from "./lib/sync";
 import { Icon } from "./components/Icon";
 import { GlobalTooltip } from "./components/GlobalTooltip";
 import { GlobalHotkeys } from "./components/GlobalHotkeys";
@@ -189,6 +193,10 @@ function NavTab({
 }
 
 function DesktopApp() {
+  // Another device is the target: the bar and the queue panel show and control it (docs/connect.md).
+  const targetId = useTarget((s) => s.targetId);
+  const syncOnline = useSync((s) => s.status === "online");
+  const remoteTarget = syncOnline ? targetId : null;
   const activeTab    = useStore((s) => s.activeTab);
   const setTab       = useStore((s) => s.setTab);
   const pushNav      = useStore((s) => s.pushNav);
@@ -427,10 +435,10 @@ function DesktopApp() {
           </div>
         </div>
 
-        <QueuePanel />
+        {remoteTarget ? <RemoteQueuePanel /> : <QueuePanel />}
       </div>
 
-      <PlayerBar />
+      {remoteTarget ? <RemotePlayerBar /> : <PlayerBar />}
     </div>
   );
 }

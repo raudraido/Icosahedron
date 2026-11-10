@@ -135,3 +135,30 @@ test("clear: wipes the stored playback state and/or settings", async () => {
   assert.equal(saved.settings.values.x, "1"); // settings untouched
   app.close();
 });
+
+test("one active player: starting playback elsewhere pauses the previous one and ignores its stale updates", async () => {
+  const { app, url, store } = await boot();
+  const a = client(url, "bob", "phone");
+  await a.next((m) => m.type === "welcome");
+  const b = client(url, "bob", "desktop");
+  await b.next((m) => m.type === "welcome");
+
+  a.send({ type: "state", state: { queue: ["a1", "a2"], index: 0, positionMs: 1000, playing: true } });
+  await b.next((m) => m.type === "state");
+
+  // the desktop starts playing: the phone is told to pause
+  b.send({ type: "state", state: { queue: ["b1"], index: 0, positionMs: 0, playing: true } });
+  assert.equal((await a.next((m) => m.type === "command")).cmd, "pause");
+  assert.equal((await a.next((m) => m.type === "devices" && m.activeDeviceId === "desktop")).activeDeviceId, "desktop");
+
+  // updates the phone sent before it got the pause must not take the active role back
+  a.send({ type: "state", state: { index: 0, positionMs: 2000, playing: true } });
+  assert.ok(await b.quiet((m) => m.type === "command")); // the desktop is not paused again
+  // and its pause (from the command) must not overwrite the stored state with the phone's queue
+  a.send({ type: "state", state: { index: 0, positionMs: 2500, playing: false } });
+  await new Promise((r) => setTimeout(r, 1200)); // the store debounces writes
+  const saved = store.load("bob");
+  assert.equal(saved.activeDeviceId, "desktop");
+  assert.deepEqual(saved.state.queue, ["b1"]);
+  app.close();
+});

@@ -22,6 +22,7 @@ const MAX_QUEUE = 20000;
 const MAX_QUEUE_BYTES = 3 * 1024 * 1024;
 const COMMANDS = new Set(["play", "pause", "toggle", "seek", "next", "prev", "volume", "load", "enqueue", "jump", "remove"]);
 const MAX_ENQUEUE = 1000; // tracks per `enqueue` command
+const FENCE_MS = 5000; // a player that was just displaced may still have "playing" updates in flight
 const PLAYBACK_MESSAGES = new Set(["state", "devices"]);
 const FORGET_AFTER_MS = 90 * 24 * 3600 * 1000; // offline devices are dropped from the registry after this
 
@@ -32,6 +33,8 @@ export class Hub {
     this.users = new Map();
     /** @type {Map<string, {state:any, activeDeviceId:string|null, settings:any}>} */
     this.data = new Map();
+    /** "user\0device" -> until: players that were just paused because another one took over. */
+    this.fences = new Map();
   }
 
   _data(user) {
@@ -42,6 +45,19 @@ export class Hub {
       this.data.set(user, d);
     }
     return d;
+  }
+
+  _fence(user, id, on) {
+    const key = user + "\0" + id;
+    if (on) this.fences.set(key, Date.now() + FENCE_MS); else this.fences.delete(key);
+  }
+
+  _fenced(user, id) {
+    const until = this.fences.get(user + "\0" + id);
+    if (until === undefined) return false;
+    if (Date.now() < until) return true;
+    this.fences.delete(user + "\0" + id);
+    return false;
   }
 
   /** Online players that take part in playback sync (what remote control and "Play here" show). */
@@ -145,6 +161,11 @@ export class Hub {
         if (hasQueue && (s.queue.length > MAX_QUEUE || JSON.stringify(s.queue).length > MAX_QUEUE_BYTES)) return;
         const queue = hasQueue ? s.queue : d.state?.queue;
         if (!queue) return; // nothing to attach a position to yet
+        // One active player per account: only the active one (or one that starts playing, which takes
+        // over) may change the stored state. A pause from a player that is no longer the active one would
+        // otherwise overwrite the real state with its own position.
+        if (!s.playing && d.activeDeviceId && d.activeDeviceId !== from) { this._fence(user, from, false); return; }
+        if (s.playing && this._fenced(user, from)) return; // stale update of a player that was just displaced
         d.state = {
           queue, index: Number(s.index) | 0,
           positionMs: Math.max(0, Number(s.positionMs) || 0), playing: !!s.playing,
@@ -152,7 +173,15 @@ export class Hub {
           updatedAt: Date.now(),
         };
         const becameActive = d.state.playing && d.activeDeviceId !== from;
-        if (becameActive) d.activeDeviceId = from;
+        if (becameActive) {
+          const prev = d.activeDeviceId ? room?.get(d.activeDeviceId) : null;
+          if (prev) { // the previous player stops: one player at a time
+            prev.conn.send({ type: "command", from, cmd: "pause" });
+            this._fence(user, d.activeDeviceId, true);
+          }
+          this._fence(user, from, false);
+          d.activeDeviceId = from;
+        }
         this.store.save(user, d);
         this._broadcast(user, { type: "state", from, state: hasQueue ? d.state : { ...d.state, queue: undefined } }, from);
         if (becameActive) this._broadcast(user, { type: "devices", devices: this._devices(user), activeDeviceId: from });
@@ -176,6 +205,8 @@ export class Hub {
         // Previous owner pauses; target loads the stored state and plays.
         const prev = d.activeDeviceId && d.activeDeviceId !== msg.target ? room.get(d.activeDeviceId) : null;
         prev?.conn.send({ type: "command", from, cmd: "pause" });
+        if (prev) this._fence(user, d.activeDeviceId, true);
+        this._fence(user, String(msg.target), false);
         d.activeDeviceId = String(msg.target);
         this.store.save(user, d);
         t.conn.send({ type: "command", from, cmd: "load", args: { state: { ...d.state, playing: true } } });

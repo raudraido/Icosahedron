@@ -71,6 +71,8 @@ Close codes: `4001` no hello in time, `4002` first message was not `hello`, `400
 
 The **active device** is the one that last published `playing: true` or was transferred to. It is the source of truth for the position.
 
+There is **one active device per account**. When another device starts playing, the engine sends the previous active one `pause` and ignores its stale `playing` updates for 5 seconds; a pause or position from a device that is not the active one does not change the stored state. See [connect.md](connect.md).
+
 **Only the playing device should publish.** An idle device that just restored its saved queue must not publish, or it would overwrite the state of the device in use. A pause or stop is still published once.
 
 ### Commands

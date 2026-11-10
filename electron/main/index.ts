@@ -438,6 +438,13 @@ function registerIpcHandlers(): void {
   });
   ipcMain.handle("lastfm_get_connection", (_e, { serverId }) => loadLastFmSession(serverId));
   ipcMain.handle("lastfm_public_api_key", () => lastfm.getApiKey());
+  // The connected session, for handing it to the sync server (src/platform/lastfmSync.ts). It only
+  // travels to the server the user chose, over the signed-in connection.
+  ipcMain.handle("lastfm_export_session", async (_e, { serverId }) => {
+    const info = await loadLastFmSession(serverId);
+    const sessionKey = info ? await getLastFmSessionKey(serverId) : null;
+    return info && sessionKey ? { sessionKey, historyEnabled: info.historyEnabled, scrobbleEnabled: info.scrobbleEnabled } : null;
+  });
   ipcMain.handle("lastfm_disconnect", (_e, { serverId }) => clearLastFmSession(serverId));
   ipcMain.handle("lastfm_set_history_enabled", (_e, { serverId, value }) => setLastFmToggle(serverId, "historyEnabled", value));
   ipcMain.handle("lastfm_set_scrobble_enabled", (_e, { serverId, value }) => setLastFmToggle(serverId, "scrobbleEnabled", value));

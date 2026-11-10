@@ -11,7 +11,8 @@ The apps and the server are versioned separately, so a version number says nothi
 | Independent players (each player's own state), choosing a device to control | 2 | Server 0.15.6 |
 | Quick Connect, the `tv` device kind, LAN discovery | 2 | Server 0.16.0, Android TV 0.1.0 |
 | Quick Connect switched on and off by an administrator in Settings (`/quickconnect/settings`) | 2 | Server 0.16.1, Desktop 0.16.1, iOS 0.1.1 |
+| Last.fm handed from the desktop to the server (`PUT /lastfm/connection`), profile picture (`/avatar`) | 2 | Server 0.16.2, Desktop 0.16.2 (Last.fm), iOS 0.1.2 (picture) |
 
-Versions before the split were one shared number (0.15.x). Since the split each product counts on its own: Desktop 0.16.0, Server 0.16.0, iOS 0.1.0, Android TV 0.1.0 (since then: Desktop 0.16.1, Server 0.16.1, iOS 0.1.1).
+Versions before the split were one shared number (0.15.x). Since the split each product counts on its own: Desktop 0.16.0, Server 0.16.0, iOS 0.1.0, Android TV 0.1.0 (since then: Desktop 0.16.2, Server 0.16.2, iOS 0.1.2).
 
 Rule of thumb: **update the server first**, then the apps. A new app against an older server still works for everything the server knows; the new features that need the server are simply missing.

@@ -13,12 +13,30 @@ type Conn = { username: string; historyEnabled: boolean; scrobbleEnabled: boolea
 type EngineState = { configured: boolean; apiKey: string; conn: Conn };
 
 const TTL_MS = 30_000;
+const HANDOVER_RETRY_MS = 5 * 60_000;
 
 export function withEngineLastFm(base: Platform): Platform {
   const engine = createEngine(() => base.invoke("sync_auth"));
   let cache: { at: number; value: EngineState | null } | null = null;
 
   const forget = () => { cache = null; };
+
+  // A Last.fm session this desktop already holds is handed to the engine once, so that every device
+  // (phone, web, TV) is connected without anyone approving again. Tried again only after a while when
+  // the engine says no (for example it runs with a different Last.fm API key).
+  let lastHandover = 0;
+  async function handOver(serverId: string, st: EngineState): Promise<EngineState> {
+    if (st.conn || Date.now() - lastHandover < HANDOVER_RETRY_MS) return st;
+    lastHandover = Date.now();
+    try {
+      const mine = await base.invoke<{ sessionKey: string; historyEnabled: boolean; scrobbleEnabled: boolean } | null>("lastfm_export_session", { serverId });
+      if (!mine) return st;
+      const r = await engine("/lastfm/connection", { method: "PUT", body: JSON.stringify(mine) });
+      if (!r?.ok) return st;
+      forget();
+      return (await state()) ?? st;
+    } catch { return st; }
+  }
 
   /** The engine's Last.fm state, or null when there is no engine, it is down or it has none. */
   async function state(): Promise<EngineState | null> {
@@ -50,7 +68,9 @@ export function withEngineLastFm(base: Platform): Platform {
     ...base,
     invoke: async (cmd, args) => {
       if (!cmd.startsWith("lastfm_") || !syncOptions().lastfm) return base.invoke(cmd, args);
-      const st = await state();
+      let st = await state();
+      const serverId = (args as any)?.serverId;
+      if (st && !st.conn && typeof serverId === "string") st = await handOver(serverId, st);
       const viaEngine = !!st?.conn; // the engine holds the connection: it does the scrobbling
       switch (cmd) {
         case "lastfm_connect_start": {
@@ -67,7 +87,11 @@ export function withEngineLastFm(base: Platform): Platform {
         case "lastfm_public_api_key":
           return (st?.apiKey || (await base.invoke(cmd, args))) as any;
         case "lastfm_disconnect":
-          if (viaEngine) return call("DELETE", "/lastfm/connection");
+          if (viaEngine) {
+            await call("DELETE", "/lastfm/connection");
+            await base.invoke(cmd, args); // this desktop's own session too, or it would be handed over again
+            return undefined as any;
+          }
           break;
         case "lastfm_set_history_enabled":
           if (viaEngine) return call("PUT", "/lastfm/toggles", { historyEnabled: (args as any).value });

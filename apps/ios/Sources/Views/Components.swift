@@ -210,7 +210,7 @@ struct ProfileButton: ViewModifier {
         content
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { show = true } label: { Image(systemName: "person.crop.circle.fill").font(.title2) }
+                    Button { show = true } label: { AvatarView(size: 30) }
                 }
             }
             .sheet(isPresented: $show) { SettingsView() }

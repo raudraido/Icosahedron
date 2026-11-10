@@ -2,6 +2,14 @@
 
 The server is the **sync engine and the web app it serves** (one Docker image, `ghcr.io/raudraido/icosahedron-server`). Versions before 0.16.0 shared one number with the other apps (0.15.3 to 0.15.9); the full text of those releases is in the [main changelog](../../CHANGELOG.md). What each version needs and gives: [docs/compatibility.md](../../docs/compatibility.md).
 
+## 0.16.2
+
+Last.fm connects once for all your devices, and the server keeps your profile picture. **Update with** `docker compose pull && docker compose up -d`. Nothing to configure.
+
+- **Last.fm works without any setup.** The server now uses the Icosahedron app's own Last.fm API account unless you set `LASTFM_API_KEY` / `LASTFM_API_SECRET` (those still win). Before, the phone said "Not set up on the server" until you registered your own key.
+- **A device can hand its Last.fm connection to the server.** `PUT /lastfm/connection` takes a session key, checks it with Last.fm and stores it for the signed-in user; the desktop app uses it so that a connection made there appears on every other device. See [docs/deploy-server.md](../../docs/deploy-server.md#lastfm).
+- **Profile picture.** `GET`, `PUT` (the raw image) and `DELETE` on `/avatar` keep one picture per user (JPEG, PNG or WebP, up to 512 kB) in the data directory. The iOS app uses it.
+
 ## 0.16.1
 
 Quick Connect gets a switch and the compose file sets everything up together. **Update with** `docker compose pull && docker compose up -d` (the web app is in the image). Nothing changes for you until you want to use the new switch; if you set `QUICK_CONNECT` in the environment it keeps deciding.

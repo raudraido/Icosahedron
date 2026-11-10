@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 struct PlaylistsList: View {
     @Environment(AppModel.self) private var app
@@ -113,23 +114,32 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Account") {
-                    LabeledContent("Server", value: app.client?.baseURL.host ?? "")
-                    LabeledContent("User", value: app.client?.username ?? "")
-                }
                 Section("About") {
                     LabeledContent("Version", value: Self.versionText)
                 }
+                Section("Account") {
+                    ProfilePictureRow()
+                    LabeledContent("Server", value: app.client?.baseURL.host ?? "")
+                    LabeledContent("User", value: app.client?.username ?? "")
+                }
                 Section("Devices") {
                     DevicesList()
-                    NavigationLink { SyncSettingsView() } label: { Label("Sync Server", systemImage: "arrow.triangle.2.circlepath") }
+                }
+                Section {
+                    NavigationLink { SyncSettingsView() } label: {
+                        HStack {
+                            Label("Sync Server", systemImage: "arrow.triangle.2.circlepath")
+                            Spacer()
+                            Text(syncStatusText).foregroundStyle(.secondary)
+                        }
+                    }
                 }
                 Section {
                     LastFmSection()
                 } header: {
                     Text("Last.fm")
                 } footer: {
-                    Text("Scrobbles go through your server, so one connection covers all your devices. Plays made offline are sent later. If your Navidrome is also linked to Last.fm, a play may be counted twice.")
+                    Text("Scrobbles go through your server, so one connection covers all your devices. If the Icosahedron desktop app is connected to Last.fm, it shares that connection with the server and it shows up here. Plays made offline are sent later. If your Navidrome is also linked to Last.fm, a play may be counted twice.")
                 }
                 Section("Sound") {
                     NavigationLink("Equalizer") { EqualizerContent().navigationTitle("Equalizer").navigationBarTitleDisplayMode(.inline) }
@@ -167,6 +177,60 @@ struct SettingsView: View {
             .navigationTitle("Account")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .task {
+                guard let c = app.client else { return }
+                await app.lastfm.refresh(client: c) // the desktop may have shared its connection since the last look
+                await app.avatar.refresh(client: c)
+            }
+        }
+    }
+
+    private var syncStatusText: String {
+        switch app.sync.status {
+        case "online": return String(localized: "Connected")
+        case "connecting": return String(localized: "Connecting…")
+        default: return String(localized: "Not reachable")
+        }
+    }
+}
+
+/// The profile picture (kept by the sync server, shown on every device) with change / remove.
+struct ProfilePictureRow: View {
+    @Environment(AppModel.self) private var app
+    @State private var picked: PhotosPickerItem?
+    @State private var message: String?
+    @State private var working = false
+
+    var body: some View {
+        VStack(spacing: 10) {
+            AvatarView(size: 96)
+            HStack(spacing: 20) {
+                PhotosPicker(selection: $picked, matching: .images) {
+                    Text(LocalizedStringKey(app.avatar.image == nil ? "Add photo" : "Change photo"))
+                }
+                if app.avatar.image != nil {
+                    Button("Remove", role: .destructive) {
+                        guard let c = app.client else { return }
+                        Task { await app.avatar.remove(client: c) }
+                    }
+                }
+            }
+            .buttonStyle(.borderless)
+            .disabled(working)
+            if let message { Text(message).font(.footnote).foregroundStyle(.orange) }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        .onChange(of: picked) { _, item in
+            guard let item, let c = app.client else { return }
+            working = true; message = nil
+            Task {
+                defer { working = false; picked = nil }
+                guard let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) else {
+                    message = String(localized: "That picture could not be used"); return
+                }
+                message = await app.avatar.set(img, client: c)
+            }
         }
     }
 }
@@ -271,7 +335,7 @@ struct LastFmSection: View {
         case .unknown:
             Text("Not available (needs the web engine)").foregroundStyle(.secondary)
         case .notConfigured:
-            Text("Not set up on the server").foregroundStyle(.secondary)
+            Text("The sync server has no Last.fm API key yet. Update it to 0.16.2 or newer, or set LASTFM_API_KEY and LASTFM_API_SECRET on it.").font(.footnote).foregroundStyle(.secondary)
         case .disconnected:
             if fm.pendingToken == nil {
                 Button("Connect to Last.fm") { connect() }

@@ -1,6 +1,6 @@
 # Sync Server settings (design)
 
-What every player's **Settings → Sync Server** section does. The engine side (registry, rename, forget, clear, `playback:false`) is described in [sync-protocol.md](sync-protocol.md#registered-players); the screens are built per platform (desktop and web first, then iOS).
+What every player's **Settings → Sync Server** section does. The engine side (registry, rename, forget, clear, `playback:false`) is described in [sync-protocol.md](sync-protocol.md#registered-players); the screen is built on the desktop and web app (**Settings → Sync Server**); the iOS screen follows.
 
 ## Sections
 

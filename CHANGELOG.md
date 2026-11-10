@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-- **Engine: registry of your players.** Each player has a name the engine remembers (renamable), offline players stay in the list and are dropped after 90 days, and the engine can forget a player or wipe the stored playback state / shared settings. A player can connect for preference sync only (`playback:false`). See [docs/sync-protocol.md](docs/sync-protocol.md#registered-players). The settings screens that use this follow.
+- **Desktop and web: Settings → Sync Server.** Join or leave the sync server (desktop), name this player, see and rename every registered player (forget offline ones), choose per player what it keeps in sync (playback and remote control, four groups of preferences, BPM, Last.fm through the server) and clear the queue or preferences the server stores. See [docs/sync-settings.md](docs/sync-settings.md). The iOS screen follows.
+- **Engine: registry of your players.** Each player has a name the engine remembers (renamable), offline players stay in the list and are dropped after 90 days, and the engine can forget a player or wipe the stored playback state / shared settings. A player can connect for preference sync only (`playback:false`). See [docs/sync-protocol.md](docs/sync-protocol.md#registered-players). 
 - **Desktop: Last.fm through the engine.** With the engine's address set and a Last.fm connection on the engine, the desktop app scrobbles and shows now-playing through it, so you connect once for all devices. A local desktop session keeps working until the engine has a connection; without an engine nothing changes.
 
 ## 0.15.4

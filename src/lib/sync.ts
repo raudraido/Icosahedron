@@ -10,9 +10,12 @@ import { platform } from "../platform";
 import { getSyncUrl, saveEngineUrl } from "../platform/syncUrl";
 import { api, type Track } from "./api";
 import { useStore } from "../store";
-import { reconcileSettings, remoteSettingsChanged, settingsDisconnected, type SettingsBlob } from "./settingsSync";
+import { reconcileSettings, remoteSettingsChanged, remoteSettingsCleared, settingsDisconnected, settingsOptionsChanged, type SettingsBlob } from "./settingsSync";
+import { syncOptions, useSyncOptions } from "./syncOptions";
 
 export interface SyncDevice { deviceId: string; name: string; kind: "electron" | "web" | "mobile" }
+/** A player in the engine's registry: online or not (the picker only lists the online ones). */
+export interface RegistryDevice { deviceId: string; name: string; kind: SyncDevice["kind"]; online: boolean; lastSeen: number }
 export interface RemoteState {
   queue?: Omit<Track, "stream_url">[]; index: number; positionMs: number; playing: boolean; updatedAt: number;
 }
@@ -25,6 +28,9 @@ interface SyncStore {
   /** Latest state published by whichever device is active (queue kept from the last time it was sent). */
   remote: (RemoteState & { from: string }) | null;
   syncUrl: string | null;
+  /** This player's name as the engine knows it (renamed in Settings > Sync Server). */
+  name: string | null;
+  registry: RegistryDevice[];
 }
 
 const LS_ID = "ico.deviceId";
@@ -48,7 +54,7 @@ function deviceName(): string {
 }
 
 export const useSync = create<SyncStore>(() => ({
-  status: "off", deviceId: loadDeviceId(), devices: [], activeDeviceId: null, remote: null, syncUrl: getSyncUrl(),
+  status: "off", deviceId: loadDeviceId(), devices: [], activeDeviceId: null, remote: null, syncUrl: getSyncUrl(), name: null, registry: [],
 }));
 
 export function setSyncUrl(url: string): void {
@@ -87,6 +93,12 @@ export const syncActions = {
   },
   /** Jukebox: play item `index` of `target`'s queue. */
   jump: (target: string, index: number) => send({ type: "command", target, cmd: "jump", args: { index } }),
+  /** Rename a registered player (this one or another). */
+  rename: (target: string, name: string) => send({ type: "rename", target, name }),
+  /** Remove an offline player from the registry (the engine refuses online ones). */
+  forget: (target: string) => send({ type: "forget", target }),
+  /** Wipe what the engine stores: the playback state and/or the shared preferences. */
+  clear: (what: { state?: boolean; settings?: boolean }) => send({ type: "clear", ...what }),
   /** Jukebox: remove item `index` from `target`'s queue. */
   removeAt: (target: string, index: number) => send({ type: "command", target, cmd: "remove", args: { index } }),
 };
@@ -101,7 +113,7 @@ async function connect(): Promise<void> {
   const sock = (ws = new WebSocket(url));
   sock.onopen = () => {
     retry = 0;
-    sock.send(JSON.stringify({ type: "hello", auth, device: { deviceId: useSync.getState().deviceId, name: deviceName(), kind: platform.kind } }));
+    sock.send(JSON.stringify({ type: "hello", auth, device: { deviceId: useSync.getState().deviceId, name: deviceName(), kind: platform.kind, playback: syncOptions().playback } }));
   };
   sock.onmessage = (ev) => { try { onMessage(JSON.parse(ev.data)); } catch { /* ignore malformed */ } };
   sock.onclose = (ev) => {
@@ -125,9 +137,17 @@ function orderDevices(list: SyncDevice[]): SyncDevice[] {
     (a.deviceId === me ? 0 : 1) - (b.deviceId === me ? 0 : 1) || a.name.localeCompare(b.name) || a.deviceId.localeCompare(b.deviceId));
 }
 
+function orderRegistry(list: RegistryDevice[]): RegistryDevice[] {
+  const me = useSync.getState().deviceId;
+  return [...list].sort((a, b) =>
+    (a.deviceId === me ? 0 : 1) - (b.deviceId === me ? 0 : 1) || Number(b.online) - Number(a.online) ||
+    a.name.localeCompare(b.name) || a.deviceId.localeCompare(b.deviceId));
+}
+
 function onMessage(m: any): void {
   switch (m.type) {
     case "welcome":
+      useSync.setState({ name: m.name ?? null });
       reconcileSettings(m.settings ?? null, (blob: SettingsBlob) => send({ type: "settings", settings: blob }));
       useSync.setState({
         status: "online", devices: orderDevices(m.devices), activeDeviceId: m.activeDeviceId,
@@ -139,6 +159,16 @@ function onMessage(m: any): void {
       break;
     case "devices":
       useSync.setState({ devices: orderDevices(m.devices), activeDeviceId: m.activeDeviceId });
+      break;
+    case "registry":
+      useSync.setState({ registry: orderRegistry(m.devices ?? []) });
+      break;
+    case "renamed":
+      useSync.setState({ name: String(m.name) });
+      break;
+    case "cleared":
+      if (m.state) useSync.setState({ remote: null, activeDeviceId: null });
+      if (m.settings) remoteSettingsCleared();
       break;
     case "state": {
       const prev = useSync.getState().remote;
@@ -152,6 +182,7 @@ function onMessage(m: any): void {
 }
 
 async function handleCommand(cmd: string, args: any): Promise<void> {
+  if (!syncOptions().playback) return; // remote control is switched off on this player
   const s = useStore.getState();
   switch (cmd) {
     case "play": if (!s.playing) s.playPause(); break;
@@ -221,6 +252,7 @@ let lastPublishedKey = "";
 let positionTimer: number | undefined;
 
 function publish(forceQueue: boolean): void {
+  if (!syncOptions().playback) return;
   const s = useStore.getState();
   if (!s.queue.length) return;
   send({
@@ -284,6 +316,11 @@ function restart(): void {
 
 /** Call once at startup: syncs whenever a server connection is active. */
 export function initSync(): void {
+  // Playback sync is part of the hello, so switching it reconnects; a preference group switched on takes over the shared values.
+  useSyncOptions.subscribe((o, prev) => {
+    if (o.playback !== prev.playback) restart();
+    if (o.prefs !== prev.prefs) settingsOptionsChanged();
+  });
   const update = (username: string) => (username ? start() : stop());
   update(useStore.getState().username);
   let prevUser = useStore.getState().username;

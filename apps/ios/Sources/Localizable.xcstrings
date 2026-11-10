@@ -1081,6 +1081,16 @@
         }
       }
     },
+    "Tap a device to play on it and control it. The player shows what it plays.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puuduta seadet, et sellel mängida ja seda juhtida. Mängija näitab, mida see mängib."
+          }
+        }
+      }
+    },
     "Add to Device Queue": {
       "localizations": {
         "et": {

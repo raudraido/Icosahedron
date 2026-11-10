@@ -171,22 +171,6 @@ struct DevicesList: View {
                 .foregroundStyle(.secondary)
         }
         ForEach(sync.devices) { d in DeviceRow(d: d) }
-        if let active = sync.activeDeviceId, active != sync.deviceId, let t = sync.remoteTrack {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("\(t.title) — \(t.artist)").lineLimit(1)
-                HStack(spacing: 24) {
-                    Button { sync.command(to: active, "prev") } label: { Image(systemName: "backward.fill") }
-                    Button { sync.command(to: active, "toggle") } label: { Image(systemName: sync.remotePlaying ? "pause.fill" : "play.fill") }
-                    Button { sync.command(to: active, "next") } label: { Image(systemName: "forward.fill") }
-                }
-                .buttonStyle(.borderless)
-                NavigationLink {
-                    JukeboxView()
-                } label: {
-                    Label(String(localized: "Open Jukebox") + " (\(sync.remoteQueue.count))", systemImage: "hifispeaker.2")
-                }
-            }
-        }
     }
 
     private func icon(_ kind: String) -> String {

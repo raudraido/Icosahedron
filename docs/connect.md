@@ -38,7 +38,7 @@ Choosing a different target while this device is playing **transfers** the playb
 
 ## The player screen
 
-The full-screen player looks the same whether it plays here or controls another device: cover, progress, queue, lyrics, info, favorite and the track menu all work on the target's track and queue. The **devices button is highlighted** with the target's name; tapping it switches target. Controls that only make sense for this phone's own sound (AirPlay, equalizer, playback speed) are hidden while another device is the target. A target with nothing playing shows an empty state with the devices button still available. The *Devices* tab is the overview: every device with what it plays; tapping one makes it the target.
+The full-screen player looks the same whether it plays here or controls another device: cover, progress, queue, lyrics, info, favorite and the track menu all work on the target's track and queue. The **devices button is highlighted** with the target's name; tapping it switches target. Controls that only make sense for this phone's own sound (AirPlay, equalizer, playback speed) stay in place but are inactive while another device is the target. A target with nothing playing shows an empty state with the devices button still available. The *Devices* tab is the overview: every device with what it plays; tapping one makes it the target.
 
 ## Not decided
 - Whether the choice of target is remembered across launches (today: every launch starts on *this device*).

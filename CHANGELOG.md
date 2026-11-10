@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **iOS: one player screen for every device.** Choose a device in the new **Devices** tab (or with the devices button in the player) and the player looks the same but shows and controls that device: cover, progress (drag to seek), queue (tap, remove, drag to reorder), lyrics, shuffle, repeat. The devices button is highlighted with the device's name; speed, AirPlay and the equalizer stay in place but inactive while another device is the target. A device with nothing playing shows "Nothing playing on …". Replaces the separate Jukebox screen.
 - **Remote control grows:** new commands `shuffle`, `repeat` and `move` (reorder the queue) on the engine, the desktop/web app and iOS; every player now also publishes its shuffle and repeat state. See [docs/sync-protocol.md](docs/sync-protocol.md).
 - **iOS: Settings → Sync Server.** Name this phone, see and rename the registered players (forget offline ones), choose what the phone keeps in sync (playback and remote control, equalizer, lyrics source) and clear the queue or preferences the server stores. Needs the 0.15.5 engine.
 

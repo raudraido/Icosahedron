@@ -30,8 +30,13 @@ struct LyricsView: View {
     }
 
     private var list: some View {
-        let p = app.player
-        let current = currentIndex(p.position)
+        // Ticks on its own: another device's position is not an observed property.
+        TimelineView(.periodic(from: .now, by: 0.25)) { ctx in listBody(at: ctx.date) }
+    }
+
+    private func listBody(at date: Date) -> some View {
+        let s = app.nowPlaying
+        let current = currentIndex(s.position(at: date))
         return ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
@@ -42,7 +47,7 @@ struct LyricsView: View {
                             .foregroundStyle(.white.opacity(active ? 1 : 0.38))
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .contentShape(Rectangle())
-                            .onTapGesture { if let t = line.time { p.seek(to: t) } }
+                            .onTapGesture { if let t = line.time { s.seek(to: t) } }
                             .animation(.easeInOut(duration: 0.25), value: active)
                             .id(i)
                     }

@@ -116,7 +116,7 @@ struct SongsScreen: View {
             }
             .listRowSeparator(.hidden)
             ForEach(Array(tracks.enumerated()), id: \.offset) { i, t in
-                Button { app.player.play(tracks, at: i) } label: { TrackRow(track: t, showCover: true) }
+                Button { app.play(tracks, at: i) } label: { TrackRow(track: t, showCover: true) }
                     .buttonStyle(.plain)
                     .onAppear { if i >= tracks.count - 10 { Task { await loadMore() } } }
             }
@@ -140,7 +140,7 @@ struct SongsScreen: View {
 
     private func shuffleAll() {
         Task {
-            if let songs = try? await app.client?.randomSongs(200), !songs.isEmpty { app.player.play(songs, at: 0) }
+            if let songs = try? await app.client?.randomSongs(200), !songs.isEmpty { app.play(songs, at: 0) }
         }
     }
 }
@@ -160,7 +160,7 @@ struct DirectoryScreen: View {
                 NavigationLink(value: e) { Label(e.title, systemImage: "folder.fill") }
             }
             ForEach(Array(tracks.enumerated()), id: \.offset) { i, t in
-                Button { app.player.play(tracks, at: i) } label: { TrackRow(track: t, showCover: true) }
+                Button { app.play(tracks, at: i) } label: { TrackRow(track: t, showCover: true) }
                     .buttonStyle(.plain)
             }
             if loading { ProgressView().frame(maxWidth: .infinity).listRowSeparator(.hidden) }
@@ -229,9 +229,9 @@ struct CachedSongsScreen: View {
                     .font(.footnote).foregroundStyle(.secondary)
                 if !playable.isEmpty {
                     HStack(spacing: 12) {
-                        Button { app.player.play(playable, at: 0) } label: { Label("Play", systemImage: "play.fill").frame(maxWidth: .infinity) }
+                        Button { app.play(playable, at: 0) } label: { Label("Play", systemImage: "play.fill").frame(maxWidth: .infinity) }
                             .buttonStyle(.borderedProminent)
-                        Button { app.player.play(playable.shuffled(), at: 0) } label: { Label("Shuffle", systemImage: "shuffle").frame(maxWidth: .infinity) }
+                        Button { app.play(playable.shuffled(), at: 0) } label: { Label("Shuffle", systemImage: "shuffle").frame(maxWidth: .infinity) }
                             .buttonStyle(.bordered)
                     }
                 }
@@ -256,7 +256,7 @@ struct CachedSongsScreen: View {
     private func row(_ e: AudioCache.Entry, playable: [Track]) -> some View {
         let ready = e.file != nil
         Button {
-            if ready, let i = playable.firstIndex(where: { $0.id == e.id }) { app.player.play(playable, at: i) }
+            if ready, let i = playable.firstIndex(where: { $0.id == e.id }) { app.play(playable, at: i) }
         } label: {
             HStack(spacing: 8) {
                 TrackRow(track: e.track, showCover: true)

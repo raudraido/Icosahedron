@@ -118,6 +118,26 @@ final class AppModel {
         bpm = map
     }
 
+    // MARK: Playing on a device
+
+    /// Plays on the chosen device: this phone, or another of the user's devices (docs/connect.md).
+    /// Radio stations only exist on this phone and always play here.
+    func play(_ tracks: [Track], at index: Int = 0) {
+        if let t = sync.remoteTarget, !tracks.contains(where: { $0.directURL != nil }) {
+            sync.playOn(t, tracks, at: index)
+        } else {
+            player.play(tracks, at: index)
+        }
+    }
+
+    func playNext(_ track: Track) {
+        if let t = sync.remoteTarget, track.directURL == nil { sync.enqueue(on: t, [track], at: .next) } else { player.playNext(track) }
+    }
+
+    func addToQueue(_ track: Track) {
+        if let t = sync.remoteTarget, track.directURL == nil { sync.enqueue(on: t, [track], at: .end) } else { player.addToQueue(track) }
+    }
+
     // MARK: Instant Mix
 
     /// A mix built around a track: similar songs from the server; without them, random songs of
@@ -132,7 +152,7 @@ final class AppModel {
                 Presenter.alert(String(localized: "No similar songs found"), String(localized: "The server has no similar-song data for this track."))
                 return
             }
-            player.play([t] + mix, at: 0)
+            play([t] + mix, at: 0)
         }
     }
 

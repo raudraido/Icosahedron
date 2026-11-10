@@ -1061,6 +1061,26 @@
         }
       }
     },
+    "Nothing playing on %@": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seadmes %@ ei mängi midagi"
+          }
+        }
+      }
+    },
+    "Choose something to play and it starts there.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vali midagi mängimiseks ja see algab seal."
+          }
+        }
+      }
+    },
     "Add to Device Queue": {
       "localizations": {
         "et": {

@@ -5,11 +5,26 @@ import SwiftUI
 struct JukeboxView: View {
     @Environment(AppModel.self) private var app
 
+    /// The device being controlled: the chosen one, else whichever other device is playing.
+    private func controlled(_ sync: SyncModel) -> String? {
+        if let t = sync.remoteTarget { return t }
+        if let a = sync.activeDeviceId, a != sync.deviceId { return a }
+        return nil
+    }
+
     var body: some View {
         let sync = app.sync
+        let target = controlled(sync)
+        let name = sync.devices.first(where: { $0.id == target })?.name
         Group {
-            if let active = sync.activeDeviceId, active != sync.deviceId, !sync.remoteQueue.isEmpty {
-                queue(active, sync)
+            if let target, sync.activeDeviceId == target, !sync.remoteQueue.isEmpty {
+                queue(target, sync)
+            } else if let name {
+                ContentUnavailableView(
+                    String(localized: "Nothing playing on \(name)"),
+                    systemImage: "hifispeaker.2",
+                    description: Text("Choose something to play and it starts there.")
+                )
             } else {
                 ContentUnavailableView(
                     String(localized: "No other device is playing"),
@@ -18,12 +33,8 @@ struct JukeboxView: View {
                 )
             }
         }
-        .navigationTitle(title(sync))
+        .navigationTitle(name ?? String(localized: "Jukebox"))
         .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private func title(_ sync: SyncModel) -> String {
-        sync.devices.first(where: { $0.id == sync.activeDeviceId })?.name ?? String(localized: "Jukebox")
     }
 
     private func queue(_ active: String, _ sync: SyncModel) -> some View {
@@ -123,7 +134,12 @@ struct JukeboxTab: View {
                 }
                 Section(String(localized: "Devices")) {
                     ForEach(sync.devices) { d in
-                        row(d, sync)
+                        DeviceRow(d: d)
+                        if sync.remoteTarget == d.id {
+                            NavigationLink { JukeboxView() } label: {
+                                Label(String(localized: "Open Jukebox"), systemImage: "hifispeaker.2")
+                            }
+                        }
                     }
                     if sync.status == "online", sync.devices.count <= 1 {
                         Text("No other devices online.").foregroundStyle(.secondary)
@@ -134,33 +150,52 @@ struct JukeboxTab: View {
         }
     }
 
-    @ViewBuilder
-    private func row(_ d: SyncModel.Device, _ sync: SyncModel) -> some View {
+    private func icon(_ kind: String) -> String {
+        switch kind {
+        case "mobile": return "iphone"
+        case "electron": return "desktopcomputer"
+        default: return "laptopcomputer"
+        }
+    }
+}
+
+/// A device in the lists. Tapping it chooses it as the device the controls act on (docs/connect.md).
+struct DeviceRow: View {
+    @Environment(AppModel.self) private var app
+    let d: SyncModel.Device
+
+    var body: some View {
+        let sync = app.sync
         let isMe = d.id == sync.deviceId
         let isActive = d.id == sync.activeDeviceId
-        let content = HStack(spacing: 12) {
-            Image(systemName: icon(d.kind)).font(.title3)
-                .foregroundStyle(isActive ? Theme.accent : Color.secondary).frame(width: 28)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(d.name + (isMe ? " " + String(localized: "(this phone)") : ""))
-                    .foregroundStyle(isActive ? Theme.accent : Color.primary)
-                if isActive, let t = sync.remoteTrack {
-                    Text("\(sync.remotePlaying ? String(localized: "Playing") : String(localized: "Paused")): \(t.title) — \(t.artist)")
-                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                } else {
-                    Text("Idle").font(.caption).foregroundStyle(.secondary)
+        let selected = (sync.remoteTarget ?? sync.deviceId) == d.id
+        let track = isMe ? app.player.current : (isActive ? sync.remoteTrack : nil)
+        let playing = isMe ? app.player.isPlaying : sync.remotePlaying
+        HStack(spacing: 12) {
+            Button { sync.setTarget(isMe ? nil : d.id) } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: icon(d.kind)).font(.title3)
+                        .foregroundStyle(isActive ? Theme.accent : Color.secondary).frame(width: 28)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(d.name + (isMe ? " " + String(localized: "(this phone)") : ""))
+                            .foregroundStyle(selected ? Theme.accent : Color.primary)
+                        if let track {
+                            Text("\(playing ? String(localized: "Playing") : String(localized: "Paused")): \(track.title) — \(track.artist)")
+                                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        } else {
+                            Text("Idle").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    if selected { Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.accent) }
                 }
+                .contentShape(Rectangle())
             }
-            Spacer()
-            if !isActive, sync.remoteTrack != nil {
-                Button(isMe ? String(localized: "Play here") : String(localized: "Send")) { sync.transfer(to: d.id) }
+            .buttonStyle(.plain)
+            if isMe, !isActive, sync.remoteTrack != nil {
+                Button(String(localized: "Play here")) { sync.setTarget(nil); sync.transfer(to: sync.deviceId) }
                     .buttonStyle(.bordered)
             }
-        }
-        if isActive, !isMe {
-            NavigationLink { JukeboxView() } label: { content }
-        } else {
-            content
         }
     }
 
@@ -169,6 +204,20 @@ struct JukeboxTab: View {
         case "mobile": return "iphone"
         case "electron": return "desktopcomputer"
         default: return "laptopcomputer"
+        }
+    }
+}
+
+/// Full-screen player while the controls act on another device.
+struct RemotePlayerCover: View {
+    @Environment(AppModel.self) private var app
+
+    var body: some View {
+        NavigationStack {
+            JukeboxView()
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { app.router.showPlayer = false } }
+                }
         }
     }
 }

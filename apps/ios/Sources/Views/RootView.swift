@@ -22,6 +22,7 @@ struct MainTabs: View {
     @Namespace private var zoom
 
     private var showPlayer: Bool {
+        if app.sync.remoteTarget != nil { return true }
         if app.player.current != nil { return true }
         if let active = app.sync.activeDeviceId, active != app.sync.deviceId, app.sync.remoteTrack != nil { return true }
         return false
@@ -39,8 +40,10 @@ struct MainTabs: View {
         .tabViewStyle(.sidebarAdaptable)
         .tabViewBottomAccessory(isEnabled: showPlayer) { MiniPlayerBar(zoom: zoom) }
         .fullScreenCover(isPresented: Bindable(app.router).showPlayer) {
-            NowPlayingView()
-                .navigationTransition(.zoom(sourceID: "cover", in: zoom))
+            Group {
+                if app.sync.remoteTarget != nil { RemotePlayerCover() } else { NowPlayingView() }
+            }
+            .navigationTransition(.zoom(sourceID: "cover", in: zoom))
         }
         .tabBarMinimizeBehavior(.onScrollDown)
     }

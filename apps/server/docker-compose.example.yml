@@ -31,6 +31,8 @@ services:
     image: ghcr.io/raudraido/icosahedron-server:latest
     command: ["node", "src/discovery.mjs"]
     network_mode: host
+    healthcheck:
+      disable: true   # the image checks the engine port, which this service does not serve
     restart: unless-stopped
     environment:
       PUBLIC_URL: ${PUBLIC_URL:-}              # what the apps should use; empty: the server's LAN address

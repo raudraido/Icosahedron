@@ -2,7 +2,9 @@
 
 The server is the **sync engine and the web app it serves** (one Docker image, `ghcr.io/raudraido/icosahedron-server`). Versions before 0.16.0 shared one number with the other apps (0.15.3 to 0.15.9); the full text of those releases is in the [main changelog](../../CHANGELOG.md). What each version needs and gives: [docs/compatibility.md](../../docs/compatibility.md).
 
-## Unreleased
+## 0.16.1
+
+Quick Connect gets a switch and the compose file sets everything up together. **Update with** `docker compose pull && docker compose up -d` (the web app is in the image). Nothing changes for you until you want to use the new switch; if you set `QUICK_CONNECT` in the environment it keeps deciding.
 
 - **Quick Connect switch.** A server administrator (a Navidrome admin account) switches Quick Connect on and off in **Settings → Sync Server → Quick Connect**; the choice is kept in `settings.json` in the data directory and switching off drops pending codes. `GET /quickconnect/settings` tells any signed-in app the state; `PUT` changes it (administrators only). `QUICK_CONNECT` in the environment still works and, when set, decides and locks the switch. See [docs/quick-connect.md](../../docs/quick-connect.md).
 - **One compose file for everything.** [docker-compose.example.yml](docker-compose.example.yml) now sets up the engine (with the web app) and the LAN discovery helper together, both driven by one [.env](.env.example) (`NAVIDROME_URL`, `PUBLIC_URL`, `ENGINE_PORT`, `ENGINE_NAME`, Last.fm). See [docs/deploy-server.md](../../docs/deploy-server.md).

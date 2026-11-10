@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.16.1
+
+A small addition to Quick Connect. **Update the server first** (0.16.1), then this app; the switch needs it.
 
 - **Quick Connect on/off in Settings → Sync Server** for a server administrator (the code entry stays for everyone while it is on). See the [server changelog](apps/server/CHANGELOG.md).
 

@@ -36,9 +36,9 @@ Close codes: `4001` no hello in time, `4002` first message was not `hello`, `400
 
 | Message | Meaning |
 |---|---|
-| `{type:"welcome", deviceId, name, devices, state, activeDeviceId, settings}` | Sent after a successful hello: this player's name, the user's online players, the stored playback state, the active player and the settings blob (`null` if none yet). `state` and `activeDeviceId` are `null` for a player with `playback:false` |
+| `{type:"welcome", deviceId, name, devices, state, activeDeviceId, settings, states?}` | Sent after a successful hello: this player's name, the user's online players, the stored playback state, the active player and the settings blob (`null` if none yet). `state` and `activeDeviceId` are `null` for a player with `playback:false` |
 | `{type:"devices", devices, activeDeviceId}` | The set of devices or the active one changed |
-| `{type:"state", from, state}` | The active device published its state |
+| `{type:"state", from, state}` | A player published its state (an older player only gets the active player's) |
 | `{type:"command", from, cmd, args}` | Another device asks this one to do something |
 | `{type:"settings", from, settings}` | Another device changed the shared settings |
 | `{type:"registry", devices}` | The registered players, see below. Sent after `welcome` and whenever a player joins, leaves, is renamed or forgotten |
@@ -52,7 +52,7 @@ Close codes: `4001` no hello in time, `4002` first message was not `hello`, `400
 |---|---|
 | `{type:"state", state}` | Publish this device's playback state |
 | `{type:"command", target, cmd, args?}` | Remote-control the device `target` |
-| `{type:"transfer", target}` | Hand playback to `target` ("Play here" / "Send") |
+| `{type:"transfer", source?, target}` | Move `source`'s playback to `target` ("Play here" / "Send"); `source` defaults to the player that last started playing |
 | `{type:"settings", settings}` | Replace the shared settings blob |
 | `{type:"rename", target?, name}` | Rename a registered player (`target` defaults to the sender), 1 to 64 characters |
 | `{type:"forget", target}` | Remove an **offline** player from the registry (an online one is refused with `error`) |
@@ -69,9 +69,9 @@ Close codes: `4001` no hello in time, `4002` first message was not `hello`, `400
 - Queue items are opaque track objects (the desktop/web `Track` shape without `stream_url`: `id`, `title`, `artist`, `artist_id`, `album`, `album_id`, `track_number`, `disc_number`, `duration_secs`, `cover_id`, `starred`, …). The receiving device rebuilds stream URLs itself.
 - Limits: 20 000 tracks and 3 MB per queue.
 
-The **active device** is the one that last published `playing: true` or was transferred to. It is the source of truth for the position.
+The **active device** (older players' single state) is the one that last *started* playing or was transferred to. `welcome.states` (`proto: 2`) maps each other online player's id to its state.
 
-There is **one active device per account**. When another device starts playing, the engine sends the previous active one `pause` and ignores its stale `playing` updates for 5 seconds; a pause or position from a device that is not the active one does not change the stored state. See [connect.md](connect.md).
+Players are **independent**: each keeps its own state and any number can play at once. A hello with `device.proto: 2` gets the per-player model (`welcome.states`, and every player's `state` messages); an older player follows one state only, the `activeDeviceId` one (the player that last *started* playing). See [connect.md](connect.md).
 
 **Only the playing device should publish.** An idle device that just restored its saved queue must not publish, or it would overwrite the state of the device in use. A pause or stop is still published once.
 

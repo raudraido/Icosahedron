@@ -136,29 +136,71 @@ test("clear: wipes the stored playback state and/or settings", async () => {
   app.close();
 });
 
-test("one active player: starting playback elsewhere pauses the previous one and ignores its stale updates", async () => {
-  const { app, url, store } = await boot();
-  const a = client(url, "bob", "phone");
+test("independent players: both play, neither is paused, each state reaches the others", async () => {
+  const { app, url } = await boot();
+  const phone = client(url, "bob", "phone", { proto: 2 });
+  await phone.next((m) => m.type === "welcome");
+  const desktop = client(url, "bob", "desktop", { proto: 2 });
+  await desktop.next((m) => m.type === "welcome");
+
+  desktop.send({ type: "state", state: { queue: ["d1", "d2"], index: 0, positionMs: 1000, playing: true } });
+  const s1 = await phone.next((m) => m.type === "state");
+  assert.equal(s1.from, "desktop");
+  phone.send({ type: "state", state: { queue: ["p1"], index: 0, positionMs: 0, playing: true } });
+  const s2 = await desktop.next((m) => m.type === "state");
+  assert.equal(s2.from, "phone");
+  assert.deepEqual(s2.state.queue, ["p1"]);
+
+  // nobody was told to pause, and a later update of one keeps the other's queue
+  assert.ok(await desktop.quiet((m) => m.type === "command"));
+  assert.ok(await phone.quiet((m) => m.type === "command"));
+  desktop.send({ type: "state", state: { index: 1, positionMs: 5000, playing: true } }); // queue unchanged: omitted
+  const s3 = await phone.next((m) => m.type === "state" && m.from === "desktop");
+  assert.equal(s3.state.index, 1);
+  assert.equal(s3.state.queue, undefined);
+
+  // a player that joins later gets the others' states
+  const late = client(url, "bob", "tablet", { proto: 2 });
+  const w = await late.next((m) => m.type === "welcome");
+  assert.deepEqual(Object.keys(w.states).sort(), ["desktop", "phone"]);
+  assert.deepEqual(w.states.desktop.queue, ["d1", "d2"]);
+  assert.deepEqual(w.states.phone.queue, ["p1"]);
+  app.close();
+});
+
+test("players without per-player states only follow the last player that started playing", async () => {
+  const { app, url } = await boot();
+  const legacy = client(url, "bob", "old"); // no proto: follows one state
+  await legacy.next((m) => m.type === "welcome");
+  const a = client(url, "bob", "a", { proto: 2 });
   await a.next((m) => m.type === "welcome");
-  const b = client(url, "bob", "desktop");
+  const b = client(url, "bob", "b", { proto: 2 });
   await b.next((m) => m.type === "welcome");
 
-  a.send({ type: "state", state: { queue: ["a1", "a2"], index: 0, positionMs: 1000, playing: true } });
-  await b.next((m) => m.type === "state");
+  a.send({ type: "state", state: { queue: ["a1"], index: 0, positionMs: 0, playing: true } });
+  assert.equal((await legacy.next((m) => m.type === "state")).from, "a");
+  b.send({ type: "state", state: { queue: ["b1"], index: 0, positionMs: 0, playing: true } }); // b becomes the active one
+  assert.equal((await legacy.next((m) => m.type === "state")).from, "b");
+  a.send({ type: "state", state: { index: 0, positionMs: 3000, playing: true } }); // a is not the active one any more
+  assert.ok(await legacy.quiet((m) => m.type === "state" && m.from === "a"));
+  app.close();
+});
 
-  // the desktop starts playing: the phone is told to pause
-  b.send({ type: "state", state: { queue: ["b1"], index: 0, positionMs: 0, playing: true } });
-  assert.equal((await a.next((m) => m.type === "command")).cmd, "pause");
-  assert.equal((await a.next((m) => m.type === "devices" && m.activeDeviceId === "desktop")).activeDeviceId, "desktop");
+test("transfer: moves the source player's playback to the target", async () => {
+  const { app, url } = await boot();
+  const phone = client(url, "bob", "phone", { proto: 2 });
+  await phone.next((m) => m.type === "welcome");
+  const desktop = client(url, "bob", "desktop", { proto: 2 });
+  await desktop.next((m) => m.type === "welcome");
+  desktop.send({ type: "state", state: { queue: ["d1", "d2"], index: 1, positionMs: 7000, playing: true } });
+  phone.send({ type: "state", state: { queue: ["p1"], index: 0, positionMs: 0, playing: true } });
+  await desktop.next((m) => m.type === "state");
 
-  // updates the phone sent before it got the pause must not take the active role back
-  a.send({ type: "state", state: { index: 0, positionMs: 2000, playing: true } });
-  assert.ok(await b.quiet((m) => m.type === "command")); // the desktop is not paused again
-  // and its pause (from the command) must not overwrite the stored state with the phone's queue
-  a.send({ type: "state", state: { index: 0, positionMs: 2500, playing: false } });
-  await new Promise((r) => setTimeout(r, 1200)); // the store debounces writes
-  const saved = store.load("bob");
-  assert.equal(saved.activeDeviceId, "desktop");
-  assert.deepEqual(saved.state.queue, ["b1"]);
+  // the phone pulls the desktop's playback here
+  phone.send({ type: "transfer", source: "desktop", target: "phone" });
+  const load = await phone.next((m) => m.type === "command" && m.cmd === "load");
+  assert.deepEqual(load.args.state.queue, ["d1", "d2"]);
+  assert.equal(load.args.state.index, 1);
+  assert.equal((await desktop.next((m) => m.type === "command")).cmd, "pause");
   app.close();
 });

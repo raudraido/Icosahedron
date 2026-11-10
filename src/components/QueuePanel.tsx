@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useStore } from "../store";
+import { usePlaybackView } from "../lib/playbackView";
 import { api, Track, fmtDuration } from "../lib/api";
 import { PlayingBars } from "./PlayingBars";
 import { SpinnerRing } from "./SpinnerRing";
@@ -275,14 +276,19 @@ function QueueToolbarBtn({
 }
 
 export function QueuePanel() {
-  const queue          = useStore((s) => s.queue);
-  const currentIndex   = useStore((s) => s.currentIndex);
-  const playing        = useStore((s) => s.playing);
+  // This device's queue, or the one of the device being controlled (docs/connect.md): same panel.
+  const view = usePlaybackView();
+  const { queue, currentIndex, playing } = view;
+  const remote = view.remote;
+  const localOnly = remote ? { opacity: 0.35, pointerEvents: "none" as const } : undefined;
   const playTrack      = useStore((s) => s.playTrack);
   const clearQueue     = useStore((s) => s.clearQueue);
   const radioLoading   = useStore((s) => s.radioLoading);
-  const reorderQueue   = useStore((s) => s.reorderQueue);
-  const removeFromQueue = useStore((s) => s.removeFromQueue);
+  const reorderQueue   = (id: string, insertAt: number) => {
+    const from = queue.findIndex((t) => t.id === id);
+    if (from >= 0) view.moveIndex(from, insertAt > from ? insertAt - 1 : insertAt); // insertAt counts before the item is taken out
+  };
+  const removeFromQueue = (id: string) => { const i = queue.findIndex((t) => t.id === id); if (i >= 0) view.removeIndex(i); };
   const addTrackNext   = useStore((s) => s.addTrackNext);
   const startRadio     = useStore((s) => s.startRadio);
   const navigateTo     = useStore((s) => s.navigateTo);
@@ -297,7 +303,9 @@ export function QueuePanel() {
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
   const [ghostY, setGhostY] = useState<number | null>(null);
-  const activeTab    = useStore((s) => s.queuePanelTab);
+  const storedTab    = useStore((s) => s.queuePanelTab);
+  // Lyrics and artist info follow this device's own track; for another device only the queue is shown.
+  const activeTab    = remote ? "queue" : storedTab;
   const setActiveTab = useStore((s) => s.setQueuePanelTab);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -495,6 +503,7 @@ export function QueuePanel() {
         className="flex items-center shrink-0"
         style={{ height: 62, paddingLeft: 10, paddingRight: 8, borderBottom: "1px solid var(--border)" }}
       >
+        <div className="flex items-center" style={localOnly}>
         <QueueToolbarBtn
           src="img/upload.png"
           title="Save Queue to Server"
@@ -513,6 +522,7 @@ export function QueuePanel() {
           onClick={clearQueue}
           disabled={queue.length === 0}
         />
+        </div>
         <div className="flex-1" />
         <SearchBox
           open={searchOpen}
@@ -575,7 +585,7 @@ export function QueuePanel() {
                   isPast={currentIndex >= 0 && i < currentIndex}
                   playing={playing}
                   dragging={dragId === t.id}
-                  onPlay={() => playTrack(t, queue)}
+                  onPlay={() => view.playIndex(i)}
                   onGripMouseDown={handleGripMouseDown(t.id)}
                   onContextMenu={(e) => handleRowContextMenu(e, t)}
                 />
@@ -601,7 +611,7 @@ export function QueuePanel() {
         <ArtistInfoPanel active={activeTab === "info"} />
       </div>
 
-      <QueueBottomTabs active={activeTab} onChange={setActiveTab} />
+      <div style={localOnly}><QueueBottomTabs active={activeTab} onChange={setActiveTab} /></div>
 
       {ctxMenu && (
         <ContextMenu

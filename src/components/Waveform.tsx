@@ -207,9 +207,11 @@ interface Props {
   trackId: string;
   duration: number;
   onSeek: (secs: number) => void;
+  /** Position in seconds for the playhead; default: this device's player. Set while another device is controlled. */
+  getPosition?: () => number;
 }
 
-export function Waveform({ streamUrl, trackId, duration, onSeek }: Props) {
+export function Waveform({ streamUrl, trackId, duration, onSeek, getPosition }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [width, setWidth] = useState(0);
@@ -219,6 +221,8 @@ export function Waveform({ streamUrl, trackId, duration, onSeek }: Props) {
   // the latest values every frame without depending on them (and therefore
   // without tearing down/restarting the loop whenever they change).
   const widthRef = useRef(0);
+  const getPositionRef = useRef(getPosition);
+  getPositionRef.current = getPosition;
   const rawPeaksRef = useRef<number[] | null>(null);
   const durationRef = useRef(duration);
   widthRef.current = width;
@@ -261,9 +265,11 @@ export function Waveform({ streamUrl, trackId, duration, onSeek }: Props) {
       const width = widthRef.current;
       if (canvas && width > 0) {
         const s = useStore.getState();
-        const posSecs = s.playing
-          ? s.currentTimeRaw + (performance.now() - s.currentTimeAnchorMs) / 1000
-          : s.currentTimeRaw;
+        const posSecs = getPositionRef.current
+          ? getPositionRef.current()
+          : s.playing
+            ? s.currentTimeRaw + (performance.now() - s.currentTimeAnchorMs) / 1000
+            : s.currentTimeRaw;
         draw(canvas, width, rawPeaksRef.current, posSecs, durationRef.current);
       }
       raf = requestAnimationFrame(tick);

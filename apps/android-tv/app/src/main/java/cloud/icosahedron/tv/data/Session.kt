@@ -36,10 +36,15 @@ class SessionStore(context: Context) {
     }
 
     companion object {
+        /** "music.example.com" -> "https://music.example.com". */
+        fun normalizeUrl(raw: String): String {
+            val url = raw.trim().trimEnd('/')
+            return if (url.startsWith("http://") || url.startsWith("https://")) url else "https://$url"
+        }
+
         /** Signs in: validates the server and the account, then keeps the salted token. */
         suspend fun login(rawUrl: String, user: String, password: String): Session {
-            var url = rawUrl.trim().trimEnd('/')
-            if (!url.startsWith("http://") && !url.startsWith("https://")) url = "https://$url"
+            val url = normalizeUrl(rawUrl)
             val salt = SubsonicClient.newSalt()
             val session = Session(url, user.trim(), salt, SubsonicClient.md5(password + salt))
             session.client().ping()

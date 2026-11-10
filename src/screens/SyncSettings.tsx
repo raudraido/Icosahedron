@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Laptop, Monitor, Smartphone, Tv } from "lucide-react";
 import { useSync, syncActions, setSyncUrl, type RegistryDevice } from "../lib/sync";
 import { useSyncOptions, setSyncOption, setPrefGroup, type PrefGroup } from "../lib/syncOptions";
 import { platform } from "../platform";
+import { quickConnectEnabled, authorizeQuickConnect, type AuthorizeResult } from "../lib/quickConnect";
 import { Section, ToggleRow } from "./SettingsParts";
 
 // Settings > Sync Server: the connection, this player's name, the players the
@@ -64,6 +65,52 @@ function PlayerRow({ d, me }: { d: RegistryDevice; me: boolean }) {
       </div>
       {editing && <NameEditor initial={d.name} onSave={(n) => { syncActions.rename(d.deviceId, n); setEditing(false); }} />}
     </div>
+  );
+}
+
+const QC_MESSAGES: Record<AuthorizeResult, string> = {
+  ok: "Done: the device is signing in.",
+  unknown: "That code is not known (it may have expired). Check the code on the device's screen.",
+  already: "That code was already used.",
+  rate: "Too many wrong codes. Wait a minute.",
+  offline: "The sync server is not reachable.",
+  error: "Something went wrong.",
+};
+
+/** Sign another device in with the six-digit code it shows (a TV, for example). Only when the server has Quick Connect on. */
+function QuickConnectSection() {
+  const [enabled, setEnabled] = useState(false);
+  const [code, setCode] = useState("");
+  const [result, setResult] = useState<AuthorizeResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { void quickConnectEnabled().then(setEnabled); }, []);
+  if (!enabled) return null;
+  return (
+    <Section title="Quick Connect">
+      <div style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
+        A TV or another device shows a six-digit code. Enter it here to sign that device in with your account.
+      </div>
+      <form
+        className="flex items-center"
+        style={{ gap: 8 }}
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (code.trim().length !== 6 || busy) return;
+          setBusy(true);
+          setResult(await authorizeQuickConnect(code));
+          setBusy(false);
+          setCode("");
+        }}
+      >
+        <input
+          value={code} inputMode="numeric" maxLength={6} placeholder="123456" aria-label="Quick Connect code"
+          onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+          style={{ ...input, width: 120, letterSpacing: 3, textAlign: "center" }}
+        />
+        <button type="submit" disabled={code.length !== 6 || busy} style={{ ...button, opacity: code.length === 6 && !busy ? 1 : 0.5 }}>Authorize</button>
+      </form>
+      {result && <div style={{ fontSize: "var(--fs-small)", color: result === "ok" ? "var(--accent)" : "var(--error)" }}>{QC_MESSAGES[result]}</div>}
+    </Section>
   );
 }
 
@@ -158,6 +205,8 @@ export function SyncServerTab() {
               />
             )}
           </Section>
+
+          <QuickConnectSection />
 
           <Section title="Server data">
             <div style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>

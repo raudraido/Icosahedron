@@ -11,6 +11,10 @@ struct SyncSettingsView: View {
     @State private var renaming: SyncModel.RegistryDevice?
     @State private var renameDraft = ""
     @State private var confirm: ClearKind?
+    @State private var qcEnabled = false
+    @State private var qcCode = ""
+    @State private var qcMessage: String?
+    @State private var qcBusy = false
 
     private enum ClearKind: Identifiable {
         case queue, settings
@@ -60,6 +64,21 @@ struct SyncSettingsView: View {
                     Text("Playback off: the other players do not see this phone and cannot control it. Theme, library layout and BPM belong to the desktop and web apps and are not changed from here.")
                 }
 
+                if qcEnabled {
+                    Section {
+                        TextField("123456", text: $qcCode)
+                            .keyboardType(.numberPad)
+                            .onChange(of: qcCode) { _, v in qcCode = String(v.filter(\.isNumber).prefix(6)) }
+                        Button("Authorize") { Task { await authorizeQuickConnect() } }
+                            .disabled(qcCode.count != 6 || qcBusy)
+                        if let qcMessage { Text(qcMessage).font(.footnote).foregroundStyle(.secondary) }
+                    } header: {
+                        Text("Quick Connect")
+                    } footer: {
+                        Text("A TV or another device shows a six-digit code. Enter it here to sign that device in with your account.")
+                    }
+                }
+
                 Section {
                     Button("Clear stored queue", role: .destructive) { confirm = .queue }
                     Button("Clear shared preferences", role: .destructive) { confirm = .settings }
@@ -73,6 +92,7 @@ struct SyncSettingsView: View {
         .navigationTitle("Sync Server")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { nameDraft = sync.name ?? "" }
+        .task { await loadQuickConnect() }
         .onChange(of: sync.name) { _, new in nameDraft = new ?? "" }
         .alert("Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Name", text: $renameDraft)
@@ -96,6 +116,31 @@ struct SyncSettingsView: View {
                 }
                 confirm = nil
             }
+        }
+    }
+
+    /// Quick Connect is only offered when the server has it switched on.
+    private func loadQuickConnect() async {
+        guard let r = try? await app.client?.engine("GET", "/quickconnect/enabled"), r.status == 200,
+              let on = try? JSONSerialization.jsonObject(with: r.data, options: .fragmentsAllowed) as? Bool else { return }
+        qcEnabled = on
+    }
+
+    private func authorizeQuickConnect() async {
+        qcBusy = true
+        defer { qcBusy = false }
+        let code = qcCode
+        qcCode = ""
+        guard let r = try? await app.client?.engine("POST", "/quickconnect/authorize", json: ["code": code]) else {
+            qcMessage = String(localized: "The sync server is not reachable.")
+            return
+        }
+        switch r.status {
+        case 200: qcMessage = String(localized: "Done: the device is signing in.")
+        case 404: qcMessage = String(localized: "That code is not known (it may have expired). Check the code on the device's screen.")
+        case 409: qcMessage = String(localized: "That code was already used.")
+        case 429: qcMessage = String(localized: "Too many wrong codes. Wait a minute.")
+        default: qcMessage = String(localized: "Something went wrong.")
         }
     }
 

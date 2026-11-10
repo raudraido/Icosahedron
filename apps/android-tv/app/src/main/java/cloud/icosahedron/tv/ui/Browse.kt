@@ -39,6 +39,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Card
@@ -181,6 +183,10 @@ fun SearchScreen(go: (Screen) -> Unit) {
             voiceMessage = null
         }
     }
+    // The microphone has the focus when Search opens: the text field would open the keyboard at once, and with
+    // it open the Left key moves the cursor, so the microphone could not be reached any more.
+    val micFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { micFocus.requestFocus() } }
     fun listen() {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -206,6 +212,7 @@ fun SearchScreen(go: (Screen) -> Unit) {
             ) {
                 Button(
                     onClick = { listen() },
+                    modifier = Modifier.focusRequester(micFocus),
                     shape = ButtonDefaults.shape(CircleShape),
                     contentPadding = PaddingValues(14.dp),
                     colors = chipColors(false),

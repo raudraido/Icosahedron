@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.15.8
+
+Controlling another device now uses the normal player bar and queue panel, and the version number is shown in the web and iOS apps. **Update the server image too** (`docker compose pull && docker compose up -d`): it serves the web app. The engine itself is unchanged since 0.15.6.
 
 - **Desktop and web: the same player bar and queue panel for another device.** Controlling another device no longer swaps in a different bar: the normal bar and queue panel show that device's track, position (waveform too), shuffle, repeat, volume and queue, with "Controlling X" in the corner and the devices button highlighted. Cast, equalizer, stop, BPM analysis, the lyrics / artist tabs and clearing the queue stay in place but inactive.
 - **The version number is visible everywhere:** in the web app (Settings → System → About) and in the iOS app (Settings → About); the desktop app already showed it.

@@ -1,6 +1,6 @@
 # Sync Server settings (design)
 
-What every player's **Settings → Sync Server** section does. The engine side (registry, rename, forget, clear, `playback:false`) is described in [sync-protocol.md](sync-protocol.md#registered-players); the screen is built on the desktop and web app (**Settings → Sync Server**); the iOS screen follows.
+What every player's **Settings → Sync Server** section does. The engine side (registry, rename, forget, clear, `playback:false`) is described in [sync-protocol.md](sync-protocol.md#registered-players); the screen is built on the desktop and web app and on iOS (**Settings → Sync Server**). The iOS app only has the switches it can act on: playback and remote control, equalizer, lyrics source (it has no BPM analysis, no themes or library layout, and its server is the address it signed in with, so there is no Join/Leave).
 
 ## Sections
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **iOS: Settings → Sync Server.** Name this phone, see and rename the registered players (forget offline ones), choose what the phone keeps in sync (playback and remote control, equalizer, lyrics source) and clear the queue or preferences the server stores. Needs the 0.15.5 engine.
+
 ## 0.15.5
 
 A Sync Server section in the settings, a registry of your players and Last.fm through the server on the desktop. **Update the engine first** (`docker compose pull && docker compose up -d`): the new settings screen and the registry need it; an older engine still works, the registry list just stays empty. The iOS settings screen follows in a later release.

@@ -111,6 +111,7 @@ struct SettingsView: View {
                 }
                 Section("Devices") {
                     DevicesList()
+                    NavigationLink { SyncSettingsView() } label: { Label("Sync Server", systemImage: "arrow.triangle.2.circlepath") }
                 }
                 Section {
                     LastFmSection()

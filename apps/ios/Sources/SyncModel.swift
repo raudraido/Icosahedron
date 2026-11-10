@@ -13,7 +13,26 @@ final class SyncModel {
         let kind: String
     }
 
+    /// A player in the engine's registry (online or not).
+    struct RegistryDevice: Identifiable, Hashable {
+        let id: String
+        let name: String
+        let kind: String
+        let online: Bool
+        let lastSeen: Date
+    }
+
+    /// What this phone keeps in sync (Settings > Sync Server). Stored on the phone, on by default;
+    /// views bind to the same keys with @AppStorage.
+    enum Switch: String {
+        case playback = "syncPlayback", equalizer = "syncEqualizer", lyrics = "syncLyrics"
+        var isOn: Bool { UserDefaults.standard.object(forKey: rawValue) as? Bool ?? true }
+    }
+
     var status = "off" // off | connecting | online
+    /// This phone's name as the engine knows it (renamable in Settings > Sync Server).
+    var name: String?
+    var registry: [RegistryDevice] = []
     var devices: [Device] = []
     var activeDeviceId: String?
     /// The active device's track and state, for the "playing on …" display.
@@ -44,9 +63,9 @@ final class SyncModel {
 
     /// Settings this app shares with the web and desktop apps: web key -> UserDefaults key.
     private enum SharedKind { case bool, string }
-    private static let sharedKeys: [(web: String, local: String, kind: SharedKind)] = [
-        ("icosahedron_lyrics_lrclib_enabled", "lyricsOnline", .bool),
-        ("eq_settings", "eq_settings", .string),
+    private static let sharedKeys: [(web: String, local: String, kind: SharedKind, group: Switch)] = [
+        ("icosahedron_lyrics_lrclib_enabled", "lyricsOnline", .bool, .lyrics),
+        ("eq_settings", "eq_settings", .string, .equalizer),
     ]
 
     init() {
@@ -105,7 +124,7 @@ final class SyncModel {
         t.resume()
         send([
             "type": "hello", "auth": client.syncAuth(),
-            "device": ["deviceId": deviceId, "name": UIDevice.current.name, "kind": "mobile"],
+            "device": ["deviceId": deviceId, "name": UIDevice.current.name, "kind": "mobile", "playback": Switch.playback.isOn],
         ])
         receive(t)
     }
@@ -153,6 +172,7 @@ final class SyncModel {
         case "welcome":
             retry = 0
             status = "online"
+            name = m["name"] as? String
             applyDevices(m)
             if let s = m["state"] as? [String: Any] { applyRemoteState(s) }
             if let st = m["settings"] as? [String: Any] { applySettings(st) }
@@ -160,6 +180,15 @@ final class SyncModel {
             if let st = m["settings"] as? [String: Any] { applySettings(st) }
         case "devices":
             applyDevices(m)
+        case "registry":
+            applyRegistry(m)
+        case "renamed":
+            name = m["name"] as? String
+        case "cleared":
+            if (m["state"] as? Bool) == true {
+                remoteQueue = []; remoteTrack = nil; remotePlaying = false; activeDeviceId = nil
+            }
+            if (m["settings"] as? Bool) == true { settingsBlob = [:] } // nothing shared any more; ours can be published again
         case "state":
             if let s = m["state"] as? [String: Any] { applyRemoteState(s) }
         case "command":
@@ -183,6 +212,22 @@ final class SyncModel {
         activeDeviceId = m["activeDeviceId"] as? String
     }
 
+    private func applyRegistry(_ m: [String: Any]) {
+        registry = J.arr(m["devices"]).compactMap { d in
+            guard let id = J.str(d, "deviceId") else { return nil }
+            return RegistryDevice(
+                id: id, name: J.str(d, "name") ?? "Device", kind: J.str(d, "kind") ?? "web",
+                online: (d["online"] as? Bool) ?? false,
+                lastSeen: Date(timeIntervalSince1970: ((d["lastSeen"] as? Double) ?? 0) / 1000)
+            )
+        }
+        .sorted { a, b in
+            if (a.id == deviceId) != (b.id == deviceId) { return a.id == deviceId }
+            if a.online != b.online { return a.online }
+            return (a.name.lowercased(), a.id) < (b.name.lowercased(), b.id)
+        }
+    }
+
     private func applyRemoteState(_ s: [String: Any]) {
         // Only assign what really changed: this arrives every few seconds, and an assignment
         // (even of an equal value) re-renders every view that shows it, which made lists flicker.
@@ -201,7 +246,7 @@ final class SyncModel {
     }
 
     private func handleCommand(_ cmd: String, _ args: [String: Any]?) {
-        guard let player else { return }
+        guard let player, Switch.playback.isOn else { return } // remote control is switched off on this phone
         switch cmd {
         case "play": player.resume()
         case "pause": player.pause()
@@ -251,8 +296,8 @@ final class SyncModel {
         var blob: [String: String] = [:]
         for (k, v) in values { if let str = v as? String { blob[k] = str } }
         settingsBlob = blob
-        for (web, local, kind) in Self.sharedKeys {
-            guard let str = blob[web] else { continue }
+        for (web, local, kind, group) in Self.sharedKeys {
+            guard group.isOn, let str = blob[web] else { continue } // a group this phone does not share is left alone
             switch kind {
             case .bool:
                 let on = str == "true"
@@ -277,7 +322,7 @@ final class SyncModel {
     private func publishSettingsIfChanged() {
         guard status == "online", var blob = settingsBlob else { return }
         var changed = false
-        for (web, local, kind) in Self.sharedKeys {
+        for (web, local, kind, group) in Self.sharedKeys where group.isOn {
             let value: String?
             switch kind {
             case .bool: value = (UserDefaults.standard.object(forKey: local) as? Bool).map { $0 ? "true" : "false" }
@@ -298,7 +343,7 @@ final class SyncModel {
     /// Only the device that is playing publishes (an idle phone restoring nothing must not
     /// overwrite the state of the one in use); a pause or stop is still published once.
     private func publish() {
-        guard status == "online", let player, !player.queue.isEmpty else { return }
+        guard status == "online", Switch.playback.isOn, let player, !player.queue.isEmpty else { return }
         guard player.isPlaying || wasPlaying else { return }
         wasPlaying = player.isPlaying
         let ids = player.queue.map { $0.id }
@@ -310,6 +355,37 @@ final class SyncModel {
             lastQueueIds = ids
         }
         send(["type": "state", "state": state])
+    }
+
+    // MARK: Sync Server settings
+
+    func rename(_ target: String, to name: String) {
+        send(["type": "rename", "target": target, "name": name])
+    }
+
+    /// Removes an offline player from the registry (the engine refuses online ones).
+    func forget(_ target: String) {
+        send(["type": "forget", "target": target])
+    }
+
+    func clearServerData(state: Bool = false, settings: Bool = false) {
+        send(["type": "clear", "state": state, "settings": settings])
+    }
+
+    /// A switch changed: playback is part of the hello, so it reconnects; a settings group that was
+    /// switched on takes over what the engine holds (or shares ours if it holds nothing for it).
+    func switchChanged(_ s: Switch) {
+        if s == .playback {
+            guard wanted else { return }
+            let old = task
+            task = nil
+            old?.cancel(with: .goingAway, reason: nil)
+            retry = 0
+            open()
+        } else if let blob = settingsBlob {
+            applySettings(["values": blob])
+            publishSettingsIfChanged()
+        }
     }
 
     func command(to target: String, _ cmd: String) {

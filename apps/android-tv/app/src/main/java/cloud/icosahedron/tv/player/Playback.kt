@@ -176,8 +176,8 @@ object Playback {
     fun next() { player.seekToNextMediaItem(); sync() }
     fun previous() { player.seekToPrevious(); sync() }
     fun seekTo(ms: Long) { player.seekTo(ms.coerceAtLeast(0)); sync(); onChanged?.invoke() }
-    fun setShuffle(on: Boolean) { player.shuffleModeEnabled = on }
-    fun setRepeat(on: Boolean) { player.repeatMode = if (on) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF }
+    fun shuffleTo(on: Boolean) { player.shuffleModeEnabled = on }
+    fun repeatTo(on: Boolean) { player.repeatMode = if (on) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF }
     fun setVolume(percent: Int) { player.volume = (percent.coerceIn(0, 100)) / 100f }
 
     fun stop() {

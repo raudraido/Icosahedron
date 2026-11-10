@@ -50,7 +50,9 @@ jobs:
 
       - name: Build
         working-directory: apps/android-tv
-        run: gradle --no-daemon :app:assembleRelease -PversionName="$VERSION" -PversionCode="$VERSION_CODE" 2>&1 | tee build.log
+        run: |
+          set -o pipefail
+          gradle --no-daemon :app:assembleRelease -PversionName="$VERSION" -PversionCode="$VERSION_CODE" 2>&1 | tee build.log
 
       - name: Name the APK
         working-directory: apps/android-tv

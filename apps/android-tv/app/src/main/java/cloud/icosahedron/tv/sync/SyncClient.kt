@@ -144,8 +144,8 @@ class SyncClient(private val session: Session, private val deviceId: String, pri
             }
             "jump" -> args?.let { Playback.jump(it.optInt("index", -1)) }
             "remove" -> args?.let { Playback.remove(it.optInt("index", -1)) }
-            "shuffle" -> args?.let { Playback.setShuffle(it.optBoolean("on")) }
-            "repeat" -> args?.let { Playback.setRepeat(it.optBoolean("on")) }
+            "shuffle" -> args?.let { Playback.shuffleTo(it.optBoolean("on")) }
+            "repeat" -> args?.let { Playback.repeatTo(it.optBoolean("on")) }
             "move" -> args?.let { Playback.move(it.optInt("from", -1), it.optInt("to", -1)) }
         }
     }

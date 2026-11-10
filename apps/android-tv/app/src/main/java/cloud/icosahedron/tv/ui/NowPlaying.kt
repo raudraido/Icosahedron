@@ -57,8 +57,8 @@ fun NowPlayingScreen() {
             Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ActionButton("-10 s", onClick = { Playback.seekTo(Playback.positionMs - 10_000) })
                 ActionButton("+10 s", onClick = { Playback.seekTo(Playback.positionMs + 10_000) })
-                ActionButton(if (Playback.shuffle) "Shuffle: on" else "Shuffle: off", onClick = { Playback.setShuffle(!Playback.shuffle) })
-                ActionButton(if (Playback.repeatAll) "Repeat: on" else "Repeat: off", onClick = { Playback.setRepeat(!Playback.repeatAll) })
+                ActionButton(if (Playback.shuffle) "Shuffle: on" else "Shuffle: off", onClick = { Playback.shuffleTo(!Playback.shuffle) })
+                ActionButton(if (Playback.repeatAll) "Repeat: on" else "Repeat: off", onClick = { Playback.repeatTo(!Playback.repeatAll) })
             }
             Text(
                 "Playing on this TV" + (App.instance.sync?.name?.let { " ($it)" } ?: ""),

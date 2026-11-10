@@ -48,7 +48,7 @@ Every build workflow can be started by hand (*Actions → pick the workflow → 
 ## One-time setup
 
 - **Docker image visibility:** the first published package is private by default. In GitHub: *your profile → Packages → icosahedron-server → Package settings → Change visibility → Public*, so that anyone can `docker pull` it.
-- **Release permissions:** the workflows use the built-in `GITHUB_TOKEN` with `contents: write` / `packages: write`; no extra secrets are needed. (The Android app can use signing secrets, see [android-tv.md](android-tv.md#updating).)
+- **Release permissions:** the workflows use the built-in `GITHUB_TOKEN` with `contents: write` / `packages: write`; no extra secrets are needed. (The Android app uses four signing secrets, set up on 2026-11-10; what they are and how to renew them: [android-tv.md](android-tv.md#updating-and-the-signing-key).)
 
 ## After a release
 

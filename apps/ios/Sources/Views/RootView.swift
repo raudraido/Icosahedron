@@ -24,7 +24,7 @@ struct MainTabs: View {
     private var showPlayer: Bool {
         if app.sync.remoteTarget != nil { return true }
         if app.player.current != nil { return true }
-        if let active = app.sync.activeDeviceId, active != app.sync.deviceId, app.sync.remoteTrack != nil { return true }
+        if app.sync.otherPlaying != nil { return true }
         return false
     }
 

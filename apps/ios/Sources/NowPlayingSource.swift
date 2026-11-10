@@ -15,21 +15,20 @@ struct NowPlayingSource {
     var isRemote: Bool { target != nil }
     var targetName: String? { sync.devices.first(where: { $0.id == target })?.name }
 
-    /// The engine only publishes the active device's state, so the target's track and queue are
-    /// known only while the target is the active one; otherwise nothing plays there.
-    private var targetIsActive: Bool { target != nil && sync.activeDeviceId == target }
+    /// The target's own state; nil while nothing is queued there (idle or just started).
+    private var remote: SyncModel.RemoteState? { sync.state(of: target) }
 
-    var current: Track? { isRemote ? (targetIsActive ? sync.remoteTrack : nil) : player.current }
-    var queue: [Track] { isRemote ? (targetIsActive ? sync.remoteQueue : []) : player.queue }
-    var index: Int { isRemote ? (targetIsActive ? sync.remoteIndex : -1) : player.index }
-    var isPlaying: Bool { isRemote ? (targetIsActive && sync.remotePlaying) : player.isPlaying }
-    var shuffle: Bool { isRemote ? sync.remoteShuffle : player.shuffle }
-    var repeatOn: Bool { isRemote ? sync.remoteRepeat : player.repeatAll }
+    var current: Track? { isRemote ? remote?.track : player.current }
+    var queue: [Track] { isRemote ? (remote?.queue ?? []) : player.queue }
+    var index: Int { isRemote ? (remote?.index ?? -1) : player.index }
+    var isPlaying: Bool { isRemote ? (remote?.playing ?? false) : player.isPlaying }
+    var shuffle: Bool { isRemote ? (remote?.shuffle ?? false) : player.shuffle }
+    var repeatOn: Bool { isRemote ? (remote?.repeatOn ?? false) : player.repeatAll }
     var duration: Double { isRemote ? Double(current?.duration ?? 0) : player.duration }
 
     /// Seconds into the track. For another device this moves on locally between its state messages.
     func position(at date: Date = Date()) -> Double {
-        isRemote ? sync.remotePosition(at: date) : player.position
+        isRemote ? sync.position(of: target, at: date) : player.position
     }
 
     var queueTotal: Double { queue.reduce(0) { $0 + Double($1.duration) } }
@@ -46,8 +45,8 @@ struct NowPlayingSource {
     func next() { if let t = target { sync.command(to: t, "next") } else { player.next() } }
     func previous() { if let t = target { sync.command(to: t, "prev") } else { player.previous() } }
     func seek(to seconds: Double) { if let t = target { sync.seek(on: t, to: seconds) } else { player.seek(to: seconds) } }
-    func toggleShuffle() { if let t = target { sync.shuffle(on: t, !sync.remoteShuffle) } else { player.toggleShuffle() } }
-    func toggleRepeat() { if let t = target { sync.repeatMode(on: t, !sync.remoteRepeat) } else { player.toggleRepeat() } }
+    func toggleShuffle() { if let t = target { sync.shuffle(on: t, !shuffle) } else { player.toggleShuffle() } }
+    func toggleRepeat() { if let t = target { sync.repeatMode(on: t, !repeatOn) } else { player.toggleRepeat() } }
     func jump(to i: Int) { if let t = target { sync.jump(on: t, to: i) } else { player.play(player.queue, at: i) } }
     func remove(at i: Int) { if let t = target { sync.remove(on: t, at: i) } else { player.removeFromQueue(at: i) } }
 

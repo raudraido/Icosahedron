@@ -42,14 +42,25 @@ final class SyncModel {
     var name: String?
     var registry: [RegistryDevice] = []
     var devices: [Device] = []
+    /// The player that last started playing (what players without per-player states follow). The
+    /// views use the per-player states below instead.
     var activeDeviceId: String?
-    /// The active device's track and state, for the "playing on …" display.
-    var remoteTrack: Track?
-    var remotePlaying = false
-    /// The active device's position when its state arrived. Not observed: views that show it
-    /// tick on their own timer instead of re-rendering on every state message.
-    @ObservationIgnored private(set) var remotePositionMs: Double = 0
-    @ObservationIgnored private(set) var remoteStamp = Date()
+
+    /// What another player is doing: its own queue and state, kept per player (docs/connect.md).
+    struct RemoteState: Equatable {
+        var queue: [Track]
+        var index: Int
+        var playing: Bool
+        var shuffle: Bool
+        var repeatOn: Bool
+        var track: Track? { queue.indices.contains(index) ? queue[index] : nil }
+    }
+    /// The other online players' states. Only assigned when something other than the position
+    /// changed: a state arrives every few seconds and an assignment re-renders what shows it.
+    private(set) var remoteStates: [String: RemoteState] = [:]
+    /// Each player's position when its state arrived. Not observed: views that show it tick on
+    /// their own timer.
+    @ObservationIgnored private var remotePositions: [String: (ms: Double, at: Date)] = [:]
 
     let deviceId: String
     @ObservationIgnored private var task: URLSessionWebSocketTask?
@@ -57,12 +68,6 @@ final class SyncModel {
     @ObservationIgnored private weak var player: PlayerModel?
     @ObservationIgnored private var wanted = false
     @ObservationIgnored private var retry = 0
-    /// The active device's queue and position, for the jukebox queue view.
-    private(set) var remoteQueue: [Track] = []
-    private(set) var remoteIndex = 0
-    /// The active device's shuffle / repeat, for the player screen while it is the target.
-    private(set) var remoteShuffle = false
-    private(set) var remoteRepeat = false
     @ObservationIgnored private var lastQueueIds: [String] = []
     @ObservationIgnored private var wasPlaying = false
     @ObservationIgnored private var timer: Timer?
@@ -121,6 +126,7 @@ final class SyncModel {
         status = "off"
         devices = []
         activeDeviceId = nil
+        remoteStates = [:]
     }
 
     private func open() {
@@ -135,7 +141,7 @@ final class SyncModel {
         t.resume()
         send([
             "type": "hello", "auth": client.syncAuth(),
-            "device": ["deviceId": deviceId, "name": UIDevice.current.name, "kind": "mobile", "playback": Switch.playback.isOn],
+            "device": ["deviceId": deviceId, "name": UIDevice.current.name, "kind": "mobile", "playback": Switch.playback.isOn, "proto": 2],
         ])
         receive(t)
     }
@@ -163,6 +169,7 @@ final class SyncModel {
         status = "off"
         devices = []
         activeDeviceId = nil
+        remoteStates = [:]
         guard wanted else { return }
         retry += 1
         let delay = min(30.0, pow(2.0, Double(retry)))
@@ -185,8 +192,15 @@ final class SyncModel {
             status = "online"
             name = m["name"] as? String
             applyDevices(m)
-            if let s = m["state"] as? [String: Any] { applyRemoteState(s) }
+            remoteStates = [:]
+            if let states = m["states"] as? [String: Any] {
+                for (id, s) in states { if let s = s as? [String: Any] { applyRemoteState(s, from: id) } }
+            } else if let s = m["state"] as? [String: Any], let active = m["activeDeviceId"] as? String {
+                applyRemoteState(s, from: active) // an engine without per-player states
+            }
             if let st = m["settings"] as? [String: Any] { applySettings(st) }
+            lastQueueIds = [] // a (re)connected engine knows nothing of this phone yet
+            publish(force: true)
         case "settings":
             if let st = m["settings"] as? [String: Any] { applySettings(st) }
         case "devices":
@@ -197,11 +211,11 @@ final class SyncModel {
             name = m["name"] as? String
         case "cleared":
             if (m["state"] as? Bool) == true {
-                remoteQueue = []; remoteTrack = nil; remotePlaying = false; activeDeviceId = nil
+                remoteStates = [:]; activeDeviceId = nil
             }
             if (m["settings"] as? Bool) == true { settingsBlob = [:] } // nothing shared any more; ours can be published again
         case "state":
-            if let s = m["state"] as? [String: Any] { applyRemoteState(s) }
+            if let s = m["state"] as? [String: Any], let from = m["from"] as? String { applyRemoteState(s, from: from) }
         case "command":
             handleCommand(m["cmd"] as? String ?? "", m["args"] as? [String: Any])
         default:
@@ -223,6 +237,9 @@ final class SyncModel {
         activeDeviceId = m["activeDeviceId"] as? String
         // The target went offline (or stopped taking part in playback sync): back to this phone.
         if let t = targetId, !devices.contains(where: { $0.id == t }) { targetId = nil }
+        // Players that left take their state with them.
+        let online = Set(devices.map { $0.id })
+        if remoteStates.keys.contains(where: { !online.contains($0) }) { remoteStates = remoteStates.filter { online.contains($0.key) } }
     }
 
     private func applyRegistry(_ m: [String: Any]) {
@@ -241,25 +258,32 @@ final class SyncModel {
         }
     }
 
-    private func applyRemoteState(_ s: [String: Any]) {
-        // Only assign what really changed: this arrives every few seconds, and an assignment
-        // (even of an equal value) re-renders every view that shows it, which made lists flicker.
-        if let q = s["queue"] as? [[String: Any]] {
-            let tracks = q.compactMap { Track(wire: $0) }
-            if tracks != remoteQueue { remoteQueue = tracks }
+    private func applyRemoteState(_ s: [String: Any], from id: String) {
+        guard id != deviceId else { return }
+        let prev = remoteStates[id]
+        var queue = prev?.queue ?? []
+        if let q = s["queue"] as? [[String: Any]] { queue = q.compactMap { Track(wire: $0) } }
+        let next = RemoteState(
+            queue: queue, index: J.int(s, "index") ?? 0,
+            playing: (s["playing"] as? Bool) ?? false,
+            shuffle: (s["shuffle"] as? Bool) ?? false, repeatOn: (s["repeat"] as? Bool) ?? false
+        )
+        if next != prev { remoteStates[id] = next } // only when it changed: no re-render per position tick
+        remotePositions[id] = (((s["positionMs"] as? Double) ?? 0), Date())
+    }
+
+    /// Another player's state, or nil when it has none (idle, nothing queued, offline).
+    func state(of id: String?) -> RemoteState? {
+        guard let id else { return nil }
+        return remoteStates[id]
+    }
+
+    /// The first other player that is playing, for the mini player when this phone is silent.
+    var otherPlaying: (id: String, state: RemoteState)? {
+        for d in devices where d.id != deviceId {
+            if let st = remoteStates[d.id], st.playing, st.track != nil { return (d.id, st) }
         }
-        let i = J.int(s, "index") ?? 0
-        if i != remoteIndex { remoteIndex = i }
-        let track = remoteQueue.indices.contains(i) ? remoteQueue[i] : nil
-        if track != remoteTrack { remoteTrack = track }
-        let playing = (s["playing"] as? Bool) ?? false
-        if playing != remotePlaying { remotePlaying = playing }
-        let shuffle = (s["shuffle"] as? Bool) ?? false
-        if shuffle != remoteShuffle { remoteShuffle = shuffle }
-        let rep = (s["repeat"] as? Bool) ?? false
-        if rep != remoteRepeat { remoteRepeat = rep }
-        remotePositionMs = (s["positionMs"] as? Double) ?? 0
-        remoteStamp = Date()
+        return nil
     }
 
     private func handleCommand(_ cmd: String, _ args: [String: Any]?) {
@@ -368,16 +392,16 @@ final class SyncModel {
 
     /// Only the device that is playing publishes (an idle phone restoring nothing must not
     /// overwrite the state of the one in use); a pause or stop is still published once.
-    private func publish() {
+    private func publish(force: Bool = false) {
         guard status == "online", Switch.playback.isOn, let player, !player.queue.isEmpty else { return }
-        guard player.isPlaying || wasPlaying else { return }
+        guard force || player.isPlaying || wasPlaying else { return }
         wasPlaying = player.isPlaying
         let ids = player.queue.map { $0.id }
         var state: [String: Any] = [
             "index": player.index, "positionMs": Int(player.position * 1000), "playing": player.isPlaying,
             "shuffle": player.shuffle, "repeat": player.repeatAll,
         ]
-        if ids != lastQueueIds || !isActiveHere {
+        if ids != lastQueueIds {
             state["queue"] = player.queue.map { $0.wire() }
             lastQueueIds = ids
         }
@@ -386,12 +410,10 @@ final class SyncModel {
 
     // MARK: Playing on a device
 
-    /// Chooses the device the controls act on. Picking another device while this phone plays moves
-    /// the music there (the phone pauses); picking this phone just points the controls back.
+    /// Chooses the device the controls act on. It only controls: music moves only with an explicit
+    /// `transfer` (Send / Play here).
     func setTarget(_ id: String?) {
-        let new = (id == deviceId) ? nil : id
-        targetId = new
-        if let new, player?.isPlaying == true { transfer(to: new) }
+        targetId = (id == deviceId) ? nil : id
     }
 
     /// Starts `tracks` on another device (the whole list, or a window of it when it is very long).
@@ -438,22 +460,24 @@ final class SyncModel {
         send(["type": "command", "target": target, "cmd": cmd])
     }
 
-    /// The active device's position in seconds, moving on locally while it plays.
-    func remotePosition(at now: Date = Date()) -> Double {
-        let base = remotePositionMs / 1000
-        let pos = remotePlaying ? base + now.timeIntervalSince(remoteStamp) : base
-        let limit = Double(remoteTrack?.duration ?? 0)
+    /// Another player's position in seconds, moving on locally while it plays.
+    func position(of id: String?, at now: Date = Date()) -> Double {
+        guard let id, let p = remotePositions[id] else { return 0 }
+        let base = p.ms / 1000
+        let st = remoteStates[id]
+        let pos = (st?.playing ?? false) ? base + now.timeIntervalSince(p.at) : base
+        let limit = Double(st?.track?.duration ?? 0)
         return limit > 0 ? min(pos, limit) : pos
     }
 
     func seek(on target: String, to seconds: Double) {
         send(["type": "command", "target": target, "cmd": "seek", "args": ["positionMs": Int(seconds * 1000)]])
-        remotePositionMs = seconds * 1000
-        remoteStamp = Date()
+        remotePositions[target] = (seconds * 1000, Date())
     }
 
-    func transfer(to target: String) {
-        send(["type": "transfer", "target": target])
+    /// Moves `source`'s playback to `target`: the source pauses, the target continues where it was.
+    func transfer(from source: String, to target: String) {
+        send(["type": "transfer", "source": source, "target": target])
     }
 
     // Jukebox: edit another device's queue.

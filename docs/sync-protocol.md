@@ -28,17 +28,23 @@ The first message must be `hello` within 10 seconds:
 
 `kind` is `electron`, `web` or `mobile`. A second connection with the same `deviceId` replaces the first.
 
+`device.name` only names the player the **first** time it connects; afterwards the engine's [registry](#registered-players) decides. `device.playback: false` connects the player for preference sync only: it is not listed for remote control, receives no `state` or `devices` messages and its `state`, `command` and `transfer` messages are ignored.
+
 Close codes: `4001` no hello in time, `4002` first message was not `hello`, `4003` authentication failed, `4004` bad device.
 
 ### Server → client
 
 | Message | Meaning |
 |---|---|
-| `{type:"welcome", deviceId, devices, state, activeDeviceId, settings}` | Sent after a successful hello: the user's devices, the stored playback state, the active device and the settings blob (`null` if none yet) |
+| `{type:"welcome", deviceId, name, devices, state, activeDeviceId, settings}` | Sent after a successful hello: this player's name, the user's online players, the stored playback state, the active player and the settings blob (`null` if none yet). `state` and `activeDeviceId` are `null` for a player with `playback:false` |
 | `{type:"devices", devices, activeDeviceId}` | The set of devices or the active one changed |
 | `{type:"state", from, state}` | The active device published its state |
 | `{type:"command", from, cmd, args}` | Another device asks this one to do something |
 | `{type:"settings", from, settings}` | Another device changed the shared settings |
+| `{type:"registry", devices}` | The registered players, see below. Sent after `welcome` and whenever a player joins, leaves, is renamed or forgotten |
+| `{type:"renamed", name}` | This player was renamed |
+| `{type:"cleared", state, settings}` | Someone wiped the stored playback state and/or settings |
+| `{type:"error", message}` | A request was refused |
 
 ### Client → server
 
@@ -48,6 +54,9 @@ Close codes: `4001` no hello in time, `4002` first message was not `hello`, `400
 | `{type:"command", target, cmd, args?}` | Remote-control the device `target` |
 | `{type:"transfer", target}` | Hand playback to `target` ("Play here" / "Send") |
 | `{type:"settings", settings}` | Replace the shared settings blob |
+| `{type:"rename", target?, name}` | Rename a registered player (`target` defaults to the sender), 1 to 64 characters |
+| `{type:"forget", target}` | Remove an **offline** player from the registry (an online one is refused with `error`) |
+| `{type:"clear", state?, settings?}` | Wipe the stored playback state (queue, position, active player) and/or the shared settings |
 
 ### Playback state
 
@@ -79,6 +88,20 @@ Jukebox commands edit the target's queue (a remote acting as a controller for a 
 Invalid arguments are dropped by the engine. `index` refers to the queue the controller last saw (from `state`), so a stale view can hit the wrong item; the target ignores out-of-range indexes.
 
 `transfer`: the engine tells the previous active device to `pause`, sets the target active and sends it `load` with the stored state and `playing: true`. Commands and transfers only reach devices of the same user.
+
+### Registered players
+
+The engine keeps a registry of each user's players in the user's file: `deviceId`, name, kind and when it was last seen. A player registers itself the first time it connects.
+
+```json
+{ "type": "registry", "devices": [
+  { "deviceId": "uuid", "name": "Kitchen tablet", "kind": "web", "online": true,  "lastSeen": 1731150000000 },
+  { "deviceId": "uuid", "name": "Old laptop",     "kind": "electron", "online": false, "lastSeen": 1728000000000 } ] }
+```
+
+- The registry is for the settings screen. `welcome.devices` and `devices` stay the **online players that take part in playback sync**, as before, so older clients keep working.
+- **Forgetting is housekeeping, not revocation:** a forgotten player that is still signed in registers again the next time it connects. Access is controlled by the Navidrome account.
+- Players that have been offline for **90 days** are dropped from the registry automatically.
 
 ### Settings
 

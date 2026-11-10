@@ -1,7 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.15.6
 
+Players are now **independent**: music at home and in the car can play at the same time, and any device can be chosen and controlled from another. **Update the engine first** (`docker compose pull && docker compose up -d`) and then the iOS app; the desktop and web apps keep working as before (they follow one player only until their own device mode arrives). Design: [docs/connect.md](docs/connect.md).
+
+- **Independent players (engine).** Every player keeps its own playback state; the engine stores them per player and forwards each to the others, so nothing pauses another player and nobody overwrites another's state. `transfer` moves a player's playback to another (`source`, `target`). A player that predates this follows one state only, the player that last started playing. See [docs/sync-protocol.md](docs/sync-protocol.md).
+- **iOS: Devices tab and choosing a device.** Every device with what it plays; tap one to control it. Choosing only controls; **Send** moves this phone's music to that device and **Play here** brings its music to this phone.
 - **iOS: one player screen for every device.** Choose a device in the new **Devices** tab (or with the devices button in the player) and the player looks the same but shows and controls that device: cover, progress (drag to seek), queue (tap, remove, drag to reorder), lyrics, shuffle, repeat. The devices button is highlighted with the device's name; speed, AirPlay and the equalizer stay in place but inactive while another device is the target. A device with nothing playing shows "Nothing playing on …". Replaces the separate Jukebox screen.
 - **Remote control grows:** new commands `shuffle`, `repeat` and `move` (reorder the queue) on the engine, the desktop/web app and iOS; every player now also publishes its shuffle and repeat state. See [docs/sync-protocol.md](docs/sync-protocol.md).
 - **iOS: Settings → Sync Server.** Name this phone, see and rename the registered players (forget offline ones), choose what the phone keeps in sync (playback and remote control, equalizer, lyrics source) and clear the queue or preferences the server stores. Needs the 0.15.5 engine.

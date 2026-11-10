@@ -6,7 +6,7 @@ A native app (Kotlin, Jetpack Compose for TV, Media3) for Google TV and Android 
 
 **The screen is redone.** Install it over 0.1.2 (same signing key).
 
-- **Now Playing is always at the top right** as a small card, like Spotify's: the cover, the song and the artist on two lines, and bars that dance while it plays. It is one step up from wherever you are. The tabs (Home, Albums, Artists, Playlists, Search) and the logo stay on screen too.
+- **Now Playing is always at the top right** as a small card, like Spotify's: the cover, the song and the artist on two lines, and bars that dance while it plays. It is one step up from wherever you are. It is only there while something plays. The tabs (Home, Albums, Artists, Playlists, Search) and the logo stay on screen too.
 - **No strip at the bottom any more:** the card at the top right already shows what plays; pause and next are in the player.
 - **Search by voice:** a microphone button in Search (it has the focus when Search opens; Right goes to the text field). Android asks once to allow the microphone. A pulsing microphone and the words as you say them show on the app's own screen, then the search runs; Back cancels. No system search bar pops up.
 - **Your profile button** next to it shows your picture (the one you set in another Icosahedron app, kept by the server; the first letter of your name without one) and opens Settings.

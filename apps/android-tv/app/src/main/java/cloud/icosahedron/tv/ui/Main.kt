@@ -159,7 +159,7 @@ fun MainScreen() {
                         if (idle && screen == Screen.NowPlaying) { swallowUp = true; return@onPreviewKeyEvent true }
                     }
                     if (e.type == KeyEventType.KeyUp && swallowUp) { swallowUp = false; return@onPreviewKeyEvent true }
-                    if (e.key == Key.Menu && e.type == KeyEventType.KeyUp) { tab(Screen.NowPlaying); true } else false
+                    if (e.key == Key.Menu && e.type == KeyEventType.KeyUp && Playback.current != null) { tab(Screen.NowPlaying); true } else false
                 },
         ) {
             Row(
@@ -177,11 +177,14 @@ fun MainScreen() {
                         ) { Text(label) }
                     }
                 }
-                NowPlayingCard(
-                    selected = screen == Screen.NowPlaying,
-                    modifier = if (screen == Screen.NowPlaying) Modifier.focusRequester(bar) else Modifier,
-                    onClick = { tab(Screen.NowPlaying) },
-                )
+                // Only while something plays: an empty card would just be a button to an empty screen.
+                if (Playback.current != null) {
+                    NowPlayingCard(
+                        selected = screen == Screen.NowPlaying,
+                        modifier = if (screen == Screen.NowPlaying) Modifier.focusRequester(bar) else Modifier,
+                        onClick = { tab(Screen.NowPlaying) },
+                    )
+                }
                 // Only the round picture: a ring in the accent colour when it is the page you are on, a white one
                 // and a little growth when it has the focus.
                 Surface(

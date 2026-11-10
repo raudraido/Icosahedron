@@ -15,3 +15,13 @@ services:
       - ./data:/data
     ports:
       - "8080:8080"   # put a TLS reverse proxy in front for remote use (it must pass WebSocket upgrades)
+
+# Optional: lets the apps find this server on the LAN (see docs/deploy-server.md#lan-discovery).
+#  discovery:
+#    image: ghcr.io/raudraido/icosahedron-server:latest
+#    command: ["node", "src/discovery.mjs"]
+#    network_mode: host
+#    restart: unless-stopped
+#    environment:
+#      PUBLIC_URL: https://music.example.com
+#      ENGINE_PORT: "8080"

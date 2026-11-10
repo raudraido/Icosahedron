@@ -9,6 +9,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -39,6 +40,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -52,8 +54,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Button
+import androidx.tv.material3.Border
 import androidx.tv.material3.ButtonDefaults
+import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import cloud.icosahedron.tv.App
 import cloud.icosahedron.tv.R
@@ -177,13 +182,23 @@ fun MainScreen() {
                     modifier = if (screen == Screen.NowPlaying) Modifier.focusRequester(bar) else Modifier,
                     onClick = { tab(Screen.NowPlaying) },
                 )
-                Button(
+                // Only the round picture: a ring in the accent colour when it is the page you are on, a white one
+                // and a little growth when it has the focus.
+                Surface(
                     onClick = { tab(Screen.Settings) },
-                    colors = chipColors(screen == Screen.Settings),
-                    shape = ButtonDefaults.shape(CircleShape),
-                    contentPadding = PaddingValues(4.dp),
-                    modifier = Modifier.padding(start = 12.dp).then(if (screen == Screen.Settings) Modifier.focusRequester(bar) else Modifier),
-                ) { ProfileAvatar(40.dp) }
+                    shape = ClickableSurfaceDefaults.shape(CircleShape),
+                    colors = ClickableSurfaceDefaults.colors(
+                        containerColor = Color.Transparent, contentColor = Color.White,
+                        focusedContainerColor = Color.Transparent, focusedContentColor = Color.White,
+                        pressedContainerColor = Color.Transparent, pressedContentColor = Color.White,
+                    ),
+                    scale = ClickableSurfaceDefaults.scale(focusedScale = 1.14f),
+                    border = ClickableSurfaceDefaults.border(
+                        border = if (screen == Screen.Settings) Border(BorderStroke(2.dp, Accent), shape = CircleShape) else Border.None,
+                        focusedBorder = Border(BorderStroke(2.dp, Color.White), shape = CircleShape),
+                    ),
+                    modifier = Modifier.padding(start = 14.dp).then(if (screen == Screen.Settings) Modifier.focusRequester(bar) else Modifier),
+                ) { ProfileAvatar(44.dp) }
             }
             Box(Modifier.weight(1f).fillMaxWidth().onFocusChanged { contentHasFocus = it.hasFocus }) {
                 when (screen) {
@@ -199,7 +214,6 @@ fun MainScreen() {
                     is Screen.PlaylistDetail -> PlaylistDetailScreen(screen.id, screen.name)
                 }
             }
-            if (screen != Screen.NowPlaying) MiniPlayer(onOpen = { tab(Screen.NowPlaying) })
         }
     }
 }
@@ -230,28 +244,5 @@ private fun NowPlayingCard(selected: Boolean, modifier: Modifier, onClick: () ->
                 EqualizerBars(Playback.isPlaying, Accent, Modifier.padding(end = 6.dp))
             }
         }
-    }
-}
-
-/** What is playing on this TV, one click from the full player. */
-@Composable
-private fun MiniPlayer(onOpen: () -> Unit) {
-    val t = Playback.current ?: return
-    Row(
-        Modifier.fillMaxWidth().background(Panel).padding(horizontal = 40.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Button(onClick = onOpen, modifier = Modifier.weight(1f)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Cover(t.coverArt, 48.dp, px = 100)
-                Column {
-                    Text(t.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 16.sp)
-                    Text(t.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, color = dim())
-                }
-            }
-        }
-        ActionButton(if (Playback.isPlaying) "Pause" else "Play", onClick = { Playback.toggle() })
-        ActionButton("Next", onClick = { Playback.next() })
     }
 }

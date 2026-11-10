@@ -6,6 +6,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -16,6 +17,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -99,11 +101,12 @@ fun SeekBar(
         if (durationMs <= 0) return
         target = ((target ?: positionMs) + by).coerceIn(0L, durationMs)
     }
+    val thickness by animateDpAsState(if (focused) 12.dp else 5.dp, tween(150), label = "thickness")
+    val knob by animateDpAsState(if (focused) 22.dp else 0.dp, tween(150), label = "knob")
     Column(modifier.fillMaxWidth()) {
-        val shape = RoundedCornerShape(6.dp)
-        Box(
-            barModifier.fillMaxWidth().height(if (focused) 10.dp else 5.dp).clip(shape).background(Color.White.copy(alpha = 0.22f))
-                .then(if (focused) Modifier.border(1.5.dp, Color.White, shape) else Modifier)
+        // No ring: the bar grows and shows a round knob while it has the focus.
+        BoxWithConstraints(
+            barModifier.fillMaxWidth().height(24.dp)
                 .onFocusChanged { focused = it.isFocused }
                 .onKeyEvent { e ->
                     if (e.type == KeyEventType.KeyUp) {
@@ -122,10 +125,15 @@ fun SeekBar(
                     }
                 }
                 .focusable(),
+            contentAlignment = Alignment.CenterStart,
         ) {
-            Box(Modifier.fillMaxWidth(frac).fillMaxHeight().background(Accent))
+            val width = maxWidth
+            Box(Modifier.fillMaxWidth().height(thickness).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.22f))) {
+                Box(Modifier.fillMaxWidth(frac).fillMaxHeight().background(Accent))
+            }
+            Box(Modifier.offset(x = width * frac - knob / 2).size(knob).clip(CircleShape).background(Color.White))
         }
-        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(fmt(shown), color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp)
             Text("-" + fmt((durationMs - shown).coerceAtLeast(0)), color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp)
         }

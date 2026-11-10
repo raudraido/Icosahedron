@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Desktop: Last.fm through the engine.** With the engine's address set and a Last.fm connection on the engine, the desktop app scrobbles and shows now-playing through it, so you connect once for all devices. A local desktop session keeps working until the engine has a connection; without an engine nothing changes.
+
 ## 0.15.4
 
 Adds the **jukebox**: control another of your devices — queue music on it, play it now, edit its queue and watch its progress — from the desktop app, the web app and the iOS app. It needs the web engine; with plain Navidrome nothing changes.

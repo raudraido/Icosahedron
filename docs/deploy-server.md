@@ -74,6 +74,8 @@ The engine holds the Last.fm API secret and each user's session key, so one conn
 1. Register an API account at last.fm/api and set `LASTFM_API_KEY` and `LASTFM_API_SECRET`.
 2. In a client (web app settings, iOS settings) choose *Connect to Last.fm*, approve in the browser, finish.
 
+The desktop app uses the engine's connection too once it has the engine's address (Devices button) and the engine holds a connection: connect once on any device. A desktop that already has its own local Last.fm session keeps using it until the engine has one; only one side scrobbles a play. Without an engine (or if it is unreachable) the desktop scrobbles on its own as before.
+
 If Navidrome is also linked to Last.fm, a play can be counted twice.
 
 ## Security

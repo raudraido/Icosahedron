@@ -3,6 +3,7 @@
 // UI and store code must go through `platform`, never `window.electronAPI`.
 import { createWebPlatform } from "./web";
 import { withEngineBpm } from "./bpmSync";
+import { withEngineLastFm } from "./lastfmSync";
 import type {
   AudioEventPayload,
   CastDevice,
@@ -49,4 +50,7 @@ const basePlatform: Platform =
   typeof window !== "undefined" && window.electronAPI
     ? electronPlatform(window.electronAPI)
     : createWebPlatform();
-export const platform: Platform = withEngineBpm(basePlatform);
+// The desktop app also shares BPM and the Last.fm connection through the engine; the
+// web build already talks to the engine for both.
+export const platform: Platform =
+  basePlatform.kind === "electron" ? withEngineLastFm(withEngineBpm(basePlatform)) : withEngineBpm(basePlatform);

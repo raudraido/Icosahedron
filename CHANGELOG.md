@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Web: a browser that blocks sound no longer pretends to play.** A browser tab that was reloaded and is then told to play by another device (remote control) is refused by the browser until someone clicks in it. The player now says so ("Your browser blocked playback on this device. Click to play"), shows paused instead of playing, and one click starts it. In Firefox you can also allow audio for the site (the permission icon in the address bar).
+
 ## 0.15.8
 
 Controlling another device now uses the normal player bar and queue panel, and the version number is shown in the web and iOS apps. **Update the server image too** (`docker compose pull && docker compose up -d`): it serves the web app. The engine itself is unchanged since 0.15.6.

@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.15.5
+
+A Sync Server section in the settings, a registry of your players and Last.fm through the server on the desktop. **Update the engine first** (`docker compose pull && docker compose up -d`): the new settings screen and the registry need it; an older engine still works, the registry list just stays empty. The iOS settings screen follows in a later release.
 
 - **Desktop and web: Settings → Sync Server.** Join or leave the sync server (desktop), name this player, see and rename every registered player (forget offline ones), choose per player what it keeps in sync (playback and remote control, four groups of preferences, BPM, Last.fm through the server) and clear the queue or preferences the server stores. See [docs/sync-settings.md](docs/sync-settings.md). The iOS screen follows.
 - **Engine: registry of your players.** Each player has a name the engine remembers (renamable), offline players stay in the list and are dropped after 90 days, and the engine can forget a player or wipe the stored playback state / shared settings. A player can connect for preference sync only (`playback:false`). See [docs/sync-protocol.md](docs/sync-protocol.md#registered-players). 

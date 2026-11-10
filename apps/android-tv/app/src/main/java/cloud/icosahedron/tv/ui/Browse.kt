@@ -119,7 +119,7 @@ private fun ArtistCard(artist: Artist, onClick: () -> Unit) {
     Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
             Text(artist.name, maxLines = 1, fontSize = 16.sp)
-            Text("${artist.albumCount} albums", fontSize = 12.sp, color = Dim)
+            Text("${artist.albumCount} albums", fontSize = 12.sp, color = dim())
         }
     }
 }
@@ -144,7 +144,7 @@ fun PlaylistsScreen(go: (Screen) -> Unit) {
                         Cover(p.coverArt, 56.dp, px = 120)
                         Column {
                             Text(p.name, fontSize = 18.sp)
-                            Text("${p.songCount} songs", fontSize = 12.sp, color = Dim)
+                            Text("${p.songCount} songs", fontSize = 12.sp, color = dim())
                         }
                     }
                 }

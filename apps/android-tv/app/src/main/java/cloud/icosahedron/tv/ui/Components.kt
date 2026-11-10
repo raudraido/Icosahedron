@@ -58,7 +58,7 @@ fun AlbumCard(album: Album, onClick: () -> Unit) {
         Cover(album.coverArt, 176.dp)
         Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
             Text(album.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp)
-            Text(album.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, color = Dim)
+            Text(album.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, color = dim())
         }
     }
 }
@@ -83,12 +83,13 @@ fun fmt(ms: Long): String {
 fun TrackRow(track: Track, number: Int?, playing: Boolean, onClick: () -> Unit) {
     Button(onClick = onClick, modifier = Modifier.fillMaxWidth().padding(horizontal = 48.dp, vertical = 2.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text(number?.toString() ?: "", color = Dim, modifier = Modifier.width(36.dp))
+            // The playing track is marked with a note in the accent colour; the text keeps the button's colour.
+            Text(if (playing) "♪" else (number?.toString() ?: ""), color = if (playing) Accent else dim(), modifier = Modifier.width(36.dp))
             Column(Modifier.weight(1f)) {
-                Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis, color = if (playing) Accent else androidx.compose.ui.graphics.Color.White)
-                Text(track.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, color = Dim)
+                Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(track.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, color = dim())
             }
-            Text(fmt(track.duration * 1000L), color = Dim)
+            Text(fmt(track.duration * 1000L), color = dim())
         }
     }
 }

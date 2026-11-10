@@ -1,9 +1,17 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="320dp"
-    android:height="180dp"
-    android:viewportWidth="320"
-    android:viewportHeight="180">
-    <path android:fillColor="#1C1E27" android:pathData="M0,0h320v180h-320z" />
-    <path android:fillColor="#E8593C" android:pathData="M160,40 L200,64 L200,112 L160,136 L120,112 L120,64 Z" />
-    <path android:fillColor="#1C1E27" android:pathData="M160,56 L184,72 L176,104 L144,104 L136,72 Z" />
-</vector>
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The tile on the Google TV home screen: the logo on the app's dark background. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#111319" />
+        </shape>
+    </item>
+    <item
+        android:width="108dp"
+        android:height="102dp"
+        android:gravity="center">
+        <bitmap
+            android:gravity="fill"
+            android:src="@drawable/logo" />
+    </item>
+</layer-list>

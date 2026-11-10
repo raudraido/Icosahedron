@@ -48,7 +48,8 @@ private sealed interface Mode {
 @Composable
 fun LoginScreen(onSignedIn: (Session) -> Unit) {
     var mode by remember { mutableStateOf<Mode>(Mode.Server) }
-    var url by remember { mutableStateOf("") }
+    val remembered = remember { App.instance.store.lastServer() }
+    var url by remember { mutableStateOf(remembered) }
     var user by remember { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -59,9 +60,10 @@ fun LoginScreen(onSignedIn: (Session) -> Unit) {
 
     // Ask the network which servers are there.
     LaunchedEffect(Unit) {
-        found = Discovery.find()
+        found = Discovery.find(App.instance)
         searching = false
-        if (url.isBlank() && found.size == 1) url = found[0].address
+        // One server found, and the field still holds nothing or what was remembered: use the found one.
+        if (found.size == 1 && (url.isBlank() || url == remembered)) url = found[0].address
     }
 
     fun startQuickConnect() {
@@ -76,6 +78,7 @@ fun LoginScreen(onSignedIn: (Session) -> Unit) {
                     error = "Quick Connect is not switched on on this server (QUICK_CONNECT=true). You can sign in with a password."
                 } else {
                     val i = qc.initiate(App.instance.store.deviceId(), SyncClient.defaultName())
+                    App.instance.store.saveLastServer(base)
                     mode = Mode.Code(base, i.code, i.secret, i.expiresInSeconds)
                 }
             } catch (e: Exception) {
@@ -91,7 +94,9 @@ fun LoginScreen(onSignedIn: (Session) -> Unit) {
         error = null
         scope.launch {
             try {
-                onSignedIn(SessionStore.login(url, user, pass))
+                val session = SessionStore.login(url, user, pass)
+                App.instance.store.saveLastServer(session.url)
+                onSignedIn(session)
             } catch (e: Exception) {
                 error = e.message ?: "Could not sign in"
             }
@@ -122,7 +127,7 @@ fun LoginScreen(onSignedIn: (Session) -> Unit) {
                     Text("Found on your network:", color = Dim, fontSize = 13.sp)
                     found.forEach { f -> ActionButton("${f.name}  ·  ${f.address}", onClick = { url = f.address }) }
                 } else {
-                    Text(if (searching) "Looking for servers on your network…" else "No server found on your network, type its address.", color = Dim, fontSize = 13.sp)
+                    Text(if (searching) "Looking for servers on your network…" else "No server found. If this TV is on another network than the server (a VLAN), switch on mDNS forwarding in your router, or type the address once: it is remembered.", color = Dim, fontSize = 13.sp)
                 }
                 Field("Server (https://music.example.com)", url, { url = it }, KeyboardType.Uri, ImeAction.Done)
                 error?.let { Text(it, color = Accent) }

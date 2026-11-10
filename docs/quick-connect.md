@@ -33,4 +33,18 @@ The same salted Subsonic token the approving app uses, not a device-bound one: i
 
 Like Jellyfin, a client broadcasts `who is Icosahedron?` to **UDP 7360** and every engine answers `{"address": "...", "id": "...", "name": "..."}`. The address is `PUBLIC_URL` when set, else this host's address on the asker's subnet plus `ENGINE_PORT`. The TV app uses it to find your server so nothing has to be typed.
 
-A Docker bridge network does not deliver broadcasts, so the responder is a second container on the host network (see [deploy-server.md](deploy-server.md#lan-discovery)). It is optional: the server can always be typed.
+The server also announces itself with **mDNS / DNS-SD** (service `_icosahedron._tcp`, the TXT record `address=` holds the same address, plus `id` and `name`). The TV app asks both ways at once. mDNS is the one that works when the TV is on another network than the server (see [below](#when-the-tv-is-on-another-network)); the UDP broadcast only reaches the same network.
+
+A Docker bridge network does not deliver broadcasts or multicast, so the responder is a second container on the host network (see [deploy-server.md](deploy-server.md#lan-discovery)). It is optional: the server can always be typed.
+
+### When the TV is on another network
+
+A router keeps broadcasts inside their own network, so a TV on a different VLAN (for example an "IoT" Wi-Fi) cannot hear the UDP broadcast. mDNS can be forwarded between networks by the router:
+
+- **UniFi:** Settings → Networks → **Gateway mDNS Proxy**: *Auto* only forwards well-known services; choose **Custom**, put both networks in *VLAN Scope* and leave *Service Scope* on *All* (or add `_icosahedron._tcp`).
+- Other routers: look for "mDNS reflector", "Bonjour forwarding" or "Avahi reflector".
+- Without that, type the address once in the TV app: it is remembered.
+
+The TV must also be allowed to open connections to the server (a firewall rule from its network to the server's address and port, or just use a public `PUBLIC_URL`, which goes the normal way out and back).
+
+**Host firewall:** the UDP broadcast needs UDP 7360 open on the server host (for `ufw`: `sudo ufw allow 7360/udp`, or limit it to your networks with `from <subnet>`). mDNS (UDP 5353 to 224.0.0.251) is allowed by `ufw` by default.

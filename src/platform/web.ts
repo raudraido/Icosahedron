@@ -7,6 +7,7 @@ import { SubsonicClient } from "../lib/subsonic/client";
 import type { AudioEventPayload } from "../lib/api";
 import type { Platform, Unsubscribe } from "./index";
 import { createEngine } from "./engineApi";
+import { useAudioBlocked } from "../lib/audioBlocked";
 
 // Defined by vite.web.config.ts from package.json.
 declare const __APP_VERSION__: string | undefined;
@@ -142,11 +143,24 @@ class WebAudio {
     this.startTicker();
     this.emit({ kind: "playing", duration: durationHint });
     void this.ctx?.resume();
-    if (!startPaused) await el.play();
+    if (!startPaused) await this.start();
+  }
+
+  /** Starts the element. The browser refuses without a user gesture on this page (NotAllowedError):
+   *  report it, so the player does not claim to be playing and the UI can ask for a click. */
+  private async start() {
+    try {
+      await this.el.play();
+      useAudioBlocked.setState({ blocked: false });
+    } catch (e) {
+      if ((e as Error)?.name !== "NotAllowedError") throw e;
+      useAudioBlocked.setState({ blocked: true });
+      this.emit({ kind: "error", message: "playback blocked by the browser: click the page once" });
+    }
   }
   chainPreload(url: string) { this.chainUrl = url; }
   pause() { this.el.pause(); }
-  resume() { this.el.play().catch(() => {}); }
+  resume() { void this.start().catch(() => {}); }
   stop() {
     this.chainUrl = null;
     this.el.pause();

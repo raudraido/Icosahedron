@@ -8,6 +8,9 @@ import type { AudioEventPayload } from "../lib/api";
 import type { Platform, Unsubscribe } from "./index";
 import { createEngine } from "./engineApi";
 
+// Defined by vite.web.config.ts from package.json.
+declare const __APP_VERSION__: string | undefined;
+
 const LS_SERVERS = "ico.servers";
 const LS_LYRICS = "ico.lyrics.";
 
@@ -335,7 +338,7 @@ export function createWebPlatform(): Platform {
     cast_pause: inert(undefined), cast_resume: inert(undefined), cast_seek: inert(undefined), cast_set_volume: inert(undefined),
     cast_connect: unsupported("cast_connect"), cast_play_track: unsupported("cast_play_track"),
     cast_calibration_start: unsupported("cast_calibration_start"), cast_calibration_stop: inert(undefined),
-    app_version: inert("web"), check_for_update: inert(null), download_and_install_update: unsupported("update"),
+    app_version: () => (typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "web"), check_for_update: inert(null), download_and_install_update: unsupported("update"),
     capture_screens: inert([]), set_window_theme: inert(undefined), quit_app: inert(undefined),
     get_tray_settings: inert({ minimizeToTray: false, exitToTray: false }), set_tray_settings: inert(undefined),
   };

@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.15.7
+
+The desktop and web apps get the same "choose a device and control it" as iOS. The engine is unchanged since 0.15.6, so there is nothing to update on the server; update the desktop app (and reload the web app). Design: [docs/connect.md](docs/connect.md).
 
 - **Desktop and web: choose a device and control it.** The devices button lists every device with what it plays; click one and the bottom bar and the queue panel show and control **that** device (seek bar, shuffle, repeat, volume, queue: click to play, ✕ to remove, drag to reorder). Choosing only controls; *Send* moves this device's music there and *Play here* brings its music here. Play, play next and add to queue from anywhere in the app go to the chosen device. The devices button is highlighted with its name. The Now Playing tab and the phone layout still show this device only.
 - **iOS: steadier progress while controlling another device.** The bar moves on by itself between the other player's reports and no longer jumps back by a fraction of a second at each report; a state that was already on its way no longer pulls the bar back right after a seek. The desktop reports its position in fractions of a second instead of whole seconds.

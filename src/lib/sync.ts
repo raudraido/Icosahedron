@@ -12,6 +12,7 @@ import { api, type Track } from "./api";
 import { useStore } from "../store";
 import { reconcileSettings, remoteSettingsChanged, remoteSettingsCleared, settingsDisconnected, settingsOptionsChanged, type SettingsBlob } from "./settingsSync";
 import { syncOptions, useSyncOptions } from "./syncOptions";
+import { useTarget, getTargetId, registerTargetRouter, runLocal } from "./target";
 
 export interface SyncDevice { deviceId: string; name: string; kind: "electron" | "web" | "mobile" }
 /** A player in the engine's registry: online or not (the picker only lists the online ones). */
@@ -26,8 +27,8 @@ interface SyncStore {
   deviceId: string;
   devices: SyncDevice[];
   activeDeviceId: string | null;
-  /** Latest state published by whichever device is active (queue kept from the last time it was sent). */
-  remote: (RemoteState & { from: string }) | null;
+  /** The other online players' own states (queue kept from the last time it was sent). */
+  states: Record<string, RemoteState>;
   syncUrl: string | null;
   /** This player's name as the engine knows it (renamed in Settings > Sync Server). */
   name: string | null;
@@ -55,7 +56,7 @@ function deviceName(): string {
 }
 
 export const useSync = create<SyncStore>(() => ({
-  status: "off", deviceId: loadDeviceId(), devices: [], activeDeviceId: null, remote: null, syncUrl: getSyncUrl(), name: null, registry: [],
+  status: "off", deviceId: loadDeviceId(), devices: [], activeDeviceId: null, states: {}, syncUrl: getSyncUrl(), name: null, registry: [],
 }));
 
 export function setSyncUrl(url: string): void {
@@ -85,7 +86,22 @@ const deviceLabel = (id: string) => useSync.getState().devices.find((d) => d.dev
 
 export const syncActions = {
   command: (target: string, cmd: string, args?: unknown) => send({ type: "command", target, cmd, args }),
-  transfer: (target: string) => send({ type: "transfer", target }),
+  /** Moves `source`'s playback to `target` (the source pauses, the target continues where it was). */
+  transfer: (target: string, source?: string) => send({ type: "transfer", target, ...(source ? { source } : {}) }),
+  /** Starts `tracks` on another device (the whole list, or a window of it when it is very long). */
+  playOn: (target: string, tracks: Track[], index: number) => {
+    const start = Math.max(0, index - 20);
+    const window = tracks.slice(start, start + 1000);
+    send({ type: "command", target, cmd: "load", args: { state: { queue: window.map(toWire), index: index - start, positionMs: 0, playing: true } } });
+  },
+  /** Chooses the device the controls act on (null = this device). It only controls; music moves with `transfer`. */
+  setTarget: (id: string | null) => useTarget.setState({ targetId: id && id !== useSync.getState().deviceId ? id : null }),
+  /** Seek on another device; reports that were already on their way are ignored for a moment. */
+  seekOn: (target: string, seconds: number) => {
+    send({ type: "command", target, cmd: "seek", args: { positionMs: Math.round(seconds * 1000) } });
+    positions[target] = { ms: seconds * 1000, at: Date.now() };
+    lastSeek[target] = Date.now();
+  },
   /** Jukebox: add tracks to `target`'s queue, right after the current one or at the end. */
   enqueue: (target: string, tracks: Track[], at: "now" | "next" | "end") => {
     send({ type: "command", target, cmd: "enqueue", args: { at, tracks: tracks.map(toWire) } });
@@ -109,6 +125,13 @@ export const syncActions = {
   removeAt: (target: string, index: number) => send({ type: "command", target, cmd: "remove", args: { index } }),
 };
 
+// UI play / play next / add to queue actions go to the target device when another one is chosen.
+registerTargetRouter({
+  play: (target, tracks, index) => syncActions.playOn(target, tracks, index),
+  next: (target, track) => syncActions.enqueue(target, [track], "next"),
+  end: (target, tracks) => syncActions.enqueue(target, tracks, "end"),
+});
+
 async function connect(): Promise<void> {
   const url = getSyncUrl();
   if (!url || !wanted) return;
@@ -119,13 +142,13 @@ async function connect(): Promise<void> {
   const sock = (ws = new WebSocket(url));
   sock.onopen = () => {
     retry = 0;
-    sock.send(JSON.stringify({ type: "hello", auth, device: { deviceId: useSync.getState().deviceId, name: deviceName(), kind: platform.kind, playback: syncOptions().playback } }));
+    sock.send(JSON.stringify({ type: "hello", auth, device: { deviceId: useSync.getState().deviceId, name: deviceName(), kind: platform.kind, playback: syncOptions().playback, proto: 2 } }));
   };
   sock.onmessage = (ev) => { try { onMessage(JSON.parse(ev.data)); } catch { /* ignore malformed */ } };
   sock.onclose = (ev) => {
     if (ws === sock) ws = null;
     settingsDisconnected();
-    useSync.setState({ status: "off", devices: [], activeDeviceId: null });
+    useSync.setState({ status: "off", devices: [], activeDeviceId: null, states: {} });
     if (wanted && ev.code !== 4003) schedule(); // 4003 = bad credentials: don't hammer the server
   };
   sock.onerror = () => sock.close();
@@ -150,22 +173,68 @@ function orderRegistry(list: RegistryDevice[]): RegistryDevice[] {
     a.name.localeCompare(b.name) || a.deviceId.localeCompare(b.deviceId));
 }
 
+// Each player reports its position every few seconds, in fractions of a second but a little late.
+// Between reports the bar moves on by itself; a report close to where the bar already is does not
+// pull it back, a real jump (seek, new track, pause) is taken as is. Kept outside the store: a
+// position tick must not re-render everything that shows the state.
+let positions: Record<string, { ms: number; at: number }> = {};
+const lastSeek: Record<string, number> = {};
+
+function applyRemoteState(id: string, s: any): void {
+  if (!s || id === useSync.getState().deviceId) return;
+  const prev = useSync.getState().states[id];
+  const next: RemoteState = { ...s, queue: s.queue ?? prev?.queue };
+  const same = prev && prev.index === next.index && prev.playing === next.playing && !!prev.shuffle === !!next.shuffle &&
+    !!prev.repeat === !!next.repeat && prev.queue === next.queue;
+  if (!same) useSync.setState({ states: { ...useSync.getState().states, [id]: next } });
+  const now = Date.now();
+  if (now - (lastSeek[id] ?? 0) < 2000) return; // a report from before our seek
+  const reported = Number(s.positionMs) || 0;
+  const old = positions[id];
+  if (old && prev?.playing && next.playing && prev.queue?.[prev.index]?.id === next.queue?.[next.index]?.id) {
+    const expected = old.ms + (now - old.at);
+    if (Math.abs(reported - expected) < 1500) { positions[id] = { ms: Math.max(reported, expected), at: now }; return; }
+  }
+  positions[id] = { ms: reported, at: now };
+}
+
+/** Another player's position in seconds, moving on locally while it plays. */
+export function remotePosition(id: string | null | undefined, now = Date.now()): number {
+  const p = id ? positions[id] : undefined;
+  if (!id || !p) return 0;
+  const st = useSync.getState().states[id];
+  const pos = (st?.playing ? p.ms + (now - p.at) : p.ms) / 1000;
+  const limit = st?.queue?.[st.index]?.duration_secs ?? 0;
+  return limit > 0 ? Math.min(pos, limit) : pos;
+}
+
 function onMessage(m: any): void {
   switch (m.type) {
     case "welcome":
       useSync.setState({ name: m.name ?? null });
       reconcileSettings(m.settings ?? null, (blob: SettingsBlob) => send({ type: "settings", settings: blob }));
-      useSync.setState({
-        status: "online", devices: orderDevices(m.devices), activeDeviceId: m.activeDeviceId,
-        remote: m.state && m.activeDeviceId ? { ...m.state, from: m.activeDeviceId } : m.state ? { ...m.state, from: "" } : null,
-      });
+      positions = {};
+      useSync.setState({ status: "online", devices: orderDevices(m.devices), activeDeviceId: m.activeDeviceId, states: {} });
+      if (m.states && typeof m.states === "object") {
+        for (const [id, st] of Object.entries<any>(m.states)) applyRemoteState(id, st);
+      } else if (m.state && m.activeDeviceId) {
+        applyRemoteState(m.activeDeviceId, m.state); // an engine without per-player states
+      }
+      lastQueue = null; // an engine we just (re)connected to knows nothing of this device yet
+      publishOnConnect();
       break;
     case "settings":
       remoteSettingsChanged(m.settings ?? null);
       break;
-    case "devices":
-      useSync.setState({ devices: orderDevices(m.devices), activeDeviceId: m.activeDeviceId });
+    case "devices": {
+      const devices = orderDevices(m.devices);
+      const online = new Set(devices.map((d) => d.deviceId));
+      const states = Object.fromEntries(Object.entries(useSync.getState().states).filter(([id]) => online.has(id)));
+      useSync.setState({ devices, activeDeviceId: m.activeDeviceId, states });
+      const t = getTargetId();
+      if (t && !online.has(t)) useTarget.setState({ targetId: null }); // the target left: back to this device
       break;
+    }
     case "registry":
       useSync.setState({ registry: orderRegistry(m.devices ?? []) });
       break;
@@ -173,14 +242,12 @@ function onMessage(m: any): void {
       useSync.setState({ name: String(m.name) });
       break;
     case "cleared":
-      if (m.state) useSync.setState({ remote: null, activeDeviceId: null });
+      if (m.state) useSync.setState({ states: {}, activeDeviceId: null });
       if (m.settings) remoteSettingsCleared();
       break;
-    case "state": {
-      const prev = useSync.getState().remote;
-      useSync.setState({ remote: { ...m.state, queue: m.state.queue ?? prev?.queue, from: m.from } });
+    case "state":
+      if (m.from && m.state) applyRemoteState(m.from, m.state);
       break;
-    }
     case "command":
       void handleCommand(m.cmd, m.args);
       break;
@@ -204,19 +271,21 @@ async function handleCommand(cmd: string, args: any): Promise<void> {
       if (!Array.isArray(wire) || !wire.length) break;
       const tracks: Track[] = await Promise.all(wire.map(async (t) => ({ ...t, stream_url: await api.streamUrl(t.id) }) as Track));
       const cur = useStore.getState();
-      if (!cur.queue.length) { cur.playTrack(tracks[0], tracks); break; } // nothing queued: just start
-      if (args.at === "end") { cur.appendToQueue(tracks); break; }
-      const first = cur.currentIndex + 1; // where the first inserted track lands
-      for (const t of [...tracks].reverse()) useStore.getState().addTrackNext(t); // keeps the given order
-      if (args.at === "now") {
-        const q = useStore.getState().queue;
-        if (q[first]) useStore.getState().playTrack(q[first], q);
-      }
+      runLocal(() => { // commands from another device act on this device's own player
+        if (!cur.queue.length) { cur.playTrack(tracks[0], tracks, { local: true }); return; } // nothing queued: just start
+        if (args.at === "end") { cur.appendToQueue(tracks); return; }
+        const first = cur.currentIndex + 1; // where the first inserted track lands
+        for (const t of [...tracks].reverse()) useStore.getState().addTrackNext(t); // keeps the given order
+        if (args.at === "now") {
+          const q = useStore.getState().queue;
+          if (q[first]) useStore.getState().playTrack(q[first], q, { local: true });
+        }
+      });
       break;
     }
     case "jump": {
       const t = s.queue[args?.index];
-      if (t) s.playTrack(t, s.queue);
+      if (t) s.playTrack(t, s.queue, { local: true });
       break;
     }
     case "remove": {
@@ -291,7 +360,12 @@ function onStoreChange(): void {
   if (!queueChanged && key === lastPublishedKey && s.playing === wasPlaying) return;
   wasPlaying = s.playing;
   lastPublishedKey = key;
-  publish(queueChanged || useSync.getState().activeDeviceId !== useSync.getState().deviceId);
+  publish(queueChanged);
+}
+
+/** On (re)connect an app that holds a queue publishes its state once, so the other players can show it even when it is paused. */
+function publishOnConnect(): void {
+  if (useStore.getState().queue.length) publish(true);
 }
 
 let unsubStore: (() => void) | null = null;
@@ -321,7 +395,7 @@ function stop(): void {
   clearInterval(positionTimer);
   ws?.close();
   ws = null;
-  useSync.setState({ status: "off", devices: [], activeDeviceId: null, remote: null });
+  useSync.setState({ status: "off", devices: [], activeDeviceId: null, states: {} });
 }
 
 function restart(): void {

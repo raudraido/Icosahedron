@@ -1,17 +1,26 @@
 import { useEffect, useRef, useState } from "react";
-import { Laptop, Monitor, Smartphone, Play, Pause, SkipBack, SkipForward, MonitorSpeaker } from "lucide-react";
+import { Laptop, Monitor, Smartphone, MonitorSpeaker, Check } from "lucide-react";
 import { useSync, syncActions, setSyncUrl, type SyncDevice } from "../lib/sync";
+import { useTarget } from "../lib/target";
+import { useStore } from "../store";
 
-// "Devices" popover for PlayerBar — the sync server's view of this user's
-// players: who is online, who is playing, remote controls for the active one,
-// and "Play here" to pull playback over (continue on another device).
+// "Devices" popover in the player bar: every device of the account and what it plays. Clicking one
+// makes it the device the controls act on (the bar and the queue then show it, docs/connect.md);
+// it only controls. *Send* moves this device's music to it, *Play here* brings its music here.
 const KIND_ICON: Record<SyncDevice["kind"], typeof Laptop> = { electron: Monitor, web: Laptop, mobile: Smartphone };
+
+const smallBtn = {
+  fontSize: 12, padding: "3px 8px", borderRadius: 6, border: "1px solid var(--text-secondary)",
+  background: "transparent", color: "inherit", cursor: "pointer", flexShrink: 0,
+} as const;
 
 export function DevicePicker() {
   const [open, setOpen] = useState(false);
-  const { status, devices, activeDeviceId, deviceId, remote, syncUrl } = useSync();
+  const { status, devices, deviceId, states, syncUrl } = useSync();
+  const targetId = useTarget((s) => s.targetId);
+  const localTrack = useStore((s) => s.queue[s.currentIndex]);
+  const localPlaying = useStore((s) => s.playing);
   const [urlDraft, setUrlDraft] = useState("");
-  const [showQueue, setShowQueue] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -22,29 +31,26 @@ export function DevicePicker() {
   }, [open]);
 
   const online = status === "online";
-  const elsewhere = online && activeDeviceId && activeDeviceId !== deviceId;
-  const track = remote?.queue?.[remote.index];
-  const active = devices.find((d) => d.deviceId === activeDeviceId);
-
-  const ctrl = (cmd: string) => activeDeviceId && syncActions.command(activeDeviceId, cmd);
-  const btn = { width: 32, height: 32, borderRadius: 16, border: "none", background: "transparent", cursor: "pointer", color: "var(--text-primary)" } as const;
+  const remoteTarget = online ? targetId : null;
+  const targetName = devices.find((d) => d.deviceId === remoteTarget)?.name;
 
   return (
     <div ref={ref} style={{ position: "relative" }} className="shrink-0">
       <button
         onClick={() => setOpen((o) => !o)}
-        title={online ? (elsewhere ? `Playing on ${active?.name}` : "Devices") : "Devices (sync offline)"}
-        className="flex items-center justify-center"
-        style={{ width: 40, height: 40, borderRadius: 20, background: "transparent", border: "none", cursor: "pointer", color: elsewhere ? "var(--accent)" : "var(--text-secondary)", opacity: online || !syncUrl ? 1 : 0.5 }}
+        title={online ? (remoteTarget ? `Controlling ${targetName}` : "Devices") : "Devices (sync offline)"}
+        className="flex flex-col items-center justify-center"
+        style={{ width: 52, height: 44, borderRadius: 10, background: "transparent", border: "none", cursor: "pointer", color: remoteTarget ? "var(--accent)" : "var(--text-secondary)", opacity: online || !syncUrl ? 1 : 0.5, gap: 1 }}
         onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
         onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
       >
         <MonitorSpeaker size={22} />
+        {remoteTarget && targetName && <span className="truncate" style={{ fontSize: 9, fontWeight: 600, maxWidth: 48 }}>{targetName}</span>}
       </button>
 
       {open && (
         <div
-          style={{ position: "absolute", right: 0, bottom: 48, width: 300, background: "var(--main-bg)", borderRadius: 8, padding: 12, zIndex: 50, color: "var(--text-primary)", boxShadow: "0 4px 16px color-mix(in srgb, var(--text-primary) 15%, transparent)" }}
+          style={{ position: "absolute", right: 0, bottom: 52, width: 320, background: "var(--main-bg)", borderRadius: 8, padding: 12, zIndex: 50, color: "var(--text-primary)", boxShadow: "0 4px 16px color-mix(in srgb, var(--text-primary) 15%, transparent)" }}
         >
           {!syncUrl ? (
             <form onSubmit={(e) => { e.preventDefault(); setSyncUrl(urlDraft.trim()); }} className="flex flex-col gap-2">
@@ -59,63 +65,34 @@ export function DevicePicker() {
                 Devices {!online && <span style={{ fontWeight: 400, fontSize: 12, color: "var(--text-secondary)" }}>· {status === "connecting" ? "connecting…" : "offline"}</span>}
               </div>
 
-              {elsewhere && track && (
-                <div style={{ marginBottom: 10, padding: 8, borderRadius: 6, background: "var(--hover-bg)" }}>
-                  <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>Playing on {active?.name}</div>
-                  <div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{track.title}</div>
-                  <div style={{ fontSize: 12, color: "var(--text-secondary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{track.artist}</div>
-                  <div className="flex items-center justify-center" style={{ gap: 4, marginTop: 4 }}>
-                    <button style={btn} onClick={() => ctrl("prev")} title="Previous"><SkipBack size={16} /></button>
-                    <button style={btn} onClick={() => ctrl("toggle")} title="Play / pause">{remote?.playing ? <Pause size={18} /> : <Play size={18} />}</button>
-                    <button style={btn} onClick={() => ctrl("next")} title="Next"><SkipForward size={16} /></button>
-                  </div>
-                  {remote?.queue && remote.queue.length > 1 && (
-                    <div style={{ marginTop: 6 }}>
-                      <button
-                        onClick={() => setShowQueue((v) => !v)}
-                        style={{ fontSize: 12, background: "transparent", border: "none", color: "var(--text-secondary)", cursor: "pointer", padding: 0 }}
-                      >{showQueue ? "Hide" : "Show"} queue ({remote.queue.length})</button>
-                      {showQueue && (
-                        <div style={{ maxHeight: 200, overflowY: "auto", marginTop: 4 }}>
-                          {remote.queue.map((t, i) => (
-                            <div key={`${t.id}-${i}`} className="flex items-center" style={{ gap: 4, padding: "2px 0", fontSize: 12 }}>
-                              <button
-                                onClick={() => activeDeviceId && syncActions.jump(activeDeviceId, i)}
-                                title="Play this"
-                                style={{ flex: 1, minWidth: 0, textAlign: "left", background: "transparent", border: "none", cursor: "pointer", color: i === remote.index ? "var(--accent)" : "inherit", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", padding: 0 }}
-                              >{t.title} <span style={{ color: "var(--text-secondary)" }}>· {t.artist}</span></button>
-                              <button
-                                onClick={() => activeDeviceId && syncActions.removeAt(activeDeviceId, i)}
-                                title="Remove from queue"
-                                style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-secondary)", padding: "0 4px" }}
-                              >✕</button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
               {devices.map((d) => {
                 const Ic = KIND_ICON[d.kind] ?? Laptop;
                 const isMe = d.deviceId === deviceId;
-                const isActive = d.deviceId === activeDeviceId;
+                const selected = (remoteTarget ?? deviceId) === d.deviceId;
+                const remote = isMe ? undefined : states[d.deviceId];
+                const track = isMe ? localTrack : remote?.queue?.[remote.index];
+                const playing = isMe ? localPlaying : !!remote?.playing;
                 return (
                   <div key={d.deviceId} className="flex items-center" style={{ gap: 8, padding: "6px 0" }}>
-                    <Ic size={18} style={{ color: isActive ? "var(--accent)" : "var(--text-secondary)" }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: isActive ? "var(--accent)" : "inherit" }}>
-                        {d.name}{isMe ? " (this device)" : ""}
+                    <button
+                      onClick={() => syncActions.setTarget(isMe ? null : d.deviceId)}
+                      className="flex items-center"
+                      style={{ gap: 8, flex: 1, minWidth: 0, background: "transparent", border: "none", cursor: "pointer", textAlign: "left", color: "inherit", padding: 0 }}
+                    >
+                      <Ic size={18} style={{ color: playing ? "var(--accent)" : "var(--text-secondary)", flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="truncate" style={{ color: selected ? "var(--accent)" : "inherit" }}>{d.name}{isMe ? " (this device)" : ""}</div>
+                        <div className="truncate" style={{ fontSize: 11, color: "var(--text-secondary)" }}>
+                          {track ? `${playing ? "Playing" : "Paused"}: ${track.title}` : "Idle"}
+                        </div>
                       </div>
-                      {isActive && <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{remote?.playing ? "Playing" : "Active"}</div>}
-                    </div>
-                    {!isActive && remote?.queue?.length ? (
-                      <button
-                        onClick={() => syncActions.transfer(d.deviceId)}
-                        style={{ fontSize: 12, padding: "3px 8px", borderRadius: 6, border: "1px solid var(--text-secondary)", background: "transparent", color: "inherit", cursor: "pointer" }}
-                      >{isMe ? "Play here" : "Send"}</button>
+                      {selected && <Check size={16} style={{ color: "var(--accent)", flexShrink: 0 }} />}
+                    </button>
+                    {isMe && remoteTarget && states[remoteTarget]?.queue?.length ? (
+                      <button style={smallBtn} onClick={() => { syncActions.transfer(deviceId, remoteTarget); syncActions.setTarget(null); }}>Play here</button>
+                    ) : null}
+                    {!isMe && localTrack ? (
+                      <button style={smallBtn} onClick={() => { syncActions.transfer(d.deviceId, deviceId); syncActions.setTarget(d.deviceId); }}>Send</button>
                     ) : null}
                   </div>
                 );

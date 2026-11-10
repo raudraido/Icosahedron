@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **The version number is visible everywhere:** in the web app (Settings → System → About) and in the iOS app (Settings → About); the desktop app already showed it.
+
 ## 0.15.7
 
 The desktop and web apps get the same "choose a device and control it" as iOS. The engine is unchanged since 0.15.6, so there is nothing to update on the server; update the desktop app (and reload the web app). Design: [docs/connect.md](docs/connect.md).

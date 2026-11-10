@@ -102,12 +102,23 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
 
+    /// "0.15.7 (0.15.7)": the app version and the build number (both come from the repository's version).
+    private static var versionText: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String
+        return build.map { $0 == version ? version : "\(version) (\($0))" } ?? version
+    }
+
     var body: some View {
         NavigationStack {
             List {
                 Section("Account") {
                     LabeledContent("Server", value: app.client?.baseURL.host ?? "")
                     LabeledContent("User", value: app.client?.username ?? "")
+                }
+                Section("About") {
+                    LabeledContent("Version", value: Self.versionText)
                 }
                 Section("Devices") {
                     DevicesList()

@@ -6,6 +6,9 @@ import android.app.Activity
 import android.os.SystemClock
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -24,15 +27,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -51,6 +58,7 @@ import androidx.tv.material3.Text
 import cloud.icosahedron.tv.App
 import cloud.icosahedron.tv.R
 import cloud.icosahedron.tv.player.Playback
+import kotlinx.coroutines.delay
 
 sealed interface Screen {
     data object Home : Screen
@@ -72,6 +80,7 @@ private val tabs = listOf(
 )
 
 private const val EXIT_WINDOW_MS = 2000L
+private const val IDLE_MS = 20_000L
 
 /**
  * Navigation: a stack of screens under a top bar that is always on screen (logo, tabs, Now Playing).
@@ -92,6 +101,18 @@ fun MainScreen() {
     var contentHasFocus by remember { mutableStateOf(false) }
     var lastBack by remember { mutableLongStateOf(0L) }
     var refocusBar by remember { mutableStateOf(false) } // after Back to Home: focus the Home tab
+    // Now Playing: after twenty seconds without a key press only the cover stays (nothing else is lit up all night on
+    // an OLED screen); the first key press then only wakes the screen and does nothing else.
+    var idle by remember { mutableStateOf(false) }
+    var keyCount by remember { mutableIntStateOf(0) }
+    var swallowUp by remember { mutableStateOf(false) }
+    LaunchedEffect(screen == Screen.NowPlaying, keyCount) {
+        idle = false
+        if (screen == Screen.NowPlaying) {
+            delay(IDLE_MS)
+            idle = true
+        }
+    }
     fun go(s: Screen) { stack = stack + s }
     fun tab(s: Screen) { stack = listOf(s) }
 
@@ -120,13 +141,24 @@ fun MainScreen() {
     }
 
     CompositionLocalProvider(LocalClient provides client) {
+        // Now Playing takes its background colour from the cover of the playing song.
+        val tint = rememberCoverTint(Playback.current?.coverArt)
+        val tintColor by animateColorAsState(tint ?: Bg, tween(800), label = "tint")
+        val barAlpha by animateFloatAsState(if (screen == Screen.NowPlaying && idle) 0f else 1f, tween(600), label = "barAlpha")
         Column(
-            Modifier.fillMaxSize().background(Bg).onPreviewKeyEvent { e ->
-                if (e.key == Key.Menu && e.type == KeyEventType.KeyUp) { tab(Screen.NowPlaying); true } else false
-            },
+            Modifier.fillMaxSize()
+                .background(if (screen == Screen.NowPlaying) Brush.verticalGradient(listOf(tintColor, Bg)) else SolidColor(Bg))
+                .onPreviewKeyEvent { e ->
+                    if (e.type == KeyEventType.KeyDown) {
+                        keyCount++
+                        if (idle && screen == Screen.NowPlaying) { swallowUp = true; return@onPreviewKeyEvent true }
+                    }
+                    if (e.type == KeyEventType.KeyUp && swallowUp) { swallowUp = false; return@onPreviewKeyEvent true }
+                    if (e.key == Key.Menu && e.type == KeyEventType.KeyUp) { tab(Screen.NowPlaying); true } else false
+                },
         ) {
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 10.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 10.dp).alpha(barAlpha),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Image(painterResource(R.drawable.logo), contentDescription = "Icosahedron", modifier = Modifier.padding(end = 16.dp).size(48.dp))
@@ -160,7 +192,7 @@ fun MainScreen() {
                     Screen.Artists -> ArtistsScreen(::go)
                     Screen.Playlists -> PlaylistsScreen(::go)
                     Screen.Search -> SearchScreen(::go)
-                    Screen.NowPlaying -> NowPlayingScreen()
+                    Screen.NowPlaying -> NowPlayingScreen(idle)
                     Screen.Settings -> SettingsScreen()
                     is Screen.AlbumDetail -> AlbumDetailScreen(screen.id, ::go)
                     is Screen.ArtistDetail -> ArtistDetailScreen(screen.id, ::go)

@@ -96,8 +96,8 @@ fun fmt(ms: Long): String {
 
 /** One track of a list: number, title and artist, length; the playing one in the accent colour. */
 @Composable
-fun TrackRow(track: Track, number: Int?, playing: Boolean, onClick: () -> Unit) {
-    Button(onClick = onClick, modifier = Modifier.fillMaxWidth().padding(horizontal = 48.dp, vertical = 2.dp)) {
+fun TrackRow(track: Track, number: Int?, playing: Boolean, horizontalPadding: Dp = 48.dp, onClick: () -> Unit) {
+    Button(onClick = onClick, modifier = Modifier.fillMaxWidth().padding(horizontal = horizontalPadding, vertical = 2.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             // The playing track is marked with a note in the accent colour; the text keeps the button's colour.
             Text(if (playing) "♪" else (number?.toString() ?: ""), color = if (playing) Accent else dim(), modifier = Modifier.width(36.dp))

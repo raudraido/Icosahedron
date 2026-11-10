@@ -187,6 +187,7 @@ struct DevicesList: View {
     private func icon(_ kind: String) -> String {
         switch kind {
         case "mobile": return "iphone"
+        case "tv": return "tv"
         case "electron": return "desktopcomputer"
         default: return "laptopcomputer"
         }

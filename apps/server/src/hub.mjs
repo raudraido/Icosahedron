@@ -115,7 +115,7 @@ export class Hub {
     if (prev) prev.conn.close?.(); // same device reconnecting replaces old socket
     const d = this._data(user);
     this._sweep(user);
-    const kind = ["electron", "web", "mobile"].includes(info.kind) ? info.kind : "web";
+    const kind = ["electron", "web", "mobile", "tv"].includes(info.kind) ? info.kind : "web";
     // The first hello names the player; after that the registry decides (it is renamed from the settings).
     const name = d.devices[deviceId]?.name ?? (String(info.name || "Unknown").slice(0, 64) || "Unknown");
     // `playback:false`: the player only takes part in preference sync — not listed, not controlled, publishes nothing.

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Laptop, Monitor, Smartphone, MonitorSpeaker, Check } from "lucide-react";
+import { Laptop, Monitor, Smartphone, MonitorSpeaker, Check, Tv } from "lucide-react";
 import { useSync, syncActions, setSyncUrl, type SyncDevice } from "../lib/sync";
 import { useTarget } from "../lib/target";
 import { useStore } from "../store";
@@ -7,7 +7,7 @@ import { useStore } from "../store";
 // "Devices" popover in the player bar: every device of the account and what it plays. Clicking one
 // makes it the device the controls act on (the bar and the queue then show it, docs/connect.md);
 // it only controls. *Send* moves this device's music to it, *Play here* brings its music here.
-const KIND_ICON: Record<SyncDevice["kind"], typeof Laptop> = { electron: Monitor, web: Laptop, mobile: Smartphone };
+const KIND_ICON: Record<SyncDevice["kind"], typeof Laptop> = { electron: Monitor, web: Laptop, mobile: Smartphone, tv: Tv };
 
 const smallBtn = {
   fontSize: 12, padding: "3px 8px", borderRadius: 6, border: "1px solid var(--text-secondary)",

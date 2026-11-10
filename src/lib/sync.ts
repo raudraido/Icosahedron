@@ -14,7 +14,7 @@ import { reconcileSettings, remoteSettingsChanged, remoteSettingsCleared, settin
 import { syncOptions, useSyncOptions } from "./syncOptions";
 import { useTarget, getTargetId, registerTargetRouter, runLocal } from "./target";
 
-export interface SyncDevice { deviceId: string; name: string; kind: "electron" | "web" | "mobile" }
+export interface SyncDevice { deviceId: string; name: string; kind: "electron" | "web" | "mobile" | "tv" }
 /** A player in the engine's registry: online or not (the picker only lists the online ones). */
 export interface RegistryDevice { deviceId: string; name: string; kind: SyncDevice["kind"]; online: boolean; lastSeen: number }
 export interface RemoteState {

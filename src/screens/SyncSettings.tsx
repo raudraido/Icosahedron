@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Laptop, Monitor, Smartphone } from "lucide-react";
+import { Laptop, Monitor, Smartphone, Tv } from "lucide-react";
 import { useSync, syncActions, setSyncUrl, type RegistryDevice } from "../lib/sync";
 import { useSyncOptions, setSyncOption, setPrefGroup, type PrefGroup } from "../lib/syncOptions";
 import { platform } from "../platform";
@@ -9,7 +9,7 @@ import { Section, ToggleRow } from "./SettingsParts";
 // engine knows, what this player keeps in sync and what the engine stores.
 // Design: docs/sync-settings.md.
 const IS_WEB = platform.kind === "web";
-const KIND_ICON: Record<RegistryDevice["kind"], typeof Laptop> = { electron: Monitor, web: Laptop, mobile: Smartphone };
+const KIND_ICON: Record<RegistryDevice["kind"], typeof Laptop> = { electron: Monitor, web: Laptop, mobile: Smartphone, tv: Tv };
 
 const PREF_LABELS: Record<PrefGroup, { label: string; description: string }> = {
   appearance: { label: "Appearance", description: "Theme and custom themes." },

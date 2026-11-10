@@ -26,7 +26,7 @@ The first message must be `hello` within 10 seconds:
   "device": { "deviceId": "uuid", "name": "Alice's iPhone", "kind": "mobile" } }
 ```
 
-`kind` is `electron`, `web` or `mobile`. A second connection with the same `deviceId` replaces the first.
+`kind` is `electron`, `web`, `mobile` or `tv`. A second connection with the same `deviceId` replaces the first.
 
 `device.name` only names the player the **first** time it connects; afterwards the engine's [registry](#registered-players) decides. `device.playback: false` connects the player for preference sync only: it is not listed for remote control, receives no `state` or `devices` messages and its `state`, `command` and `transfer` messages are ignored.
 

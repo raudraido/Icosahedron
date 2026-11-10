@@ -35,6 +35,7 @@ Images are published for `linux/amd64` and `linux/arm64`. `latest` is the newest
 | `DATA_DIR` | `/data` | Where state is kept (mount a volume!) |
 | `WEB_ROOT` | `/app/web` (image) | The web app's static files |
 | `LASTFM_API_KEY`, `LASTFM_API_SECRET` | unset | Enable Last.fm (see below) |
+| `QUICK_CONNECT` | off | `true` lets devices without a keyboard (a TV) sign in with a six-digit code, see [quick-connect.md](quick-connect.md) |
 
 ## Data
 
@@ -66,6 +67,24 @@ location / {
 ```
 
 If the proxy puts a login page in front (SSO), exclude `/manifest.webmanifest`, `/sw.js` and `/icons/` or the web app cannot be installed; mobile apps and `/sync` also need to reach the engine without that login.
+
+## LAN discovery
+
+So a TV app can find the server by itself (and Quick Connect needs nothing typed), run the same image a second time **on the host network**; a Docker bridge network does not deliver the UDP broadcast the apps send. Add to the compose file:
+
+```yaml
+  discovery:
+    image: ghcr.io/raudraido/icosahedron-server:latest
+    command: ["node", "src/discovery.mjs"]
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      PUBLIC_URL: https://music.example.com   # what the apps should use; without it the LAN address is answered
+      ENGINE_PORT: "8080"                      # the published port of the engine (used without PUBLIC_URL)
+      ENGINE_NAME: Home
+```
+
+It listens on UDP 7360 (Jellyfin uses 7359, so both can run). It is optional.
 
 ## Last.fm
 

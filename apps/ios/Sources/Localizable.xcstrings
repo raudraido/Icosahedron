@@ -1091,6 +1091,86 @@
         }
       }
     },
+    "Quick Connect": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kiirühendus"
+          }
+        }
+      }
+    },
+    "Authorize": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Luba"
+          }
+        }
+      }
+    },
+    "A TV or another device shows a six-digit code. Enter it here to sign that device in with your account.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Teler või muu seade näitab kuuekohalist koodi. Sisesta see siia, et logida see seade sinu kontoga sisse."
+          }
+        }
+      }
+    },
+    "Done: the device is signing in.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valmis: seade logib sisse."
+          }
+        }
+      }
+    },
+    "That code is not known (it may have expired). Check the code on the device's screen.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seda koodi ei tunta (see võib olla aegunud). Kontrolli koodi seadme ekraanilt."
+          }
+        }
+      }
+    },
+    "That code was already used.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "See kood on juba kasutatud."
+          }
+        }
+      }
+    },
+    "Too many wrong codes. Wait a minute.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Liiga palju valesid koode. Oota minut."
+          }
+        }
+      }
+    },
+    "Something went wrong.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Midagi läks valesti."
+          }
+        }
+      }
+    },
     "Add to Device Queue": {
       "localizations": {
         "et": {

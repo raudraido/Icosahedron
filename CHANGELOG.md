@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Quick Connect.** Sign a TV in without typing a password: it shows a six-digit code, you enter it in **Settings → Sync Server → Quick Connect** in an app where you are signed in (web, desktop, iOS). Off unless the engine has `QUICK_CONNECT=true`. The Android TV app can also find your server on the network (an optional discovery container on the host network answers its broadcast). See [docs/quick-connect.md](docs/quick-connect.md).
 - **Android TV / Google TV app (new).** A native app that plays through the TV, browses your library with the remote and appears as a TV in the other apps' device lists (they can start music on it, control it and send their playback to it). Sideload the APK from the release; see [docs/android-tv.md](docs/android-tv.md). The engine knows the device kind `tv` (update the server image to get the TV icon; older engines show it as a laptop).
 
 ## 0.15.9

@@ -7,6 +7,7 @@ import { verifySubsonic } from "./auth.mjs";
 import { isProxied, proxyToNavidrome } from "./proxy.mjs";
 import { createBpmStore } from "./bpm.mjs";
 import { createLastFm } from "./lastfm.mjs";
+import { createQuickConnect } from "./quickconnect.mjs";
 
 const MIME = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".mjs": "text/javascript",
@@ -17,22 +18,24 @@ const MIME = {
 /**
  * @param {{navidromeUrl:string, webRoot?:string, store:any, verify?:Function}} opts
  */
-export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmStore(), lastfm = createLastFm({}), verify = verifySubsonic }) {
+export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmStore(), lastfm = createLastFm({}), verify = verifySubsonic, quickConnect = createQuickConnect() }) {
   const hub = new Hub(store);
   const authCache = new Map(); // "u|t|s" -> expiry; tokens stay valid, so re-verifying each call is wasted
 
-  async function authed(req) {
+  /** The verified {u,t,s} of the request's Subsonic Authorization header, or null. */
+  async function authedCred(req) {
     const m = /^Subsonic\s+(.+)$/.exec(req.headers.authorization ?? "");
     if (!m) return null;
     const p = new URLSearchParams(m[1]);
     const cred = { u: p.get("u"), t: p.get("t"), s: p.get("s") };
     const key = `${cred.u}|${cred.t}|${cred.s}`;
-    if ((authCache.get(key) ?? 0) > Date.now()) return cred.u;
+    if ((authCache.get(key) ?? 0) > Date.now()) return cred;
     if (!(await verify(navidromeUrl, cred))) return null;
     authCache.set(key, Date.now() + 10 * 60 * 1000);
     if (authCache.size > 500) authCache.delete(authCache.keys().next().value);
-    return cred.u;
+    return cred;
   }
+  const authed = async (req) => (await authedCred(req))?.u ?? null;
 
   async function readJson(req, limit = 16 * 1024) {
     let body = "";
@@ -71,6 +74,48 @@ export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmSt
     }
   }
 
+  // Quick Connect (docs/quick-connect.md): a device without a sign-in shows a six-digit code, a
+  // signed-in app authorizes it, the device claims the sign-in.
+  async function handleQuickConnect(req, res, url) {
+    const json = (code, body) => { res.writeHead(code, { "content-type": "application/json" }); res.end(JSON.stringify(body)); };
+    const route = url.pathname.slice("/quickconnect".length);
+    const m = req.method;
+    if (route === "/enabled" && m === "GET") return json(200, quickConnect.enabled);
+    if (!quickConnect.enabled) return json(403, { error: "Quick Connect is disabled on this server" });
+    try {
+      if (route === "/initiate" && m === "POST") {
+        const address = String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim() || req.socket.remoteAddress || "";
+        const r = quickConnect.initiate(await readJson(req), address);
+        if (r.error === "rate") return json(429, { error: "Too many requests" });
+        if (r.error) return json(503, { error: "Busy" });
+        return json(200, r);
+      }
+      if (route === "/connect" && m === "GET") {
+        const st = quickConnect.status(url.searchParams.get("secret") ?? "");
+        return st ? json(200, st) : json(404, { error: "Unknown secret" });
+      }
+      if (route === "/authorize" && m === "POST") {
+        const cred = await authedCred(req);
+        if (!cred) return json(401, { error: "Sign in first" });
+        const b = await readJson(req);
+        const r = quickConnect.authorize(String(b.code ?? ""), cred);
+        if (r === "ok") return json(200, { authorized: true });
+        if (r === "rate") return json(429, { error: "Too many wrong codes" });
+        if (r === "already") return json(409, { error: "Already authorized" });
+        return json(404, { error: "Unknown code" });
+      }
+      if (route === "/claim" && m === "POST") {
+        const b = await readJson(req);
+        const auth = quickConnect.claim(String(b.secret ?? ""));
+        return auth ? json(200, auth) : json(404, { error: "Not authorized (yet)" });
+      }
+      res.writeHead(404).end();
+    } catch (e) {
+      if (e.code === 413 || e.code === 400) { res.writeHead(e.code).end(); return; }
+      json(500, { error: "failed" });
+    }
+  }
+
   async function handleBpm(req, res, url) {
     if (!(await authed(req))) { res.writeHead(401).end(); return; }
     const id = decodeURIComponent(url.pathname.slice("/bpm".length).replace(/^\//, ""));
@@ -99,6 +144,7 @@ export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmSt
     const url = new URL(req.url ?? "/", "http://x");
     if (isProxied(url.pathname)) { proxyToNavidrome(navidromeUrl, req, res); return; }
     if (url.pathname === "/bpm" || url.pathname.startsWith("/bpm/")) { handleBpm(req, res, url).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); }); return; }
+    if (url.pathname.startsWith("/quickconnect/")) { handleQuickConnect(req, res, url).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); }); return; }
     if (url.pathname.startsWith("/lastfm/")) { handleLastfm(req, res, url).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); }); return; }
     if (url.pathname === "/healthz") { res.writeHead(200).end("ok"); return; }
     if (url.pathname === "/config.json") {

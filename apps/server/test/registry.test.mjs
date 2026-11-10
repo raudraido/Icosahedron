@@ -204,3 +204,12 @@ test("transfer: moves the source player's playback to the target", async () => {
   assert.equal((await desktop.next((m) => m.type === "command")).cmd, "pause");
   app.close();
 });
+
+test("a TV registers with its own kind", async () => {
+  const { app, url } = await boot();
+  const tv = client(url, "bob", "livingroom", { kind: "tv", proto: 2 });
+  await tv.next((m) => m.type === "welcome");
+  const reg = await tv.next(isRegistry);
+  assert.equal(reg.devices.find((d) => d.deviceId === "livingroom").kind, "tv");
+  app.close();
+});

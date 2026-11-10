@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Android TV / Google TV app (new).** A native app that plays through the TV, browses your library with the remote and appears as a TV in the other apps' device lists (they can start music on it, control it and send their playback to it). Sideload the APK from the release; see [docs/android-tv.md](docs/android-tv.md). The engine knows the device kind `tv` (update the server image to get the TV icon; older engines show it as a laptop).
+
 ## 0.15.9
 
 A web fix for controlling a browser player from another device. **Update the server image** (`docker compose pull && docker compose up -d`): it serves the web app. The engine itself is unchanged since 0.15.6.

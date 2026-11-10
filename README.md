@@ -26,6 +26,7 @@ A music player for your own [Navidrome](https://www.navidrome.org/) / Subsonic s
 | **Web engine** | Small Docker service: sync hub, Navidrome proxy, BPM store, Last.fm, serves the web app | [`apps/server`](apps/server) | [docs/deploy-server.md](docs/deploy-server.md) |
 | **Web app** | The desktop UI in a browser, installable as a PWA; served by the engine | built from `src/` | [docs/web.md](docs/web.md) |
 | **iOS app** | Native SwiftUI app for iPhone and iPad (gapless, offline cache, lyrics, Siri/Shortcuts, …) | [`apps/ios`](apps/ios) | [docs/ios.md](docs/ios.md) |
+| **Android TV app** | Native Kotlin app for Google TV / Android TV: plays through the TV, browses with the remote, appears as a device in the other apps | [`apps/android-tv`](apps/android-tv) | [docs/android-tv.md](docs/android-tv.md) |
 
 How they fit together: [docs/architecture.md](docs/architecture.md). The sync wire protocol: [docs/sync-protocol.md](docs/sync-protocol.md).
 
@@ -50,6 +51,8 @@ services:
 Open `http://<host>:8080`, sign in with your Navidrome account. Details, environment variables and reverse-proxy notes: [docs/deploy-server.md](docs/deploy-server.md).
 
 **Desktop app:** download a build from the [Releases](https://github.com/raudraido/Icosahedron/releases) page (AppImage / `.deb` for Linux, `.exe` for Windows), or build it yourself — see below. To sync, press the *devices* button next to the cast button and enter your engine's address.
+
+**Android TV app:** sideload the APK from a release, see [docs/android-tv.md](docs/android-tv.md).
 
 **iOS app:** download the unsigned `.ipa` from a release and sign it for your device with AltStore, SideStore, Sideloadly or iloader — see [docs/ios.md](docs/ios.md).
 
@@ -78,7 +81,7 @@ The native audio engine can be rebuilt on its own with `npm run build:native` �
 
 ## Releases
 
-One version for everything. A `v*` tag builds and publishes the desktop packages, the iOS `.ipa` and the Docker image. See [docs/releasing.md](docs/releasing.md) and the [CHANGELOG](CHANGELOG.md).
+One version for everything. A `v*` tag builds and publishes the desktop packages, the iOS `.ipa`, the Android TV APK and the Docker image. See [docs/releasing.md](docs/releasing.md) and the [CHANGELOG](CHANGELOG.md).
 
 ## License
 

@@ -4,6 +4,7 @@ The server is the **sync engine and the web app it serves** (one Docker image, `
 
 ## 0.16.9
 
+- **Share links made in the web app work.** A link made from the browser carries the engine's address (`https://your-server/share/…`), and the engine passed it to the web app's own page instead of Navidrome's share page, so whoever opened it saw a sign-in. The engine now hands `/share/` (the page, its files, the stream and the cover) to Navidrome; no sign-in is needed, as for any share link. Links made earlier with that address start working too.
 - **Web sign-in says which server it is.** The page shows "Sign in to music.example.com" and the server version, and no longer offers "or connect to a new server" or a list of saved servers: the web app belongs to the server it is opened from.
 
 ## 0.16.8

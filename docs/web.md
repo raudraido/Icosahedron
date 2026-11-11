@@ -25,6 +25,7 @@ In the web app **one click plays** a song in every song list (the queue, a playl
 - **iOS Safari does not show title and cover on the lock screen** for any web page we tried (even a minimal test page); other iPhone browsers do. Use the [iOS app](ios.md) for that.
 - The **equalizer is not available on iOS Safari** (WebAudio output stops in the background there).
 - No casting, no native BPM detection, no updater (those are desktop features).
+- **Share links** (right-click → Share) carry the server's own address and open for anyone: the engine passes `/share/` to Navidrome (server 0.16.9; links made earlier with the engine's address start working then).
 - A basic phone layout exists (header, bottom tabs, mini player, full-screen player); the iOS app is the real phone experience.
 
 ## URL switches (diagnostics)

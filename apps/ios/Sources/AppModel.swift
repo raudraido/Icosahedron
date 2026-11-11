@@ -64,10 +64,16 @@ final class AppModel {
         }
     }
 
-    func signIn(url: String, user: String, pass: String, remember: Bool = true) async throws {
+    /// The address as typed, made into a clean https (or given http) URL text.
+    func normalizedURL(_ url: String) -> String {
         var text = url.trimmingCharacters(in: .whitespacesAndNewlines)
         if !text.lowercased().hasPrefix("http") { text = "https://" + text }
         while text.hasSuffix("/") { text.removeLast() }
+        return text
+    }
+
+    func signIn(url: String, user: String, pass: String, remember: Bool = true) async throws {
+        let text = normalizedURL(url)
         guard let base = URL(string: text) else { throw SubsonicError.badResponse }
         let c = SubsonicClient(baseURL: base, username: user, password: pass)
         try await c.ping()

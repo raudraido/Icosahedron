@@ -19,6 +19,7 @@ struct RootView: View {
 
 struct MainTabs: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.scenePhase) private var scenePhase
     @Namespace private var zoom
 
     private var showPlayer: Bool {
@@ -44,6 +45,15 @@ struct MainTabs: View {
                 .navigationTransition(.zoom(sourceID: "cover", in: zoom))
         }
         .tabBarMinimizeBehavior(.onScrollDown)
+        // Secure sign-in: another device asks this phone to approve it.
+        .sheet(item: Binding(get: { app.sync.approvals.first }, set: { _ in })) { request in
+            ApprovalPromptView(request: request)
+                .presentationDetents([.medium])
+                .interactiveDismissDisabled()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await app.sync.refreshApprovals() } }
+        }
     }
 }
 
@@ -54,8 +64,25 @@ struct LoginView: View {
     @State private var pass = ""
     @State private var busy = false
     @State private var error: String?
+    /// Set when the server asks for approval of a new device (secure sign-in): the sign-in waits for it.
+    @State private var approval: (base: URL, url: String, user: String, pass: String)?
 
     var body: some View {
+        if let approval {
+            SignInApprovalView(
+                base: approval.base, user: approval.user, password: approval.pass,
+                onGranted: { granted in
+                    do { try await app.signIn(url: approval.url, user: approval.user, pass: granted.secret) }
+                    catch { self.approval = nil; self.error = error.localizedDescription }
+                },
+                onCancel: { self.approval = nil }
+            )
+        } else {
+            form
+        }
+    }
+
+    private var form: some View {
         VStack(spacing: 18) {
             Spacer()
             Image(systemName: "hexagon.fill").font(.system(size: 56)).foregroundStyle(Theme.accent)
@@ -89,7 +116,19 @@ struct LoginView: View {
     private func signIn() async {
         busy = true
         error = nil
-        do { try await app.signIn(url: url, user: user, pass: pass) } catch { self.error = error.localizedDescription }
+        do {
+            // A server with secure sign-in asks a device that is already signed in to approve this one.
+            let text = app.normalizedURL(url)
+            if let base = URL(string: text) {
+                let probe = await SecureSignIn.probe(base)
+                if probe.engine && probe.secure {
+                    approval = (base, text, user, pass)
+                    busy = false
+                    return
+                }
+            }
+            try await app.signIn(url: url, user: user, pass: pass)
+        } catch { self.error = error.localizedDescription }
         busy = false
     }
 }

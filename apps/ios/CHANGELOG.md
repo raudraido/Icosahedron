@@ -2,6 +2,14 @@
 
 A native SwiftUI app for iPhone and iPad (iOS 26.1 or later), built as an unsigned `.ipa` (sign it with SideStore, AltStore, Sideloadly or iloader: [docs/ios.md](../../docs/ios.md)). It has been part of the shared releases 0.15.3 to 0.15.9 (see the [main changelog](../../CHANGELOG.md)); from here it has its **own version, release and changelog**. What works with which server: [docs/compatibility.md](../../docs/compatibility.md).
 
+## 0.2.0
+
+Needs [server](../server/CHANGELOG.md) 0.17.0 for secure sign-in; without it the app works as before.
+
+- **Secure sign-in.** For a server that asks for approval of new devices (an administrator switches it on in Settings → Sync Server → Secure sign-in): signing in shows a number and waits while one of your signed-in devices approves it; no device at hand, a recovery code or an administrator's invite code works. When another device asks, this phone shows a prompt with three numbers (pick the one on the other screen) or "It was not me", and a notification if the app is still running behind another.
+- **Settings → Sync Server → Secure sign-in:** turn it on or off, trusted devices (swipe to remove), app passwords, new recovery codes, invites, sign-in history.
+- The app does not run in the background, so a request is seen when you open it (or at once if it is already open); a push notification when it is closed is not possible with a free Apple ID.
+
 ## 0.1.4
 
 - **Fixed:** in Home, Playlists, See All, a tap on a playlist only flickered and did not open it.

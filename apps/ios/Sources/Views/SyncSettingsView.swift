@@ -93,6 +93,12 @@ struct SyncSettingsView: View {
                 }
 
                 Section {
+                    NavigationLink("Secure sign-in") { SecureSignInSettings() }
+                } footer: {
+                    Text("Makes a new device ask one of your signed-in devices for approval, so a password alone is not enough.")
+                }
+
+                Section {
                     Button("Clear stored queue", role: .destructive) { confirm = .queue }
                     Button("Clear shared preferences", role: .destructive) { confirm = .settings }
                 } header: {

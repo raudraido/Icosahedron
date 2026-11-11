@@ -49,7 +49,7 @@ interface ColumnDef {
 
 // Leading row-position column — always present, first, fixed width, non-reorderable,
 // non-sortable, non-toggleable, non-resizable. Change the width here.
-// One click plays a row (the web app first; the desktop app keeps double-click until the web version is tested).
+// One click plays a row (desktop and web alike).
 // Selecting several rows then happens with a checkbox in front of the row instead of a plain click, so the number
 // column is wider: [checkbox][number].
 const NUM_COL_WIDTH = CLICK_TO_PLAY ? 44 : 20;

@@ -19,7 +19,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          # Pinned: `ubuntu-latest` became Ubuntu 26.04 (2026-11), whose runners could not reach the
+          # package mirrors (apt "Temporary failure resolving" twice for v0.17.0). An older base also
+          # makes the AppImage/.deb run on more distributions (older glibc).
+          - os: ubuntu-24.04
             artifact-glob: |
               dist/*.AppImage
               dist/*.deb
@@ -40,7 +43,7 @@ jobs:
       # the runner by default.
       - name: Install ALSA dev headers
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+        run: sudo apt-get -o Acquire::Retries=5 update && sudo apt-get -o Acquire::Retries=5 install -y libasound2-dev
 
       # `npm install`, not `ci` — the file: dependency on native/audio-engine
       # is rebuilt per-platform by postinstall anyway, so lockfile-exact

@@ -416,7 +416,7 @@ export const api = {
   // ── BPM detection (footer bar) — cache-first; get_bpm runs the native
   // QM-DSP analyzer on a cache miss (can take a few seconds), so callers
   // should treat this as a slow call, not fire-and-forget it per track. ────
-  getBpm: (trackId: string, streamUrl: string) => invoke<number>("get_bpm", { trackId, streamUrl }),
+  getBpm: (trackId: string, streamUrl: string, genre?: string | null) => invoke<number>("get_bpm", { trackId, streamUrl, genre: genre ?? null }),
   setBpmOverride: (trackId: string, bpm: number) => invoke<void>("set_bpm_override", { trackId, bpm }),
   getBpmCacheAll: () => invoke<Record<string, number>>("get_bpm_cache_all"),
 

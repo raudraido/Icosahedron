@@ -12,6 +12,7 @@ import {
   searchLyrics, fetchLyrics, lrclibDirect, loadLocalLyrics, saveLocalLyrics,
   removeLocalLyrics, getBandsintownEvents,
 } from "./lyrics";
+import { resolveDnbBpm } from "./bpmOctave";
 import {
   listServers, saveServer, deleteServer, getActiveServerId, setActiveServerId, loadServerCredentials, updateServerLibrary,
 } from "./credentials";
@@ -550,10 +551,11 @@ function registerIpcHandlers(): void {
 
   // ── BPM detection (footer bar) — cache-first, falls back to the native
   // QM-DSP analyzer (audio_engine.rs's analyze_bpm) on a cache miss. ────────
-  ipcMain.handle("get_bpm", async (_e, { trackId, streamUrl }) => {
+  ipcMain.handle("get_bpm", async (_e, { trackId, streamUrl, genre }) => {
     const cached = await getCachedBpm(trackId);
     if (cached != null) return cached;
-    const bpm = await requireAudio().analyzeBpm(streamUrl);
+    // Drum & bass comes out of the tracker at half or two thirds of its tempo: fixed by the genre tag.
+    const bpm = resolveDnbBpm(await requireAudio().analyzeBpm(streamUrl), genre);
     await setCachedBpm(trackId, bpm);
     return bpm;
   });

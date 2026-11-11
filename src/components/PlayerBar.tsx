@@ -171,7 +171,7 @@ export function PlayerBar() {
     const gen = ++bpmGenRef.current;
     const timer = setTimeout(() => {
       setBpmLoading(true);
-      api.getBpm(track.id, track.stream_url)
+      api.getBpm(track.id, track.stream_url, track.genre)
         .then((bpm) => { if (gen === bpmGenRef.current) { setBpmCache(track.id, bpm); setBpmLoading(false); } })
         .catch(() => { if (gen === bpmGenRef.current) setBpmLoading(false); });
     }, 350);

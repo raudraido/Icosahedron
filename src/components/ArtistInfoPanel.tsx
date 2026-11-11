@@ -241,7 +241,7 @@ export function ArtistInfoPanel({ active }: { active: boolean }) {
           {!bitEnabled ? (
             <div style={{ marginTop: 6 }}>
               <p style={{ color: "var(--text-secondary)", fontSize: "calc(var(--fs-secondary) - 1px)", marginBottom: 2 }}>See upcoming tour dates?</p>
-              <p style={{ color: "var(--text-secondary)", opacity: 0.6, fontSize: 10, marginBottom: 8 }}>Optional. Loads concerts via Bandsintown.</p>
+              <p style={{ color: "var(--text-secondary)", opacity: 0.6, fontSize: 10, marginBottom: 8 }}>Optional. Loads concerts via Ticketmaster.</p>
               <button
                 onClick={enableBandsintown}
                 style={{ height: 30, width: "100%", background: "var(--accent)", color: "#111111", fontWeight: "var(--fw-emphasis)", fontSize: "calc(var(--fs-secondary) - 1px)", border: "none", borderRadius: 4, cursor: "pointer" }}
@@ -266,7 +266,7 @@ export function ArtistInfoPanel({ active }: { active: boolean }) {
                   {showAllTours ? "Show less" : `Show ${events.length - TOUR_LIMIT} more`}
                 </button>
               )}
-              <p style={{ color: "var(--text-secondary)", opacity: 0.3, fontSize: 10, marginTop: 6 }}>Tour data via Bandsintown</p>
+              <p style={{ color: "var(--text-secondary)", opacity: 0.3, fontSize: 10, marginTop: 6 }}>Tour data via Ticketmaster</p>
             </>
           )}
         </>

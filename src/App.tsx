@@ -26,6 +26,7 @@ import { GlobalHotkeys } from "./components/GlobalHotkeys";
 import { SpotlightSearch } from "./components/SpotlightSearch";
 import { ShareDialog } from "./components/ShareDialog";
 import { UpdateBanner } from "./components/UpdateBanner";
+import { ApprovalPrompt } from "./components/ApprovalPrompt";
 
 // Full old-app nav order (window.py's addTab sequence) — Home, Now Playing,
 // Mix Builder, and Visualizer aren't built out yet, so they render Placeholder
@@ -482,6 +483,7 @@ function AppInner() {
       {connected && <GlobalHotkeys />}
       {connected && <SpotlightSearch />}
       {connected && <ShareDialog />}
+      {connected && <ApprovalPrompt />}
       <GlobalTooltip />
       <UpdateBanner />
     </>

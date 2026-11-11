@@ -54,6 +54,8 @@ export class SubsonicClient {
   private password: string;
   private nativeJwt: string | null = null;
   private nativeJwtPromise: Promise<void> | null = null;
+  /** The engine's secure sign-in closes /auth/login: the native API is then called with this device's Subsonic credentials instead of a JWT. */
+  private nativeViaEngine = false;
   /** Selected libraries (Subsonic music folders / Navidrome library ids),
    *  empty = all — set from the server profile, changeable live via
    *  setMusicFolders. */
@@ -162,7 +164,7 @@ export class SubsonicClient {
   // --- Navidrome native auth (JWT) ---
 
   private async authenticateNative(): Promise<void> {
-    if (this.nativeJwt) return;
+    if (this.nativeJwt || this.nativeViaEngine) return;
     if (!this.nativeJwtPromise) {
       this.nativeJwtPromise = (async () => {
         const resp = await fetch(`${this.baseUrl}/auth/login`, {
@@ -170,6 +172,7 @@ export class SubsonicClient {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ username: this.username, password: this.password }),
         });
+        if (resp.status === 403) { this.nativeViaEngine = true; return; } // secure sign-in: the engine speaks for this device
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const body = await resp.json();
         if (typeof body?.token !== "string") throw new Error("no token in response");
@@ -177,6 +180,15 @@ export class SubsonicClient {
       })();
     }
     return this.nativeJwtPromise;
+  }
+
+  /** The header for a Navidrome native API call; call after authenticateNative(). */
+  private nativeAuthHeader(): Record<string, string> {
+    if (this.nativeViaEngine) {
+      const { u, t, s } = this.syncAuth();
+      return { authorization: `Subsonic ${new URLSearchParams({ u, t, s })}` };
+    }
+    return { "x-nd-authorization": `Bearer ${this.nativeJwt}` };
   }
 
   // --- API methods ---
@@ -311,7 +323,7 @@ export class SubsonicClient {
       `${this.baseUrl}/api/artist?${this.applyNativeLibrary(new URLSearchParams({
         _start: "0", _end: "100000", _sort: nativeSort, _order: "ASC",
       }))}`,
-      { headers: { "x-nd-authorization": `Bearer ${this.nativeJwt}` } },
+      { headers: { ...this.nativeAuthHeader() } },
     );
     const data = await resp.json();
     if (!Array.isArray(data)) throw new Error("expected array");
@@ -337,7 +349,7 @@ export class SubsonicClient {
       `${this.baseUrl}/api/album?${this.applyNativeLibrary(new URLSearchParams({
         _start: "0", _end: "100000", _sort: "name", _order: "ASC", compilation: "true",
       }))}`,
-      { headers: { "x-nd-authorization": `Bearer ${this.nativeJwt}` } },
+      { headers: { ...this.nativeAuthHeader() } },
     );
     const data = await resp.json();
     if (!Array.isArray(data)) throw new Error("expected array");
@@ -502,7 +514,7 @@ export class SubsonicClient {
     if (filters?.starred !== undefined) params.set("starred", filters.starred ? "true" : "false");
     this.applyNativeLibrary(params);
     const resp = await fetch(`${this.baseUrl}/api/song?${params}`, {
-      headers: { "x-nd-authorization": `Bearer ${this.nativeJwt}` },
+      headers: { ...this.nativeAuthHeader() },
     });
     const data = await resp.json();
     if (!Array.isArray(data)) throw new Error("expected array");
@@ -531,7 +543,7 @@ export class SubsonicClient {
     if (filters?.year) params.set("year", filters.year);
     this.applyNativeLibrary(params);
     const resp = await fetch(`${this.baseUrl}/api/${endpoint}?${params}`, {
-      headers: { "x-nd-authorization": `Bearer ${this.nativeJwt}` },
+      headers: { ...this.nativeAuthHeader() },
     });
     const data = await resp.json();
     if (!Array.isArray(data)) return {};
@@ -573,7 +585,7 @@ export class SubsonicClient {
   private async getSongNative(songId: string): Promise<any> {
     await this.authenticateNative();
     const resp = await fetch(`${this.baseUrl}/api/song/${songId}`, {
-      headers: { "x-nd-authorization": `Bearer ${this.nativeJwt}` },
+      headers: { ...this.nativeAuthHeader() },
     });
     if (!resp.ok) return {};
     return resp.json();
@@ -636,7 +648,7 @@ export class SubsonicClient {
       if (expiresMs) body.expiresAt = new Date(expiresMs).toISOString();
       const resp = await fetch(`${this.baseUrl}/api/share`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-nd-authorization": `Bearer ${this.nativeJwt}` },
+        headers: { "Content-Type": "application/json", ...this.nativeAuthHeader() },
         body: JSON.stringify(body),
       });
       if (resp.ok) {
@@ -661,7 +673,7 @@ export class SubsonicClient {
       await this.authenticateNative();
       const resp = await fetch(`${this.baseUrl}/api${path}`, {
         method,
-        headers: { "content-type": "application/json", "x-nd-authorization": `Bearer ${this.nativeJwt}` },
+        headers: { "content-type": "application/json", ...this.nativeAuthHeader() },
         body: body === undefined ? undefined : JSON.stringify(body),
       });
       if (resp.status === 401 && attempt === 0) { this.nativeJwt = null; this.nativeJwtPromise = null; continue; } // the token expired

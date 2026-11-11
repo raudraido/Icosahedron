@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
 import { platform } from "../platform";
+import { getEngineBase, saveEngineUrl } from "../platform/syncUrl";
+import { probeEngine, requestSignIn, pollSignIn, signInWithCode, type Granted } from "../lib/secureSignIn";
 
 // In the browser the server is the site itself (the web engine proxies
 // Navidrome), so there is no URL to ask for and staying signed in is the
@@ -61,6 +63,117 @@ function SavedServerRow({ name, url, username, onUse }: { name: string; url: str
   );
 }
 
+const FAILED: Record<string, string> = {
+  wrong: "Wrong user name or password.",
+  rate: "Too many attempts. Wait a few minutes and try again.",
+  busy: "There are already several sign-in requests open for this account. Wait for them to expire or answer them.",
+  offline: "Could not reach the server.",
+  denied: "The sign-in was denied.",
+  expired: "Nobody answered in time.",
+  gone: "That request is no longer open.",
+  not_required: "This server does not ask for approval.",
+  error: "Something went wrong.",
+};
+
+// Secure sign-in (docs/secure-sign-in.md): the server wants a device that is already signed in to approve this one.
+function SignInApproval({ base, user, password, onGranted, onCancel }: {
+  base: string; user: string; password: string; onGranted: (g: Granted) => Promise<void>; onCancel: () => void;
+}) {
+  type View =
+    | { kind: "starting" }
+    | { kind: "waiting"; number: number; expiresAt: number }
+    | { kind: "failed"; reason: string }
+    | { kind: "code"; error?: string; busy?: boolean }
+    | { kind: "codes"; codes: string[]; granted: Granted };
+  const [view, setView] = useState<View>({ kind: "starting" });
+  const [code, setCode] = useState("");
+  const [now, setNow] = useState(Date.now());
+  const started = useRef(false);
+  const request = useRef<{ id: string; secret: string } | null>(null);
+  const granted = useRef(onGranted);
+  granted.current = onGranted;
+
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    void (async () => {
+      const r = await requestSignIn(base, user, password);
+      if (!r.ok) { setView(r.reason === "no_trusted_device" ? { kind: "code" } : { kind: "failed", reason: r.reason }); return; }
+      request.current = { id: r.id, secret: r.secret };
+      setView({ kind: "waiting", number: r.number, expiresAt: Date.now() + r.expiresIn * 1000 });
+    })();
+  }, [base, user, password]);
+
+  useEffect(() => {
+    if (view.kind !== "waiting") return;
+    const t = setInterval(async () => {
+      setNow(Date.now());
+      const req = request.current;
+      if (!req) return;
+      const p = await pollSignIn(base, req.id, req.secret);
+      if (p.state === "approved") { clearInterval(t); void granted.current({ user: p.user, secret: p.secret }); }
+      else if (p.state === "denied" || p.state === "expired" || p.state === "gone") { clearInterval(t); setView({ kind: "failed", reason: p.state }); }
+    }, 2000);
+    return () => clearInterval(t);
+  }, [view.kind, base]);
+
+  async function useCode() {
+    setView({ kind: "code", busy: true });
+    const r = await signInWithCode(base, user, password, code);
+    if (!r.ok) { setView({ kind: "code", error: r.reason === "wrong" ? "That code is not valid." : FAILED[r.reason] }); return; }
+    if (r.granted.recoveryCodes?.length) setView({ kind: "codes", codes: r.granted.recoveryCodes, granted: r.granted });
+    else void granted.current(r.granted);
+  }
+
+  const textStyle = { color: "var(--text-primary)", opacity: 0.75, fontSize: "var(--fs-secondary)", lineHeight: 1.5 } as const;
+  const link = { background: "transparent", border: "none", color: "var(--accent)", cursor: "pointer", fontSize: "var(--fs-small)", padding: 0 } as const;
+  const inputStyle2 = { background: "var(--card-bg)", color: "var(--text-secondary)", border: "1px solid var(--border)" };
+  const left = view.kind === "waiting" ? Math.max(0, Math.round((view.expiresAt - now) / 1000)) : 0;
+
+  return (
+    <div className="space-y-4" style={{ textAlign: "center" }}>
+      <h2 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>Approve this sign-in</h2>
+      {view.kind === "starting" && <p style={textStyle}>Contacting the server…</p>}
+      {view.kind === "waiting" && (
+        <>
+          <p style={textStyle}>Open Icosahedron on one of your devices that is already signed in and pick this number:</p>
+          <div style={{ fontSize: 56, fontWeight: 700, letterSpacing: 4, color: "var(--accent)" }}>{view.number}</div>
+          <p style={{ ...textStyle, opacity: 0.5 }}>Waiting for approval… {Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")}</p>
+          <button type="button" style={link} onClick={() => setView({ kind: "code" })}>No device at hand? Use a code</button>
+        </>
+      )}
+      {view.kind === "failed" && <p style={{ color: "var(--error)", fontSize: "var(--fs-secondary)" }}>{FAILED[view.reason] ?? FAILED.error}</p>}
+      {view.kind === "code" && (
+        <>
+          <p style={textStyle}>Enter a recovery code, or the code you got from the server's administrator.</p>
+          <input
+            className="w-full rounded-lg px-3 py-2 text-sm outline-none" style={{ ...inputStyle2, textAlign: "center", letterSpacing: 2 }}
+            placeholder="XXXX-XXXX-XXXX" value={code} autoFocus onChange={(e) => setCode(e.target.value)}
+          />
+          {view.error && <p style={{ color: "var(--error)", fontSize: "var(--fs-small)" }}>{view.error}</p>}
+          <button
+            type="button" disabled={!code.trim() || view.busy} onClick={useCode}
+            className="w-full rounded-lg py-2 text-sm font-medium disabled:opacity-50"
+            style={{ background: "color-mix(in srgb, var(--accent) 20%, transparent)", color: "var(--accent)", border: "1px solid color-mix(in srgb, var(--accent) 30%, transparent)" }}
+          >{view.busy ? "Checking…" : "Sign in with code"}</button>
+        </>
+      )}
+      {view.kind === "codes" && (
+        <>
+          <p style={textStyle}>This is your first device. Write these recovery codes down and keep them safe. Each works once, if you lose every device:</p>
+          <pre style={{ background: "var(--card-bg)", border: "1px solid var(--border)", borderRadius: 8, padding: 10, color: "var(--text-primary)", fontSize: 13, userSelect: "text" }}>{view.codes.join("\n")}</pre>
+          <button
+            type="button" onClick={() => void granted.current(view.granted)}
+            className="w-full rounded-lg py-2 text-sm font-medium"
+            style={{ background: "color-mix(in srgb, var(--accent) 20%, transparent)", color: "var(--accent)", border: "1px solid color-mix(in srgb, var(--accent) 30%, transparent)" }}
+          >I have saved them</button>
+        </>
+      )}
+      <button type="button" style={link} onClick={onCancel}>{view.kind === "failed" ? "Back" : "Cancel"}</button>
+    </div>
+  );
+}
+
 export function Login() {
   const connect = useStore((s) => s.connect);
   const servers = useStore((s) => s.servers);
@@ -73,6 +186,7 @@ export function Login() {
   const [remember, setRemember] = useState(IS_WEB);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [approval, setApproval] = useState<{ url: string; user: string; pass: string; remember: boolean } | null>(null);
 
   useEffect(() => { loadServers(); }, [loadServers]);
 
@@ -103,6 +217,13 @@ export function Login() {
     try {
       const trimmed = IS_WEB ? location.origin : url.trim();
       const fullUrl = PROTOCOL_RE.test(trimmed) ? trimmed : `${secure ? "https" : "http"}://${trimmed}`;
+      // A server with secure sign-in asks a device that is already signed in to approve this one.
+      const probe = await probeEngine(fullUrl);
+      if (probe.engine && probe.secure) {
+        if (platform.kind === "electron" && !getEngineBase()) saveEngineUrl(fullUrl); // the approvals travel over the sync connection
+        setApproval({ url: fullUrl, user: user.trim(), pass, remember });
+        return;
+      }
       await connect(fullUrl, user.trim(), pass, remember);
     } catch (err) {
       setError(String(err));
@@ -116,6 +237,23 @@ export function Login() {
     color: "var(--text-secondary)",
     border: "1px solid var(--border)",
   };
+
+  if (approval) {
+    return (
+      <div className="flex h-screen items-center justify-center" style={{ background: "var(--main-bg)" }}>
+        <div className="w-full rounded-xl p-8 shadow-2xl" style={{ maxWidth: 420, background: "var(--left-panel-bg)", border: "1px solid var(--border)" }}>
+          <SignInApproval
+            base={approval.url} user={approval.user} password={approval.pass}
+            onGranted={async (g) => {
+              try { await connect(approval.url, approval.user, g.secret, approval.remember); }
+              catch (err) { setApproval(null); setError(String(err)); }
+            }}
+            onCancel={() => setApproval(null)}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen items-center justify-center" style={{ background: "var(--main-bg)" }}>

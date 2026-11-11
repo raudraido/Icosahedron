@@ -5,6 +5,7 @@
 // restoring its saved queue would overwrite the state of the one in use).
 // Other devices don't mirror — they show the active device's now-playing in
 // the picker and can send commands or transfer playback here.
+import { addApproval, removeApproval, refreshApprovals } from "./approvals";
 import { create } from "zustand";
 import { platform } from "../platform";
 import { getSyncUrl, saveEngineUrl } from "../platform/syncUrl";
@@ -222,6 +223,7 @@ function onMessage(m: any): void {
       }
       lastQueue = null; // an engine we just (re)connected to knows nothing of this device yet
       publishOnConnect();
+      void refreshApprovals();
       break;
     case "settings":
       remoteSettingsChanged(m.settings ?? null);
@@ -240,6 +242,12 @@ function onMessage(m: any): void {
       break;
     case "renamed":
       useSync.setState({ name: String(m.name) });
+      break;
+    case "approval": // secure sign-in: another device asks to be let in
+      addApproval(m.request);
+      break;
+    case "approval_done":
+      removeApproval(String(m.id));
       break;
     case "cleared":
       if (m.state) useSync.setState({ states: {}, activeDeviceId: null });

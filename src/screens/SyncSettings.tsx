@@ -5,6 +5,7 @@ import { useSyncOptions, setSyncOption, setPrefGroup, type PrefGroup } from "../
 import { platform } from "../platform";
 import { quickConnectSettings, setQuickConnectEnabled, authorizeQuickConnect, type AuthorizeResult, type QuickConnectSettings } from "../lib/quickConnect";
 import { Section, ToggleRow } from "./SettingsParts";
+import { SecureSignInSection } from "./SecureSignIn";
 
 // Settings > Sync Server: the connection, this player's name, the players the
 // engine knows, what this player keeps in sync and what the engine stores.
@@ -222,6 +223,8 @@ export function SyncServerTab() {
           </Section>
 
           <QuickConnectSection />
+
+          <SecureSignInSection />
 
           <Section title="Server data">
             <div style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.17.0
+
+**Needs server 0.17.0.** Secure sign-in, for people whose server is reachable from the internet: **a new device has to be approved by a device that is already signed in**, so a password alone gets nobody in. It is off until an administrator switches it on (Settings → Sync Server → Secure sign-in), and nothing changes while it is off. The plan: [docs/secure-sign-in.md](docs/secure-sign-in.md); what Navidrome needs: [docs/deploy-server.md](docs/deploy-server.md#secure-sign-in-optional).
+
+- **Signing in to such a server** shows a number and waits: on one of your signed-in devices a prompt asks you to pick that number out of three (or deny it). No device at hand: enter a recovery code, or the code an administrator made for you.
+- **The approval prompt** appears in the app (and as a system notification) when another device asks; "It was not me" denies it.
+- **Settings → Sync Server → Secure sign-in:** turn it on (you get recovery codes, this device stays signed in), trusted devices with remove, app passwords for apps that cannot ask for approval, new recovery codes, invites for other users, sign-in history, turn off.
+- With it on, Users and Share keep working: the native calls use this device's sign-in, since the engine closes the password login.
+- If the server address you type is a sync server with secure sign-in, the desktop app also remembers it as its sync server.
+
 ## 0.16.6
 
 - **Drum & bass BPM: fewer false corrections.** A track whose genre tag also holds Hip-Hop, Rap, Trap, Reggae or Dancehall is no longer treated as drum & bass (an album tagged "Rap • Hip-Hop • Electronic • Drum & Bass" got 190 BPM for a 95 BPM hip-hop track), and the corrected tempo must now be 160 to 185. A wrong BPM already stored for such a track is corrected by hand in the footer BPM menu.

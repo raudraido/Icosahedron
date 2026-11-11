@@ -111,7 +111,9 @@ struct PlaylistShelf: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: 14) {
                         ForEach(playlists.prefix(20)) { p in
-                            NavigationLink(value: p) {
+                            NavigationLink {
+                                PlaylistScreen(playlist: p)
+                            } label: {
                                 VStack(alignment: .leading, spacing: 6) {
                                     CoverImage(id: p.coverArt, size: 300)
                                         .frame(width: 150, height: 150)

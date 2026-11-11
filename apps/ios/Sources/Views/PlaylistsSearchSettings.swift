@@ -7,7 +7,11 @@ struct PlaylistsList: View {
     var body: some View {
         List {
             ForEach(app.playlists) { p in
-                NavigationLink(value: p) {
+                // The destination is given here, not looked up by value in the stack: from Home's See All the
+                // lookup did not fire (the tap only flickered), as Home rebuilds while playlists load.
+                NavigationLink {
+                    PlaylistScreen(playlist: p)
+                } label: {
                     HStack(spacing: 12) {
                         CoverImage(id: p.coverArt, size: 100)
                             .frame(width: 48, height: 48).clipShape(RoundedRectangle(cornerRadius: 6))

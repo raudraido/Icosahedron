@@ -27,6 +27,7 @@ struct HomeView: View {
                     AlbumShelf(title: "Discover", albums: random, seeAll: ("random", String(localized: "Discover")))
                     AlbumShelf(title: "Recently added", albums: newest, seeAll: ("newest", String(localized: "Recently added")))
                     AlbumShelf(title: "Most played", albums: frequent, seeAll: ("frequent", String(localized: "Most played")))
+                    PlaylistShelf(playlists: app.playlists)
                     if let error { Text(error).font(.footnote).foregroundStyle(.red).padding(.horizontal) }
                 }
                 .padding(.vertical)
@@ -58,6 +59,7 @@ struct HomeView: View {
             async let n = c.albums(type: "newest", size: 20)
             async let f = c.albums(type: "frequent", size: 20)
             async let r = c.albums(type: "random", size: 20)
+            await app.refreshPlaylists()
             (newest, frequent, random) = try await (n, f, r)
             error = nil
         } catch {

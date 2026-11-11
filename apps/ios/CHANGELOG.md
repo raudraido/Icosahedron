@@ -4,7 +4,7 @@ A native SwiftUI app for iPhone and iPad (iOS 26.1 or later), built as an unsign
 
 ## 0.1.3
 
-- **Home.** Discover is now the first shelf, and Discover, Recently added and Most played each have a **See All** button that opens the whole list. **Random mix** starts playing at once instead of opening a list you had to press Play on.
+- **Home.** Discover is now the first shelf, and Discover, Recently added and Most played each have a **See All** button that opens the whole list. a **Playlists** shelf (with See All) closes the list. **Random mix** starts playing at once instead of opening a list you had to press Play on.
 
 ## 0.1.2
 

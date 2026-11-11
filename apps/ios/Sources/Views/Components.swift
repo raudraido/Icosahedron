@@ -87,6 +87,50 @@ struct AlbumShelf: View {
     }
 }
 
+/// Home shelf of the user's playlists, with a See All button that opens the full list.
+struct PlaylistShelf: View {
+    let playlists: [Playlist]
+
+    var body: some View {
+        if !playlists.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Playlists").font(.title3.bold())
+                    Spacer()
+                    NavigationLink {
+                        PlaylistsList().navigationTitle("Playlists").navigationBarTitleDisplayMode(.inline)
+                    } label: {
+                        HStack(spacing: 4) { Text("See All"); Image(systemName: "chevron.right").font(.caption.bold()) }
+                            .font(.subheadline.weight(.medium))
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(.quaternary, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(alignment: .top, spacing: 14) {
+                        ForEach(playlists.prefix(20)) { p in
+                            NavigationLink(value: p) {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    CoverImage(id: p.coverArt, size: 300)
+                                        .frame(width: 150, height: 150)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    Text(p.name).font(.subheadline.weight(.semibold)).lineLimit(1)
+                                    Text("\(p.songCount) tracks").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                }
+                                .frame(width: 150, alignment: .leading)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+            }
+        }
+    }
+}
+
 struct TrackRow: View {
     @Environment(AppModel.self) private var app
     @AppStorage("showBPM") private var showBPM = true

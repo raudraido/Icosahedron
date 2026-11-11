@@ -77,13 +77,13 @@ struct LibraryView: View {
     private func destination(_ s: LibrarySection) -> some View {
         switch s {
         case .artists:
-            ArtistsList().navigationTitle("Artists").navigationBarTitleDisplayMode(.inline)
+            ArtistsBrowser().navigationTitle("Artists").navigationBarTitleDisplayMode(.inline)
         case .albums:
-            AlbumsGrid(type: "alphabeticalByName").navigationTitle("Albums").navigationBarTitleDisplayMode(.inline)
+            AlbumsBrowser(sort: .name).navigationTitle("Albums").navigationBarTitleDisplayMode(.inline)
         case .newest:
-            AlbumsGrid(type: "newest").navigationTitle("Newest Albums").navigationBarTitleDisplayMode(.inline)
+            AlbumsBrowser(sort: .added).navigationTitle("Newest Albums").navigationBarTitleDisplayMode(.inline)
         case .recent:
-            AlbumsGrid(type: "recent").navigationTitle("Recently Played Albums").navigationBarTitleDisplayMode(.inline)
+            AlbumsBrowser(sort: .recentlyPlayed).navigationTitle("Recently Played Albums").navigationBarTitleDisplayMode(.inline)
         case .songs:
             SongsScreen()
         case .favorites:

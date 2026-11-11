@@ -271,7 +271,7 @@ function RowCheck({ checked, partial, on, onToggle, title }: {
       data-no-row-click
       className={filled || on ? "row-check is-on" : "row-check"}
       onClick={(e) => { e.stopPropagation(); onToggle(e); }}
-      onMouseDown={(e) => e.stopPropagation()} // not the start of a drag
+      onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }} // not the start of a drag, nor of a text selection (Shift + click ticks a range)
       style={{
         width: 16, height: 16, borderRadius: 4, flexShrink: 0, cursor: "pointer", boxSizing: "border-box",
         border: `1.5px solid ${filled ? "var(--accent)" : "var(--text-secondary)"}`, background: filled ? "var(--accent)" : "transparent",
@@ -1683,7 +1683,11 @@ export function TrackTable({
                 // real pointer movement never sets dropIndexRef (see
                 // handleGripMouseDown above), so it doesn't trigger a
                 // reorder.
-                onMouseDown={reorderActive ? handleGripMouseDown(t.id) : undefined}
+                onMouseDown={(e) => {
+                  // Shift / Ctrl / Cmd + click selects rows: the browser must not also start (or stretch) a text selection.
+                  if (CLICK_TO_PLAY && (e.shiftKey || e.ctrlKey || e.metaKey)) e.preventDefault();
+                  if (reorderActive) handleGripMouseDown(t.id)(e);
+                }}
                 className={[reorderActive ? "reorder-row" : "", CLICK_TO_PLAY ? "click-row" : ""].filter(Boolean).join(" ") || undefined}
                 style={{
                   position: "absolute", top: row.start - rowTopOffset, left: 0, right: 0, height: 58,

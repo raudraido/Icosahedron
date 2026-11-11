@@ -2,6 +2,10 @@
 
 The server is the **sync engine and the web app it serves** (one Docker image, `ghcr.io/raudraido/icosahedron-server`). Versions before 0.16.0 shared one number with the other apps (0.15.3 to 0.15.9); the full text of those releases is in the [main changelog](../../CHANGELOG.md). What each version needs and gives: [docs/compatibility.md](../../docs/compatibility.md).
 
+## 0.16.7
+
+- **Shift + click on a song no longer selects its text** in the browser (it ticks the range and nothing else gets highlighted). Text can still be selected and copied normally.
+
 ## 0.16.6
 
 The web app plays with **one click** instead of a double-click. **Update with** `docker compose pull && docker compose up -d`, then reload the page (`Ctrl+Shift+R` if the browser keeps the old one). The desktop app still uses a double-click until this has been tried in the web app.

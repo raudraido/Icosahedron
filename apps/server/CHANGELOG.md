@@ -2,6 +2,10 @@
 
 The server is the **sync engine and the web app it serves** (one Docker image, `ghcr.io/raudraido/icosahedron-server`). Versions before 0.16.0 shared one number with the other apps (0.15.3 to 0.15.9); the full text of those releases is in the [main changelog](../../CHANGELOG.md). What each version needs and gives: [docs/compatibility.md](../../docs/compatibility.md).
 
+## 0.18.0
+
+The web app gets Settings → Navidrome plugins (see the desktop changelog 0.18.0 for what it does). The engine itself is unchanged: Navidrome's `/api/plugin` goes through the proxy like the rest of the native API.
+
 ## 0.17.1
 
 - **Fixed: signing in to the web app with secure sign-in on never finished.** After you approved the sign-in on another device, the waiting page kept on waiting. The browser's service worker kept the first answer to "has it been approved yet" and handed it out again and again; it now caches only the app's own static files (and a share page can no longer become the cached app shell). The old cache is dropped on the next load. Reload the page once (or twice) after the server is updated.

@@ -1,6 +1,6 @@
 # Secure sign-in (plan)
 
-Status: **step 1 (the engine) is built, off by default; no app can use it yet** (steps 2 to 4). This is the design for "a password must never be the only thing between the internet and your music".
+Status: **steps 1 (the engine) and 2 (desktop and web) are built, off by default**; iOS and Android TV follow (steps 3 and 4). This is the design for "a password must never be the only thing between the internet and your music".
 
 ## Goal
 

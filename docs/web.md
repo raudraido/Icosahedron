@@ -19,6 +19,10 @@ In the web app **one click plays** a song in every song list (the queue, a playl
 - The hearts, artist and album links and the boxes in a row do their own thing and do not start playback.
 - The desktop app plays the same way (one click, tick boxes, Shift/Ctrl selection).
 
+## Secure sign-in
+
+When an administrator has switched it on ([secure-sign-in.md](secure-sign-in.md)), signing in shows a number and waits for a device that is already signed in to approve it; the web app asks the same of itself when it is the one that approves. The sign-in is kept on the device like any other.
+
 ## Limits
 
 - **No gapless** between tracks: one persistent `<audio>` element.

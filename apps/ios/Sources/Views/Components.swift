@@ -63,7 +63,7 @@ struct AlbumShelf: View {
                     Spacer()
                     if let seeAll {
                         NavigationLink {
-                            AlbumsGrid(type: seeAll.type).navigationTitle(seeAll.title).navigationBarTitleDisplayMode(.inline)
+                            AlbumsBrowser(sort: AlbumSort(rawValue: seeAll.type) ?? .name).navigationTitle(seeAll.title).navigationBarTitleDisplayMode(.inline)
                         } label: {
                             HStack(spacing: 4) { Text("See All"); Image(systemName: "chevron.right").font(.caption.bold()) }
                                 .font(.subheadline.weight(.medium))

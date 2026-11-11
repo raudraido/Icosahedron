@@ -2,6 +2,11 @@
 
 A native SwiftUI app for iPhone and iPad (iOS 26.1 or later), built as an unsigned `.ipa` (sign it with SideStore, AltStore, Sideloadly or iloader: [docs/ios.md](../../docs/ios.md)). It has been part of the shared releases 0.15.3 to 0.15.9 (see the [main changelog](../../CHANGELOG.md)); from here it has its **own version, release and changelog**. What works with which server: [docs/compatibility.md](../../docs/compatibility.md).
 
+## 0.2.1
+
+- **The app remembers what was playing.** The queue, the track and the position are kept (a moment after every change, and every 15 seconds while playing) and put back when the app starts, paused where it was. A **"play" from the car, a headset or the lock screen** when iOS has closed the app now starts the app, signs in, puts the last queue back and plays it; before, there was nothing to play and the car turned to another music app. Clearing the queue or signing out forgets it.
+- To be the app the car picks, Icosahedron has to be the last one that played: play something in it before the drive, and do not play another music app in between.
+
 ## 0.2.0
 
 Needs [server](../server/CHANGELOG.md) 0.17.0 for secure sign-in; without it the app works as before.

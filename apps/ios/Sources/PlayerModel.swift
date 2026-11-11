@@ -51,6 +51,64 @@ final class PlayerModel {
 
     var current: Track? { queue.indices.contains(index) ? queue[index] : nil }
 
+    // MARK: Remembering the queue
+    // What was playing is kept on disk, so that a "play" from the car, a headset or the lock screen
+    // still has something to play after iOS has closed the app: iOS then starts the app again for that
+    // command, and an app with nothing to play looks dead to it (it tries another music app).
+
+    /// Asked for "play" with nothing loaded: set by AppModel, which signs in and restores the saved queue first.
+    @ObservationIgnored var onPlayWithoutQueue: (() -> Void)?
+    @ObservationIgnored private var saveWork: DispatchWorkItem?
+    @ObservationIgnored private var lastPositionSave = Date.distantPast
+
+    private struct SavedSession: Codable {
+        var queue: [Track]
+        var index: Int
+        var position: Double
+    }
+
+    private static var sessionURL: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("playback-session.json")
+    }
+
+    /// Every change to the queue, the track or the play state: told to sync, and kept on disk a moment later.
+    private func changed() {
+        onChange?()
+        saveWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.saveSession() }
+        saveWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: work)
+    }
+
+    private func saveSession() {
+        guard current != nil else { return }
+        lastPositionSave = Date()
+        let session = SavedSession(queue: queue, index: index, position: position)
+        let url = Self.sessionURL
+        DispatchQueue.global(qos: .utility).async {
+            if let data = try? JSONEncoder().encode(session) { try? data.write(to: url, options: .atomic) }
+        }
+    }
+
+    private func forgetSession() {
+        saveWork?.cancel()
+        try? FileManager.default.removeItem(at: Self.sessionURL)
+    }
+
+    /// Puts the last queue back, paused where it was (or playing: a "play" command started the app).
+    func restoreLastSession(play: Bool) {
+        guard queue.isEmpty else { if play { resume() }; return }
+        guard client != nil,
+              let data = try? Data(contentsOf: Self.sessionURL),
+              let saved = try? JSONDecoder().decode(SavedSession.self, from: data),
+              saved.queue.indices.contains(saved.index) else { return }
+        queue = saved.queue
+        index = saved.index
+        nextOverrideId = nil
+        load(startPaused: true, startAt: saved.position, silent: true)
+        if play { resume() }
+    }
+
     init() {
         configureSession()
         configureRemoteCommands()
@@ -91,14 +149,14 @@ final class PlayerModel {
         player.play()
         isPlaying = true
         updateNowPlaying()
-        onChange?()
+        changed()
     }
 
     func pause() {
         player.pause()
         isPlaying = false
         updateNowPlaying()
-        onChange?()
+        changed()
     }
 
     func toggle() { isPlaying ? pause() : resume() }
@@ -139,7 +197,7 @@ final class PlayerModel {
         }
         position = t
         updateNowPlaying()
-        onChange?()
+        changed()
     }
 
     // MARK: Queue editing
@@ -150,14 +208,14 @@ final class PlayerModel {
         queue.insert(track, at: index + 1)
         nextOverrideId = track.id
         preloadNext()
-        onChange?()
+        changed()
     }
 
     func addToQueue(_ track: Track) {
         guard current != nil else { play([track], at: 0); return }
         queue.append(track)
         preloadNext() // it may have become the next one (end of queue with repeat)
-        onChange?()
+        changed()
     }
 
     func moveInQueue(from source: IndexSet, to destination: Int) {
@@ -166,7 +224,7 @@ final class PlayerModel {
         queue.move(fromOffsets: source, toOffset: destination)
         if let newIndex = order.firstIndex(of: index) { index = newIndex }
         preloadNext()
-        onChange?()
+        changed()
     }
 
     func removeFromQueue(at i: Int) {
@@ -184,7 +242,7 @@ final class PlayerModel {
             if i < index { index -= 1 }
             preloadNext()
         }
-        onChange?()
+        changed()
     }
 
     // MARK: Favorites
@@ -242,13 +300,13 @@ final class PlayerModel {
     func toggleShuffle() {
         shuffle.toggle()
         preloadNext() // the track queued behind the current one may no longer be the right one
-        onChange?()
+        changed()
     }
 
     func toggleRepeat() {
         repeatAll.toggle()
         preloadNext()
-        onChange?()
+        changed()
     }
 
     func stop() {
@@ -262,6 +320,7 @@ final class PlayerModel {
         position = 0
         duration = 0
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        forgetSession()
     }
 
     // MARK: Internals
@@ -293,7 +352,7 @@ final class PlayerModel {
         preloadNext()
         cacheCurrentSoon()
         updateQualityLabel()
-        onChange?()
+        changed()
     }
 
     /// Streams start at once (no precise-timing scan: that makes AVFoundation read the whole
@@ -432,7 +491,7 @@ final class PlayerModel {
             preloadNext()
             cacheCurrentSoon()
             updateQualityLabel()
-            onChange?()
+            changed()
         } else if cur == nil, playingItem != nil {
             // Possibly the end of the queue — but the player can also be empty for a moment
             // while it hops between items, so look again shortly before concluding that.
@@ -447,20 +506,21 @@ final class PlayerModel {
         isPlaying = false
         position = 0
         updateNowPlaying()
-        onChange?()
+        changed()
     }
 
     private func tick(_ time: CMTime) {
         let s = time.seconds
         if s.isFinite, !seeking { position = s }
         scrobbleIfDue()
+        if isPlaying, Date().timeIntervalSince(lastPositionSave) > 15 { saveSession() }
         if let d = player.currentItem?.duration.seconds, d.isFinite, d > 0 { duration = d }
         if let item = player.currentItem, item.status == .failed, let cur = current, !handlingFailure {
             handlingFailure = true
             if playingLocal { cache.remove(cur.id) }
             let resumeAt = position
             let wasPlaying = isPlaying
-            if playingLocal { load(startPaused: !wasPlaying, startAt: resumeAt, silent: true) } else { isPlaying = false; onChange?() }
+            if playingLocal { load(startPaused: !wasPlaying, startAt: resumeAt, silent: true) } else { isPlaying = false; changed() }
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.handlingFailure = false }
         }
         // Pick up pauses/resumes that happened outside the app's own buttons.
@@ -468,7 +528,7 @@ final class PlayerModel {
         if playing != isPlaying, current != nil {
             isPlaying = playing
             updateNowPlaying()
-            onChange?()
+            changed()
         }
     }
 
@@ -495,7 +555,7 @@ final class PlayerModel {
                   let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
             if type == .began {
                 self.isPlaying = false
-                self.onChange?()
+                self.changed()
             } else if let o = n.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt,
                       AVAudioSession.InterruptionOptions(rawValue: o).contains(.shouldResume) {
                 self.resume()
@@ -503,11 +563,14 @@ final class PlayerModel {
         }
     }
 
+    private func remotePlay() { if current == nil { onPlayWithoutQueue?() } else { resume() } }
+    private func remoteToggle() { if current == nil { onPlayWithoutQueue?() } else { toggle() } }
+
     private func configureRemoteCommands() {
         let c = MPRemoteCommandCenter.shared()
-        c.playCommand.addTarget { [weak self] _ in self?.resume(); return .success }
+        c.playCommand.addTarget { [weak self] _ in self?.remotePlay(); return .success }
         c.pauseCommand.addTarget { [weak self] _ in self?.pause(); return .success }
-        c.togglePlayPauseCommand.addTarget { [weak self] _ in self?.toggle(); return .success }
+        c.togglePlayPauseCommand.addTarget { [weak self] _ in self?.remoteToggle(); return .success }
         c.nextTrackCommand.addTarget { [weak self] _ in self?.next(); return .success }
         c.previousTrackCommand.addTarget { [weak self] _ in self?.previous(); return .success }
         c.changePlaybackRateCommand.supportedPlaybackRates = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]

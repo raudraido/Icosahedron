@@ -90,6 +90,21 @@ If Navidrome is also linked to Last.fm, a play can be counted twice.
 - The engine never stores passwords. It does store play queues, settings and (if enabled) Last.fm session keys.
 - `GET /config.json` and `/healthz` are public; they reveal only the Navidrome URL configured for the container.
 
+## Secure sign-in (optional)
+
+Keeps a stolen or guessed password from being enough: with it on, a new device must be approved by a device that is already trusted ([secure-sign-in.md](secure-sign-in.md)). It is **off** until an administrator switches it on in the app, and nothing changes while it is off.
+
+It needs Navidrome to take the account from a header the engine sends, which Navidrome does only for the addresses you list. Give Navidrome **only the engine's address** (never `0.0.0.0/0`) and keep Navidrome off the internet:
+
+```yaml
+  navidrome:
+    environment:
+      ND_REVERSEPROXYWHITELIST: 172.18.0.0/16   # the Docker network the engine is on; docker network inspect <name> shows it
+    # no "ports:" for the internet: only the engine talks to Navidrome
+```
+
+The engine tries this before it switches on and refuses (`navidrome_does_not_trust_engine`) when Navidrome does not accept it, so you cannot lock yourself out by a missing setting. If you ever are locked out anyway, run on the server `docker compose exec icosahedron node src/devices-cli.mjs secure off`, then `docker compose restart icosahedron`. `node src/devices-cli.mjs invite <user>` prints a one-use code for a user's first device.
+
 ## Updating
 
 ```bash

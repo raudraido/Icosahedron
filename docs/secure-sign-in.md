@@ -1,6 +1,6 @@
 # Secure sign-in (plan)
 
-Status: **plan, nothing built yet.** This is the design for "a password must never be the only thing between the internet and your music".
+Status: **step 1 (the engine) is built, off by default; no app can use it yet** (steps 2 to 4). This is the design for "a password must never be the only thing between the internet and your music".
 
 ## Goal
 
@@ -59,6 +59,27 @@ Off by default. Off means exactly today's behaviour. On a new install the admini
 
 - **Settings → Devices**: trusted devices (name, kind, last seen, address), remove, app passwords, recovery codes (create new), sign-in history, pending requests.
 - Removing a device ends its access at once.
+
+## API
+
+All JSON. "Device" below means a request with a trusted device's credentials in the `Authorization: Subsonic u=…&t=…&s=…` header (`t = md5(secret + s)`).
+
+| Call | Who | Meaning |
+|---|---|---|
+| `GET /device/info` | anyone | `{secure}` (also `secure` in `/config.json`) |
+| `POST /device/request` `{user, password, device}` | a new device | checks the password, opens a request: `{id, secret, number, expiresIn}`. `409 not_required` when off, `409 no_trusted_device` when the account has none (use a code), `429` when asking too often |
+| `GET /device/poll?id=&secret=` | the new device | `{state: pending\|approved\|denied\|expired}`; on `approved` also `{deviceId, secret, cred:{u,t,s}}`, once |
+| `GET /device/pending` | a device | open requests with their three `choices` |
+| `POST /device/decide` `{id, approve, number}` | a device | `{result: approved\|denied\|wrong\|expired}`; a wrong number denies |
+| `GET /device/list`, `DELETE /device/<id>`, `GET /device/history` | a device | trusted devices (`current` marks this one), remove one, the sign-in history |
+| `POST /device/app-password` `{name}` | a device | a device secret for a third-party app, shown once |
+| `POST /device/recovery-codes` | a device | new recovery codes (the old ones stop working) |
+| `POST /device/recover` `{user, password, code, device}` | a new device | a recovery code makes a device without approval, once |
+| `POST /device/invite` `{user}` | an administrator's device | a one-use code (24 hours) for that user's first device |
+| `POST /device/redeem` `{user, password, code, device}` | a new device | the invite makes the first device; `recoveryCodes` come with it |
+| `PUT /device/secure` `{enabled, device}` | an administrator | on: needs the Navidrome sign-in (old way), checks that Navidrome trusts the engine (`412` if not), makes the calling device trusted, returns `{deviceId, secret, cred, recoveryCodes}`; off: needs a trusted device |
+
+With secure sign-in on, `/rest`, `/api` and the sync WebSocket accept only trusted devices' credentials, `/auth/*` is closed, `/share/*` stays public, and Quick Connect gives the TV a device of its own. Old Navidrome tokens and passwords stop working at the engine at once; sockets that are already open stay until they close. Limits: 15 attempts per address and 30 per account in 15 minutes, 3 open requests per account.
 
 ## Compatibility
 

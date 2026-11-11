@@ -2,6 +2,12 @@
 
 The server is the **sync engine and the web app it serves** (one Docker image, `ghcr.io/raudraido/icosahedron-server`). Versions before 0.16.0 shared one number with the other apps (0.15.3 to 0.15.9); the full text of those releases is in the [main changelog](../../CHANGELOG.md). What each version needs and gives: [docs/compatibility.md](../../docs/compatibility.md).
 
+## 0.16.5
+
+Small fixes to the web app. **Update with** `docker compose pull && docker compose up -d`, then reload the page (`Ctrl+Shift+R` if the browser keeps the old one).
+
+- **Settings → System in the browser:** "Minimize to tray" and "Exit to tray" now say "Not available in the browser" instead of showing switches that do nothing (a browser has no system tray). The desktop app is unchanged.
+
 ## 0.16.4
 
 The discovery helper also announces the server with **mDNS**, so a TV on another network (a VLAN) can find it when the router forwards mDNS. **Update with** `docker compose pull && docker compose up -d` (both containers). Nothing to configure; `DISCOVERY_MDNS=false` switches it off.

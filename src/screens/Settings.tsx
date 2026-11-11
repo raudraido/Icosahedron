@@ -177,6 +177,8 @@ function UpdateRow() {
 
 function ApplicationSection() {
   const [settings, setSettings] = useState<TraySettings | null>(null);
+  // A browser has no system tray: the two switches would do nothing there.
+  const inBrowser = platform.kind !== "electron";
 
   useEffect(() => { api.getTraySettings().then(setSettings); }, []);
 
@@ -189,6 +191,14 @@ function ApplicationSection() {
     });
   }
 
+  if (inBrowser) {
+    return (
+      <Section title="Application">
+        <Row label="Minimize to tray" value="Not available in the browser" />
+        <Row label="Exit to tray" value="Not available in the browser" />
+      </Section>
+    );
+  }
   if (!settings) return null;
 
   return (

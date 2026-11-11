@@ -31,8 +31,15 @@ test("proxies /rest with range and POST bodies, hides other paths", async () => 
   await fetch(`${base}/rest/updatePlaylist`, { method: "POST", body: "x=1" });
   assert.equal(seen[1].body, "x=1");
 
+  // public share pages and their assets go to Navidrome without any sign-in
+  const r2 = await fetch(`${base}/share/abc123`);
+  assert.equal(r2.status, 200);
+  assert.equal(seen[2].url, "/share/abc123");
+  await fetch(`${base}/share/assets/index.js`);
+  assert.equal(seen[3].url, "/share/assets/index.js");
+
   const r3 = await fetch(`${base}/metrics`);
   assert.equal(r3.status, 404);
-  assert.equal(seen.length, 2);
+  assert.equal(seen.length, 4);
   app.close(); up.closeAllConnections(); up.close();
 });

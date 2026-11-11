@@ -3,8 +3,10 @@ import { request as httpsRequest } from "node:https";
 
 // Same-origin reverse proxy to Navidrome, so the browser UI needs no CORS and
 // no mixed-content exceptions. Streams both ways and forwards Range headers
-// (seeking in <audio>). Only the Subsonic/Navidrome API prefixes are exposed.
-export const PROXY_PREFIXES = ["/rest/", "/api/", "/auth/"];
+// (seeking in <audio>). Only the Subsonic/Navidrome API prefixes are exposed, and /share/ (Navidrome's
+// public share pages: the page, its assets, the stream and the cover), so a share link made from the
+// web app (whose address is the engine's) opens for people who have no account.
+export const PROXY_PREFIXES = ["/rest/", "/api/", "/auth/", "/share/"];
 
 const DROP_REQ = new Set(["host", "connection", "origin", "referer", "x-forwarded-for", "x-forwarded-host", "x-forwarded-proto"]);
 

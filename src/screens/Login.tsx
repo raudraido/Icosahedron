@@ -76,6 +76,16 @@ export function Login() {
 
   useEffect(() => { loadServers(); }, [loadServers]);
 
+  // In the browser the page itself says which server this is (its address) and which version it runs.
+  const [serverVersion, setServerVersion] = useState("");
+  useEffect(() => {
+    if (!IS_WEB) return;
+    fetch("config.json", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((c) => { if (c?.version) setServerVersion(String(c.version)); })
+      .catch(() => { /* the version line is only a courtesy */ });
+  }, []);
+
   // Typing an explicit http:// or https:// prefix wins over the toggle, and
   // syncs the toggle to match it (rather than leaving the two disagreeing) —
   // so the toggle only ever decides the protocol for a bare "host" URL with
@@ -137,9 +147,18 @@ export function Login() {
           </div>
           <h1 className="text-2xl font-semibold" style={{ color: "var(--accent)" }}>Icosahedron</h1>
         </div>
-        <p className="text-sm text-center" style={{ color: "var(--text-primary)", opacity: 0.6 }}>Connect to your Navidrome server</p>
+        {IS_WEB ? (
+          <div className="text-center" style={{ color: "var(--text-primary)" }}>
+            <p className="text-sm" style={{ opacity: 0.6 }}>Sign in to</p>
+            <p className="text-base font-medium" style={{ opacity: 0.9 }}>{location.host}</p>
+            {serverVersion && <p className="text-xs" style={{ opacity: 0.4, marginTop: 2 }}>Server {serverVersion}</p>}
+          </div>
+        ) : (
+          <p className="text-sm text-center" style={{ color: "var(--text-primary)", opacity: 0.6 }}>Connect to your Navidrome server</p>
+        )}
 
-        {servers.length > 0 && (
+        {/* The web app belongs to one server (the site itself), so there is no list of servers to pick from. */}
+        {!IS_WEB && servers.length > 0 && (
           <>
             <div className="space-y-2">
               {servers.map((s) => (

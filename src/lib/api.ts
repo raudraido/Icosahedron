@@ -1,6 +1,6 @@
 import { platform } from "../platform";
-import type { NdUser } from "./subsonic/client";
-export type { NdUser };
+import type { NdUser, NdPlugin } from "./subsonic/client";
+export type { NdUser, NdPlugin };
 
 function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   return platform.invoke<T>(cmd, args);
@@ -308,6 +308,11 @@ export const api = {
   usersUpdate: (id: string, patch: { name?: string; email?: string; isAdmin?: boolean; password?: string }, current: NdUser) =>
     invoke<NdUser>("users_update", { id, patch, current }),
   usersDelete: (id: string) => invoke<void>("users_delete", { id }),
+
+  // Navidrome plugins (administrators only; Settings → Navidrome plugins).
+  pluginsList: () => invoke<NdPlugin[]>("plugins_list"),
+  pluginsUpdate: (id: string, patch: { enabled?: boolean; config?: string }) => invoke<NdPlugin | null>("plugins_update", { id, patch }),
+  pluginsRescan: () => invoke<void>("plugins_rescan"),
 
   scrobble: (trackId: string, submission: boolean) =>
     invoke<void>("scrobble", { trackId, submission }),

@@ -417,6 +417,9 @@ function registerIpcHandlers(): void {
   ipcMain.handle("users_create", (_e, { u }) => requireClient().createUser(u));
   ipcMain.handle("users_update", (_e, { id, patch, current }) => requireClient().updateUser(id, patch, current));
   ipcMain.handle("users_delete", (_e, { id }) => requireClient().deleteUser(id));
+  ipcMain.handle("plugins_list", () => requireClient().listPlugins());
+  ipcMain.handle("plugins_update", (_e, { id, patch }) => requireClient().updatePlugin(id, patch));
+  ipcMain.handle("plugins_rescan", () => requireClient().rescanPlugins());
 
   ipcMain.handle("scrobble", (_e, { trackId, submission }) => requireClient().scrobble(trackId, submission));
 

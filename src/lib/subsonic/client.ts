@@ -48,6 +48,13 @@ export interface NdUser {
   lastLoginAt?: string | null; lastAccessAt?: string | null; createdAt?: string;
 }
 
+/** A Navidrome plugin as the native API lists it (manifest and config are JSON text). */
+export interface NdPlugin {
+  id: string; path: string; manifest: string; config?: string; libraries?: string; users?: string;
+  enabled: boolean; lastError?: string; allUsers?: boolean; allLibraries?: boolean;
+  sha256?: string; createdAt?: string; updatedAt?: string;
+}
+
 export class SubsonicClient {
   private baseUrl: string;
   private username: string;
@@ -662,6 +669,23 @@ export class SubsonicClient {
     const url = asArray(root.shares?.share)[0]?.url;
     if (typeof url !== "string" || !url) throw new Error("Server did not return a share URL — is sharing enabled?");
     return url;
+  }
+
+  // --- Navidrome plugins (native /api/plugin, administrators) ---
+
+  async listPlugins(): Promise<NdPlugin[]> {
+    const data = await this.nativeJson("GET", "/plugin");
+    return Array.isArray(data) ? data : [];
+  }
+
+  /** enabled and/or config (JSON text) of a plugin; a plugin that cannot be enabled answers with its reason. */
+  async updatePlugin(id: string, patch: { enabled?: boolean; config?: string }): Promise<NdPlugin | null> {
+    return this.nativeJson("PUT", `/plugin/${encodeURIComponent(id)}`, patch);
+  }
+
+  /** Looks in the plugins folder again, for a plugin copied in since the last look. */
+  async rescanPlugins(): Promise<void> {
+    await this.nativeJson("POST", "/plugin/rescan", {});
   }
 
   // --- User administration (Navidrome's native /api/user, administrators only) ---

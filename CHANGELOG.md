@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.0
+
+**Works with server 0.17.x** (Navidrome's own plugin API, through the sync server).
+
+- **Settings → Navidrome plugins** (for a Navidrome administrator): the plugins installed in Navidrome with their version, author and what they may do (internet, your music files, their own storage), **what uses them** (for example AudioMuse-AI is what Instant Mix needs, nd-lyrics is where lyrics can come from), a switch to turn each on and off, and their settings (drawn from the plugin's own description, secrets such as API tokens hidden). A list at the top shows which features need a plugin and whether it is installed and working. **Rescan** finds a plugin copied into Navidrome's plugins folder. Adding a plugin from the app through the sync server is planned.
+
 ## 0.17.0
 
 **Needs server 0.17.0.** Secure sign-in, for people whose server is reachable from the internet: **a new device has to be approved by a device that is already signed in**, so a password alone gets nobody in. It is off until an administrator switches it on (Settings → Sync Server → Secure sign-in), and nothing changes while it is off. The plan: [docs/secure-sign-in.md](docs/secure-sign-in.md); what Navidrome needs: [docs/deploy-server.md](docs/deploy-server.md#secure-sign-in-optional).

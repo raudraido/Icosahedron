@@ -13,6 +13,7 @@ import { Section, Row, ToggleRow } from "./SettingsParts";
 import { SyncServerTab } from "./SyncSettings";
 import { useSync } from "../lib/sync";
 import { UsersTab } from "./UsersTab";
+import { PluginsTab } from "./PluginsTab";
 import { Avatar, changeMyPicture } from "../components/Avatar";
 import { useAvatar, removeMyAvatar } from "../lib/avatar";
 
@@ -25,7 +26,7 @@ import { useAvatar, removeMyAvatar } from "../lib/avatar";
 // account switch" discussion this was born from); only System and Themes
 // have real functionality today.
 
-type SettingsTab = "system" | "playback" | "integrations" | "sync" | "appearance" | "themes" | "servers" | "users" | "themeBuilder" | "hotkeys";
+type SettingsTab = "system" | "playback" | "integrations" | "sync" | "appearance" | "themes" | "servers" | "users" | "plugins" | "themeBuilder" | "hotkeys";
 
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: "system",       label: "System" },
@@ -36,6 +37,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "themes",       label: "Themes" },
   { id: "servers",      label: "Servers" },
   { id: "users",        label: "Users" },
+  { id: "plugins",      label: "Navidrome plugins" },
   { id: "themeBuilder", label: "Theme Builder" },
   { id: "hotkeys",      label: "Hotkeys" },
 ];
@@ -1801,6 +1803,7 @@ export function Settings() {
             {tab === "themes" && <ThemesTab />}
             {tab === "servers" && <ServersTab />}
             {tab === "users" && <UsersTab />}
+            {tab === "plugins" && <PluginsTab />}
             {tab === "themeBuilder" && <ThemeBuilderTab />}
             {tab === "hotkeys" && <HotkeysTab />}
           </div>

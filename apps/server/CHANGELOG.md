@@ -4,7 +4,7 @@ The server is the **sync engine and the web app it serves** (one Docker image, `
 
 ## 0.18.0
 
-The web app gets Settings → Navidrome plugins (see the desktop changelog 0.18.0 for what it does). The engine itself is unchanged: Navidrome's `/api/plugin` goes through the proxy like the rest of the native API.
+The web app gets Settings → Navidrome plugins and a **playback speed** button in the footer bar, pitch kept (see the desktop changelog 0.18.0 for what they do). The engine itself is unchanged: Navidrome's `/api/plugin` goes through the proxy like the rest of the native API.
 
 ## 0.17.1
 

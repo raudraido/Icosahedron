@@ -137,6 +137,13 @@ impl AudioEngine {
         Ok(())
     }
 
+    /// Playback speed (1 = normal); the pitch follows it. Applies to what plays now and to every later track.
+    #[napi]
+    pub fn set_speed(&self, speed: f64) -> napi::Result<()> {
+        transport::set_speed(&self.inner, speed as f32);
+        Ok(())
+    }
+
     /// 10-band EQ + preamp — applies live to whatever is playing (and to
     /// every future/gapless-chained source). `bands_db`: 10 gains in dB for
     /// the ISO octave bands 31 Hz…16 kHz; `preamp_db`: master pre-gain.

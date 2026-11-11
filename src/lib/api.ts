@@ -391,6 +391,8 @@ export const api = {
   audioStop: () => invoke<void>("audio_stop"),
   audioSeek: (seconds: number) => invoke<void>("audio_seek", { seconds }),
   audioSetVolume: (volume: number) => invoke<void>("audio_set_volume", { volume }),
+  /** Playback speed, 1 = normal. In the browser the pitch is kept; the desktop engine's pitch follows the speed. */
+  audioSetSpeed: (speed: number) => invoke<void>("audio_set_speed", { speed }),
   /** 10-band EQ: gains in dB (31 Hz…16 kHz ISO bands) + preamp dB + master enable. */
   audioSetEq: (enabled: boolean, preampDb: number, bandsDb: number[]) =>
     invoke<void>("audio_set_eq", { enabled, preampDb, bandsDb }),

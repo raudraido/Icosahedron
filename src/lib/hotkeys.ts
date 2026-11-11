@@ -22,6 +22,8 @@ export const DEFAULT_HOTKEYS: HotkeyDef[] = [
   { id: "mute",       label: "Toggle Mute",       default: "Ctrl+M" },
   { id: "shuffle",    label: "Toggle Shuffle",    default: "Ctrl+S" },
   { id: "repeat",     label: "Toggle Repeat",     default: "Ctrl+R" },
+  { id: "speed_up",   label: "Speed Up",          default: "Alt+Up" },
+  { id: "speed_down", label: "Speed Down",        default: "Alt+Down" },
   { id: "spotlight",  label: "Spotlight Search",  default: "Ctrl+F" },
 ];
 

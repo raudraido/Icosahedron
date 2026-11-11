@@ -132,6 +132,17 @@ pub(crate) fn seek(state: &AudioEngine, seconds: f64) -> Result<(), String> {
     Ok(())
 }
 
+/// Playback speed, 0.25 to 4. The position the progress task reports is counted in samples of the
+/// decoded media, upstream of the speed change, so it advances in media time without any correction.
+pub(crate) fn set_speed(state: &AudioEngine, speed: f32) {
+    let speed = if speed.is_finite() { speed.clamp(0.25, 4.0) } else { 1.0 };
+    state.speed.store(speed.to_bits(), Ordering::Relaxed);
+    let cur = state.current.lock().unwrap();
+    if let Some(sink) = &cur.sink {
+        sink.set_speed(speed);
+    }
+}
+
 pub(crate) fn set_volume(state: &AudioEngine, volume: f32) {
     state.volume.store(volume.to_bits(), Ordering::Relaxed);
     let effective = compute_gain(volume);

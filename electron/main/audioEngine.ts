@@ -60,6 +60,10 @@ export class AudioEngineClient {
     this.engine.setVolume(volume);
   }
 
+  setSpeed(speed: number): void {
+    this.engine.setSpeed(speed);
+  }
+
   /** 10-band EQ + preamp (dB) — applies live to current and future sources. */
   setEq(enabled: boolean, preampDb: number, bandsDb: number[]): void {
     this.engine.setEq(enabled, preampDb, bandsDb);

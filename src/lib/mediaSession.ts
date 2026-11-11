@@ -126,7 +126,7 @@ export function initMediaSession(): void {
     const s = st();
     if (!(s.duration > 0)) return;
     try {
-      ms.setPositionState({ duration: s.duration, position: Math.min(Math.max(0, s.currentTimeRaw), s.duration), playbackRate: 1 });
+      ms.setPositionState({ duration: s.duration, position: Math.min(Math.max(0, s.currentTimeRaw), s.duration), playbackRate: s.playbackSpeed });
       dbg.posSets++;
       dbg.lastPos = `${Math.round(s.currentTimeRaw)}/${Math.round(s.duration)}`;
     } catch (e) { note(e, "position"); }

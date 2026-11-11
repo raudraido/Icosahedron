@@ -247,6 +247,9 @@ interface AppStore {
   prev: () => void;
   setCurrentTime: (secs: number) => void;
   setVolume: (v: number) => void;
+  /** Playback speed on this device (1 = normal), 0.5 to 2. Kept across restarts. */
+  playbackSpeed: number;
+  setPlaybackSpeed: (v: number) => void;
 
   // 10-band EQ + preamp (native engine's EqSource, PlayerBar's EqualizerPopup)
   // — persisted in localStorage and pushed to the engine on every change and
@@ -672,6 +675,18 @@ function seekLocalAndCast(secs: number): void {
   }
 }
 
+const LS_SPEED = "playback_speed";
+export const SPEED_MIN = 0.5;
+export const SPEED_MAX = 2;
+/** 0.5 to 2 in steps of 0.05. */
+export function clampSpeed(v: number): number {
+  if (!Number.isFinite(v)) return 1;
+  return Math.round(Math.max(SPEED_MIN, Math.min(SPEED_MAX, v)) * 20) / 20;
+}
+function loadPlaybackSpeed(): number {
+  try { const v = localStorage.getItem(LS_SPEED); return v ? clampSpeed(Number(v)) : 1; } catch { return 1; }
+}
+
 export const useStore = create<AppStore>((set, get) => ({
   connected: false,
   serverUrl: "",
@@ -934,6 +949,7 @@ export const useStore = create<AppStore>((set, get) => ({
   shuffle: false,
   repeat: false,
   volume: 100,
+  playbackSpeed: loadPlaybackSpeed(),
   currentTime: 0,
   currentTimeRaw: 0,
   currentTimeAnchorMs: 0,
@@ -1097,6 +1113,13 @@ export const useStore = create<AppStore>((set, get) => ({
     const clamped = Math.max(0, Math.min(100, v));
     api.audioSetVolume(clamped / 100);
     set({ volume: clamped });
+  },
+
+  setPlaybackSpeed: (v) => {
+    const speed = clampSpeed(v);
+    api.audioSetSpeed(speed).catch(() => {});
+    try { localStorage.setItem(LS_SPEED, String(speed)); } catch { /* best-effort */ }
+    set({ playbackSpeed: speed });
   },
 
   ...loadEqSettings(),

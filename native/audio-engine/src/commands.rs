@@ -116,6 +116,7 @@ pub(crate) async fn play(
 
     let sink = Arc::new(Player::connect_new(state.stream_handle.mixer()));
     sink.set_volume(effective_volume);
+    sink.set_speed(f32::from_bits(state.speed.load(Ordering::Relaxed)));
     state.volume.store(volume.to_bits(), Ordering::Relaxed);
 
     let armed_now = state.stream_playback_armed.load(Ordering::Relaxed);

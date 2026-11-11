@@ -6,23 +6,28 @@ struct HomeView: View {
     @State private var frequent: [Album] = []
     @State private var random: [Album] = []
     @State private var error: String?
+    @State private var startingMix = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    NavigationLink {
-                        TrackListScreen(title: String(localized: "Random mix")) { try await app.client?.randomSongs(100) ?? [] }
-                    } label: {
-                        Label("Random mix", systemImage: "shuffle")
-                            .frame(maxWidth: .infinity, minHeight: 44)
+                    // Starts at once: no list to open and press Play on a second time.
+                    Button { Task { await startRandomMix() } } label: {
+                        HStack(spacing: 8) {
+                            if startingMix { ProgressView() } else { Image(systemName: "shuffle") }
+                            Text("Random mix")
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .buttonStyle(.borderedProminent)
+                    .disabled(startingMix)
                     .padding(.horizontal)
 
-                    AlbumShelf(title: "Recently added", albums: newest)
-                    AlbumShelf(title: "Most played", albums: frequent)
-                    AlbumShelf(title: "Discover", albums: random)
+                    AlbumShelf(title: "Discover", albums: random, seeAll: ("random", String(localized: "Discover")))
+                    AlbumShelf(title: "Recently added", albums: newest, seeAll: ("newest", String(localized: "Recently added")))
+                    AlbumShelf(title: "Most played", albums: frequent, seeAll: ("frequent", String(localized: "Most played")))
+                    PlaylistShelf(playlists: app.playlists)
                     if let error { Text(error).font(.footnote).foregroundStyle(.red).padding(.horizontal) }
                 }
                 .padding(.vertical)
@@ -35,12 +40,26 @@ struct HomeView: View {
         }
     }
 
+    private func startRandomMix() async {
+        guard let c = app.client, !startingMix else { return }
+        startingMix = true
+        defer { startingMix = false }
+        do {
+            let songs = try await c.randomSongs(100)
+            if !songs.isEmpty { app.play(songs, at: 0) }
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
     private func load() async {
         guard let c = app.client else { return }
         do {
             async let n = c.albums(type: "newest", size: 20)
             async let f = c.albums(type: "frequent", size: 20)
             async let r = c.albums(type: "random", size: 20)
+            await app.refreshPlaylists()
             (newest, frequent, random) = try await (n, f, r)
             error = nil
         } catch {
@@ -80,7 +99,9 @@ struct AlbumsGrid: View {
         guard !loading, !done, let c = app.client else { return }
         loading = true
         if let page = try? await c.albums(type: type, size: pageSize, offset: albums.count) {
-            albums += page
+            // "random" hands out a fresh draw every time, so a page can repeat an album already shown.
+            let seen = Set(albums.map(\.id))
+            albums += page.filter { !seen.contains($0.id) }
             if page.count < pageSize { done = true }
         }
         loading = false

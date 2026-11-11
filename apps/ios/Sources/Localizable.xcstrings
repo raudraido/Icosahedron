@@ -1311,6 +1311,16 @@
         }
       }
     },
+    "See All": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vaata kõiki"
+          }
+        }
+      }
+    },
     "Discover": {
       "localizations": {
         "et": {

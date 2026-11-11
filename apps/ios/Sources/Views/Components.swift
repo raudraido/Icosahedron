@@ -52,11 +52,28 @@ struct AlbumCard: View {
 struct AlbumShelf: View {
     let title: LocalizedStringKey
     let albums: [Album]
+    /// When set, the heading gets a "See All" button that opens the whole list (an album list type of the server).
+    var seeAll: (type: String, title: String)? = nil
 
     var body: some View {
         if !albums.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                Text(title).font(.title3.bold()).padding(.horizontal)
+                HStack {
+                    Text(title).font(.title3.bold())
+                    Spacer()
+                    if let seeAll {
+                        NavigationLink {
+                            AlbumsGrid(type: seeAll.type).navigationTitle(seeAll.title).navigationBarTitleDisplayMode(.inline)
+                        } label: {
+                            HStack(spacing: 4) { Text("See All"); Image(systemName: "chevron.right").font(.caption.bold()) }
+                                .font(.subheadline.weight(.medium))
+                                .padding(.horizontal, 12).padding(.vertical, 6)
+                                .background(.quaternary, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal)
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: 14) {
                         ForEach(albums) { a in

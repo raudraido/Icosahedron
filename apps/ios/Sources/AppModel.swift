@@ -31,6 +31,13 @@ final class AppModel {
         player.net = net
         player.onNowPlaying = { [weak self] t in self?.nowPlaying(t) }
         player.onScrobble = { [weak self] t, time in self?.scrobble(t, time) }
+        // "Play" from the car / a headset when iOS started the app for it: sign in, put the last queue back, play.
+        player.onPlayWithoutQueue = { [weak self] in
+            Task { @MainActor in
+                await self?.restore()
+                self?.player.restoreLastSession(play: true)
+            }
+        }
         net.onChange = { [weak self] in
             guard let self else { return }
             self.player.networkChanged()
@@ -62,6 +69,7 @@ final class AppModel {
             client = c
             player.client = c
         }
+        player.restoreLastSession(play: false) // what was playing last time, paused where it was
     }
 
     /// The address as typed, made into a clean https (or given http) URL text.

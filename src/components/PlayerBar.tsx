@@ -78,6 +78,8 @@ export function PlayerBar() {
   const localOnly = remote ? { opacity: 0.35, pointerEvents: "none" as const } : undefined;
   const volumeInactive = remote && view.targetKind === "mobile"; // the phone app has no volume control
   const [remoteWaveUrl, setRemoteWaveUrl] = useState("");
+  // The waveform is drawn from the audio itself: its URL is made fresh (a kept track's own URL may carry an old sign-in).
+  const [localWaveUrl, setLocalWaveUrl] = useState("");
 
   // Remembers the last non-zero volume so unmuting restores the actual
   // previous level instead of always jumping back to a hardcoded 80 —
@@ -138,6 +140,12 @@ export function PlayerBar() {
   const [newPlaylistFor, setNewPlaylistFor] = useState<Track | null>(null);
 
   const track = queue[currentIndex] ?? null;
+  useEffect(() => {
+    let live = true;
+    setLocalWaveUrl("");
+    if (track && !remote) api.streamUrl(track.id).then((u) => { if (live) setLocalWaveUrl(u); }).catch(() => {});
+    return () => { live = false; };
+  }, [track?.id, remote]);
 
   // The other device's track has no stream URL here; the waveform of the same track is decoded from the server.
   useEffect(() => {
@@ -442,9 +450,9 @@ export function PlayerBar() {
           <span className="tabular-nums text-right shrink-0" style={{ minWidth: 56, fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)", color: "var(--accent)" }}>
             {fmtDuration(currentTime)}
           </span>
-          {track && (remote ? remoteWaveUrl : track.stream_url) ? (
+          {track && (remote ? remoteWaveUrl : localWaveUrl) ? (
             <Waveform
-              streamUrl={remote ? remoteWaveUrl : track.stream_url}
+              streamUrl={remote ? remoteWaveUrl : localWaveUrl}
               trackId={track.id}
               duration={duration}
               onSeek={setCurrentTime}

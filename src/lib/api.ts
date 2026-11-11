@@ -216,6 +216,23 @@ export interface ServerProfile {
   musicFolderNames: string[];
 }
 
+/**
+ * A track's stream URL carries the sign-in it was made with. Tracks are kept (Daily Mixes for a day, cached
+ * lists, a saved queue), and when the sign-in changes meanwhile (secure sign-in swaps the password for a
+ * device secret) the kept URLs are refused and nothing plays. So the URL is made again from the track id,
+ * with the current sign-in, when it is used.
+ */
+async function freshStreamUrl(url: string): Promise<string> {
+  try {
+    const u = new URL(url);
+    if (!u.pathname.endsWith("/rest/stream")) return url;
+    const id = u.searchParams.get("id");
+    return id ? await invoke<string>("stream_url", { songId: id }) : url;
+  } catch {
+    return url;
+  }
+}
+
 export const api = {
   connect: (url: string, username: string, password: string) =>
     invoke<boolean>("connect", { url, username, password }),
@@ -380,10 +397,10 @@ export const api = {
   // ── Native gapless audio engine (electron/main/audioEngine.ts) ──────────
   // `volume` here is 0-1 (the store keeps its own volume as a 0-100 int for
   // the UI/localStorage and divides by 100 at these call sites).
-  audioPlay: (url: string, volume: number, durationHint: number, manual = true, startPaused = false) =>
-    invoke<void>("audio_play", { url, volume, durationHint, manual, startPaused }),
-  audioChainPreload: (url: string, durationHint: number) =>
-    invoke<void>("audio_chain_preload", { url, durationHint }),
+  audioPlay: async (url: string, volume: number, durationHint: number, manual = true, startPaused = false) =>
+    invoke<void>("audio_play", { url: await freshStreamUrl(url), volume, durationHint, manual, startPaused }),
+  audioChainPreload: async (url: string, durationHint: number) =>
+    invoke<void>("audio_chain_preload", { url: await freshStreamUrl(url), durationHint }),
   audioPause: () => invoke<void>("audio_pause"),
   audioResume: () => invoke<void>("audio_resume"),
   /** Resumes `offsetMs` after the latest AirPlay stream's first audio went out; timed natively, to the microsecond. */
@@ -423,7 +440,7 @@ export const api = {
   // ── BPM detection (footer bar) — cache-first; get_bpm runs the native
   // QM-DSP analyzer on a cache miss (can take a few seconds), so callers
   // should treat this as a slow call, not fire-and-forget it per track. ────
-  getBpm: (trackId: string, streamUrl: string, genre?: string | null) => invoke<number>("get_bpm", { trackId, streamUrl, genre: genre ?? null }),
+  getBpm: async (trackId: string, streamUrl: string, genre?: string | null) => invoke<number>("get_bpm", { trackId, streamUrl: await freshStreamUrl(streamUrl), genre: genre ?? null }),
   setBpmOverride: (trackId: string, bpm: number) => invoke<void>("set_bpm_override", { trackId, bpm }),
   getBpmCacheAll: () => invoke<Record<string, number>>("get_bpm_cache_all"),
 

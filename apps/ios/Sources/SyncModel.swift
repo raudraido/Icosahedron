@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import UIKit
+import UserNotifications
 
 /// Link to the Icosahedron web engine's sync hub (`/sync`): shows the user's other
 /// devices, publishes what this phone plays, and takes remote-control commands.
@@ -30,6 +31,8 @@ final class SyncModel {
     }
 
     var status = "off" // off | connecting | online
+    /// Secure sign-in: other devices asking this phone to approve them (docs/secure-sign-in.md).
+    var approvals: [SecureSignIn.Pending] = []
     /// The device the playback controls act on; nil = this phone. Chosen in the device lists
     /// (docs/connect.md). Falls back to this phone when that device goes offline.
     private(set) var targetId: String?
@@ -204,6 +207,7 @@ final class SyncModel {
             if let st = m["settings"] as? [String: Any] { applySettings(st) }
             lastQueueIds = [] // a (re)connected engine knows nothing of this phone yet
             publish(force: true)
+            Task { await refreshApprovals() }
         case "settings":
             if let st = m["settings"] as? [String: Any] { applySettings(st) }
         case "devices":
@@ -212,6 +216,13 @@ final class SyncModel {
             applyRegistry(m)
         case "renamed":
             name = m["name"] as? String
+        case "approval":
+            if let r = m["request"] as? [String: Any], let p = SecureSignIn.Pending(json: r), p.expiresAt > Date() {
+                if !approvals.contains(where: { $0.id == p.id }) { approvals.append(p) }
+                announce(p)
+            }
+        case "approval_done":
+            if let id = m["id"] as? String { approvals.removeAll { $0.id == id } }
         case "cleared":
             if (m["state"] as? Bool) == true {
                 remoteStates = [:]; activeDeviceId = nil
@@ -224,6 +235,34 @@ final class SyncModel {
         default:
             break
         }
+    }
+
+    /// Asks the engine which sign-in requests are open (after connecting, and when the app comes back to the front).
+    @MainActor
+    func refreshApprovals() async {
+        guard let c = client else { return }
+        let list = await SecureSignIn.pending(c).filter { $0.expiresAt > Date() }
+        approvals = list
+        list.forEach { announce($0) }
+    }
+
+    /// Answers a request: approve with the number picked, or deny (number nil). Returns what the engine says.
+    @MainActor
+    func answerApproval(_ p: SecureSignIn.Pending, approve: Bool, number: Int?) async -> String {
+        guard let c = client else { return "offline" }
+        let result = await SecureSignIn.decide(c, id: p.id, approve: approve, number: number)
+        approvals.removeAll { $0.id == p.id }
+        return result
+    }
+
+    /// A local notification when the phone is not in front, so a request is noticed (only while the app still runs).
+    private func announce(_ p: SecureSignIn.Pending) {
+        guard UIApplication.shared.applicationState != .active else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "Sign-in attempt"
+        content.body = "\(p.deviceName)\(p.address.isEmpty ? "" : " · " + p.address). Open Icosahedron to approve or deny."
+        content.sound = .default
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: p.id, content: content, trigger: nil))
     }
 
     private func applyDevices(_ m: [String: Any]) {

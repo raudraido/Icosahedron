@@ -2,6 +2,10 @@
 
 The server is the **sync engine and the web app it serves** (one Docker image, `ghcr.io/raudraido/icosahedron-server`). Versions before 0.16.0 shared one number with the other apps (0.15.3 to 0.15.9); the full text of those releases is in the [main changelog](../../CHANGELOG.md). What each version needs and gives: [docs/compatibility.md](../../docs/compatibility.md).
 
+## 0.16.8
+
+- **On Tour in the artist info works again, and now in the web app too.** Bandsintown stopped giving concert lists to public apps (every artist came back empty), so the engine now asks Ticketmaster and the web app gets the dates from the engine (`GET /tour?artist=`). Only concerts of the artist itself are listed, not tribute acts, and answers are kept for 6 hours. `TICKETMASTER_API_KEY` is not needed. Artists Ticketmaster has no dates for show nothing, as before.
+
 ## 0.16.7
 
 - **Shift + click on a song no longer selects its text** in the browser (it ticks the range and nothing else gets highlighted). Text can still be selected and copied normally.

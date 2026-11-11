@@ -321,7 +321,7 @@ export function createWebPlatform(): Platform {
     lyrics_local_load: ({ key }) => localStorage.getItem(LS_LYRICS + key),
     lyrics_local_save: ({ key, raw }) => localStorage.setItem(LS_LYRICS + key, raw),
     lyrics_local_remove: ({ key }) => localStorage.removeItem(LS_LYRICS + key),
-    bandsintown_events: inert([]),
+    bandsintown_events: ({ artistName }) => lf("GET", `/tour?artist=${encodeURIComponent(artistName)}`).catch(() => []),
 
     // audio
     audio_play: (a) => audio.play(a.url, a.volume, a.durationHint, a.manual, a.startPaused),

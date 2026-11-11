@@ -145,9 +145,7 @@ export async function removeLocalLyrics(key: string): Promise<void> {
   }
 }
 
-// ── Bandsintown tour dates ───────────────────────────────────────────────────
-
-const BIT_APP_ID = "js_app_id";
+// ── Tour dates ───────────────────────────────────────────────────
 
 export interface TourEvent {
   datetime: string;
@@ -155,18 +153,33 @@ export interface TourEvent {
   venue: { name: string; city: string; region: string; country: string };
 }
 
+// Bandsintown no longer serves events to public app ids (always []), so tour dates come from
+// Ticketmaster's Discovery API. The artist is matched as an exact "attraction" first so tribute acts
+// that merely contain the name are left out. Same logic as apps/server/src/tour.mjs.
+const TM_KEY = "gCnkc6kf6EzDVbAuAH5p7qXTjOKHUYUa";
+const tmNorm = (s: string) => s.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const tmCache = new Map<string, { at: number; events: TourEvent[] }>();
+
 export async function getBandsintownEvents(artistName: string): Promise<TourEvent[]> {
-  const encoded = encodeURIComponent(artistName);
-  const events = await getJson(
-    `https://rest.bandsintown.com/artists/${encoded}/events?app_id=${BIT_APP_ID}`,
-  );
-  if (!Array.isArray(events)) return [];
-  return events.map((e: any) => ({
-    datetime: e.datetime ?? "",
-    url: e.url ?? "",
-    venue: {
-      name: e.venue?.name ?? "", city: e.venue?.city ?? "",
-      region: e.venue?.region ?? "", country: e.venue?.country ?? "",
-    },
-  }));
+  const want = tmNorm(artistName);
+  if (!want) return [];
+  const hit = tmCache.get(want);
+  if (hit && Date.now() - hit.at < 6 * 3600_000) return hit.events;
+  const base = "https://app.ticketmaster.com/discovery/v2";
+  const q = (o: Record<string, string>) => new URLSearchParams({ apikey: TM_KEY, ...o });
+  const found = await getJson(`${base}/attractions.json?${q({ keyword: artistName, classificationName: "music", size: "20" })}`);
+  const attraction = (found?._embedded?.attractions ?? []).find((a: any) => tmNorm(a.name ?? "") === want);
+  if (!attraction) return [];
+  const ev = await getJson(`${base}/events.json?${q({ attractionId: attraction.id, sort: "date,asc", size: "50" })}`);
+  const events: TourEvent[] = (ev?._embedded?.events ?? []).map((e: any) => {
+    const v = e._embedded?.venues?.[0] ?? {};
+    const st = e.dates?.start ?? {};
+    return {
+      datetime: st.dateTime ?? (st.localDate ? `${st.localDate}T${st.localTime ?? "00:00:00"}` : ""),
+      url: e.url ?? "",
+      venue: { name: v.name ?? "", city: v.city?.name ?? "", region: v.state?.stateCode ?? v.state?.name ?? "", country: v.country?.name ?? "" },
+    };
+  });
+  tmCache.set(want, { at: Date.now(), events });
+  return events;
 }

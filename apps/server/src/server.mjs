@@ -8,6 +8,7 @@ import { verifySubsonic, isNavidromeAdmin } from "./auth.mjs";
 import { isProxied, proxyToNavidrome } from "./proxy.mjs";
 import { createBpmStore } from "./bpm.mjs";
 import { createLastFm } from "./lastfm.mjs";
+import { createTour } from "./tour.mjs";
 import { createQuickConnect } from "./quickconnect.mjs";
 import { createAvatarStore, imageType, AVATAR_MAX_BYTES } from "./avatar.mjs";
 
@@ -25,7 +26,7 @@ const MIME = {
 /**
  * @param {{navidromeUrl:string, webRoot?:string, store:any, verify?:Function}} opts
  */
-export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmStore(), lastfm = createLastFm({}), verify = verifySubsonic, isAdmin = isNavidromeAdmin, quickConnect = createQuickConnect(), avatars = createAvatarStore() }) {
+export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmStore(), lastfm = createLastFm({}), verify = verifySubsonic, isAdmin = isNavidromeAdmin, quickConnect = createQuickConnect(), avatars = createAvatarStore(), tour = createTour() }) {
   const hub = new Hub(store);
   const authCache = new Map(); // "u|t|s" -> expiry; tokens stay valid, so re-verifying each call is wasted
 
@@ -219,6 +220,14 @@ export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmSt
     if (url.pathname.startsWith("/quickconnect/")) { handleQuickConnect(req, res, url).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); }); return; }
     if (url.pathname.startsWith("/lastfm/")) { handleLastfm(req, res, url).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); }); return; }
     if (url.pathname === "/avatar" || url.pathname.startsWith("/avatar/")) { handleAvatar(req, res, url).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); }); return; }
+    if (url.pathname === "/tour") {
+      (async () => {
+        if (!(await authed(req))) { res.writeHead(401).end(); return; }
+        const events = await tour.events(url.searchParams.get("artist") ?? "").catch(() => []);
+        res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(events));
+      })().catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); });
+      return;
+    }
     if (url.pathname === "/healthz") { res.writeHead(200).end("ok"); return; }
     if (url.pathname === "/config.json") {
       // The web UI reads this to learn which Subsonic server to talk to.

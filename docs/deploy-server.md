@@ -94,14 +94,25 @@ If Navidrome is also linked to Last.fm, a play can be counted twice.
 
 Keeps a stolen or guessed password from being enough: with it on, a new device must be approved by a device that is already trusted ([secure-sign-in.md](secure-sign-in.md)). It is **off** until an administrator switches it on in the app, and nothing changes while it is off.
 
-It needs Navidrome to take the account from a header the engine sends, which Navidrome does only for the addresses you list. Give Navidrome **only the engine's address** (never `0.0.0.0/0`) and keep Navidrome off the internet:
+It needs Navidrome to take the account from a header the engine sends, which Navidrome does only for the addresses you list. Give Navidrome **only the engine's address** (never `0.0.0.0/0`, never the whole Docker network) and keep Navidrome off the internet.
+
+In Navidrome's `navidrome.toml` (in its data folder):
+
+```toml
+[ExtAuth]
+TrustedSources = "172.24.0.130/32"   # your engine's address (docker network inspect shows it), /32: just that one
+```
+
+or the environment variable `ND_EXTAUTH_TRUSTEDSOURCES`. (Before Navidrome 0.64 the option was `ReverseProxyWhitelist` / `ND_REVERSEPROXYWHITELIST`; it still works but warns.) Do **not** list the whole Docker network: Navidrome's published port arrives from the Docker gateway, which would then be trusted too and anybody on your LAN could send the header. Give the engine a fixed address so an update cannot change it:
 
 ```yaml
-  navidrome:
-    environment:
-      ND_REVERSEPROXYWHITELIST: 172.18.0.0/16   # the Docker network the engine is on; docker network inspect <name> shows it
-    # no "ports:" for the internet: only the engine talks to Navidrome
+  icosahedron:
+    networks:
+      docker_network:
+        ipv4_address: 172.24.0.130
 ```
+
+Restart Navidrome after changing it, and keep it off the internet (no port forward to it, only the engine talks to it).
 
 The engine tries this before it switches on and refuses (`navidrome_does_not_trust_engine`) when Navidrome does not accept it, so you cannot lock yourself out by a missing setting. If you ever are locked out anyway, run on the server `docker compose exec icosahedron node src/devices-cli.mjs secure off`, then `docker compose restart icosahedron`. `node src/devices-cli.mjs invite <user>` prints a one-use code for a user's first device.
 

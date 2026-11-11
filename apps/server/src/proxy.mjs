@@ -15,7 +15,7 @@ export function isProxied(pathname) {
 }
 
 // Navidrome takes the account from this header when the request comes from an address it was told to
-// trust (ND_REVERSEPROXYWHITELIST). A client must never be able to send it: it is always removed, and
+// trust (ExtAuth.TrustedSources). A client must never be able to send it: it is always removed, and
 // set only by the engine after it has checked the device itself (secure sign-in).
 const USER_HEADER = "remote-user";
 const AUTH_PARAMS = ["u", "t", "s", "p", "apiKey"];

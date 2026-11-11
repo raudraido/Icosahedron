@@ -18,6 +18,7 @@ import { TrackInfoDialog } from "./TrackInfoDialog";
 import { BpmMenu } from "./BpmMenu";
 import { EqualizerPopup } from "./EqualizerPopup";
 import { FAVORITE_PINK } from "../lib/theme";
+import { platform } from "../platform";
 
 const LS_SHOW_REMAINING = "footer_show_remaining_time";
 
@@ -124,6 +125,8 @@ export function PlayerBar() {
   const castVolume         = useStore((s) => s.castVolume);
   const setCastVolume      = useStore((s) => s.setCastVolume);
   const [castPicker, setCastPicker] = useState<{ x: number; y: number } | null>(null);
+  // Casting to speakers and TVs is done by the desktop app (it finds the devices on the network); a browser cannot.
+  const noCast = platform.kind !== "electron";
   const [artHov, setArtHov] = useState(false);
   const [expandBtnHov, setExpandBtnHov] = useState(false);
 
@@ -518,7 +521,9 @@ export function PlayerBar() {
             this button's own rect, same pattern as TrackTable's filter icon. */}
         <button
           data-cast-trigger
+          disabled={noCast}
           onClick={(e) => {
+            if (noCast) return;
             if (castPicker) { setCastPicker(null); return; }
             const rect = e.currentTarget.getBoundingClientRect();
             // CastPicker opens upward-and-leftward from this corner — see
@@ -526,10 +531,10 @@ export function PlayerBar() {
             setCastPicker({ x: rect.right, y: rect.top - 4 });
             discoverCastDevices();
           }}
-          title={castConnected ? `Casting to ${castDevice?.name}` : "Cast"}
+          title={noCast ? "Cast: not available in the browser" : castConnected ? `Casting to ${castDevice?.name}` : "Cast"}
           className="flex items-center justify-center shrink-0"
-          style={{ width: 40, height: 40, borderRadius: 20, background: "transparent", border: "none", cursor: "pointer", color: castConnected ? "var(--accent)" : "var(--text-secondary)", ...localOnly }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
+          style={{ width: 40, height: 40, borderRadius: 20, background: "transparent", border: "none", cursor: noCast ? "not-allowed" : "pointer", color: castConnected ? "var(--accent)" : "var(--text-secondary)", ...(noCast ? { opacity: 0.35 } : {}), ...localOnly }}
+          onMouseEnter={(e) => { if (!noCast) e.currentTarget.style.background = "var(--hover-bg)"; }}
           onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
         >
           <Icon src="img/cast.png" size={22} />

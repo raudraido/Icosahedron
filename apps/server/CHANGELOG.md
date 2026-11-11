@@ -7,6 +7,8 @@ The server is the **sync engine and the web app it serves** (one Docker image, `
 Small fixes to the web app. **Update with** `docker compose pull && docker compose up -d`, then reload the page (`Ctrl+Shift+R` if the browser keeps the old one).
 
 - **Settings → System in the browser:** "Minimize to tray" and "Exit to tray" now say "Not available in the browser" instead of showing switches that do nothing (a browser has no system tray). The desktop app is unchanged.
+- **The Cast button in the browser** is dimmed and says "Cast: not available in the browser" when you point at it, instead of opening a picker that can find nothing (a browser cannot find speakers and TVs; the desktop app does).
+- **Settings → System → About → Updates in the browser** no longer says "You're up to date" with a Check Again button (the web app is part of the server and changes when the server is updated); it says "Not available in the browser (updates with the server)".
 
 ## 0.16.4
 

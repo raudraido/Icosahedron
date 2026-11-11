@@ -537,7 +537,8 @@ function SystemTab() {
       <ApplicationSection />
       <Section title="About">
         <Row label="Version" value={version ? `v${version}` : ""} />
-        <UpdateRow />
+        {/* The desktop app checks GitHub for a new version; the web app is part of the server and changes with it. */}
+        {platform.kind === "electron" ? <UpdateRow /> : <Row label="Updates" value="Not available in the browser (updates with the server)" />}
       </Section>
       <Section title="Active Connection">
         <ProfilePictureRow />

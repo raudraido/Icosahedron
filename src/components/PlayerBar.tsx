@@ -17,6 +17,7 @@ import { PromptDialog } from "./PromptDialog";
 import { TrackInfoDialog } from "./TrackInfoDialog";
 import { BpmMenu } from "./BpmMenu";
 import { EqualizerPopup } from "./EqualizerPopup";
+import { SpeedMenu, speedLabel } from "./SpeedMenu";
 import { FAVORITE_PINK } from "../lib/theme";
 import { platform } from "../platform";
 
@@ -77,6 +78,8 @@ export function PlayerBar() {
   const localOnly = remote ? { opacity: 0.35, pointerEvents: "none" as const } : undefined;
   const volumeInactive = remote && view.targetKind === "mobile"; // the phone app has no volume control
   const [remoteWaveUrl, setRemoteWaveUrl] = useState("");
+  // The waveform is drawn from the audio itself: its URL is made fresh (a kept track's own URL may carry an old sign-in).
+  const [localWaveUrl, setLocalWaveUrl] = useState("");
 
   // Remembers the last non-zero volume so unmuting restores the actual
   // previous level instead of always jumping back to a hardcoded 80 —
@@ -137,6 +140,12 @@ export function PlayerBar() {
   const [newPlaylistFor, setNewPlaylistFor] = useState<Track | null>(null);
 
   const track = queue[currentIndex] ?? null;
+  useEffect(() => {
+    let live = true;
+    setLocalWaveUrl("");
+    if (track && !remote) api.streamUrl(track.id).then((u) => { if (live) setLocalWaveUrl(u); }).catch(() => {});
+    return () => { live = false; };
+  }, [track?.id, remote]);
 
   // The other device's track has no stream URL here; the waveform of the same track is decoded from the server.
   useEffect(() => {
@@ -181,6 +190,10 @@ export function PlayerBar() {
   const effectiveBpm = (track ? bpmCache[track.id] : undefined) ?? track?.bpm ?? null;
 
   const [bpmMenu, setBpmMenu] = useState<{ x: number; y: number } | null>(null);
+  const [speedMenu, setSpeedMenu] = useState<{ x: number; y: number } | null>(null);
+  const playbackSpeed = useStore((s) => s.playbackSpeed);
+  // The engine starts at normal speed: hand it the saved one (the browser keeps its own rate per element).
+  useEffect(() => { api.audioSetSpeed(useStore.getState().playbackSpeed).catch(() => {}); }, []);
 
   async function applyBpm(bpm: number) {
     if (!track) return;
@@ -389,7 +402,7 @@ export function PlayerBar() {
                   }}
                   style={{ cursor: effectiveBpm != null ? "pointer" : "default", textUnderlineOffset: 2, textDecorationThickness: 1, textDecorationColor: "var(--accent)" }}
                 >
-                  {effectiveBpm != null ? `${effectiveBpm.toFixed(1)} BPM` : "···BPM"}
+                  {effectiveBpm != null ? `${(effectiveBpm * playbackSpeed).toFixed(1)} BPM` : "···BPM"}
                 </span>
               )}
               {(effectiveBpm != null || bpmLoading) && track?.format && "  ·  "}
@@ -437,9 +450,9 @@ export function PlayerBar() {
           <span className="tabular-nums text-right shrink-0" style={{ minWidth: 56, fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)", color: "var(--accent)" }}>
             {fmtDuration(currentTime)}
           </span>
-          {track && (remote ? remoteWaveUrl : track.stream_url) ? (
+          {track && (remote ? remoteWaveUrl : localWaveUrl) ? (
             <Waveform
-              streamUrl={remote ? remoteWaveUrl : track.stream_url}
+              streamUrl={remote ? remoteWaveUrl : localWaveUrl}
               trackId={track.id}
               duration={duration}
               onSeek={setCurrentTime}
@@ -465,6 +478,21 @@ export function PlayerBar() {
           same 19% proportion as leftBlock, floored higher (260px) since this row's
           icon/slider cluster needs more room than leftBlock's compact art+text ── */}
       <div className="flex items-center shrink-0 justify-end" style={{ width: "max(260px, 19%)", gap: 6 }}>
+        {/* Speed — presets and a slider; local to this device */}
+        <button
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            setSpeedMenu(speedMenu ? null : { x: rect.left + rect.width / 2, y: rect.top });
+          }}
+          title="Playback speed"
+          className="flex items-center justify-center shrink-0"
+          style={{ minWidth: 40, height: 40, padding: "0 6px", borderRadius: 20, background: "transparent", border: "none", cursor: "pointer", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)", color: playbackSpeed === 1 ? "var(--text-secondary)" : "var(--accent)", ...localOnly }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+        >
+          {speedLabel(playbackSpeed)}
+        </button>
+
         {/* Equalizer — opens the 10-band EQ popup anchored above this button */}
         <button
           onMouseDown={() => { eqWasOpenRef.current = eqAnchor !== null; }}
@@ -587,6 +615,7 @@ export function PlayerBar() {
           onCancel={() => setNewPlaylistFor(null)}
         />
       )}
+      {speedMenu && <SpeedMenu x={speedMenu.x} y={speedMenu.y} onClose={() => setSpeedMenu(null)} />}
       {bpmMenu && effectiveBpm != null && (
         <BpmMenu x={bpmMenu.x} y={bpmMenu.y} bpm={effectiveBpm} onApply={applyBpm} onClose={() => setBpmMenu(null)} />
       )}

@@ -49,6 +49,8 @@ export function GlobalHotkeys() {
       if (matchesBinding(e, b.seek_fwd))   { e.preventDefault(); store.setCurrentTime(Math.min(store.duration, store.currentTime + 5)); return; }
       if (matchesBinding(e, b.nav_back))   { e.preventDefault(); store.navBack(); return; }
       if (matchesBinding(e, b.nav_fwd))    { e.preventDefault(); store.navFwd(); return; }
+      if (matchesBinding(e, b.speed_up))   { e.preventDefault(); store.setPlaybackSpeed(store.playbackSpeed + 0.05); return; }
+      if (matchesBinding(e, b.speed_down)) { e.preventDefault(); store.setPlaybackSpeed(store.playbackSpeed - 0.05); return; }
       if (matchesBinding(e, b.vol_up))     { e.preventDefault(); store.setVolume(Math.min(100, store.volume + 5)); return; }
       if (matchesBinding(e, b.vol_down))   { e.preventDefault(); store.setVolume(Math.max(0, store.volume - 5)); return; }
       if (matchesBinding(e, b.mute)) {

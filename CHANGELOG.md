@@ -4,6 +4,10 @@
 
 **Works with server 0.17.x** (Navidrome's own plugin API, through the sync server).
 
+- **Fixed: a Daily Mix (or any list kept from before) added to the queue played nothing and the seekbar stayed empty** after secure sign-in was switched on. A track kept its stream address with the old sign-in in it, which the server then refused. The address is now made again, with the current sign-in, when a track is played, preloaded, analysed for BPM or drawn as a waveform.
+
+- **Playback speed.** A speed button in the footer bar (next to the equalizer) opens presets from 0.5× to 2×, a slider and Reset; **Alt+Up / Alt+Down** change it by 0.05 (rebindable in Settings → Hotkeys). It is kept on each device. In the web app the pitch stays the same; **in the desktop app the pitch changes with the speed** (keeping it needs a time-stretch step that comes later). The BPM in the footer shows the BPM at the current speed, and the lock-screen / media keys know the rate. The speed does not apply to a cast device.
+
 - **Settings → Navidrome plugins** (for a Navidrome administrator): the plugins installed in Navidrome with their version, author and what they may do (internet, your music files, their own storage), **what uses them** (for example AudioMuse-AI is what Instant Mix needs, nd-lyrics is where lyrics can come from), a switch to turn each on and off, and their settings (drawn from the plugin's own description, secrets such as API tokens hidden). A list at the top shows which features need a plugin and whether it is installed and working. **Rescan** finds a plugin copied into Navidrome's plugins folder. Adding a plugin from the app through the sync server is planned.
 
 ## 0.17.0

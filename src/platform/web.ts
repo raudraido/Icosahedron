@@ -170,6 +170,15 @@ class WebAudio {
   }
   seek(s: number) { this.el.currentTime = s; }
   setVolume(v: number) { this.el.volume = v; }
+  /** Speed with the pitch kept. The default rate is set too: loading a new source resets the rate to it. */
+  setSpeed(v: number) {
+    const el = this.el as HTMLAudioElement & { webkitPreservesPitch?: boolean; mozPreservesPitch?: boolean };
+    el.defaultPlaybackRate = v;
+    el.playbackRate = v;
+    el.preservesPitch = true;
+    el.webkitPreservesPitch = true;
+    el.mozPreservesPitch = true;
+  }
 }
 
 export function createWebPlatform(): Platform {
@@ -335,6 +344,7 @@ export function createWebPlatform(): Platform {
     audio_stop: () => audio.stop(),
     audio_seek: ({ seconds }) => audio.seek(seconds),
     audio_set_volume: ({ volume }) => audio.setVolume(volume),
+    audio_set_speed: ({ speed }) => audio.setSpeed(speed),
     audio_set_eq: (a) => audio.setEq(!!a.enabled, Number(a.preampDb) || 0, Array.isArray(a.bandsDb) ? a.bandsDb.map(Number) : []),
     get_bpm: unsupported("get_bpm"),
     set_bpm_override: inert(undefined),

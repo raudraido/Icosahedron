@@ -12,7 +12,7 @@ Meant for people who just installed the server: no command line in the normal pa
 
 ### The engine speaks to Navidrome as the user
 
-Checked against Navidrome 0.64 (a throw-away container, 2026-11-11): when a request comes from an address listed in `ND_REVERSEPROXYWHITELIST`, Navidrome takes the user from the `Remote-User` header.
+Checked against Navidrome 0.64 (a throw-away container, 2026-11-11): when a request comes from an address listed in `ExtAuth.TrustedSources` (called `ReverseProxyWhitelist` before Navidrome 0.64 renamed it; the old name still works but warns), Navidrome takes the user from the `Remote-User` header.
 
 | Call | Result with only `Remote-User: alice` |
 |---|---|
@@ -92,7 +92,7 @@ Sync protocol 3. An old app cannot do the approval; with secure sign-in on it ge
 2. **Desktop and web**: sign-in with approval (waiting screen with the number), approval prompt (in the app and as a system notification on desktop while it runs), Settings → Devices, turn-on flow. Desktop 0.17.0, server follows.
 3. **iOS**: the same (the approval prompt appears when the app is opened; local notification while it runs). iOS 0.2.0.
 4. **Android TV**: Quick Connect enrolment. Android TV 0.3.0.
-5. **Extras**: optional phone notification through ntfy (works with a free Apple ID where Apple push does not), first-run notice, invites with QR, Navidrome compose example with `ND_REVERSEPROXYWHITELIST`.
+5. **Extras**: optional phone notification through ntfy (works with a free Apple ID where Apple push does not), first-run notice, invites with QR, Navidrome example with `ExtAuth.TrustedSources`.
 
 ## Decisions
 

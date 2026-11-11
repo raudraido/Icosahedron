@@ -23,7 +23,7 @@ const KIND_ICON: Record<string, typeof Laptop> = { desktop: Monitor, web: Laptop
 
 const TURN_ON_ERRORS: Record<string, string> = {
   not_admin: "Only a server administrator can switch this on.",
-  navidrome_does_not_trust_engine: "Navidrome does not accept this server yet, so nobody could sign in. Add ND_REVERSEPROXYWHITELIST for the sync server to Navidrome first (docs/deploy-server.md, Secure sign-in).",
+  navidrome_does_not_trust_engine: "Navidrome does not accept this server yet, so nobody could sign in. Add ExtAuth.TrustedSources (ND_EXTAUTH_TRUSTEDSOURCES) with the sync server's address to Navidrome first (docs/deploy-server.md, Secure sign-in).",
   already: "It is already on.",
   offline: "Could not reach the server.",
   error: "Something went wrong.",

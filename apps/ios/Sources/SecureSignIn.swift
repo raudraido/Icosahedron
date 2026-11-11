@@ -149,7 +149,7 @@ enum SecureSignIn {
         switch r.status {
         case 200: return .on(secret: J.str(j ?? [:], "secret") ?? "", recoveryCodes: (j?["recoveryCodes"] as? [String]) ?? [])
         case 403: return .failed("Only a server administrator can switch this on.")
-        case 412: return .failed("Navidrome does not accept the sync server yet, so nobody could sign in. Add ND_REVERSEPROXYWHITELIST for the sync server to Navidrome first (docs/deploy-server.md, Secure sign-in).")
+        case 412: return .failed("Navidrome does not accept the sync server yet, so nobody could sign in. Add ExtAuth.TrustedSources (ND_EXTAUTH_TRUSTEDSOURCES) with the sync server's address to Navidrome first (docs/deploy-server.md, Secure sign-in).")
         case 409: return .failed("It is already on.")
         default: return .failed("Something went wrong.")
         }

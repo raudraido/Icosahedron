@@ -51,7 +51,7 @@ export async function verifyPassword(baseUrl, user, password, fetchImpl = fetch)
 
 /**
  * Whether Navidrome takes the account from the Remote-User header when the engine sends it (it does only
- * for an address in ND_REVERSEPROXYWHITELIST). Secure sign-in depends on it, so it is tried before it is switched on.
+ * for an address in ExtAuth.TrustedSources; before Navidrome 0.64 ReverseProxyWhitelist). Secure sign-in depends on it, so it is tried before it is switched on.
  */
 export async function navidromeTrustsEngine(baseUrl, user, fetchImpl = fetch) {
   const q = new URLSearchParams({ v: API_VERSION, c: "IcosahedronSync", f: "json" });

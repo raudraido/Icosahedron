@@ -1,8 +1,12 @@
 # Changelog
 
+## 0.16.6
+
+- **Drum & bass BPM: fewer false corrections.** A track whose genre tag also holds Hip-Hop, Rap, Trap, Reggae or Dancehall is no longer treated as drum & bass (an album tagged "Rap • Hip-Hop • Electronic • Drum & Bass" got 190 BPM for a 95 BPM hip-hop track), and the corrected tempo must now be 160 to 185. A wrong BPM already stored for such a track is corrected by hand in the footer BPM menu.
+
 ## 0.16.5
 
-- **Drum & bass BPM.** The tempo tracker found half (about 87) or two thirds (about 116) of the real tempo of drum & bass tracks. When the track's genre says drum & bass (Drum & Bass, DnB, Liquid Funk, Neurofunk, Jungle, Jump Up, Techstep, Darkstep), a BPM of 75 to 100 is now doubled and one of 105 to 127 is multiplied by 1.5, as long as the result is 160 to 190 (87 becomes 174, 116 becomes 174). Other genres are not touched. Tracks whose BPM was already stored keep their old value; it can be corrected by hand in the footer BPM menu.
+- **Drum & bass BPM.** The tempo tracker found half (about 87) or two thirds (about 116) of the real tempo of drum & bass tracks. When the track's genre says drum & bass (Drum & Bass, DnB, Liquid Funk, Neurofunk, Jungle, Jump Up, Techstep, Darkstep), a BPM of 75 to 100 is now doubled and one of 105 to 127 is multiplied by 1.5, as long as the result is 160 to 190 (later narrowed to 185) (87 becomes 174, 116 becomes 174). Other genres are not touched. Tracks whose BPM was already stored keep their old value; it can be corrected by hand in the footer BPM menu.
 
 ## 0.16.4
 

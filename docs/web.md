@@ -17,7 +17,7 @@ In the web app **one click plays** a song in every song list (the queue, a playl
 - **Selecting several songs:** a tick box shows in front of the row when you point at it. Once one is ticked, every row shows its box and a bar replaces the column headings: *N selected*, **Play**, **Play Next**, **Add to Queue**, **Add to Playlist**, **Clear selection**; its box ticks or clears all. `Esc` clears the selection. `Shift` + click on a box ticks a range; `Ctrl` / `Cmd` / `Shift` + click on the row selects it without playing. With several rows ticked, the right-click menu acts on all of them.
 - **Dragging** a row (the queue, and a playlist in its own order) still reorders it; the click that ends a drag does not play.
 - The hearts, artist and album links and the boxes in a row do their own thing and do not start playback.
-- The desktop app still plays on a double-click for now.
+- The desktop app plays the same way (one click, tick boxes, Shift/Ctrl selection).
 
 ## Limits
 

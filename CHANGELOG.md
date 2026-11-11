@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.16.4
+
+**Update the server first** (0.16.8), then this app.
+
+- **One click plays a song** in the queue, playlists, albums and the artist's popular songs, instead of a double-click. Tick boxes appear when you hover a row; Shift + click ticks a range, Ctrl/Cmd + click adds one, and a bar above the list plays, queues or adds the ticked songs to a playlist. Same as the web app.
+- **On Tour in artist info works again.** Bandsintown no longer gives concert lists to apps like this one (it hands out keys only to approved companies and per artist), so the dates now come from Ticketmaster. Only the artist's own concerts are listed, not tribute acts. Artists Ticketmaster has no dates for show nothing.
+
 ## 0.16.3
 
 **Update the server first** (0.16.3), then this app.

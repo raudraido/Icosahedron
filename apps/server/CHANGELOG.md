@@ -2,6 +2,13 @@
 
 The server is the **sync engine and the web app it serves** (one Docker image, `ghcr.io/raudraido/icosahedron-server`). Versions before 0.16.0 shared one number with the other apps (0.15.3 to 0.15.9); the full text of those releases is in the [main changelog](../../CHANGELOG.md). What each version needs and gives: [docs/compatibility.md](../../docs/compatibility.md).
 
+## 0.17.0
+
+**Groundwork for secure sign-in, off by default.** Nothing changes for you or your apps until an administrator switches it on, and no app can do that yet (the apps follow in their own versions). What is in: trusted devices with their own secrets, sign-in approval with a number to match, recovery codes, invites, app passwords, a sign-in history, rate limits, and Quick Connect that gives a TV a sign-in of its own. With it on, the engine checks the device itself and asks Navidrome as that account through its trusted header, so Navidrome can stay off the internet and no password is needed to reach it. The plan: [docs/secure-sign-in.md](../../docs/secure-sign-in.md); what Navidrome needs: [docs/deploy-server.md](../../docs/deploy-server.md#secure-sign-in-optional).
+
+- The engine always removes a `Remote-User` header a client sends.
+- `GET /config.json` has `secure`. New `/device/*` endpoints, sync messages `approval` and `approval_done`, and `node src/devices-cli.mjs` (`invite <user>`, `secure on|off`).
+
 ## 0.16.9
 
 - **Share links made in the web app work.** A link made from the browser carries the engine's address (`https://your-server/share/…`), and the engine passed it to the web app's own page instead of Navidrome's share page, so whoever opened it saw a sign-in. The engine now hands `/share/` (the page, its files, the stream and the cover) to Navidrome; no sign-in is needed, as for any share link. Links made earlier with that address start working too.

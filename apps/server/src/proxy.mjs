@@ -14,11 +14,24 @@ export function isProxied(pathname) {
   return PROXY_PREFIXES.some((p) => pathname.startsWith(p));
 }
 
-export function proxyToNavidrome(baseUrl, req, res) {
+// Navidrome takes the account from this header when the request comes from an address it was told to
+// trust (ND_REVERSEPROXYWHITELIST). A client must never be able to send it: it is always removed, and
+// set only by the engine after it has checked the device itself (secure sign-in).
+const USER_HEADER = "remote-user";
+const AUTH_PARAMS = ["u", "t", "s", "p", "apiKey"];
+
+/** @param {{user?: string|null}} [opts]  user: the account the engine has verified; forwarded as the trusted header */
+export function proxyToNavidrome(baseUrl, req, res, opts = {}) {
   const target = new URL(req.url, baseUrl);
+  if (opts.user) for (const k of AUTH_PARAMS) target.searchParams.delete(k);
   const base = new URL(baseUrl);
   const headers = {};
   for (const [k, v] of Object.entries(req.headers)) if (!DROP_REQ.has(k)) headers[k] = v;
+  delete headers[USER_HEADER];
+  if (opts.user) {
+    headers[USER_HEADER] = opts.user;
+    if (/^Subsonic\s/i.test(String(headers.authorization ?? ""))) delete headers.authorization;
+  }
   headers.host = base.host;
   const doRequest = base.protocol === "https:" ? httpsRequest : httpRequest;
   const up = doRequest(

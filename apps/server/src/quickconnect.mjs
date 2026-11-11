@@ -86,19 +86,22 @@ export function createQuickConnect({ enabled = false, locked = false, onChange, 
       if (r.authenticated) return "already";
       r.authenticated = true;
       r.dateAdded = now() + 60_000; // stays for another minute so the device certainly sees it (as Jellyfin does)
-      authorized.set(r.secret, { at: now(), auth: { u: auth.u, t: auth.t, s: auth.s } });
+      authorized.set(r.secret, { at: now(), auth: { u: auth.u, t: auth.t, s: auth.s }, device: r.device });
       return "ok";
     },
 
-    /** The device claims its sign-in once; null when nothing was authorized for the secret. */
-    claim(secret) {
+    /** The device claims its sign-in once: {auth, device}; null when nothing was authorized for the secret. */
+    claimFull(secret) {
       if (!on) return null;
       expire();
       const a = authorized.get(secret);
       if (!a) return null;
       authorized.delete(secret);
       for (const [code, r] of requests) if (r.secret === secret) requests.delete(code);
-      return a.auth;
+      return { auth: a.auth, device: a.device };
     },
+
+    /** The same, only the sign-in. */
+    claim(secret) { return this.claimFull(secret)?.auth ?? null; },
   };
 }

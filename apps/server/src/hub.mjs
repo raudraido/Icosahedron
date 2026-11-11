@@ -106,6 +106,11 @@ export class Hub {
   }
 
   /** Register a device. Returns an object to feed messages / disconnect into. */
+  /** Sends one message to every connected device of a user. */
+  notify(user, msg) {
+    for (const { conn } of this.users.get(user)?.values() ?? []) conn.send(msg);
+  }
+
   join(user, info, conn) {
     const deviceId = String(info.deviceId || "").slice(0, 64);
     if (!deviceId) throw new Error("deviceId required");

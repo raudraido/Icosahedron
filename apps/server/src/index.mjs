@@ -1,4 +1,6 @@
-import { createApp } from "./server.mjs";
+import { createApp, createSecureSwitch } from "./server.mjs";
+import { createDevices } from "./devices.mjs";
+import { createInvites } from "./invites.mjs";
 import { fileStore } from "./store.mjs";
 import { createAvatarStore } from "./avatar.mjs";
 import { createBpmStore } from "./bpm.mjs";
@@ -15,8 +17,12 @@ const webDir = resolve(process.env.WEB_ROOT ?? "web");
 const settings = fileSettings(process.env.DATA_DIR ?? "/data");
 const qcFlag = String(process.env.QUICK_CONNECT ?? "").trim().toLowerCase();
 const qcEnv = ["1", "true", "yes"].includes(qcFlag) ? true : ["0", "false", "no"].includes(qcFlag) ? false : null;
+const dataDir = process.env.DATA_DIR ?? "/data";
 const app = createApp({
   navidromeUrl,
+  secureSwitch: createSecureSwitch({ enabled: settings.get("secureSignIn") === true, onChange: (on) => settings.set("secureSignIn", on) }),
+  devices: createDevices({ dir: dataDir }),
+  invites: createInvites({ dir: dataDir }),
   webRoot: existsSync(webDir) ? webDir : undefined,
   store: fileStore(process.env.DATA_DIR ?? "/data"),
   avatars: createAvatarStore(process.env.DATA_DIR ?? "/data"),

@@ -43,6 +43,8 @@ Close codes: `4001` no hello in time, `4002` first message was not `hello`, `400
 | `{type:"settings", from, settings}` | Another device changed the shared settings |
 | `{type:"registry", devices}` | The registered players, see below. Sent after `welcome` and whenever a player joins, leaves, is renamed or forgotten |
 | `{type:"renamed", name}` | This player was renamed |
+| `{type:"approval", request}` | Secure sign-in on: a new device asks to be let in. `request` = `{id, device:{name,kind,app,version}, address, at, expiresAt, choices:[3 numbers]}`; answer with `POST /device/decide` (see [secure-sign-in.md](secure-sign-in.md)) |
+| `{type:"approval_done", id}` | That request was answered (approved, denied or wrong number); remove the prompt |
 | `{type:"cleared", state, settings}` | Someone wiped the stored playback state and/or settings |
 | `{type:"error", message}` | A request was refused |
 
@@ -121,8 +123,10 @@ All need the `Authorization` header unless noted.
 | Method and path | Purpose |
 |---|---|
 | `GET /healthz` | Liveness, `ok` (no auth) |
-| `GET /config.json` | Tells the web app where Navidrome is (no auth) |
-| `/rest/*`, `/api/*`, `/auth/*` | Same-origin proxy to Navidrome (Range requests supported). Navidrome does its own authentication |
+| `GET /config.json` | Tells the web app where Navidrome is, and `secure` (secure sign-in on) (no auth) |
+| `/device/*` | Secure sign-in: asking to be let in, approving, trusted devices, recovery. See [secure-sign-in.md](secure-sign-in.md#api) |
+| `/rest/*`, `/api/*`, `/auth/*` | Same-origin proxy to Navidrome (Range requests supported). Navidrome does its own authentication; with secure sign-in on the engine checks the device instead and `/auth/*` is closed |
+| `/share/*` | Same-origin proxy to Navidrome's public share pages (no auth) |
 | `GET /bpm` | `{ "<trackId>": bpm, … }` — all known BPM values |
 | `GET /bpm/<id>` | `{ "bpm": n }` or 404 |
 | `PUT /bpm/<id>` | Body `{bpm, manual?}`; 20 ≤ bpm ≤ 400. A `manual` value is not overwritten by a detected one (422) |

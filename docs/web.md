@@ -10,6 +10,15 @@ Needs HTTPS. In Chrome / Edge use the install icon in the address bar; in Safari
 
 Playback, library browsing, playlists, favorites, lyrics, Last.fm (through the engine), the device list and remote control, shared preferences, BPM (from the engine's store), media keys and Media Session (notification / lock-screen controls), and an **equalizer** (WebAudio, same 10 bands as the desktop).
 
+## Playing and selecting songs
+
+In the web app **one click plays** a song in every song list (the queue, a playlist, an album, Tracks, Favorites, the artist's popular songs). A song played from a list is put right after the one that plays now (the queue is not replaced); in the queue a click jumps to that song.
+
+- **Selecting several songs:** a tick box shows in front of the row when you point at it. Once one is ticked, every row shows its box and a bar replaces the column headings: *N selected*, **Play**, **Play Next**, **Add to Queue**, **Add to Playlist**, **Clear selection**; its box ticks or clears all. `Esc` clears the selection. `Shift` + click on a box ticks a range; `Ctrl` / `Cmd` / `Shift` + click on the row selects it without playing. With several rows ticked, the right-click menu acts on all of them.
+- **Dragging** a row (the queue, and a playlist in its own order) still reorders it; the click that ends a drag does not play.
+- The hearts, artist and album links and the boxes in a row do their own thing and do not start playback.
+- The desktop app still plays on a double-click for now.
+
 ## Limits
 
 - **No gapless** between tracks: one persistent `<audio>` element.

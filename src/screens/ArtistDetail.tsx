@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { CLICK_TO_PLAY } from "../lib/clickToPlay";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, Album, Track, fmtDuration } from "../lib/api";
 import { CoverArt } from "../components/CoverArt";
@@ -166,7 +167,8 @@ function PopularTrackRow({ track, index, onPlay, onOpenAlbum, onContextMenu }: {
   const [albumHov, setAlbumHov] = useState(false);
   return (
     <div
-      onDoubleClick={onPlay}
+      onClick={CLICK_TO_PLAY ? (e) => { if (!(e.target as HTMLElement).closest("button, a, input")) onPlay(); } : undefined}
+      onDoubleClick={CLICK_TO_PLAY ? undefined : onPlay}
       onContextMenu={onContextMenu}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}

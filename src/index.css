@@ -119,6 +119,12 @@ html, body, #root {
 .track-num-plain { transition: opacity 120ms; }
 .reorder-row:hover .track-num-grip { opacity: 1; }
 .reorder-row:hover .track-num-plain { opacity: 0; }
+/* One-click-to-play track lists (TrackTable.tsx): the tick box shows on hover and, once a row is ticked, on every
+ * row; the cover shows a play icon on hover. */
+.row-check { opacity: 0; transition: opacity 120ms; }
+.click-row:hover .row-check, .select-mode .row-check, .row-check.is-on, .num-head:hover .row-check { opacity: 1; }
+.cover-play { opacity: 0; transition: opacity 120ms; }
+.click-row:hover .cover-play { opacity: 1; }
 /* Cursor on hover is set imperatively in TrackTable.tsx's onMouseEnter/Leave
  * instead of here — an inline style (the row already sets cursor:"pointer")
  * always beats a CSS rule's specificity, so a .reorder-row:hover rule here

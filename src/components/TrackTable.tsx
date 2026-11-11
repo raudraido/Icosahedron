@@ -20,6 +20,7 @@ import { FAVORITE_PINK } from "../lib/theme";
 import { GripDots, InsertionIndicator, GhostRow } from "./QueuePanel";
 import { ScrollThumb } from "./ScrollThumb";
 import { useSync, syncActions } from "../lib/sync";
+import { CLICK_TO_PLAY } from "../lib/clickToPlay";
 
 // Fixed track-row height — used both by react-virtual's estimateSize and by
 // the reorder drag math below (Math.floor(relY / TRACK_ROW_HEIGHT)). Only
@@ -48,7 +49,11 @@ interface ColumnDef {
 
 // Leading row-position column — always present, first, fixed width, non-reorderable,
 // non-sortable, non-toggleable, non-resizable. Change the width here.
-const NUM_COL_WIDTH = 20;
+// One click plays a row (the web app first; the desktop app keeps double-click until the web version is tested).
+// Selecting several rows then happens with a checkbox in front of the row instead of a plain click, so the number
+// column is wider: [checkbox][number].
+const NUM_COL_WIDTH = CLICK_TO_PLAY ? 44 : 20;
+const CHECK_SLOT = 20;
 // Fine-tune the "#" cell's centered content left/right without moving the
 // following column: shift the box itself by this many px (positive = left)
 // via equal-and-opposite margins, so the net space it occupies is unchanged.
@@ -253,6 +258,51 @@ function HoverToken({ text, clickable, onClick, onHover, className }: {
 
 // ── Favorite toggle ──────────────────────────────────────────────────────
 
+/** The tick box in front of a row (and in the header, for all rows): shown on hover, and for every row once one is ticked. */
+function RowCheck({ checked, partial, on, onToggle, title }: {
+  checked: boolean; partial?: boolean; on?: boolean; onToggle: (e: React.MouseEvent) => void; title?: string;
+}) {
+  const filled = checked || partial;
+  return (
+    <span
+      role="checkbox"
+      aria-checked={partial ? "mixed" : checked}
+      title={title}
+      data-no-row-click
+      className={filled || on ? "row-check is-on" : "row-check"}
+      onClick={(e) => { e.stopPropagation(); onToggle(e); }}
+      onMouseDown={(e) => e.stopPropagation()} // not the start of a drag
+      style={{
+        width: 16, height: 16, borderRadius: 4, flexShrink: 0, cursor: "pointer", boxSizing: "border-box",
+        border: `1.5px solid ${filled ? "var(--accent)" : "var(--text-secondary)"}`, background: filled ? "var(--accent)" : "transparent",
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+      }}
+    >
+      {checked ? (
+        <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 6.5l2.5 2.5 4.5-5" /></svg>
+      ) : partial ? (
+        <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round"><path d="M3 6h6" /></svg>
+      ) : null}
+    </span>
+  );
+}
+
+function BulkBtn({ label, onClick }: { label: string; onClick: (e: React.MouseEvent<HTMLButtonElement>) => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "4px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "transparent", cursor: "pointer",
+        color: "var(--text-primary)", fontSize: "var(--fs-small)", whiteSpace: "nowrap",
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
+      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+    >
+      {label}
+    </button>
+  );
+}
+
 function FavoriteHeart({ track }: { track: Track }) {
   const [starred, setStarred] = useState(track.starred);
   const [hov, setHov] = useState(false);
@@ -398,6 +448,7 @@ export function TrackTable({
   const addTrackNext = useStore((s) => s.addTrackNext);
   const openShareDialog = useStore((s) => s.openShareDialog);
   const addTrackToQueue = useStore((s) => s.addTrackToQueue);
+  const appendToQueue = useStore((s) => s.appendToQueue);
   const startRadio = useStore((s) => s.startRadio);
   const currentId = useStore((s) => s.queue[s.currentIndex]?.id);
   const playing = useStore((s) => s.playing);
@@ -405,7 +456,8 @@ export function TrackTable({
 
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; track: Track } | null>(null);
   const [infoTrack, setInfoTrack] = useState<Track | null>(null);
-  const [newPlaylistFor, setNewPlaylistFor] = useState<Track | null>(null);
+  const [newPlaylistFor, setNewPlaylistFor] = useState<Track[] | null>(null);
+  const [bulkMenu, setBulkMenu] = useState<{ x: number; y: number } | null>(null);
   const [filterPopup, setFilterPopup] = useState<{ col: string; x: number; y: number } | null>(null);
   const { data: playlists = [] } = useQuery({ queryKey: ["playlists"], queryFn: api.getPlaylists });
 
@@ -635,6 +687,9 @@ export function TrackTable({
   // Queue panel's own drag-reorder.
   const reorderActive = reorderable && !showDiscHeaders && !sortState && !query.trim();
   const dropIndexRef = useRef<number | null>(null);
+  // True while a row is really being dragged (not just clicked with a shaky hand): the click that follows a drop
+  // must not also start playing the row.
+  const dragMovedRef = useRef(false);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
   const [ghostY, setGhostY] = useState<number | null>(null);
@@ -650,8 +705,10 @@ export function TrackTable({
       setDragId(trackId);
       dropIndexRef.current = null;
       document.body.style.userSelect = "none";
+      const startX = e.clientX, startY = e.clientY;
 
       function onMove(ev: MouseEvent) {
+        if (!dragMovedRef.current && Math.hypot(ev.clientX - startX, ev.clientY - startY) > 4) dragMovedRef.current = true;
         const listEl = parentRef.current;
         if (!listEl) return;
         const listRect = listEl.getBoundingClientRect();
@@ -668,6 +725,8 @@ export function TrackTable({
         window.removeEventListener("mousemove", onMove);
         window.removeEventListener("mouseup", onUp);
         document.body.style.userSelect = "";
+        // The click that ends a drag arrives right after this; forget the drag only once it has passed.
+        setTimeout(() => { dragMovedRef.current = false; }, 0);
         if (dropIndexRef.current !== null) onReorder?.(trackId, dropIndexRef.current);
         setDragId(null);
         setDropIndex(null);
@@ -1059,17 +1118,17 @@ export function TrackTable({
     } catch { /* best-effort — row will just show the stale state until next fetch */ }
   }
 
-  async function addToExistingPlaylist(playlistId: string, track: Track) {
-    await api.addTracksToPlaylist(playlistId, [track.id]);
+  async function addToExistingPlaylist(playlistId: string, tracks: Track[]) {
+    await api.addTracksToPlaylist(playlistId, tracks.map((t) => t.id));
     qc.invalidateQueries({ queryKey: ["playlists"] });
   }
 
   async function createPlaylistAndAdd(name: string) {
-    const track = newPlaylistFor;
+    const tracks = newPlaylistFor;
     setNewPlaylistFor(null);
-    if (!track) return;
+    if (!tracks?.length) return;
     const playlist = await api.createPlaylist(name);
-    await api.addTracksToPlaylist(playlist.id, [track.id]);
+    await api.addTracksToPlaylist(playlist.id, tracks.map((t) => t.id));
     qc.invalidateQueries({ queryKey: ["playlists"] });
   }
 
@@ -1111,21 +1170,24 @@ export function TrackTable({
 
   function buildTrackMenu(track: Track): MenuEntry[] {
     const filterByItems = buildFilterByItems(track);
+    // With several rows ticked, the queue and playlist entries act on all of them.
+    const many = CLICK_TO_PLAY && selected.size > 1 && selected.has(track.id) ? sorted.filter((t) => selected.has(t.id)) : null;
+    const group = many ?? [track];
     return [
-      { label: "Play Now", icon: "img/sub_play.png", onClick: () => playTrack(track, [track]) },
-      { label: "Play Next", icon: "img/sub_next.png", onClick: () => addTrackNext(track) },
-      { label: "Add to Queue", icon: "img/queue.png", onClick: () => addTrackToQueue(track) },
+      { label: many ? `Play ${many.length} Songs` : "Play Now", icon: "img/sub_play.png", onClick: () => (many ? playTrack(many[0], many) : playTrack(track, [track])) },
+      { label: "Play Next", icon: "img/sub_next.png", onClick: () => playNextGroup(group) },
+      { label: "Add to Queue", icon: "img/queue.png", onClick: () => (many ? appendToQueue(many) : addTrackToQueue(track)) },
       ...jukeboxMenu(track),
       { label: "Go to Artist", icon: "img/sub_artist.png", disabled: !track.artist_id, onClick: () => track.artist_id && navigateTo({ tab: "artists", artistId: track.artist_id }) },
       { label: "Start Radio", icon: "img/radio.png", onClick: () => startRadio(track) },
       {
         label: "Add to Playlist", icon: "img/playlist.png",
         submenu: [
-          { label: "New Playlist…", icon: "img/add.png", onClick: () => setNewPlaylistFor(track) },
+          { label: "New Playlist…", icon: "img/add.png", onClick: () => setNewPlaylistFor(group) },
           ...playlists.map((p) => ({
             label: `${p.name}  (${p.song_count})`,
             icon: "img/playlist.png",
-            onClick: () => addToExistingPlaylist(p.id, track),
+            onClick: () => addToExistingPlaylist(p.id, group),
           })),
         ],
       },
@@ -1142,7 +1204,42 @@ export function TrackTable({
     ];
   }
 
+  // ── One click plays; rows are ticked with their checkbox ─────────────────────────────────────────
+  const selectMode = CLICK_TO_PLAY && selected.size > 0;
+  const allSelected = sorted.length > 0 && sorted.every((t) => selected.has(t.id));
+
+  /** Inserts the tracks after the current one, in their own order. */
+  function playNextGroup(tracks: Track[]) {
+    for (const t of [...tracks].reverse()) addTrackNext(t);
+  }
+
+  function handleRowClickPlay(e: React.MouseEvent, track: Track, index: number) {
+    if (dragMovedRef.current) return; // the end of a drag, not a click
+    if ((e.target as HTMLElement).closest("button, a, input, [data-no-row-click]")) return; // heart, links, checkbox
+    if (e.shiftKey || e.ctrlKey || e.metaKey) { handleRowClick(e, track, index); return; } // select, as before
+    insertAfterCurrentAndPlay(track);
+  }
+
+  function toggleSelected(e: React.MouseEvent, track: Track, index: number) {
+    if (e.shiftKey && lastClickedIndex !== null) {
+      const [from, to] = [Math.min(lastClickedIndex, index), Math.max(lastClickedIndex, index)];
+      setSelected((prev) => new Set([...prev, ...sorted.slice(from, to + 1).map((t) => t.id)]));
+    } else {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.has(track.id) ? next.delete(track.id) : next.add(track.id);
+        return next;
+      });
+    }
+    setLastClickedIndex(index);
+  }
+
+  function toggleAll() {
+    setSelected(allSelected ? new Set() : new Set(sorted.map((t) => t.id)));
+  }
+
   function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Escape" && selected.size > 0) { setSelected(new Set()); return; }
     if (e.key !== "Enter" || selected.size === 0) return;
     const selectedTracks = sorted.filter((t) => selected.has(t.id));
     if (selectedTracks.length > 1) {
@@ -1167,7 +1264,14 @@ export function TrackTable({
       case "track":
         return (
           <div className="flex items-center min-w-0" style={{ gap: 12, flex: 1 }}>
-            <CoverArt coverId={t.cover_id} size={52} className="shrink-0 w-[52px] h-[52px] rounded-[3px]" />
+            <div style={{ position: "relative", width: 52, height: 52, flexShrink: 0 }}>
+              <CoverArt coverId={t.cover_id} size={52} className="shrink-0 w-[52px] h-[52px] rounded-[3px]" />
+              {CLICK_TO_PLAY && (
+                <div className="cover-play" aria-hidden style={{ position: "absolute", inset: 0, borderRadius: 3, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z" /></svg>
+                </div>
+              )}
+            </div>
             <div className="min-w-0 flex-1">
               <p className="truncate" style={{ color: isPlaying ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)" }}>{t.title}</p>
               <ArtistTokens name={t.artist} artistId={t.artist_id} fontSize="var(--fs-secondary)" />
@@ -1382,9 +1486,36 @@ export function TrackTable({
           further outside the visible table each time (reported as columns
           "pushed outside the view" with runaway gaps between them). */}
       <div ref={headerRowRef} className="flex items-center shrink-0" style={{ position: "relative", height: 36, padding: "0 24px", gap: 0, minWidth: 0, overflow: "hidden" }}>
-        <div style={{ flex: `0 0 ${NUM_COL_WIDTH}px`, marginLeft: -NUM_COL_SHIFT, marginRight: NUM_COL_SHIFT, display: "flex", justifyContent: "center" }}>
-          <span style={{ fontSize: "var(--fs-small)", fontWeight: "var(--fw-emphasis)", letterSpacing: 0.8, color: "var(--text-secondary)" }}>#</span>
-        </div>
+        {CLICK_TO_PLAY ? (
+          <div className="num-head" style={{ flex: `0 0 ${NUM_COL_WIDTH}px`, marginLeft: -NUM_COL_SHIFT, marginRight: NUM_COL_SHIFT, display: "flex", alignItems: "center", height: "100%" }}>
+            <div style={{ width: CHECK_SLOT, display: "flex", justifyContent: "center" }}>
+              <RowCheck checked={allSelected} partial={selected.size > 0 && !allSelected} onToggle={toggleAll} title={allSelected ? "Deselect all" : "Select all"} />
+            </div>
+            <div style={{ flex: 1, display: "flex", justifyContent: "center" }}>
+              <span style={{ fontSize: "var(--fs-small)", fontWeight: "var(--fw-emphasis)", letterSpacing: 0.8, color: "var(--text-secondary)" }}>#</span>
+            </div>
+          </div>
+        ) : (
+          <div style={{ flex: `0 0 ${NUM_COL_WIDTH}px`, marginLeft: -NUM_COL_SHIFT, marginRight: NUM_COL_SHIFT, display: "flex", justifyContent: "center" }}>
+            <span style={{ fontSize: "var(--fs-small)", fontWeight: "var(--fw-emphasis)", letterSpacing: 0.8, color: "var(--text-secondary)" }}>#</span>
+          </div>
+        )}
+        {selectMode && (
+          <div style={{ position: "absolute", inset: 0, zIndex: 5, display: "flex", alignItems: "center", gap: 8, padding: "0 24px", background: "var(--main-bg)" }}>
+            <div style={{ width: CHECK_SLOT, marginLeft: -NUM_COL_SHIFT, display: "flex", justifyContent: "center" }}>
+              <RowCheck checked={allSelected} partial={!allSelected} on onToggle={toggleAll} title={allSelected ? "Deselect all" : "Select all"} />
+            </div>
+            <span style={{ fontWeight: "var(--fw-emphasis)", fontSize: "var(--fs-secondary)", color: "var(--accent)", marginLeft: 6 }}>
+              {selected.size} selected
+            </span>
+            <div style={{ flex: 1 }} />
+            <BulkBtn label="Play" onClick={() => { const t = sorted.filter((x) => selected.has(x.id)); if (t.length) playTrack(t[0], t); }} />
+            <BulkBtn label="Play Next" onClick={() => playNextGroup(sorted.filter((x) => selected.has(x.id)))} />
+            <BulkBtn label="Add to Queue" onClick={() => appendToQueue(sorted.filter((x) => selected.has(x.id)))} />
+            <BulkBtn label="Add to Playlist" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setBulkMenu({ x: r.left, y: r.bottom + 4 }); }} />
+            <BulkBtn label="Clear selection" onClick={() => setSelected(new Set())} />
+          </div>
+        )}
         {visibleCols.map((id) => {
           const col = COLUMNS[id];
           return (
@@ -1499,7 +1630,7 @@ export function TrackTable({
 
       {/* Rows */}
       <div className="flex-1" style={{ position: "relative", minHeight: 0 }}>
-      <div ref={parentRef} className="scroll-clean" tabIndex={0} onKeyDown={handleKeyDown} style={{ height: "100%", borderTop: "1px solid var(--border)", position: "relative" }}>
+      <div ref={parentRef} className={selectMode ? "scroll-clean select-mode" : "scroll-clean"} tabIndex={0} onKeyDown={handleKeyDown} style={{ height: "100%", borderTop: "1px solid var(--border)", position: "relative" }}>
         {loading && displayRows.length === 0 && Array.from({ length: 12 }, (_, i) => (
           <SkeletonTrackRow
             key={i}
@@ -1541,8 +1672,8 @@ export function TrackTable({
                 key={t.id}
                 data-index={row.index}
                 ref={virtualizer.measureElement}
-                onClick={(e) => handleRowClick(e, t, trackIndex)}
-                onDoubleClick={() => handleRowDoubleClick(t)}
+                onClick={(e) => (CLICK_TO_PLAY ? handleRowClickPlay(e, t, trackIndex) : handleRowClick(e, t, trackIndex))}
+                onDoubleClick={CLICK_TO_PLAY ? undefined : () => handleRowDoubleClick(t)}
                 onContextMenu={(e) => handleRowContextMenu(e, t)}
                 // The grip icon (.track-num-grip below) only appears on
                 // hover via CSS, but once it's showing, the whole row is a
@@ -1553,7 +1684,7 @@ export function TrackTable({
                 // handleGripMouseDown above), so it doesn't trigger a
                 // reorder.
                 onMouseDown={reorderActive ? handleGripMouseDown(t.id) : undefined}
-                className={reorderActive ? "reorder-row" : undefined}
+                className={[reorderActive ? "reorder-row" : "", CLICK_TO_PLAY ? "click-row" : ""].filter(Boolean).join(" ") || undefined}
                 style={{
                   position: "absolute", top: row.start - rowTopOffset, left: 0, right: 0, height: 58,
                   // gap: 0 — must match the header row's own gap (see its
@@ -1597,6 +1728,12 @@ export function TrackTable({
                 <div
                   style={{ flex: `0 0 ${NUM_COL_WIDTH}px`, marginLeft: -NUM_COL_SHIFT, marginRight: NUM_COL_SHIFT, position: "relative", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}
                 >
+                  {CLICK_TO_PLAY && (
+                    <div style={{ flex: `0 0 ${CHECK_SLOT}px`, display: "flex", justifyContent: "center" }}>
+                      <RowCheck checked={isSelected} onToggle={(e) => toggleSelected(e, t, trackIndex)} />
+                    </div>
+                  )}
+                  <div style={{ position: "relative", flex: CLICK_TO_PLAY ? 1 : undefined, height: "100%", width: CLICK_TO_PLAY ? undefined : "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   {reorderActive && (
                     <div className="track-num-grip" style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <GripDots />
@@ -1608,6 +1745,7 @@ export function TrackTable({
                         {numColSource === "position" ? numColOffset + trackIndex + 1 : (t.track_number || "")}
                       </span>
                     )}
+                  </div>
                   </div>
                 </div>
                 {visibleCols.map((id) => (
@@ -1661,6 +1799,21 @@ export function TrackTable({
       )}
     </div>
 
+    {bulkMenu && (
+      <ContextMenu
+        x={bulkMenu.x}
+        y={bulkMenu.y}
+        items={[
+          { label: "New Playlist…", icon: "img/add.png", onClick: () => setNewPlaylistFor(sorted.filter((t) => selected.has(t.id))) },
+          ...playlists.map((p) => ({
+            label: `${p.name}  (${p.song_count})`,
+            icon: "img/playlist.png",
+            onClick: () => addToExistingPlaylist(p.id, sorted.filter((t) => selected.has(t.id))),
+          })),
+        ]}
+        onClose={() => setBulkMenu(null)}
+      />
+    )}
     {ctxMenu && (
       <ContextMenu
         x={ctxMenu.x}

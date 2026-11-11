@@ -68,68 +68,6 @@ struct HomeView: View {
     }
 }
 
-struct AlbumsGrid: View {
-    @Environment(AppModel.self) private var app
-    let type: String
-
-    init(type: String = "alphabeticalByName") { self.type = type }
-
-    @State private var albums: [Album] = []
-    @State private var done = false
-    @State private var loading = false
-    private let pageSize = 60
-    private let columns = [GridItem(.adaptive(minimum: 150), spacing: 14, alignment: .top)]
-
-    var body: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 18) {
-                ForEach(albums) { a in
-                    NavigationLink(value: a) { AlbumCard(album: a, width: 160) }
-                        .buttonStyle(.plain)
-                        .onAppear { if a.id == albums.last?.id { Task { await loadMore() } } }
-                }
-            }
-            .padding(.horizontal)
-            if loading { ProgressView().padding() }
-        }
-        .task { if albums.isEmpty { await loadMore() } }
-    }
-
-    private func loadMore() async {
-        guard !loading, !done, let c = app.client else { return }
-        loading = true
-        if let page = try? await c.albums(type: type, size: pageSize, offset: albums.count) {
-            // "random" hands out a fresh draw every time, so a page can repeat an album already shown.
-            let seen = Set(albums.map(\.id))
-            albums += page.filter { !seen.contains($0.id) }
-            if page.count < pageSize { done = true }
-        }
-        loading = false
-    }
-}
-
-struct ArtistsList: View {
-    @Environment(AppModel.self) private var app
-    @State private var artists: [Artist] = []
-
-    var body: some View {
-        List(artists) { a in
-            NavigationLink(value: a) {
-                HStack(spacing: 12) {
-                    CoverImage(id: a.coverArt, size: 100)
-                        .frame(width: 44, height: 44).clipShape(Circle())
-                    VStack(alignment: .leading) {
-                        Text(a.name)
-                        Text("\(a.albumCount) albums").font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-            }
-        }
-        .listStyle(.plain)
-        .task { if artists.isEmpty { artists = (try? await app.client?.artists()) ?? [] } }
-    }
-}
-
 struct AlbumDetailView: View {
     @Environment(AppModel.self) private var app
     let album: Album

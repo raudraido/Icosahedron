@@ -2290,6 +2290,116 @@
           }
         }
       }
+    },
+    "Album Artist": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Albumi esitaja"
+          }
+        }
+      }
+    },
+    "Date Added": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lisamise kuupäev"
+          }
+        }
+      }
+    },
+    "Most Played": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enim mängitud"
+          }
+        }
+      }
+    },
+    "Release Year": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ilmumisaasta"
+          }
+        }
+      }
+    },
+    "All albums": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kõik albumid"
+          }
+        }
+      }
+    },
+    "Favorites": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lemmikud"
+          }
+        }
+      }
+    },
+    "Genres": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Žanrid"
+          }
+        }
+      }
+    },
+    "Years": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aastad"
+          }
+        }
+      }
+    },
+    "Most albums": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kõige rohkem albumeid"
+          }
+        }
+      }
+    },
+    "Random": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Juhuslik"
+          }
+        }
+      }
+    },
+    "%lld artists": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld artisti"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

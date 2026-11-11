@@ -89,10 +89,28 @@ final class SubsonicClient {
 
     func ping() async throws { _ = try await call("ping") }
 
-    func albums(type: String, size: Int = 40, offset: Int = 0) async throws -> [Album] {
-        let r = try await call("getAlbumList2", [item("type", type), item("size", String(size)), item("offset", String(offset))])
+    func albums(type: String, size: Int = 40, offset: Int = 0, genre: String? = nil, fromYear: Int? = nil, toYear: Int? = nil) async throws -> [Album] {
+        var items = [item("type", type), item("size", String(size)), item("offset", String(offset))]
+        if let genre { items.append(item("genre", genre)) }
+        if let fromYear { items.append(item("fromYear", String(fromYear))) }
+        if let toYear { items.append(item("toYear", String(toYear))) }
+        let r = try await call("getAlbumList2", items)
         let list = (r["albumList2"] as? [String: Any]) ?? [:]
         return J.arr(list["album"]).compactMap { Album(subsonic: $0) }
+    }
+
+    /// Genre names, for the Albums filter.
+    func genres() async throws -> [String] {
+        let r = try await call("getGenres")
+        let g = (r["genres"] as? [String: Any]) ?? [:]
+        return J.arr(g["genre"]).compactMap { J.str($0, "value") }.filter { !$0.isEmpty }.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    /// The favourite albums and artists.
+    func starredAlbumsAndArtists() async throws -> (albums: [Album], artists: [Artist]) {
+        let r = try await call("getStarred2")
+        let s = (r["starred2"] as? [String: Any]) ?? [:]
+        return (J.arr(s["album"]).compactMap { Album(subsonic: $0) }, J.arr(s["artist"]).compactMap { Artist(subsonic: $0) })
     }
 
     func artists() async throws -> [Artist] {

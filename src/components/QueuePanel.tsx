@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CLICK_TO_PLAY } from "../lib/clickToPlay";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useStore } from "../store";
@@ -154,7 +155,8 @@ function QueueRow({ track: t, index: i, isCurrent, isPast, playing, dragging, on
     <div
       role="button"
       tabIndex={0}
-      onDoubleClick={onPlay}
+      onClick={CLICK_TO_PLAY ? (e) => { if (!(e.target as HTMLElement).closest("button, a, input")) onPlay(); } : undefined}
+      onDoubleClick={CLICK_TO_PLAY ? undefined : onPlay}
       onContextMenu={onContextMenu}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
@@ -301,6 +303,8 @@ export function QueuePanel() {
 
   const listRef = useRef<HTMLDivElement>(null);
   const dropIndexRef = useRef<number | null>(null);
+  // True while a row is really being dragged: the click that follows a drop must not also jump to that song.
+  const dragMovedRef = useRef(false);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
   const [ghostY, setGhostY] = useState<number | null>(null);
@@ -430,8 +434,10 @@ export function QueuePanel() {
       setDragId(trackId);
       dropIndexRef.current = null;
       document.body.style.userSelect = "none";
+      const startX = e.clientX, startY = e.clientY;
 
       function onMove(ev: MouseEvent) {
+        if (!dragMovedRef.current && Math.hypot(ev.clientX - startX, ev.clientY - startY) > 4) dragMovedRef.current = true;
         const listEl = listRef.current;
         if (!listEl) return;
         const listRect = listEl.getBoundingClientRect();
@@ -449,6 +455,7 @@ export function QueuePanel() {
         window.removeEventListener("mousemove", onMove);
         window.removeEventListener("mouseup", onUp);
         document.body.style.userSelect = "";
+        setTimeout(() => { dragMovedRef.current = false; }, 0); // the click that ends a drag comes right after
         if (dropIndexRef.current !== null) reorderQueue(trackId, dropIndexRef.current);
         setDragId(null);
         setDropIndex(null);
@@ -587,7 +594,7 @@ export function QueuePanel() {
                   isPast={currentIndex >= 0 && i < currentIndex}
                   playing={playing}
                   dragging={dragId === t.id}
-                  onPlay={() => view.playIndex(i)}
+                  onPlay={() => { if (!dragMovedRef.current) view.playIndex(i); }}
                   onGripMouseDown={handleGripMouseDown(t.id)}
                   onContextMenu={(e) => handleRowContextMenu(e, t)}
                 />

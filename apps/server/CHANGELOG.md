@@ -2,6 +2,14 @@
 
 The server is the **sync engine and the web app it serves** (one Docker image, `ghcr.io/raudraido/icosahedron-server`). Versions before 0.16.0 shared one number with the other apps (0.15.3 to 0.15.9); the full text of those releases is in the [main changelog](../../CHANGELOG.md). What each version needs and gives: [docs/compatibility.md](../../docs/compatibility.md).
 
+## 0.16.6
+
+The web app plays with **one click** instead of a double-click. **Update with** `docker compose pull && docker compose up -d`, then reload the page (`Ctrl+Shift+R` if the browser keeps the old one). The desktop app still uses a double-click until this has been tried in the web app.
+
+- **One click plays** in the queue (it jumps to that song), in playlists and albums, in Tracks and Favorites and in the artist's popular songs. A song played from a list goes right after the one that plays now, as the double-click did. A play icon shows on the cover when you point at a row.
+- **Selecting several songs:** a tick box shows in front of a row when you point at it; once one is ticked every row shows its box, a box in the heading ticks or clears all, and a bar shows *N selected* with **Play**, **Play Next**, **Add to Queue**, **Add to Playlist** and **Clear selection**. `Esc` clears. `Shift` + click on a box ticks a range; `Ctrl`/`Cmd`/`Shift` + click on the row still selects without playing. The right-click menu acts on all ticked songs.
+- **Reordering by dragging** a row in the queue and in a playlist works as before; letting go of a dragged row does not play it.
+
 ## 0.16.5
 
 Small fixes to the web app. **Update with** `docker compose pull && docker compose up -d`, then reload the page (`Ctrl+Shift+R` if the browser keeps the old one).

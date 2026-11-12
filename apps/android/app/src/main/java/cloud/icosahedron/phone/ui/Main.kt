@@ -282,13 +282,14 @@ private fun HomeScreen(push: (Route) -> Unit, allPlaylists: () -> Unit, onProfil
 private fun LibraryScreen(selected: Int, onSelect: (Int) -> Unit, push: (Route) -> Unit) {
     val openOffline = { k: String, i: String -> push(Route.OfflineR(k, i)) }
     Column(Modifier.fillMaxSize()) {
-        TabRow(selected, containerColor = Bg, contentColor = Accent) {
-            listOf("Albums", "Artists", "Playlists", "Downloads").forEachIndexed { i, s -> Tab(selected == i, { onSelect(i) }, text = { Text(s) }) }
+        androidx.compose.material3.ScrollableTabRow(selected, containerColor = Bg, contentColor = Accent, edgePadding = 8.dp) {
+            listOf("Albums", "Artists", "Playlists", "Favorite Songs", "Downloads").forEachIndexed { i, s -> Tab(selected == i, { onSelect(i) }, text = { Text(s) }) }
         }
         when (selected) {
             0 -> AlbumsBrowser(AlbumSort.Name, onAlbum = { push(Route.AlbumR(it.id)) })
             1 -> ArtistsBrowser(onArtist = { push(Route.ArtistR(it.id)) })
             2 -> PlaylistsList(push)
+            3 -> FavoriteSongs()
             else -> OfflineList(open = openOffline)
         }
     }
@@ -454,6 +455,24 @@ private fun PlaylistScreen(id: String, name: String, onBack: () -> Unit) {
         actions = { if (list.isNotEmpty()) PlayShuffle(list, Target("playlist", id, name, "${list.size} songs", cover, playlist = Playlist(id, name, list.size, cover), preloaded = list, onPage = true)) },
     ) {
         itemsIndexed(list) { i, t -> TrackRow(t) { Control.playTracks(list, i) } }
+    }
+}
+
+/** The songs marked as favorites (the heart), the same list as Favorite Songs in the iOS app. */
+@Composable
+private fun FavoriteSongs() {
+    val client = LocalClient.current
+    // reload when a heart is changed anywhere
+    val changes = Favorites.over.entries.joinToString(",") { it.key + it.value }
+    val songs by load(changes) { client.starred() }
+    val list = songs ?: emptyList()
+    LazyColumn(Modifier.fillMaxSize()) {
+        item {
+            Text(if (songs == null) "Loading…" else "${list.size} songs", fontSize = 13.sp, color = Dim, modifier = Modifier.padding(16.dp))
+            if (songs != null && list.isEmpty()) Text("Nothing here yet. Mark songs with the heart.", color = Dim, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp))
+            if (list.isNotEmpty()) PlayShuffle(list, Target("list", "favorites", "Favorite Songs", "${list.size} songs", list.firstOrNull()?.coverArt, preloaded = list))
+        }
+        itemsIndexed(list, key = { _, t -> t.id }) { i, t -> TrackRow(t) { Control.playTracks(list, i) } }
     }
 }
 

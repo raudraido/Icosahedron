@@ -120,7 +120,7 @@ fun MainScreen() {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             // A wide screen (a tablet, a phone on its side, a car): the tabs go to a rail at the left, not a bar at the bottom
             val wide = maxWidth > maxHeight && maxWidth >= 600.dp
-            val bottomInset = if (wide && Control.track != null) 156.dp else 0.dp
+            val compact = maxHeight < 440.dp // a low screen: no labels under the tab icons
             val destinations = listOf(Dest.Home to Icons.Filled.Home, Dest.Library to Icons.Filled.List, Dest.Search to Icons.Filled.Search, Dest.Devices to Icons.Filled.Phone, Dest.Settings to Icons.Filled.Settings)
             val body: @Composable (PaddingValues) -> Unit = { pad ->
                 Box(Modifier.padding(pad).fillMaxSize()) {
@@ -146,22 +146,21 @@ fun MainScreen() {
                     }
                 }
             }
-            CompositionLocalProvider(LocalBottomInset provides bottomInset) {
             if (wide) {
                 Row(Modifier.fillMaxSize()) {
-                    Column(Modifier.fillMaxHeight().width(88.dp).background(Panel).padding(vertical = 8.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(Modifier.fillMaxHeight().width(88.dp).background(Panel).padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                      Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                         destinations.forEach { (t, icon) ->
                             NavigationRailItem(
                                 selected = tab == t, onClick = { tab = t; stack.clear() },
-                                icon = { Icon(icon, t.name) }, label = { Text(t.name, fontSize = 11.sp) },
+                                icon = { Icon(icon, t.name) }, label = if (compact) null else ({ Text(t.name, fontSize = 11.sp) }), alwaysShowLabel = !compact,
                                 colors = NavigationRailItemDefaults.colors(selectedIconColor = Accent, selectedTextColor = Accent, indicatorColor = PanelHi, unselectedIconColor = Dim, unselectedTextColor = Dim),
                             )
                         }
+                      }
+                        RailPlayer(compact, onOpen = { showPlayer = true })
                     }
-                    Box(Modifier.weight(1f).fillMaxHeight()) {
-                        Scaffold(containerColor = Bg) { body(it) }
-                        FloatingPlayer(onOpen = { showPlayer = true }, Modifier.align(Alignment.BottomEnd).padding(16.dp))
-                    }
+                    Scaffold(modifier = Modifier.weight(1f), containerColor = Bg) { body(it) }
                 }
             } else {
                 Scaffold(
@@ -182,7 +181,6 @@ fun MainScreen() {
                     },
                 ) { body(it) }
             }
-            }
             BackHandler(enabled = stack.isNotEmpty()) { stack.removeLast() }
             BackHandler(enabled = stack.isEmpty() && tab != Dest.Home) { tab = Dest.Home }
             AnimatedVisibility(showPlayer, enter = slideInVertically { it }, exit = slideOutVertically { it }) {
@@ -192,31 +190,27 @@ fun MainScreen() {
     }
 }
 
-// ── Floating player (wide screens): a small card in the corner, so it does not take a bar's worth of width ──
+// ── The player in the side rail (wide screens): only the cover with a ring for the progress ──
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun FloatingPlayer(onOpen: () -> Unit, modifier: Modifier = Modifier) {
+private fun RailPlayer(compact: Boolean, onOpen: () -> Unit) {
     val t = Control.track ?: return
-    var expanded by remember { mutableStateOf(false) } // a long press on the cover shows the song's name
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val progress = if (Control.durationMs > 0) (Control.positionMs.toFloat() / Control.durationMs).coerceIn(0f, 1f) else 0f
-    val shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)
-    Column(
-        modifier.width(if (expanded) 220.dp else 148.dp).background(Panel.copy(alpha = 0.96f), shape).border(1.dp, PanelHi, shape).padding(horizontal = 8.dp, vertical = 10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+    val outer = if (compact) 56.dp else 68.dp
+    // A tap opens Now Playing, a long press pauses or plays
+    Box(
+        Modifier.padding(bottom = 12.dp).size(outer).combinedClickable(
+            onClick = onOpen,
+            onLongClick = { haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); Control.toggle() },
+        ),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.size(72.dp).combinedClickable(onClick = onOpen, onLongClick = { expanded = !expanded }), contentAlignment = Alignment.Center) {
-            Cover(t.coverArt, 60.dp, round = true)
-            androidx.compose.material3.CircularProgressIndicator(progress = { progress }, modifier = Modifier.size(72.dp), color = Accent, trackColor = PanelHi, strokeWidth = 3.dp)
+        Cover(t.coverArt, outer - 12.dp, round = true)
+        if (!Control.isPlaying) Box(Modifier.size(outer - 12.dp).background(androidx.compose.ui.graphics.Color(0x88000000), androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
+            Icon(painterResource(R.drawable.ic_play), "Paused", Modifier.size(22.dp))
         }
-        if (expanded) {
-            Text(t.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
-            Text(if (Control.remote) "on ${targetName()}" else t.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 11.sp, color = if (Control.remote) Accent else Dim)
-        }
-        Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { Control.previous() }, modifier = Modifier.size(40.dp)) { Icon(painterResource(R.drawable.ic_prev), "Previous", Modifier.size(22.dp)) }
-            IconButton(onClick = { Control.toggle() }, modifier = Modifier.size(44.dp)) { Icon(painterResource(if (Control.isPlaying) R.drawable.ic_pause else R.drawable.ic_play), "Play / pause", Modifier.size(28.dp)) }
-            IconButton(onClick = { Control.next() }, modifier = Modifier.size(40.dp)) { Icon(painterResource(R.drawable.ic_next), "Next", Modifier.size(22.dp)) }
-        }
+        androidx.compose.material3.CircularProgressIndicator(progress = { progress }, modifier = Modifier.size(outer), color = Accent, trackColor = PanelHi, strokeWidth = 3.dp)
     }
 }
 
@@ -251,7 +245,7 @@ private fun HomeScreen(push: (Route) -> Unit, allPlaylists: () -> Unit, onProfil
     val newest by load("newest") { client.albums("newest", 20) }
     val frequent by load("frequent") { client.albums("frequent", 20) }
     val playlists by load("playlists" to Library.playlistsRevision) { client.playlists() }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp + LocalBottomInset.current)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
         item {
             // Quick buttons (more can be added next to Random mix) and the profile picture
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -301,7 +295,7 @@ private fun AlbumListScreen(type: String, title: String, onBack: () -> Unit, pus
 private fun PlaylistsList(push: (Route) -> Unit) {
     val client = LocalClient.current
     val lists by load("playlists-all" to Library.playlistsRevision) { client.playlists() }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = LocalBottomInset.current)) {
+    LazyColumn(Modifier.fillMaxSize()) {
         items(lists ?: emptyList(), key = { it.id }) { p ->
             CollectionBox("playlist", p.id, p.name, "${p.songCount} songs", p.coverArt, { push(Route.PlaylistR(p.id, p.name)) }, Modifier.fillMaxWidth(), playlist = p) {
                 Row(Modifier.padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -328,7 +322,7 @@ private fun SearchScreen(push: (Route) -> Unit) {
         OutlinedTextField(q, { q = it }, singleLine = true, label = { Text("Search songs, albums, artists") }, modifier = Modifier.fillMaxWidth().padding(16.dp),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions())
         val r = result
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = LocalBottomInset.current)) {
+        LazyColumn(Modifier.fillMaxSize()) {
             if (r != null) {
                 if (r.first.isNotEmpty()) { item { SectionHeader("Artists") }; items(r.first, key = { "ar" + it.id }) { a -> ArtistRow(a) { push(Route.ArtistR(a.id)) } } }
                 if (r.second.isNotEmpty()) item { AlbumShelf("Albums", r.second, null) { push(Route.AlbumR(it.id)) } }
@@ -388,10 +382,10 @@ private fun DetailLayout(
                     if (line2 != null) Text(line2, color = Dim, fontSize = 12.sp)
                     actions()
                 }
-                LazyColumn(Modifier.weight(1f).fillMaxHeight(), contentPadding = PaddingValues(bottom = LocalBottomInset.current)) { songs() }
+                LazyColumn(Modifier.weight(1f).fillMaxHeight()) { songs() }
             }
         } else {
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = LocalBottomInset.current)) {
+            LazyColumn(Modifier.fillMaxSize()) {
                 item {
                     TopBar(title, onBack)
                     if (showCoverNarrow) Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -431,7 +425,7 @@ private fun ArtistScreen(id: String, onBack: () -> Unit, push: (Route) -> Unit) 
     val albums = data?.second ?: emptyList()
     Column(Modifier.fillMaxSize()) {
         TopBar(data?.first?.name ?: "", onBack)
-        LazyVerticalGrid(GridCells.Adaptive(160.dp), Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 12.dp + LocalBottomInset.current), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        LazyVerticalGrid(GridCells.Adaptive(160.dp), Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             items(albums, key = { it.id }) { a -> AlbumCard(a, size = 160.dp) { push(Route.AlbumR(a.id)) } }
         }
     }
@@ -457,7 +451,7 @@ private fun PlaylistScreen(id: String, name: String, onBack: () -> Unit) {
 private fun OfflineList(open: (String, String) -> Unit) {
     val songs = cloud.icosahedron.phone.player.Offline.kept
     val pending = cloud.icosahedron.phone.player.Offline.pending
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = LocalBottomInset.current)) {
+    LazyColumn(Modifier.fillMaxSize()) {
         item {
             Text(
                 "${songs.size} songs on this phone" + if (pending > 0) " · downloading $pending" else "",

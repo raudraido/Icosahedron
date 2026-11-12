@@ -111,6 +111,12 @@ object Playback {
 
     private fun item(t: Track): MediaItem = buildItem(t)
 
+    /** A playable item for [t] (the media session and Android Auto use it). */
+    fun mediaItemFor(t: Track): MediaItem = buildItem(t)
+
+    /** The queue the session set from outside (Android Auto): keeps the screens' list in step with the player. */
+    fun adoptQueue(tracks: List<Track>) { queue = tracks; scrobbledId = null }
+
     private fun buildItem(t: Track): MediaItem {
         val c = client
         return MediaItem.Builder()

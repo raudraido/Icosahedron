@@ -117,7 +117,7 @@ private fun MainSettings(open: (Page) -> Unit) {
     var cell by remember { mutableStateOf(Prefs.qualityCellular) }
     val secure by load("secure") { SecureSignIn.isOn(client) }
 
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = LocalBottomInset.current)) {
         item {
             Text("Settings", fontSize = 28.sp, color = Accent, modifier = Modifier.padding(vertical = 16.dp))
             Header("About")

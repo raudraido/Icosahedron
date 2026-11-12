@@ -73,6 +73,20 @@ class SubsonicClient(val baseUrl: String, val user: String, val salt: String, va
         } catch (e: IOException) { 0 to "" }
     }
 
+    class Raw(val status: Int, val bytes: ByteArray, val etag: String?)
+
+    /** Like [engine] but with bytes in and out (the profile picture), and an ETag for "has it changed". */
+    suspend fun engineRaw(method: String, path: String, body: ByteArray? = null, contentType: String? = null, etag: String? = null): Raw = withContext(Dispatchers.IO) {
+        val rb = body?.toRequestBody((contentType ?: "application/octet-stream").toMediaType())
+        val b = Request.Builder().url(baseUrl.trimEnd('/') + path)
+            .header("Authorization", "Subsonic u=$user&t=$token&s=$salt")
+            .method(method, rb ?: if (method == "GET" || method == "DELETE") null else "".toRequestBody())
+        if (etag != null) b.header("If-None-Match", etag)
+        try {
+            http.newCall(b.build()).execute().use { r -> Raw(r.code, r.body?.bytes() ?: ByteArray(0), r.header("ETag")) }
+        } catch (e: IOException) { Raw(0, ByteArray(0), null) }
+    }
+
     suspend fun ping() { call("ping") }
 
     /**

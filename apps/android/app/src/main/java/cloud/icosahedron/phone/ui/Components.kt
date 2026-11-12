@@ -32,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -154,4 +155,15 @@ fun keepOffline(context: android.content.Context, client: cloud.icosahedron.phon
 fun fmt(ms: Long): String {
     val s = (ms / 1000).coerceAtLeast(0)
     return "%d:%02d".format(s / 60, s % 60)
+}
+
+/** A round profile picture, or the user's first letter on the accent colour. */
+@Composable
+fun AvatarView(size: Dp = 36.dp, modifier: Modifier = Modifier) {
+    val img = cloud.icosahedron.phone.data.Avatar.image
+    val user = LocalClient.current.user
+    Box(modifier.size(size).clip(CircleShape).background(Accent), contentAlignment = Alignment.Center) {
+        if (img != null) androidx.compose.foundation.Image(img.asImageBitmap(), "Account", Modifier.size(size), contentScale = ContentScale.Crop)
+        else Text(user.take(1).uppercase(), fontSize = (size.value * 0.5f).sp, color = androidx.compose.ui.graphics.Color.White)
+    }
 }

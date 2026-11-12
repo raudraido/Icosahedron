@@ -123,6 +123,7 @@ private fun MainSettings(open: (Page) -> Unit) {
             Header("About")
             Row { Text("Version", Modifier.weight(1f)); Text(BuildConfig.VERSION_NAME, color = Dim) }
             Header("Account")
+            ProfilePictureRow()
             Row { Text("Server", Modifier.weight(1f)); Text(client.baseUrl.substringAfter("://"), color = Dim) }
             Row(Modifier.padding(top = 6.dp)) { Text("User", Modifier.weight(1f)); Text(client.user, color = Dim) }
             Header("Connections")
@@ -327,5 +328,27 @@ private fun OfflinePage() {
             Note("Use \"Keep offline\" in a song's menu or on an album or playlist. Kept songs are never removed by the cache.")
             if (offline.kept.isNotEmpty()) TextButton(onClick = { offline.unkeepAll() }) { Text("Remove all kept songs", color = Accent) }
         }
+    }
+}
+
+/** The profile picture (kept by the sync server, shown on every device) with change / remove. */
+@Composable
+private fun ProfilePictureRow() {
+    val client = LocalClient.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var message by remember { mutableStateOf<String?>(null) }
+    var working by remember { mutableStateOf(false) }
+    val picker = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) { working = true; message = null; scope.launch { message = cloud.icosahedron.phone.data.Avatar.set(context, uri, client); working = false } }
+    }
+    val has = cloud.icosahedron.phone.data.Avatar.image != null
+    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        AvatarView(96.dp)
+        Row {
+            TextButton(onClick = { picker.launch("image/*") }, enabled = !working) { Text(if (has) "Change photo" else "Add photo", color = Accent) }
+            if (has) TextButton(onClick = { scope.launch { cloud.icosahedron.phone.data.Avatar.remove(client) } }, enabled = !working) { Text("Remove", color = Accent) }
+        }
+        message?.let { Text(it, color = Accent, fontSize = 13.sp) }
     }
 }

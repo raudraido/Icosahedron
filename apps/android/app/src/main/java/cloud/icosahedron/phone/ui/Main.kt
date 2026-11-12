@@ -6,6 +6,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -325,26 +326,63 @@ private fun PlayShuffle(tracks: List<Track>, target: Target? = null) {
     }
 }
 
+/**
+ * A page for one album or playlist. On a wide screen (a tablet, a phone on its side, a car) the cover, the names and
+ * the buttons stay at the left and only the songs scroll at the right, like Now Playing; on a narrow screen
+ * everything scrolls in one column.
+ */
+@Composable
+private fun DetailLayout(
+    title: String, coverId: String?, line1: String, onLine1: (() -> Unit)?, line2: String?,
+    onBack: () -> Unit, showCoverNarrow: Boolean, actions: @Composable () -> Unit,
+    songs: androidx.compose.foundation.lazy.LazyListScope.() -> Unit,
+) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val wide = maxWidth > maxHeight && maxWidth >= 560.dp
+        if (wide) {
+            val pane = maxWidth * 0.4f
+            val cover = minOf(pane - 32.dp, maxHeight - 250.dp).coerceIn(120.dp, 340.dp)
+            Row(Modifier.fillMaxSize()) {
+                Column(Modifier.width(pane).fillMaxHeight().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+                    TopBar("", onBack)
+                    Cover(coverId, cover)
+                    Text(title, fontSize = 18.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 10.dp, start = 16.dp, end = 16.dp))
+                    if (line1.isNotEmpty()) Text(line1, color = Accent, fontSize = 14.sp, modifier = Modifier.clickable(enabled = onLine1 != null) { onLine1?.invoke() })
+                    if (line2 != null) Text(line2, color = Dim, fontSize = 12.sp)
+                    actions()
+                }
+                LazyColumn(Modifier.weight(1f).fillMaxHeight()) { songs() }
+            }
+        } else {
+            LazyColumn(Modifier.fillMaxSize()) {
+                item {
+                    TopBar(title, onBack)
+                    if (showCoverNarrow) Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Cover(coverId, 220.dp)
+                        Text(title, fontSize = 20.sp, modifier = Modifier.padding(top = 12.dp, start = 16.dp, end = 16.dp))
+                        if (line1.isNotEmpty()) Text(line1, color = Accent, fontSize = 14.sp, modifier = Modifier.clickable(enabled = onLine1 != null) { onLine1?.invoke() })
+                        if (line2 != null) Text(line2, color = Dim, fontSize = 12.sp)
+                    }
+                    actions()
+                }
+                songs()
+            }
+        }
+    }
+}
+
 @Composable
 private fun AlbumScreen(id: String, onBack: () -> Unit, push: (Route) -> Unit) {
     val client = LocalClient.current
     val data by load(id) { client.album(id) }
     val album = data?.first
     val tracks = data?.second ?: emptyList()
-    LazyColumn(Modifier.fillMaxSize()) {
-        item {
-            TopBar(album?.name ?: "", onBack)
-            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                Cover(album?.coverArt, 220.dp)
-                Text(album?.name ?: "", fontSize = 20.sp, modifier = Modifier.padding(top = 12.dp, start = 16.dp, end = 16.dp))
-                Text(
-                    album?.artist ?: "", color = Accent, fontSize = 14.sp,
-                    modifier = Modifier.clickable(enabled = album?.artistId != null) { push(Route.ArtistR(album!!.artistId!!)) },
-                )
-                if (album?.year != null) Text(album.year.toString(), color = Dim, fontSize = 12.sp)
-            }
-            if (tracks.isNotEmpty()) PlayShuffle(tracks, album?.let { Target("album", it.id, it.name, it.artist, it.coverArt, album = it, preloaded = tracks, onPage = true) })
-        }
+    DetailLayout(
+        title = album?.name ?: "", coverId = album?.coverArt, line1 = album?.artist ?: "",
+        onLine1 = album?.artistId?.let { aid -> { push(Route.ArtistR(aid)) } }, line2 = album?.year?.toString(),
+        onBack = onBack, showCoverNarrow = true,
+        actions = { if (tracks.isNotEmpty()) PlayShuffle(tracks, album?.let { Target("album", it.id, it.name, it.artist, it.coverArt, album = it, preloaded = tracks, onPage = true) }) },
+    ) {
         itemsIndexed(tracks, key = { _, t -> t.id }) { i, t -> TrackRow(t, showCover = false, number = if (t.trackNumber > 0) t.trackNumber else i + 1) { Control.playTracks(tracks, i) } }
     }
 }
@@ -367,8 +405,12 @@ private fun PlaylistScreen(id: String, name: String, onBack: () -> Unit) {
     val client = LocalClient.current
     val tracks by load(id) { client.playlistTracks(id) }
     val list = tracks ?: emptyList()
-    LazyColumn(Modifier.fillMaxSize()) {
-        item { TopBar(name, onBack); if (list.isNotEmpty()) PlayShuffle(list, Target("playlist", id, name, "${list.size} songs", list.firstOrNull()?.coverArt, playlist = Playlist(id, name, list.size, list.firstOrNull()?.coverArt), preloaded = list, onPage = true)) }
+    val cover = list.firstOrNull()?.coverArt
+    DetailLayout(
+        title = name, coverId = cover, line1 = "", onLine1 = null, line2 = if (list.isEmpty()) null else "${list.size} songs",
+        onBack = onBack, showCoverNarrow = false,
+        actions = { if (list.isNotEmpty()) PlayShuffle(list, Target("playlist", id, name, "${list.size} songs", cover, playlist = Playlist(id, name, list.size, cover), preloaded = list, onPage = true)) },
+    ) {
         itemsIndexed(list) { i, t -> TrackRow(t) { Control.playTracks(list, i) } }
     }
 }
@@ -409,12 +451,11 @@ private fun OfflineList(open: (String, String) -> Unit) {
 private fun OfflineCollectionScreen(kind: String, id: String, onBack: () -> Unit) {
     val c = cloud.icosahedron.phone.player.Offline.collections.firstOrNull { it.kind == kind && it.id == id }
     if (c == null) { onBack(); return }
-    LazyColumn(Modifier.fillMaxSize()) {
-        item {
-            TopBar(c.name, onBack)
-            Text(c.subtitle, color = Dim, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp))
-            PlayShuffle(c.tracks, Target(c.kind, c.id, c.name, c.subtitle, c.cover, preloaded = c.tracks))
-        }
+    DetailLayout(
+        title = c.name, coverId = c.cover, line1 = c.subtitle, onLine1 = null, line2 = null,
+        onBack = onBack, showCoverNarrow = false,
+        actions = { PlayShuffle(c.tracks, Target(c.kind, c.id, c.name, c.subtitle, c.cover, preloaded = c.tracks)) },
+    ) {
         itemsIndexed(c.tracks, key = { _, t -> t.id }) { i, t -> TrackRow(t) { Control.playTracks(c.tracks, i) } }
     }
 }

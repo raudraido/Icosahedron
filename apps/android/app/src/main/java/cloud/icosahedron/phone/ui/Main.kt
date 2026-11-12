@@ -100,7 +100,7 @@ fun MainScreen() {
     val session = app.session ?: return
     val client = remember(session) { session.client() }
     var tab by rememberSaveable { mutableStateOf(Dest.Home) }
-    var libraryTab by rememberSaveable { mutableIntStateOf(0) }
+    var libraryTab by rememberSaveable { mutableIntStateOf(cloud.icosahedron.phone.data.Prefs.libraryTab) }
     val stack = remember { mutableStateListOf<Route>() }
     var showPlayer by remember { mutableStateOf(false) }
 
@@ -137,7 +137,7 @@ fun MainScreen() {
                                 allPlaylists = { libraryTab = 2; tab = Dest.Library },
                                 onProfile = { tab = Dest.Settings },
                             )
-                            Dest.Library -> LibraryScreen(libraryTab, { libraryTab = it }, push)
+                            Dest.Library -> LibraryScreen(libraryTab, { libraryTab = it; cloud.icosahedron.phone.data.Prefs.libraryTab = it }, push)
                             Dest.Search -> SearchScreen(push)
                             Dest.Devices -> DevicesScreen()
                             Dest.Settings -> SettingsScreen()
@@ -286,7 +286,7 @@ private fun LibraryScreen(selected: Int, onSelect: (Int) -> Unit, push: (Route) 
             listOf("Albums", "Artists", "Playlists", "Favorite Songs", "Downloads").forEachIndexed { i, s -> Tab(selected == i, { onSelect(i) }, text = { Text(s) }) }
         }
         when (selected) {
-            0 -> AlbumsBrowser(AlbumSort.Name, onAlbum = { push(Route.AlbumR(it.id)) })
+            0 -> AlbumsBrowser(AlbumSort.Name, onAlbum = { push(Route.AlbumR(it.id)) }, persist = true)
             1 -> ArtistsBrowser(onArtist = { push(Route.ArtistR(it.id)) })
             2 -> PlaylistsList(push)
             3 -> FavoriteSongs()

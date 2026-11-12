@@ -20,6 +20,28 @@ object Prefs {
     var cacheOnCellular: Boolean
         get() = p.getBoolean("cacheOnCellular", false)
         set(v) { p.edit().putBoolean("cacheOnCellular", v).apply() }
+    // What the Library remembers: the tab, how Albums and Artists are sorted and filtered, grid or list
+    var libraryTab: Int
+        get() = p.getInt("libraryTab", 0)
+        set(v) { p.edit().putInt("libraryTab", v).apply() }
+    var albumSort: String
+        get() = p.getString("albumSort", "Name") ?: "Name"
+        set(v) { p.edit().putString("albumSort", v).apply() }
+    var albumFilter: String
+        get() = p.getString("albumFilter", "all") ?: "all"
+        set(v) { p.edit().putString("albumFilter", v).apply() }
+    var albumGrid: Boolean
+        get() = p.getBoolean("albumGrid", true)
+        set(v) { p.edit().putBoolean("albumGrid", v).apply() }
+    var artistSort: String
+        get() = p.getString("artistSort", "Name") ?: "Name"
+        set(v) { p.edit().putString("artistSort", v).apply() }
+    var artistFavorites: Boolean
+        get() = p.getBoolean("artistFavorites", false)
+        set(v) { p.edit().putBoolean("artistFavorites", v).apply() }
+    var artistGrid: Boolean
+        get() = p.getBoolean("artistGrid", false)
+        set(v) { p.edit().putBoolean("artistGrid", v).apply() }
     var qualityWifi: String
         get() = p.getString("qualityWifi", "raw") ?: "raw"
         set(v) { p.edit().putString("qualityWifi", v).apply() }

@@ -121,7 +121,7 @@ fun TrackRow(t: Track, showCover: Boolean = true, number: Int? = null, onPlay: (
         if (showCover) Cover(t.coverArt, 44.dp, modifier = Modifier.padding(end = 12.dp))
         Column(Modifier.weight(1f)) {
             Text(t.title, maxLines = 1, overflow = TextOverflow.Ellipsis, color = if (playing) Accent else androidx.compose.ui.graphics.Color.White)
-            Text(t.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, color = Dim)
+            Text(t.artist + (if (t.bpm != null && cloud.icosahedron.phone.data.Prefs.showBpm) " · ${t.bpm} BPM" else ""), maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, color = Dim)
         }
         Text(fmt(t.duration * 1000L), fontSize = 12.sp, color = Dim)
         Box {

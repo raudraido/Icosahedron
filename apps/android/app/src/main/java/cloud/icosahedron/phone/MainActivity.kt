@@ -30,6 +30,7 @@ class MainActivity : ComponentActivity() {
                     if (app.session == null) LoginScreen(onSignedIn = { app.signedIn(it) }) else {
                         MainScreen()
                         app.sync?.let { ApprovalDialog(it) }
+                        cloud.icosahedron.phone.ui.SecretsDialog(app.secretsToShow) { app.secretsToShow = null }
                     }
                 }
             }

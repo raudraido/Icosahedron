@@ -150,5 +150,43 @@ object SecureSignIn {
         } catch (_: Exception) { null }
     }
 
+    sealed interface TurnOn {
+        data class On(val session: Session, val recoveryCodes: List<String>) : TurnOn
+        data class Failed(val message: String) : TurnOn
+    }
+
+    /** Switches it on (an administrator). This phone becomes the first trusted device and signs in again with the secret it gets. */
+    suspend fun turnOn(c: SubsonicClient): TurnOn {
+        val (st, body) = c.engine("PUT", "/device/secure", JSONObject().put("enabled", true).put("device", deviceInfo()))
+        val j = try { JSONObject(body) } catch (_: Exception) { null }
+        return when (st) {
+            200 -> {
+                val s = j?.let { sessionOf(c.baseUrl, it, c.user) }
+                val codes = j?.optJSONArray("recoveryCodes")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList()
+                if (s == null) TurnOn.Failed("Something went wrong.") else TurnOn.On(s, codes)
+            }
+            0 -> TurnOn.Failed("Could not reach the server.")
+            403 -> TurnOn.Failed("Only a server administrator can switch this on.")
+            412 -> TurnOn.Failed("Navidrome does not accept the sync server yet, so nobody could sign in. Add ExtAuth.TrustedSources (ND_EXTAUTH_TRUSTEDSOURCES) with the sync server's address to Navidrome first (docs/deploy-server.md, Secure sign-in).")
+            409 -> TurnOn.Failed("It is already on.")
+            else -> TurnOn.Failed("Something went wrong.")
+        }
+    }
+
+    suspend fun turnOff(c: SubsonicClient): Boolean = c.engine("PUT", "/device/secure", JSONObject().put("enabled", false)).first == 200
+
+    suspend fun newRecoveryCodes(c: SubsonicClient): List<String>? {
+        val (st, body) = c.engine("POST", "/device/recovery-codes", JSONObject())
+        if (st != 200) return null
+        return try { JSONObject(body).optJSONArray("recoveryCodes")?.let { a -> (0 until a.length()).map { a.optString(it) } } } catch (_: Exception) { null }
+    }
+
+    /** A device secret for a third-party app (shown once). */
+    suspend fun appPassword(c: SubsonicClient, name: String): String? {
+        val (st, body) = c.engine("POST", "/device/app-password", JSONObject().put("name", name))
+        if (st != 200) return null
+        return try { JSONObject(body).str("secret") } catch (_: Exception) { null }
+    }
+
     suspend fun remove(c: SubsonicClient, id: String): Boolean = c.engine("DELETE", "/device/$id").first == 204
 }

@@ -111,6 +111,7 @@ private fun MainSettings(open: (Page) -> Unit) {
     val client = LocalClient.current
     val sync = app.sync
     var lyrics by remember { mutableStateOf(Prefs.lyricsOnline) }
+    var bpm by remember { mutableStateOf(Prefs.showBpm) }
     var wifi by remember { mutableStateOf(Prefs.qualityWifi) }
     var cell by remember { mutableStateOf(Prefs.qualityCellular) }
     val secure by load("secure") { SecureSignIn.isOn(client) }
@@ -129,6 +130,8 @@ private fun MainSettings(open: (Page) -> Unit) {
             LinkRow("Secure sign-in", when (secure) { true -> "On"; false -> "Off"; null -> "" }) { open(Page.Devices) }
             Header("Sound")
             LinkRow("Equalizer", if (Eq.enabled) "On" else "Off") { open(Page.Equalizer) }
+            Header("Lists")
+            ToggleRow("Show BPM in song lists", bpm) { bpm = it; Prefs.showBpm = it }
             Header("Lyrics")
             ToggleRow("Look up lyrics online (LRCLIB)", lyrics) { lyrics = it; Prefs.lyricsOnline = it }
             Header("Playback quality")
@@ -229,17 +232,39 @@ private fun EqualizerPage() {
 // ── Secure sign-in ──
 @Composable
 private fun DevicesPage() {
+    val app = App.instance
     val client = LocalClient.current
     val scope = rememberCoroutineScope()
     var reload by remember { mutableIntStateOf(0) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var confirmOff by remember { mutableStateOf(false) }
+    var appName by remember { mutableStateOf("") }
     val secure by load(reload) { SecureSignIn.isOn(client) }
     val devices by load(reload to secure) { if (secure == true) SecureSignIn.devices(client) else null }
-    Text("Secure sign-in: ${when (secure) { true -> "on"; false -> "off"; null -> "…" }}", modifier = Modifier.padding(top = 12.dp))
-    if (secure == false) Note("Switch it on from the desktop or iOS app (Settings → Sync Server → Secure sign-in).")
-    if (secure == true) {
-        Header("Trusted devices")
-        val d = devices
-        LazyColumn {
+    LazyColumn(Modifier.fillMaxSize()) {
+        item {
+            Text("Secure sign-in: ${when (secure) { true -> "on"; false -> "off"; null -> "…" }}", modifier = Modifier.padding(top = 12.dp))
+            Note("With it on, a new device can only sign in when a device that is already trusted approves it. A password alone is not enough.")
+            message?.let { Text(it, color = Accent, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp)) }
+            if (secure == false) {
+                OutlinedButton(enabled = !busy, modifier = Modifier.fillMaxWidth().padding(top = 8.dp), onClick = {
+                    busy = true; message = null
+                    scope.launch {
+                        when (val r = SecureSignIn.turnOn(client)) {
+                            is SecureSignIn.TurnOn.On -> { app.secretsToShow = "Secure sign-in is on. Save these recovery codes: each works once, for a new device when none of your trusted devices is at hand." to r.recoveryCodes; app.signedIn(r.session) }
+                            is SecureSignIn.TurnOn.Failed -> message = r.message
+                        }
+                        busy = false
+                    }
+                }) { Text(if (busy) "Switching on…" else "Turn on (administrator)") }
+            }
+            if (secure == true) {
+                Header("Trusted devices")
+            }
+        }
+        if (secure == true) {
+            val d = devices
             items(d?.first ?: emptyList(), key = { it.id }) { dev ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -248,6 +273,28 @@ private fun DevicesPage() {
                     }
                     if (dev.id != d?.second) TextButton(onClick = { scope.launch { SecureSignIn.remove(client, dev.id); reload++ } }) { Text("Remove", color = Accent) }
                 }
+            }
+            item {
+                Header("Recovery codes")
+                OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = {
+                    scope.launch { SecureSignIn.newRecoveryCodes(client)?.let { app.secretsToShow = "New recovery codes. The old ones no longer work." to it } ?: run { message = "Could not make new codes." } }
+                }) { Text("Make new recovery codes") }
+                Header("App password (for other Subsonic apps)")
+                Note("Other apps (Symfonium, DSub …) cannot ask for approval. This makes a password for one of them; it is shown once.")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.OutlinedTextField(appName, { appName = it }, singleLine = true, modifier = Modifier.weight(1f), label = { Text("App name") })
+                    TextButton(enabled = appName.isNotBlank(), onClick = {
+                        scope.launch { SecureSignIn.appPassword(client, appName.trim())?.let { app.secretsToShow = "App password for ${appName.trim()}. Use it as the password in that app; it is shown only now." to listOf(it); appName = ""; reload++ } ?: run { message = "Could not make it." } }
+                    }) { Text("Make", color = Accent) }
+                }
+                TextButton(onClick = { confirmOff = true }, modifier = Modifier.padding(top = 16.dp)) { Text("Turn secure sign-in off", color = Accent) }
+                if (confirmOff) androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { confirmOff = false },
+                    title = { Text("Turn it off?") },
+                    text = { Text("Then a password is enough again to sign in on a new device.") },
+                    confirmButton = { TextButton(onClick = { confirmOff = false; scope.launch { SecureSignIn.turnOff(client); reload++ } }) { Text("Turn off", color = Accent) } },
+                    dismissButton = { TextButton(onClick = { confirmOff = false }) { Text("Cancel") } },
+                )
             }
         }
     }

@@ -94,7 +94,7 @@ object Playback {
         scope.launch {
             while (true) {
                 delay(500)
-                if (queue.isNotEmpty()) { sync(); scrobbleWhenDue(); onTick?.invoke() }
+                if (queue.isNotEmpty()) { sync(); scrobbleWhenDue(); onTick?.invoke(); saveSession() }
             }
         }
     }
@@ -109,7 +109,9 @@ object Playback {
         repeatAll = player.repeatMode != Player.REPEAT_MODE_OFF
     }
 
-    private fun item(t: Track): MediaItem {
+    private fun item(t: Track): MediaItem = buildItem(t)
+
+    private fun buildItem(t: Track): MediaItem {
         val c = client
         return MediaItem.Builder()
             .setMediaId(t.id)
@@ -210,6 +212,54 @@ object Playback {
 
     fun setVolume(percent: Int) { player.volume = (percent.coerceIn(0, 100)) / 100f }
 
+    // ── The queue is remembered, so the app (and a play button in the car or on a headset) continues where it was ──
+    class Saved(val tracks: List<Track>, val index: Int, val positionMs: Long)
+
+    private val sessionFile get() = java.io.File(appContext.filesDir, "playback-session.json")
+    private var lastSig = ""
+    private var lastSave = 0L
+
+    private fun saveSession() {
+        val q = queue
+        if (q.isEmpty()) return
+        val sig = q.size.toString() + q.first().id + q.last().id + index + (current?.id ?: "")
+        val now = System.currentTimeMillis()
+        if (sig == lastSig && now - lastSave < 15_000) return
+        lastSig = sig; lastSave = now
+        val idx = index; val pos = positionMs; val user = client?.user
+        scope.launch(Dispatchers.IO) {
+            try {
+                val o = org.json.JSONObject().put("user", user).put("index", idx).put("positionMs", pos)
+                    .put("queue", org.json.JSONArray(q.map { it.toWire() }))
+                sessionFile.writeText(o.toString())
+            } catch (_: Exception) { }
+        }
+    }
+
+    fun loadSaved(): Saved? = try {
+        val o = org.json.JSONObject(sessionFile.readText())
+        val tracks = o.getJSONArray("queue").let { a -> (0 until a.length()).mapNotNull { Track.fromWire(a.getJSONObject(it)) } }
+        if (tracks.isEmpty() || o.optString("user") != client?.user) null
+        else Saved(tracks, o.optInt("index", 0).coerceIn(0, tracks.size - 1), o.optLong("positionMs", 0))
+    } catch (_: Exception) { null }
+
+    /** Puts the remembered queue back (paused unless [play]). */
+    fun restoreSession(play: Boolean = false): Boolean {
+        if (queue.isNotEmpty()) return true
+        val s = loadSaved() ?: return false
+        playTracks(s.tracks, s.index, s.positionMs, play)
+        return true
+    }
+
+    /** For the media session: what to play when a play button is pressed and nothing is loaded. */
+    fun resumption(): androidx.media3.session.MediaSession.MediaItemsWithStartPosition? {
+        val s = loadSaved() ?: return null
+        queue = s.tracks
+        return androidx.media3.session.MediaSession.MediaItemsWithStartPosition(s.tracks.map(::item), s.index, s.positionMs)
+    }
+
+    fun clearSaved() { try { sessionFile.delete() } catch (_: Exception) { }; lastSig = "" }
+
     fun stop() {
         player.stop()
         player.clearMediaItems()
@@ -220,6 +270,7 @@ object Playback {
 
     // The server's play count: "now playing" at the start, the play itself after half the track.
     private fun nowPlaying() {
+        if (!player.playWhenReady) return // a restored queue is not a play
         val t = current ?: return
         val c = client ?: return
         scope.launch(Dispatchers.IO) { try { c.scrobble(t.id, false) } catch (_: Exception) { } }

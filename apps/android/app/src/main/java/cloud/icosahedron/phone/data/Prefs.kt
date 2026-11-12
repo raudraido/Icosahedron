@@ -11,6 +11,9 @@ object Prefs {
     var lyricsOnline: Boolean
         get() = p.getBoolean("lyricsOnline", true)
         set(v) { p.edit().putBoolean("lyricsOnline", v).apply() }
+    var showBpm: Boolean
+        get() = p.getBoolean("showBpm", true)
+        set(v) { p.edit().putBoolean("showBpm", v).apply() }
     var qualityWifi: String
         get() = p.getString("qualityWifi", "raw") ?: "raw"
         set(v) { p.edit().putString("qualityWifi", v).apply() }

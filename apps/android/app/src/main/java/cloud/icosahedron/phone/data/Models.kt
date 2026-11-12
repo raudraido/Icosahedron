@@ -29,6 +29,7 @@ data class Track(
     val genre: String?,
     val bitrate: Int?,
     val format: String?,
+    val bpm: Int? = null,
 ) {
     /** The track object of the sync protocol (the shape the desktop, web and iOS apps use). */
     fun toWire(): JSONObject = JSONObject().apply {
@@ -44,7 +45,7 @@ data class Track(
         put("year", year ?: JSONObject.NULL)
         put("play_count", 0)
         put("bitrate", bitrate ?: JSONObject.NULL)
-        put("bpm", JSONObject.NULL)
+        put("bpm", bpm ?: JSONObject.NULL)
         put("created", JSONObject.NULL)
         put("format", format ?: JSONObject.NULL)
     }
@@ -56,7 +57,7 @@ data class Track(
                 id, o.str("title") ?: "", o.str("artist") ?: "", o.str("artistId"),
                 o.str("album"), o.str("albumId"), o.int("track") ?: 0, o.int("discNumber") ?: 0,
                 o.int("duration") ?: 0, o.str("coverArt"), o.has("starred"),
-                o.int("year"), o.str("genre"), o.int("bitRate"), o.str("suffix"),
+                o.int("year"), o.str("genre"), o.int("bitRate"), o.str("suffix"), o.int("bpm")?.takeIf { it > 0 },
             )
         }
 
@@ -66,7 +67,7 @@ data class Track(
                 id, o.str("title") ?: "", o.str("artist") ?: "", o.str("artist_id"),
                 o.str("album"), o.str("album_id"), o.int("track_number") ?: 0, o.int("disc_number") ?: 0,
                 o.int("duration_secs") ?: 0, o.str("cover_id"), o.optBoolean("starred", false),
-                o.int("year"), o.str("genre"), o.int("bitrate"), o.str("format"),
+                o.int("year"), o.str("genre"), o.int("bitrate"), o.str("format"), o.int("bpm")?.takeIf { it > 0 },
             )
         }
     }

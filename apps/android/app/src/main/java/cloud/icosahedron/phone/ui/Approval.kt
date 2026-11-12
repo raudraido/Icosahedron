@@ -48,3 +48,22 @@ fun ApprovalDialog(sync: SyncClient) {
         dismissButton = { OutlinedButton(onClick = { scope.launch { sync.answer(p, false, null) } }) { Text("Deny") } },
     )
 }
+
+/** Codes or a password that are shown only once. */
+@Composable
+fun SecretsDialog(content: Pair<String, List<String>>?, onClose: () -> Unit) {
+    val (text, lines) = content ?: return
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text("Save this now") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(text)
+                lines.forEach { Text(it, fontSize = 18.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace) }
+            }
+        },
+        confirmButton = { Button(onClick = onClose) { Text("I saved them") } },
+        dismissButton = { TextButton(onClick = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(lines.joinToString("\n"))) }) { Text("Copy") } },
+    )
+}

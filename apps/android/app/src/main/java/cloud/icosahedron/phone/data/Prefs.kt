@@ -14,6 +14,12 @@ object Prefs {
     var showBpm: Boolean
         get() = p.getBoolean("showBpm", true)
         set(v) { p.edit().putBoolean("showBpm", v).apply() }
+    var cacheLimitMb: Int
+        get() = p.getInt("cacheLimitMb", 1024)
+        set(v) { p.edit().putInt("cacheLimitMb", v).apply() }
+    var cacheOnCellular: Boolean
+        get() = p.getBoolean("cacheOnCellular", false)
+        set(v) { p.edit().putBoolean("cacheOnCellular", v).apply() }
     var qualityWifi: String
         get() = p.getString("qualityWifi", "raw") ?: "raw"
         set(v) { p.edit().putString("qualityWifi", v).apply() }

@@ -27,6 +27,10 @@ From the command line: `gradle :app:assembleRelease -PversionName=0.1.0 -Pversio
 
 The data, player and sync layers are the same as the TV app's, with the phone as device kind `mobile`.
 
+## Offline
+
+`player/Offline.kt` keeps two caches on disk (Media3 `SimpleCache`): the **cache** in the app cache folder (what is played and the next song, the oldest removed over the limit in Settings → Offline) and the **kept** songs in the app files (never evicted, listed in `kept.json`). The player reads kept songs first, then the cache, then the network. Keys are the song id plus the quality, or `kept:<id>` for kept songs, so a change of quality does not hide a kept song. On mobile data nothing is written to the cache or downloaded unless allowed.
+
 ## Android Auto
 
 The app is a media app for Android Auto: the browse tree (Recently played, Playlists, Albums, Artists, Random mix), search and the player come from `PlaybackService` (a Media3 `MediaLibraryService`), so the car screen, Bluetooth controls and the Assistant all use the same library.

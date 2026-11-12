@@ -45,7 +45,7 @@ import kotlinx.coroutines.launch
 import java.text.DateFormat
 import java.util.Date
 
-private enum class Page { Main, Sync, LastFm, Equalizer, Devices }
+private enum class Page { Main, Sync, LastFm, Equalizer, Devices, Offline }
 
 @Composable
 fun SettingsScreen() {
@@ -57,6 +57,7 @@ fun SettingsScreen() {
         Page.LastFm -> Sub("Last.fm", { page = Page.Main }) { LastFmPage() }
         Page.Equalizer -> Sub("Equalizer", { page = Page.Main }) { EqualizerPage() }
         Page.Devices -> Sub("Secure sign-in", { page = Page.Main }) { DevicesPage() }
+        Page.Offline -> Sub("Offline", { page = Page.Main }) { OfflinePage() }
     }
 }
 
@@ -130,6 +131,8 @@ private fun MainSettings(open: (Page) -> Unit) {
             LinkRow("Secure sign-in", when (secure) { true -> "On"; false -> "Off"; null -> "" }) { open(Page.Devices) }
             Header("Sound")
             LinkRow("Equalizer", if (Eq.enabled) "On" else "Off") { open(Page.Equalizer) }
+            Header("Offline")
+            LinkRow("Cache and kept songs", "${cloud.icosahedron.phone.player.Offline.kept.size} kept") { open(Page.Offline) }
             Header("Lists")
             ToggleRow("Show BPM in song lists", bpm) { bpm = it; Prefs.showBpm = it }
             Header("Lyrics")
@@ -296,6 +299,33 @@ private fun DevicesPage() {
                     dismissButton = { TextButton(onClick = { confirmOff = false }) { Text("Cancel") } },
                 )
             }
+        }
+    }
+}
+
+// ── Offline ──
+@Composable
+private fun OfflinePage() {
+    val offline = cloud.icosahedron.phone.player.Offline
+    var limit by remember { mutableIntStateOf(Prefs.cacheLimitMb) }
+    var cellular by remember { mutableStateOf(Prefs.cacheOnCellular) }
+    var used by remember { mutableStateOf(offline.cacheBytes()) }
+    var keptBytes by remember { mutableStateOf(offline.keptBytes()) }
+    LaunchedEffect(offline.kept.size, offline.pending) { used = offline.cacheBytes(); keptBytes = offline.keptBytes() }
+    fun mb(b: Long) = if (b >= 1024L * 1024 * 1024) "%.1f GB".format(b / 1073741824.0) else "%d MB".format(b / 1048576)
+    LazyColumn(Modifier.fillMaxSize()) {
+        item {
+            Header("Cache")
+            Note("Songs you play are kept for next time and the next song is fetched while this one plays, so they start at once and play without a network. The oldest are removed when the limit is reached.")
+            ChoiceRow("Limit", limit.toString(), listOf(256, 512, 1024, 2048, 5120, 10240).map { it.toString() }, { mb(it.toLong() * 1048576) }) { limit = it.toInt(); offline.setLimitMb(limit) }
+            Row { Text("In the cache now", Modifier.weight(1f)); Text(mb(used), color = Dim) }
+            TextButton(onClick = { offline.clearCache(); used = 0 }) { Text("Clear the cache", color = Accent) }
+            ToggleRow("Cache and download on mobile data", cellular) { cellular = it; Prefs.cacheOnCellular = it }
+            Header("Kept on this phone")
+            Row { Text("${offline.kept.size} songs", Modifier.weight(1f)); Text(mb(keptBytes), color = Dim) }
+            if (offline.pending > 0) Note("Downloading: ${offline.pending} left")
+            Note("Use \"Keep offline\" in a song's menu or on an album or playlist. Kept songs are never removed by the cache.")
+            if (offline.kept.isNotEmpty()) TextButton(onClick = { offline.unkeepAll() }) { Text("Remove all kept songs", color = Accent) }
         }
     }
 }

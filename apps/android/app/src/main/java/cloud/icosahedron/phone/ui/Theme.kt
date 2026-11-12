@@ -13,9 +13,6 @@ val Panel = Color(0xFF1C1E27)
 val PanelHi = Color(0xFF2A2D38)
 val Dim = Color(0xFFA0A4B0)
 
-/** Space the lists leave at the bottom for the floating player (only on a wide screen). */
-val LocalBottomInset = androidx.compose.runtime.compositionLocalOf { androidx.compose.ui.unit.Dp(0f) }
-
 /** The signed-in server connection, for covers and lists. */
 val LocalClient = compositionLocalOf<SubsonicClient> { error("not signed in") }
 

@@ -40,7 +40,7 @@ fun DevicesScreen() {
         }
         val me = sync.myId
         val chosen = sync.targetId ?: me
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = LocalBottomInset.current)) {
+        LazyColumn(Modifier.fillMaxSize()) {
             items(sync.devices, key = { it.id }) { d ->
                 val isMe = d.id == me
                 val st = if (isMe) null else sync.stateOf(d.id)

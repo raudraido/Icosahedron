@@ -2,6 +2,10 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
+## 0.1.19
+
+- **The corners of the playback icons are a little rounded** (play, pause, previous, next, shuffle, repeat): they had sharp points; now the corners have a small radius, so they look softer. The icons are scaled down slightly to make up for the rounding.
+
 ## 0.1.18
 
 **Now Playing is redone so it can be used in a shaking car.**

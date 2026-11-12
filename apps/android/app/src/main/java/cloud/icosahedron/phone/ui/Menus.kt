@@ -47,6 +47,12 @@ object Favorites {
     val over = mutableStateMapOf<String, Boolean>()
     fun album(a: Album) = over["album:${a.id}"] ?: a.starred
     fun track(t: Track) = over["track:${t.id}"] ?: t.starred
+
+    fun toggleTrack(client: cloud.icosahedron.phone.data.SubsonicClient, t: Track, scope: kotlinx.coroutines.CoroutineScope) {
+        val on = !track(t)
+        over["track:${t.id}"] = on
+        scope.launch { if (!runCatching { client.setStarred(t.id, on) }.isSuccess) over["track:${t.id}"] = !on }
+    }
 }
 
 /**

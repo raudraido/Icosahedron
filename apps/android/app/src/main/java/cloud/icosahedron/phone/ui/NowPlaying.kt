@@ -22,6 +22,14 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.runtime.CompositionLocalProvider
+import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -57,6 +65,52 @@ fun NowPlayingScreen(onClose: () -> Unit) {
     var panel by remember { mutableStateOf(0) } // 0 cover, 1 lyrics, 2 queue
     var info by remember { mutableStateOf(false) } // the cover tapped: the song's details under a smaller cover
     var dragging by remember { mutableStateOf<Float?>(null) }
+    val client = LocalClient.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var menu by remember { mutableStateOf(false) }
+
+    // ── Pull the screen down from anywhere to close it ──
+    // Lists (lyrics, queue, details) scroll first; only a pull at their top closes the screen.
+    val offset = remember { androidx.compose.animation.core.Animatable(0f) }
+    val threshold = with(androidx.compose.ui.platform.LocalDensity.current) { 140.dp.toPx() }
+    fun release(velocityY: Float) {
+        if (offset.value > threshold || velocityY > 1800f) onClose() else scope.launch { offset.animateTo(0f) }
+    }
+    val connection = remember {
+        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+            override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                if (offset.value > 0f && available.y < 0f) {
+                    val next = (offset.value + available.y).coerceAtLeast(0f)
+                    val used = next - offset.value
+                    scope.launch { offset.snapTo(next) }
+                    return androidx.compose.ui.geometry.Offset(0f, used)
+                }
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+            override fun onPostScroll(consumed: androidx.compose.ui.geometry.Offset, available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                if (available.y > 0f && source == androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput) {
+                    scope.launch { offset.snapTo(offset.value + available.y) }
+                    return androidx.compose.ui.geometry.Offset(0f, available.y)
+                }
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+            override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
+                if (offset.value > 0f) { release(available.y); return available }
+                return androidx.compose.ui.unit.Velocity.Zero
+            }
+        }
+    }
+    val dragState = androidx.compose.foundation.gestures.rememberDraggableState { d -> scope.launch { offset.snapTo((offset.value + d).coerceAtLeast(0f)) } }
+
+    // A page opened from the menu (the artist, the album) sits under this screen: close it first
+    val parentOpener = LocalOpener.current
+    val opener = remember(parentOpener) {
+        object : Opener {
+            override fun album(id: String) { onClose(); parentOpener.album(id) }
+            override fun artist(id: String) { onClose(); parentOpener.artist(id) }
+            override fun back() { parentOpener.back() }
+        }
+    }
 
     val header: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -79,6 +133,7 @@ fun NowPlayingScreen(onClose: () -> Unit) {
             }
         }
     }
+    // The song, the seek bar, and under it the smaller buttons: favorite, lyrics, speed, queue, the menu
     val meta: @Composable () -> Unit = {
         if (t != null) {
             Text(t.title, fontSize = 22.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 12.dp))
@@ -95,27 +150,42 @@ fun NowPlayingScreen(onClose: () -> Unit) {
                 Text(fmt((shown * dur).toLong()), fontSize = 12.sp, color = Dim, modifier = Modifier.weight(1f))
                 Text(fmt(Control.durationMs), fontSize = 12.sp, color = Dim)
             }
+            val fav = Favorites.track(t)
+            Row(Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { Favorites.toggleTrack(client, t, scope) }) {
+                    Icon(if (fav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, if (fav) "Remove Favorite" else "Favorite", tint = if (fav) Accent else Color.White)
+                }
+                IconButton(onClick = { panel = if (panel == 1) 0 else 1; info = false }) { Icon(painterResource(R.drawable.ic_lyrics), "Lyrics", tint = if (panel == 1) Accent else Color.White) }
+                if (!Control.remote) SpeedButton()
+                IconButton(onClick = { panel = if (panel == 2) 0 else 2; info = false }) { Icon(painterResource(R.drawable.ic_queue), "Queue", tint = if (panel == 2) Accent else Color.White) }
+                Box {
+                    IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "More") }
+                    CompositionLocalProvider(LocalOpener provides opener) {
+                        TargetMenu(Target("track", t.id, t.title, t.artist, t.coverArt, track = t), menu) { menu = false }
+                    }
+                }
+            }
         }
     }
-    val buttons: @Composable () -> Unit = {
-        Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { Control.shuffleTo(!Control.shuffle) }) { Icon(painterResource(R.drawable.ic_shuffle), "Shuffle", tint = if (Control.shuffle) Accent else Color.White) }
-            IconButton(onClick = { Control.previous() }) { Icon(painterResource(R.drawable.ic_prev), "Previous", Modifier.size(34.dp)) }
-            IconButton(onClick = { Control.toggle() }, modifier = Modifier.size(68.dp)) {
-                Icon(painterResource(if (Control.isPlaying) R.drawable.ic_pause else R.drawable.ic_play), "Play / pause", Modifier.size(52.dp))
+    // The playback controls, at the very bottom and big
+    val controls: @Composable () -> Unit = {
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 16.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { Control.shuffleTo(!Control.shuffle) }, modifier = Modifier.size(56.dp)) { Icon(painterResource(R.drawable.ic_shuffle), "Shuffle", Modifier.size(28.dp), tint = if (Control.shuffle) Accent else Color.White) }
+            IconButton(onClick = { Control.previous() }, modifier = Modifier.size(64.dp)) { Icon(painterResource(R.drawable.ic_prev), "Previous", Modifier.size(44.dp)) }
+            IconButton(onClick = { Control.toggle() }, modifier = Modifier.size(88.dp)) {
+                Icon(painterResource(if (Control.isPlaying) R.drawable.ic_pause else R.drawable.ic_play), "Play / pause", Modifier.size(68.dp))
             }
-            IconButton(onClick = { Control.next() }) { Icon(painterResource(R.drawable.ic_next), "Next", Modifier.size(34.dp)) }
-            IconButton(onClick = { Control.repeatTo(!Control.repeatOn) }) { Icon(painterResource(R.drawable.ic_repeat), "Repeat", tint = if (Control.repeatOn) Accent else Color.White) }
-        }
-        Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-            IconButton(onClick = { panel = if (panel == 1) 0 else 1; info = false }) { Icon(painterResource(R.drawable.ic_lyrics), "Lyrics", tint = if (panel == 1) Accent else Color.White) }
-            if (!Control.remote) SpeedButton()
-            IconButton(onClick = { panel = if (panel == 2) 0 else 2; info = false }) { Icon(painterResource(R.drawable.ic_queue), "Queue", tint = if (panel == 2) Accent else Color.White) }
+            IconButton(onClick = { Control.next() }, modifier = Modifier.size(64.dp)) { Icon(painterResource(R.drawable.ic_next), "Next", Modifier.size(44.dp)) }
+            IconButton(onClick = { Control.repeatTo(!Control.repeatOn) }, modifier = Modifier.size(56.dp)) { Icon(painterResource(R.drawable.ic_repeat), "Repeat", Modifier.size(28.dp), tint = if (Control.repeatOn) Accent else Color.White) }
         }
     }
 
     androidx.compose.foundation.layout.BoxWithConstraints(
-        Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(bg, Bg))).padding(horizontal = 20.dp, vertical = 8.dp)
+        Modifier.fillMaxSize()
+            .offset { androidx.compose.ui.unit.IntOffset(0, offset.value.toInt()) }
+            .nestedScroll(connection)
+            .draggable(dragState, androidx.compose.foundation.gestures.Orientation.Vertical, onDragStopped = { release(it) })
+            .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(bg, Bg))).padding(horizontal = 20.dp, vertical = 8.dp)
             // the screen is on top of the app: a tap that nothing here uses must not reach what is under it
             .pointerInput(Unit) { detectTapGestures { } },
     ) {
@@ -124,14 +194,14 @@ fun NowPlayingScreen(onClose: () -> Unit) {
         if (wide) {
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 Box(Modifier.weight(1f).fillMaxHeight().padding(vertical = 8.dp)) { art() }
-                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center) { header(); meta(); buttons() }
+                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center) { header(); meta(); controls() }
             }
         } else {
             Column(Modifier.fillMaxSize()) {
                 header()
                 Box(Modifier.weight(1f).fillMaxWidth()) { art() }
                 meta()
-                buttons()
+                controls()
             }
         }
     }

@@ -2,6 +2,10 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
+## 0.1.5
+
+- **Profile picture:** the account's picture (the one set in another Icosahedron app; the sync server keeps it) shows at the top right of Home, and Settings → Account lets you add, change or remove it. Without one, the first letter of the user name is shown. The phone keeps a copy for the next launch and for offline.
+
 ## 0.1.4
 
 - **Offline cache:** songs you play are kept on the phone for next time, and the next song in the queue is fetched while the current one plays, so they start at once and play without a network. The oldest are removed when the limit is reached (Settings → Offline: 256 MB to 10 GB, clear the cache). On mobile data nothing is cached or downloaded unless you allow it there.

@@ -91,6 +91,7 @@ fun MainScreen() {
     val stack = remember { mutableStateListOf<Route>() }
     var showPlayer by remember { mutableStateOf(false) }
 
+    LaunchedEffect(client) { cloud.icosahedron.phone.data.Avatar.refresh(client) }
     LaunchedEffect(Control.remote) { while (Control.remote) { delay(500); Control.tick = System.currentTimeMillis() } }
 
     CompositionLocalProvider(LocalClient provides client) {
@@ -124,6 +125,7 @@ fun MainScreen() {
                             Dest.Home -> HomeScreen(
                                 push = push,
                                 allPlaylists = { libraryTab = 2; tab = Dest.Library },
+                                onProfile = { tab = Dest.Settings },
                             )
                             Dest.Library -> LibraryScreen(libraryTab, { libraryTab = it }, push)
                             Dest.Search -> SearchScreen(push)
@@ -165,7 +167,7 @@ private fun MiniPlayer(onOpen: () -> Unit) {
 
 // ── Home ──
 @Composable
-private fun HomeScreen(push: (Route) -> Unit, allPlaylists: () -> Unit) {
+private fun HomeScreen(push: (Route) -> Unit, allPlaylists: () -> Unit, onProfile: () -> Unit) {
     val client = LocalClient.current
     val scope = rememberCoroutineScope()
     val discover by load("discover") { client.albums("random", 20) }
@@ -175,7 +177,10 @@ private fun HomeScreen(push: (Route) -> Unit, allPlaylists: () -> Unit) {
     val playlists by load("playlists") { client.playlists() }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
         item {
-            Text("Icosahedron", fontSize = 28.sp, color = Accent, modifier = Modifier.padding(16.dp))
+            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Icosahedron", fontSize = 28.sp, color = Accent, modifier = Modifier.weight(1f))
+                AvatarView(36.dp, Modifier.clickable(onClick = onProfile))
+            }
             Button(
                 onClick = { scope.launch { runCatching { client.randomSongs(100) }.getOrNull()?.let { Control.playTracks(it, 0) } } },
                 modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),

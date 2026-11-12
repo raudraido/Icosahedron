@@ -133,7 +133,7 @@ fun NowPlayingScreen(onClose: () -> Unit) {
                 panel == 2 -> QueuePanel()
                 info -> InfoPanel(t, onClose, onCover = { info = false })
                 else -> androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Cover(t.coverArt, minOf(maxWidth, maxHeight), modifier = Modifier.clickable { info = true })
+                    Cover(t.coverArt, minOf(maxWidth, maxHeight) * 0.8f, modifier = Modifier.clickable { info = true })
                 }
             }
         }
@@ -146,6 +146,7 @@ fun NowPlayingScreen(onClose: () -> Unit) {
                 Column(Modifier.weight(1f)) {
                     Text(t.title, fontSize = if (big) 30.sp else 22.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = if (big) 36.sp else 28.sp)
                     Text(t.artist, fontSize = if (big) 22.sp else 15.sp, color = Color(0xCCFFFFFF), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    t.album?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = if (big) 17.sp else 13.sp, color = Color(0x99FFFFFF), maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 }
                 IconButton(onClick = { Favorites.toggleTrack(client, t, scope) }, modifier = Modifier.size(if (big) 76.dp else 56.dp)) {
                     Icon(if (fav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, if (fav) "Remove Favorite" else "Favorite", Modifier.size(if (big) 40.dp else 28.dp), tint = if (fav) Accent else Color.White)
@@ -153,16 +154,19 @@ fun NowPlayingScreen(onClose: () -> Unit) {
             }
             val dur = Control.durationMs.coerceAtLeast(1)
             val shown = dragging ?: (Control.positionMs.toFloat() / dur)
-            Slider(
-                value = shown.coerceIn(0f, 1f),
-                onValueChange = { dragging = it },
-                onValueChangeFinished = { dragging?.let { Control.seekTo((it * dur).toLong()) }; dragging = null },
-                colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Accent, inactiveTrackColor = Color(0x44FFFFFF)),
-                thumb = { SliderDefaults.Thumb(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, thumbSize = androidx.compose.ui.unit.DpSize(if (big) 10.dp else 4.dp, if (big) 56.dp else 44.dp), colors = SliderDefaults.colors(thumbColor = Color.White)) },
-            )
-            Row(Modifier.fillMaxWidth()) {
-                Text(fmt((shown * dur).toLong()), fontSize = if (big) 16.sp else 12.sp, color = Color(0xCCFFFFFF), modifier = Modifier.weight(1f))
-                Text(fmt(Control.durationMs), fontSize = if (big) 16.sp else 12.sp, color = Color(0xCCFFFFFF))
+            // The time already played at the left end of the bar, the time left (with a minus) at the right end
+            val timeStyle = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum")
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(fmt((shown * dur).toLong()), fontSize = if (big) 16.sp else 12.sp, style = timeStyle, color = Color(0xCCFFFFFF), modifier = Modifier.widthIn(min = if (big) 48.dp else 36.dp))
+                Slider(
+                    value = shown.coerceIn(0f, 1f),
+                    onValueChange = { dragging = it },
+                    onValueChangeFinished = { dragging?.let { Control.seekTo((it * dur).toLong()) }; dragging = null },
+                    colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Accent, inactiveTrackColor = Color(0x44FFFFFF)),
+                    thumb = { SliderDefaults.Thumb(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, thumbSize = androidx.compose.ui.unit.DpSize(if (big) 10.dp else 4.dp, if (big) 56.dp else 44.dp), colors = SliderDefaults.colors(thumbColor = Color.White)) },
+                    modifier = Modifier.weight(1f).padding(horizontal = 6.dp),
+                )
+                Text("-" + fmt(((1f - shown.coerceIn(0f, 1f)) * dur).toLong()), fontSize = if (big) 16.sp else 12.sp, style = timeStyle, color = Color(0xCCFFFFFF), textAlign = TextAlign.End, modifier = Modifier.widthIn(min = if (big) 56.dp else 40.dp))
             }
         }
     }

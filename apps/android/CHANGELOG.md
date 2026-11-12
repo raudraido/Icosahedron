@@ -2,6 +2,10 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
+## 0.1.20
+
+- **Now Playing:** the time already played is at the **left end of the seek bar** and the time left (with a minus, like "-0:06") at the **right end**, on the same row as the bar. The **album name** is under the artist. The **cover is 20% smaller**.
+
 ## 0.1.19
 
 - **The corners of the playback icons are a little rounded** (play, pause, previous, next, shuffle, repeat): they had sharp points; now the corners have a small radius, so they look softer. The icons are scaled down slightly to make up for the rounding.

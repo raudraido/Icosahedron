@@ -65,7 +65,9 @@ object Playback {
     fun init(context: Context) {
         if (::player.isInitialized) return
         appContext = context.applicationContext
+        Offline.init(appContext)
         player = ExoPlayer.Builder(appContext)
+            .setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(Offline.dataSourceFactory()))
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(),
                 true,
@@ -83,7 +85,7 @@ object Playback {
         })
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) { sync(); onChanged?.invoke() }
-            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) { sync(); nowPlaying(); onChanged?.invoke() }
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) { sync(); nowPlaying(); prefetchNext(); onChanged?.invoke() }
             override fun onPlaybackStateChanged(playbackState: Int) { sync(); onChanged?.invoke() }
             override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) { sync(); onChanged?.invoke() }
             override fun onRepeatModeChanged(repeatMode: Int) { sync(); onChanged?.invoke() }
@@ -97,6 +99,12 @@ object Playback {
                 if (queue.isNotEmpty()) { sync(); scrobbleWhenDue(); onTick?.invoke(); saveSession() }
             }
         }
+    }
+
+    /** Fetches the next song into the cache while this one plays. */
+    private fun prefetchNext() {
+        val next = queue.getOrNull(index + 1)
+        Offline.prefetch(next, next?.let { client?.streamUrl(it.id) })
     }
 
     /** Copies the player's state into the Compose state. */
@@ -122,6 +130,7 @@ object Playback {
         return MediaItem.Builder()
             .setMediaId(t.id)
             .setUri(c?.streamUrl(t.id))
+            .setCustomCacheKey(Offline.keyFor(t))
             .setMediaMetadata(
                 MediaMetadata.Builder()
                     .setTitle(t.title).setArtist(t.artist).setAlbumTitle(t.album)

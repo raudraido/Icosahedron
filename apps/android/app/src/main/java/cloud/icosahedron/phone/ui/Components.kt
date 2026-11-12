@@ -123,15 +123,32 @@ fun TrackRow(t: Track, showCover: Boolean = true, number: Int? = null, onPlay: (
             Text(t.title, maxLines = 1, overflow = TextOverflow.Ellipsis, color = if (playing) Accent else androidx.compose.ui.graphics.Color.White)
             Text(t.artist + (if (t.bpm != null && cloud.icosahedron.phone.data.Prefs.showBpm) " · ${t.bpm} BPM" else ""), maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, color = Dim)
         }
+        if (cloud.icosahedron.phone.player.Offline.isKept(t.id)) Text("↓ ", fontSize = 12.sp, color = Accent)
         Text(fmt(t.duration * 1000L), fontSize = 12.sp, color = Dim)
         Box {
             IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "More", tint = Dim) }
             DropdownMenu(menu, { menu = false }) {
                 DropdownMenuItem(text = { Text("Play next") }, onClick = { menu = false; Control.playNext(t) })
                 DropdownMenuItem(text = { Text("Add to queue") }, onClick = { menu = false; Control.addToQueue(listOf(t)) })
+                if (cloud.icosahedron.phone.player.Offline.isKept(t.id)) {
+                    DropdownMenuItem(text = { Text("Remove from offline") }, onClick = { menu = false; cloud.icosahedron.phone.player.Offline.unkeep(t) })
+                } else {
+                    val ctx = androidx.compose.ui.platform.LocalContext.current
+                    val cl = LocalClient.current
+                    DropdownMenuItem(text = { Text("Keep offline") }, onClick = { menu = false; keepOffline(ctx, cl, listOf(t)) })
+                }
             }
         }
     }
+}
+
+/** Starts keeping songs on the phone; on mobile data only when that is allowed in Settings. */
+fun keepOffline(context: android.content.Context, client: cloud.icosahedron.phone.data.SubsonicClient, tracks: List<Track>) {
+    if (!cloud.icosahedron.phone.player.Offline.cachingAllowed()) {
+        android.widget.Toast.makeText(context, "On mobile data downloads are off (Settings → Offline)", android.widget.Toast.LENGTH_LONG).show()
+        return
+    }
+    cloud.icosahedron.phone.player.Offline.keep(tracks) { client.streamUrl(it.id) }
 }
 
 fun fmt(ms: Long): String {

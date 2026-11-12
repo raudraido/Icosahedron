@@ -2,6 +2,12 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
+## 0.1.4
+
+- **Offline cache:** songs you play are kept on the phone for next time, and the next song in the queue is fetched while the current one plays, so they start at once and play without a network. The oldest are removed when the limit is reached (Settings → Offline: 256 MB to 10 GB, clear the cache). On mobile data nothing is cached or downloaded unless you allow it there.
+- **Keep offline:** in a song's menu and on every album and playlist page. Kept songs are never removed by the cache, have a ↓ mark, play without a network and are listed in **Library → Offline** (Play, Shuffle). Settings → Offline shows what is kept and removes it.
+- Still to come: nothing planned from the first list; browsing the library itself without a network is not part of this.
+
 ## 0.1.3
 
 - **Android Auto:** the app shows up on the car screen with Recently played, Playlists, Albums, Artists and a Random mix, and search by voice or text. A song played from an album or playlist plays the whole list from there. Bluetooth and Assistant use the same library. To try a sideloaded app in the car, switch on Android Auto's developer mode and *Unknown sources* (docs/android.md).

@@ -36,3 +36,44 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: cloud.raud.icosahedron
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+
+  # The same app with the CarPlay scene and the CarPlay Audio entitlement (docs/carplay.md). It is a separate target so
+  # that the .ipa that is signed with a free Apple ID (SideStore, AltStore) does not carry an entitlement Apple has not
+  # given: such an app would not install. Build it only with a paid account (Xcode, or the CarPlay simulator).
+  IcosahedronCarPlay:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+      - path: CarPlay
+    entitlements:
+      path: CarPlay/Icosahedron-CarPlay.entitlements
+      properties:
+        com.apple.developer.carplay-audio: true
+    info:
+      path: CarPlay/Info.plist
+      properties:
+        CFBundleDisplayName: Icosahedron
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        UIBackgroundModes: [audio]
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [en, et]
+        ITSAppUsesNonExemptEncryption: false
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+          UISceneConfigurations:
+            CPTemplateApplicationSceneSessionRoleApplication:
+              - UISceneConfigurationName: CarPlay
+                UISceneClassName: CPTemplateApplicationScene
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).CarPlaySceneDelegate
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: cloud.raud.icosahedron
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

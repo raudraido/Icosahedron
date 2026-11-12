@@ -2,6 +2,11 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
+## 0.1.22
+
+- **The Library remembers how you left it:** the tab you were on, how Albums are sorted and filtered (and grid or list), and how Artists are sorted (favorites only, grid or list). It used to start from the default every time you came back to Library. The "See all" pages from Home still open with the order they were asked for.
+- **Library → Favorite Songs:** a new section with every song you marked with the heart (the same list as Favorite Songs in the iOS app), with Play, Shuffle and the ⋮ menu (for example Download all or Add to Playlist). It follows the heart: a song you favorite or unfavorite anywhere appears or goes away at once. The Library tabs scroll sideways now, as there are five of them.
+
 ## 0.1.21
 
 - **Now Playing text is bigger:** the title, the artist and the album are about 15% bigger.

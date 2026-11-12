@@ -36,6 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cloud.icosahedron.phone.data.Album
+import cloud.icosahedron.phone.data.Prefs
 import cloud.icosahedron.phone.data.Artist
 import kotlinx.coroutines.launch
 import java.text.Normalizer
@@ -66,6 +67,12 @@ private val decades = listOf(
     AlbumFilter.Years("1960s", 1960, 1969), AlbumFilter.Years("1950s", 1950, 1959), AlbumFilter.Years("Earlier", 1, 1949),
 )
 
+private fun filterOf(key: String): AlbumFilter = when {
+    key == "fav" -> AlbumFilter.Favorites
+    key.startsWith("genre:") -> AlbumFilter.Genre(key.removePrefix("genre:"))
+    else -> decades.firstOrNull { it.key == key } ?: AlbumFilter.All
+}
+
 private fun letterOf(s: String): String {
     val f = Normalizer.normalize(s.trim(), Normalizer.Form.NFD).firstOrNull()?.uppercaseChar() ?: return "#"
     return if (f.isLetter()) f.toString() else "#"
@@ -90,11 +97,15 @@ private fun MenuButton(label: String, content: @Composable (close: () -> Unit) -
 }
 
 @Composable
-fun AlbumsBrowser(initial: AlbumSort, onAlbum: (Album) -> Unit) {
+/** [persist]: the Library tab remembers the sort, the filter and grid or list; the "See all" pages open as they were asked to. */
+fun AlbumsBrowser(initial: AlbumSort, onAlbum: (Album) -> Unit, persist: Boolean = false) {
     val client = LocalClient.current
-    var sort by rememberSaveable { mutableStateOf(initial) }
-    var filter by remember { mutableStateOf<AlbumFilter>(AlbumFilter.All) }
-    var grid by rememberSaveable { mutableStateOf(true) }
+    var sort by rememberSaveable { mutableStateOf(if (persist) runCatching { AlbumSort.valueOf(Prefs.albumSort) }.getOrDefault(initial) else initial) }
+    var filter by remember { mutableStateOf<AlbumFilter>(if (persist) filterOf(Prefs.albumFilter) else AlbumFilter.All) }
+    var grid by rememberSaveable { mutableStateOf(if (persist) Prefs.albumGrid else true) }
+    LaunchedEffect(sort, filter.key, grid) {
+        if (persist) { Prefs.albumSort = sort.name; Prefs.albumFilter = filter.key; Prefs.albumGrid = grid }
+    }
     var albums by remember { mutableStateOf<List<Album>>(emptyList()) }
     var loading by remember { mutableStateOf(false) }
     val genres by load("genres") { client.genres() }
@@ -192,9 +203,10 @@ private enum class ArtistSort(val title: String) { Name("Name"), MostAlbums("Mos
 @Composable
 fun ArtistsBrowser(onArtist: (Artist) -> Unit) {
     val client = LocalClient.current
-    var sort by rememberSaveable { mutableStateOf(ArtistSort.Name) }
-    var favoritesOnly by rememberSaveable { mutableStateOf(false) }
-    var grid by rememberSaveable { mutableStateOf(false) }
+    var sort by rememberSaveable { mutableStateOf(runCatching { ArtistSort.valueOf(Prefs.artistSort) }.getOrDefault(ArtistSort.Name)) }
+    var favoritesOnly by rememberSaveable { mutableStateOf(Prefs.artistFavorites) }
+    var grid by rememberSaveable { mutableStateOf(Prefs.artistGrid) }
+    LaunchedEffect(sort, favoritesOnly, grid) { Prefs.artistSort = sort.name; Prefs.artistFavorites = favoritesOnly; Prefs.artistGrid = grid }
     val all by load("artists") { client.artists() }
     val favorites by load("fav-artists") { client.starredAlbumsAndArtists().second.map { it.id }.toSet() }
     val shuffled = remember(all) { all?.shuffled() ?: emptyList() }

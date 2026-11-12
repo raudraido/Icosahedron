@@ -2,6 +2,12 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
+## 0.1.10
+
+- **Home:** the big "Icosahedron" title is gone. **Random mix** is now a small button in a row of quick buttons (more can be added next to it) with the profile picture at the right.
+- **Sound keeps working when the system's audio service restarts:** the player now asks for a fresh audio session if it was given none (every song then failed with "Invalid audio session ID"), and tries the song again once when the audio output cannot be opened.
+- **The equalizer effect is only made when the equalizer is on** (or its page is open), so a phone that does not use it does not touch the system's audio effects at all.
+
 ## 0.1.9
 
 - **A wide screen (a tablet, a phone on its side, a car) is used properly:** the tabs move to a rail at the left instead of a bar at the bottom, **Now Playing puts the cover on one side and the controls on the other**, and the album and artist grids take as many columns as fit.

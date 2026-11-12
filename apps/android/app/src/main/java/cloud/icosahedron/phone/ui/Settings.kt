@@ -217,6 +217,7 @@ private fun LastFmPage() {
 // ── Equalizer ──
 @Composable
 private fun EqualizerPage() {
+    LaunchedEffect(Unit) { Eq.ensure(cloud.icosahedron.phone.player.Playback.player.audioSessionId) }
     if (!Eq.available) { Note("This phone has no equalizer for the player."); return }
     Column {
         ToggleRow("Equalizer", Eq.enabled) { Eq.turn(it) }

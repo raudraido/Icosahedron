@@ -79,9 +79,20 @@ object Playback {
         keepPitch = prefs.getBoolean("keepPitch", true)
         applySpeed()
         Eq.init(appContext)
-        Eq.attach(player.audioSessionId)
+        // The system can fail to give the player a session (the audio service restarting): -1 then breaks every song
+        ensureAudioSession()
+        // The equalizer is an audio effect inside the system's audio service: it is only made when it is on (or being set up)
+        if (Eq.wantedAtStart) Eq.attach(player.audioSessionId)
         player.addListener(object : Player.Listener {
-            override fun onAudioSessionIdChanged(audioSessionId: Int) { Eq.attach(audioSessionId) }
+            override fun onAudioSessionIdChanged(audioSessionId: Int) { if (Eq.isAttached || Eq.wantedAtStart) Eq.attach(audioSessionId) }
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                // "AudioTrack init failed": get a fresh session once and try the song again
+                if (error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED && System.currentTimeMillis() - lastAudioRepair > 5_000) {
+                    lastAudioRepair = System.currentTimeMillis()
+                    ensureAudioSession(force = true)
+                    player.prepare()
+                }
+            }
         })
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) { sync(); onChanged?.invoke() }
@@ -99,6 +110,16 @@ object Playback {
                 if (queue.isNotEmpty()) { sync(); scrobbleWhenDue(); onTick?.invoke(); saveSession() }
             }
         }
+    }
+
+    private var lastAudioRepair = 0L
+
+    private fun ensureAudioSession(force: Boolean = false) {
+        try {
+            if (!force && player.audioSessionId > 0) return
+            val id = appContext.getSystemService(android.media.AudioManager::class.java).generateAudioSessionId()
+            if (id > 0) player.audioSessionId = id
+        } catch (_: Exception) { }
     }
 
     /** Fetches the next song into the cache while this one plays. */

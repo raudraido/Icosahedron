@@ -6,6 +6,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -213,14 +215,16 @@ private fun HomeScreen(push: (Route) -> Unit, allPlaylists: () -> Unit, onProfil
     val playlists by load("playlists" to Library.playlistsRevision) { client.playlists() }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
         item {
-            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Icosahedron", fontSize = 28.sp, color = Accent, modifier = Modifier.weight(1f))
-                AvatarView(36.dp, Modifier.clickable(onClick = onProfile))
+            // Quick buttons (more can be added next to Random mix) and the profile picture
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { scope.launch { runCatching { client.randomSongs(100) }.getOrNull()?.let { Control.playTracks(it, 0) } } },
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp), modifier = Modifier.height(36.dp),
+                    ) { Text("Random mix", fontSize = 14.sp) }
+                }
+                AvatarView(36.dp, Modifier.padding(start = 12.dp).clickable(onClick = onProfile))
             }
-            Button(
-                onClick = { scope.launch { runCatching { client.randomSongs(100) }.getOrNull()?.let { Control.playTracks(it, 0) } } },
-                modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
-            ) { Text("Random mix") }
         }
         item { AlbumShelf("Discover", discover, { push(Route.AlbumList("random", "Discover")) }) { push(Route.AlbumR(it.id)) } }
         item { AlbumShelf("Recently played", recent, { push(Route.AlbumList("recent", "Recently played")) }) { push(Route.AlbumR(it.id)) } }

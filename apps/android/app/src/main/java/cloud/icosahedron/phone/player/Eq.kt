@@ -24,6 +24,14 @@ object Eq {
 
     fun init(context: Context) { prefs = context.getSharedPreferences("eq", Context.MODE_PRIVATE) }
 
+    /** Only a phone that has the equalizer switched on makes the effect at start. */
+    val wantedAtStart: Boolean get() = ::prefs.isInitialized && prefs.getBoolean("enabled", false)
+    var isAttached = false
+        private set
+
+    /** Makes the effect when the equalizer page opens. */
+    fun ensure(session: Int) { if (!isAttached) attach(session) }
+
     /** Called with the player's audio session id (it changes). */
     fun attach(session: Int) {
         try {
@@ -38,8 +46,9 @@ object Eq {
             }
             enabled = prefs.getBoolean("enabled", false)
             available = true
+            isAttached = true
             apply()
-        } catch (_: Exception) { available = false }
+        } catch (_: Exception) { available = false; isAttached = false }
     }
 
     private fun apply() {

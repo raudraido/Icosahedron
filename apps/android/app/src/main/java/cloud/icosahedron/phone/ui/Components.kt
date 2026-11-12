@@ -115,7 +115,7 @@ fun ArtistRow(a: Artist, onClick: () -> Unit) {
 @Composable
 fun TrackRow(t: Track, showCover: Boolean = true, number: Int? = null, onPlay: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
-    val playing = Playback.current?.id == t.id
+    val playing = Control.track?.id == t.id
     Row(Modifier.fillMaxWidth().clickable(onClick = onPlay).padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         if (number != null) Text(number.toString(), color = Dim, modifier = Modifier.width(28.dp), fontSize = 14.sp)
         if (showCover) Cover(t.coverArt, 44.dp, modifier = Modifier.padding(end = 12.dp))
@@ -127,8 +127,8 @@ fun TrackRow(t: Track, showCover: Boolean = true, number: Int? = null, onPlay: (
         Box {
             IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "More", tint = Dim) }
             DropdownMenu(menu, { menu = false }) {
-                DropdownMenuItem(text = { Text("Play next") }, onClick = { menu = false; Playback.playNext(t) })
-                DropdownMenuItem(text = { Text("Add to queue") }, onClick = { menu = false; Playback.addToQueue(listOf(t)) })
+                DropdownMenuItem(text = { Text("Play next") }, onClick = { menu = false; Control.playNext(t) })
+                DropdownMenuItem(text = { Text("Add to queue") }, onClick = { menu = false; Control.addToQueue(listOf(t)) })
             }
         }
     }

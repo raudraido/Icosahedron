@@ -32,7 +32,15 @@ class SubsonicClient(val baseUrl: String, val user: String, val salt: String, va
             .addQueryParameter("v", "1.16.1")
             .addQueryParameter("c", "Icosahedron")
 
-    fun streamUrl(id: String): String = builder("stream").addQueryParameter("id", id).build().toString()
+    fun streamUrl(id: String): String {
+        val b = builder("stream").addQueryParameter("id", id)
+        val q = Quality.current()
+        if (q != "raw") {
+            val (format, kbps) = q.split("-").let { it[0] to it[1] }
+            b.addQueryParameter("format", format).addQueryParameter("maxBitRate", kbps)
+        }
+        return b.build().toString()
+    }
 
     fun coverUrl(id: String?, size: Int): String? =
         id?.let { builder("getCoverArt").addQueryParameter("id", it).addQueryParameter("size", size.toString()).build().toString() }
@@ -79,9 +87,24 @@ class SubsonicClient(val baseUrl: String, val user: String, val salt: String, va
         return pick.objs("line").map { LyricLine(if (synced) it.optLong("start") + offset else null, it.optString("value")) }
     }
 
-    suspend fun albums(type: String, size: Int = 40, offset: Int = 0): List<Album> =
-        call("getAlbumList2", "type" to type, "size" to size.toString(), "offset" to offset.toString())
+    suspend fun albums(type: String, size: Int = 40, offset: Int = 0, genre: String? = null, fromYear: Int? = null, toYear: Int? = null): List<Album> =
+        call(
+            "getAlbumList2",
+            *listOfNotNull(
+                "type" to type, "size" to size.toString(), "offset" to offset.toString(),
+                genre?.let { "genre" to it }, fromYear?.let { "fromYear" to it.toString() }, toYear?.let { "toYear" to it.toString() },
+            ).toTypedArray(),
+        )
             .optJSONObject("albumList2")?.objs("album")?.mapNotNull { Album.fromSubsonic(it) } ?: emptyList()
+
+    suspend fun genres(): List<String> =
+        call("getGenres").optJSONObject("genres")?.objs("genre")?.mapNotNull { it.str("value") }?.sorted() ?: emptyList()
+
+    suspend fun starredAlbumsAndArtists(): Pair<List<Album>, List<Artist>> {
+        val s = call("getStarred2").optJSONObject("starred2")
+        return (s?.objs("album")?.mapNotNull { Album.fromSubsonic(it) } ?: emptyList()) to
+            (s?.objs("artist")?.mapNotNull { Artist.fromSubsonic(it) } ?: emptyList())
+    }
 
     suspend fun artists(): List<Artist> =
         call("getArtists").optJSONObject("artists")?.objs("index")

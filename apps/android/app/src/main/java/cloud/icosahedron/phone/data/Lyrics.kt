@@ -23,7 +23,7 @@ object Lyrics {
 
     suspend fun forTrack(client: SubsonicClient, t: Track): List<LyricLine> {
         cache[t.id]?.let { return it }
-        val lines = runCatching { client.lyrics(t.id) }.getOrDefault(emptyList()).ifEmpty { lrclib(t) }
+        val lines = runCatching { client.lyrics(t.id) }.getOrDefault(emptyList()).ifEmpty { if (Prefs.lyricsOnline) lrclib(t) else emptyList() }
         cache[t.id] = lines
         return lines
     }

@@ -47,6 +47,11 @@ object Playback {
     var repeatAll by mutableStateOf(false)
         private set
 
+    var speed by mutableStateOf(1f)
+        private set
+    var keepPitch by mutableStateOf(true)
+        private set
+
     val current: Track? get() = queue.getOrNull(index)
 
     /** Called when what this player does changes (track, play state, queue, shuffle, repeat). */
@@ -67,6 +72,15 @@ object Playback {
             )
             .setHandleAudioBecomingNoisy(true)
             .build()
+        val prefs = appContext.getSharedPreferences("playback", Context.MODE_PRIVATE)
+        speed = prefs.getFloat("speed", 1f)
+        keepPitch = prefs.getBoolean("keepPitch", true)
+        applySpeed()
+        Eq.init(appContext)
+        Eq.attach(player.audioSessionId)
+        player.addListener(object : Player.Listener {
+            override fun onAudioSessionIdChanged(audioSessionId: Int) { Eq.attach(audioSessionId) }
+        })
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) { sync(); onChanged?.invoke() }
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) { sync(); nowPlaying(); onChanged?.invoke() }
@@ -182,6 +196,18 @@ object Playback {
     fun seekTo(ms: Long) { player.seekTo(ms.coerceAtLeast(0)); sync(); onChanged?.invoke() }
     fun shuffleTo(on: Boolean) { player.shuffleModeEnabled = on }
     fun repeatTo(on: Boolean) { player.repeatMode = if (on) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF }
+    /** Playback speed 0.5x to 2x; with [keep] the pitch stays (time-stretch), without it the pitch follows the speed. */
+    fun setSpeed(value: Float, keep: Boolean = keepPitch) {
+        speed = value.coerceIn(0.5f, 2f)
+        keepPitch = keep
+        applySpeed()
+        appContext.getSharedPreferences("playback", Context.MODE_PRIVATE).edit().putFloat("speed", speed).putBoolean("keepPitch", keepPitch).apply()
+    }
+
+    private fun applySpeed() {
+        player.playbackParameters = androidx.media3.common.PlaybackParameters(speed, if (keepPitch) 1f else speed)
+    }
+
     fun setVolume(percent: Int) { player.volume = (percent.coerceIn(0, 100)) / 100f }
 
     fun stop() {

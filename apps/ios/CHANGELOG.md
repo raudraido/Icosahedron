@@ -2,6 +2,10 @@
 
 A native SwiftUI app for iPhone and iPad (iOS 26.1 or later), built as an unsigned `.ipa` (sign it with SideStore, AltStore, Sideloadly or iloader: [docs/ios.md](../../docs/ios.md)). It has been part of the shared releases 0.15.3 to 0.15.9 (see the [main changelog](../../CHANGELOG.md)); from here it has its **own version, release and changelog**. What works with which server: [docs/compatibility.md](../../docs/compatibility.md).
 
+## 0.2.6
+
+- **Home:** the big title is gone (the small one stays in the bar) and **Random mix** is a small button in a row of quick buttons, like on Android; more can be added next to it.
+
 ## 0.2.5
 
 - **The "…" button next to Play and Shuffle is now three dots one above the other** (like on Android) and as tall as the Shuffle button.

@@ -8,6 +8,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -106,24 +111,11 @@ fun MainScreen() {
     }
 
     CompositionLocalProvider(LocalClient provides client, LocalOpener provides opener) {
-        Box(Modifier.fillMaxSize()) {
-            Scaffold(
-                containerColor = Bg,
-                bottomBar = {
-                    Column {
-                        MiniPlayer(onOpen = { showPlayer = true })
-                        NavigationBar(containerColor = Panel) {
-                            listOf(Dest.Home to Icons.Filled.Home, Dest.Library to Icons.Filled.List, Dest.Search to Icons.Filled.Search, Dest.Devices to Icons.Filled.Phone, Dest.Settings to Icons.Filled.Settings).forEach { (t, icon) ->
-                                NavigationBarItem(
-                                    selected = tab == t, onClick = { tab = t; stack.clear() },
-                                    icon = { Icon(icon, t.name) }, label = { Text(t.name) },
-                                    colors = NavigationBarItemDefaults.colors(selectedIconColor = Accent, selectedTextColor = Accent, indicatorColor = PanelHi, unselectedIconColor = Dim, unselectedTextColor = Dim),
-                                )
-                            }
-                        }
-                    }
-                },
-            ) { pad ->
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            // A wide screen (a tablet, a phone on its side, a car): the tabs go to a rail at the left, not a bar at the bottom
+            val wide = maxWidth > maxHeight && maxWidth >= 600.dp
+            val destinations = listOf(Dest.Home to Icons.Filled.Home, Dest.Library to Icons.Filled.List, Dest.Search to Icons.Filled.Search, Dest.Devices to Icons.Filled.Phone, Dest.Settings to Icons.Filled.Settings)
+            val body: @Composable (PaddingValues) -> Unit = { pad ->
                 Box(Modifier.padding(pad).fillMaxSize()) {
                     val top = stack.lastOrNull()
                     val push = { r: Route -> stack.add(r); Unit }
@@ -146,6 +138,38 @@ fun MainScreen() {
                         }
                     }
                 }
+            }
+            if (wide) {
+                Row(Modifier.fillMaxSize()) {
+                    Column(Modifier.fillMaxHeight().width(88.dp).background(Panel).padding(vertical = 8.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                        destinations.forEach { (t, icon) ->
+                            NavigationRailItem(
+                                selected = tab == t, onClick = { tab = t; stack.clear() },
+                                icon = { Icon(icon, t.name) }, label = { Text(t.name, fontSize = 11.sp) },
+                                colors = NavigationRailItemDefaults.colors(selectedIconColor = Accent, selectedTextColor = Accent, indicatorColor = PanelHi, unselectedIconColor = Dim, unselectedTextColor = Dim),
+                            )
+                        }
+                    }
+                    Scaffold(modifier = Modifier.weight(1f), containerColor = Bg, bottomBar = { MiniPlayer(onOpen = { showPlayer = true }) }) { body(it) }
+                }
+            } else {
+                Scaffold(
+                    containerColor = Bg,
+                    bottomBar = {
+                        Column {
+                            MiniPlayer(onOpen = { showPlayer = true })
+                            NavigationBar(containerColor = Panel) {
+                                destinations.forEach { (t, icon) ->
+                                    NavigationBarItem(
+                                        selected = tab == t, onClick = { tab = t; stack.clear() },
+                                        icon = { Icon(icon, t.name) }, label = { Text(t.name) },
+                                        colors = NavigationBarItemDefaults.colors(selectedIconColor = Accent, selectedTextColor = Accent, indicatorColor = PanelHi, unselectedIconColor = Dim, unselectedTextColor = Dim),
+                                    )
+                                }
+                            }
+                        }
+                    },
+                ) { body(it) }
             }
             BackHandler(enabled = stack.isNotEmpty()) { stack.removeLast() }
             BackHandler(enabled = stack.isEmpty() && tab != Dest.Home) { tab = Dest.Home }
@@ -328,8 +352,8 @@ private fun ArtistScreen(id: String, onBack: () -> Unit, push: (Route) -> Unit) 
     val albums = data?.second ?: emptyList()
     Column(Modifier.fillMaxSize()) {
         TopBar(data?.first?.name ?: "", onBack)
-        LazyVerticalGrid(GridCells.Fixed(2), Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            items(albums, key = { it.id }) { a -> AlbumCard(a, size = 170.dp) { push(Route.AlbumR(a.id)) } }
+        LazyVerticalGrid(GridCells.Adaptive(160.dp), Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            items(albums, key = { it.id }) { a -> AlbumCard(a, size = 160.dp) { push(Route.AlbumR(a.id)) } }
         }
     }
 }

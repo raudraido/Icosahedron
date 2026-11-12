@@ -125,11 +125,11 @@ fun NowPlayingScreen(onClose: () -> Unit) {
         }
     }
     // The cover, or what replaces it (lyrics, the queue, the song's details)
-    val art: @Composable () -> Unit = {
+    val art: @Composable (Boolean) -> Unit = { big ->
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             when {
                 t == null -> Text("Nothing is playing", color = Dim)
-                panel == 1 -> LyricsPanel(t)
+                panel == 1 -> LyricsPanel(t, big)
                 panel == 2 -> QueuePanel()
                 info -> InfoPanel(t, onClose, onCover = { info = false })
                 else -> androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -144,9 +144,9 @@ fun NowPlayingScreen(onClose: () -> Unit) {
             val fav = Favorites.track(t)
             Row(Modifier.fillMaxWidth().padding(top = if (big) 0.dp else 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(t.title, fontSize = if (big) 30.sp else 22.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = if (big) 36.sp else 28.sp)
-                    Text(t.artist, fontSize = if (big) 22.sp else 15.sp, color = Color(0xCCFFFFFF), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    t.album?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = if (big) 17.sp else 13.sp, color = Color(0x99FFFFFF), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    Text(t.title, fontSize = if (big) 35.sp else 25.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = if (big) 41.sp else 31.sp)
+                    Text(t.artist, fontSize = if (big) 25.sp else 17.sp, color = Color(0xCCFFFFFF), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    t.album?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = if (big) 20.sp else 15.sp, color = Color(0x99FFFFFF), maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 }
                 IconButton(onClick = { Favorites.toggleTrack(client, t, scope) }, modifier = Modifier.size(if (big) 76.dp else 56.dp)) {
                     Icon(if (fav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, if (fav) "Remove Favorite" else "Favorite", Modifier.size(if (big) 40.dp else 28.dp), tint = if (fav) Accent else Color.White)
@@ -217,7 +217,7 @@ fun NowPlayingScreen(onClose: () -> Unit) {
         val wide = maxWidth > maxHeight && maxWidth >= 600.dp
         if (wide) {
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                Box(Modifier.weight(1f).fillMaxHeight().padding(vertical = 8.dp)) { art() }
+                Box(Modifier.weight(1f).fillMaxHeight().padding(vertical = 8.dp)) { art(true) }
                 // spread over the whole height instead of bunched in the middle
                 Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
                     header(true)
@@ -229,7 +229,7 @@ fun NowPlayingScreen(onClose: () -> Unit) {
         } else {
             Column(Modifier.fillMaxSize()) {
                 header(false)
-                Box(Modifier.weight(1f).fillMaxWidth()) { art() }
+                Box(Modifier.weight(1f).fillMaxWidth()) { art(false) }
                 meta(false)
                 tools(false)
                 controls(false)
@@ -251,21 +251,27 @@ private fun ToolBlock(label: String, active: Boolean, onClick: () -> Unit, icon:
 }
 
 @Composable
-private fun LyricsPanel(t: cloud.icosahedron.phone.data.Track) {
+private fun LyricsPanel(t: cloud.icosahedron.phone.data.Track, big: Boolean) {
     val client = LocalClient.current
     val lines by load(t.id) { Lyrics.forTrack(client, t) }
     val list = lines
-    if (list == null) { Text("Looking for lyrics…", color = Dim); return }
-    if (list.isEmpty()) { Text("No lyrics found", color = Dim); return }
+    if (list == null) { Text("Looking for lyrics…", color = Dim, fontSize = if (big) 20.sp else 16.sp); return }
+    if (list.isEmpty()) { Text("No lyrics found", color = Dim, fontSize = if (big) 20.sp else 16.sp); return }
     val now = if (list.first().timeMs == null) -1 else list.indexOfLast { (it.timeMs ?: Long.MAX_VALUE) <= Control.positionMs }
     val state = rememberLazyListState()
-    LaunchedEffect(now) { if (now >= 0) state.animateScrollToItem((now - 2).coerceAtLeast(0)) }
-    LazyColumn(Modifier.fillMaxSize(), state = state, horizontalAlignment = Alignment.CenterHorizontally) {
+    // The line that is sung sits a third of the way down, with the next lines under it
+    LaunchedEffect(now) { if (now >= 0) state.animateScrollToItem(now, -(state.layoutInfo.viewportSize.height / 3)) }
+    LazyColumn(Modifier.fillMaxSize(), state = state, horizontalAlignment = Alignment.CenterHorizontally, contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 24.dp)) {
         itemsIndexed(list) { i, l ->
+            val current = i == now
             Text(
-                l.text.ifBlank { "♪" }, fontSize = 20.sp, textAlign = TextAlign.Center,
-                color = if (i == now) Color.White else Color(0x99FFFFFF),
-                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp).clickable(enabled = l.timeMs != null) { Control.seekTo(l.timeMs ?: 0) },
+                l.text.ifBlank { "♪" },
+                fontSize = if (big) (if (current) 34.sp else 25.sp) else (if (current) 27.sp else 20.sp),
+                lineHeight = if (big) (if (current) 42.sp else 32.sp) else (if (current) 33.sp else 26.sp),
+                fontWeight = if (current) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal,
+                textAlign = TextAlign.Center,
+                color = if (current) Color.White else Color(0x80FFFFFF),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = if (big) 11.dp else 8.dp).clickable(enabled = l.timeMs != null) { Control.seekTo(l.timeMs ?: 0) },
             )
         }
     }

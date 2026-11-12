@@ -1,4 +1,4 @@
-# Icosahedron
+# Icosahedron HUB
 
 A music player for your own [Navidrome](https://www.navidrome.org/) / Subsonic server — on your **desktop**, in your **browser** and on your **iPhone** — with everything kept in step: start a song on one device and continue on another, or control one device from another.
 

@@ -22,10 +22,7 @@ struct PlaylistsList: View {
                     }
                 }
                 .contextMenu {
-                    CollectionMenuItems(kind: "playlist", id: p.id, name: p.name, subtitle: "\(p.songCount) tracks", coverArt: p.coverArt)
-                    Divider()
-                    Button { app.renamePlaylist(p) } label: { Label("Rename", systemImage: "pencil") }
-                    Button(role: .destructive) { app.deletePlaylist(p) } label: { Label("Delete", systemImage: "trash") }
+                    CollectionMenuItems(kind: "playlist", id: p.id, name: p.name, subtitle: "\(p.songCount) tracks", coverArt: p.coverArt, playlist: p)
                 }
                 .swipeActions(edge: .trailing) {
                     Button(role: .destructive) { app.deletePlaylist(p) } label: { Label("Delete", systemImage: "trash") }

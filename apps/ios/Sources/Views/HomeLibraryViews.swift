@@ -87,6 +87,10 @@ struct AlbumDetailView: View {
                         .buttonStyle(.borderedProminent)
                     Button { app.play(tracks.shuffled(), at: 0) } label: { Label("Shuffle", systemImage: "shuffle").frame(maxWidth: .infinity) }
                         .buttonStyle(.bordered)
+                    Menu {
+                        CollectionMenuItems(kind: "album", id: album.id, name: album.name, subtitle: album.artist, coverArt: album.coverArt, album: album, preloaded: tracks)
+                    } label: { Image(systemName: "ellipsis").frame(width: 24) }
+                        .buttonStyle(.bordered)
                 }
                 .disabled(tracks.isEmpty)
             }
@@ -100,16 +104,6 @@ struct AlbumDetailView: View {
         }
         .listStyle(.plain)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if !tracks.isEmpty {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button { app.keepOffline(tracks) } label: { Label("Keep Album Offline", systemImage: "arrow.down.circle") }
-                        Button { app.removeOffline(tracks.map { $0.id }) } label: { Label("Remove Offline", systemImage: "arrow.down.circle.badge.xmark") }
-                    } label: { Image(systemName: "ellipsis.circle") }
-                }
-            }
-        }
         .task { tracks = (try? await app.client?.album(album.id).1) ?? [] }
     }
 

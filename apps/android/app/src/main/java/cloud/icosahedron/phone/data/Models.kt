@@ -81,13 +81,14 @@ data class Album(
     val coverArt: String?,
     val year: Int?,
     val songCount: Int,
+    val starred: Boolean = false,
 ) {
     companion object {
         fun fromSubsonic(o: JSONObject): Album? {
             val id = o.str("id") ?: return null
             return Album(
                 id, o.str("name") ?: o.str("title") ?: "", o.str("artist") ?: "", o.str("artistId"),
-                o.str("coverArt"), o.int("year"), o.int("songCount") ?: 0,
+                o.str("coverArt"), o.int("year"), o.int("songCount") ?: 0, o.has("starred"),
             )
         }
     }

@@ -2,6 +2,14 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
+## 0.1.7
+
+**One menu for albums, playlists and songs, the same as in the iOS app.**
+
+- On an album or playlist page there is a **⋮** button next to Play and Shuffle. The same menu opens on a long press on a card and on a song's ⋮: **Play Next, Add to Queue, Add to Device Queue, Download, Favorite, Add to Playlist, Share**, and Show Album / Show Artist or Rename / Delete where they fit.
+- **Favorite** works on albums (the same as Albums → Filter → Favorites) and songs. **Add to Playlist** adds a whole album or playlist (or makes a new playlist from it). **Share** makes a Navidrome share link. **Add to Device Queue** sends it to another of your devices.
+- "Keep offline" is now **Download** everywhere, and the offline view is **Library → Downloads**.
+
 ## 0.1.6
 
 - **Albums and playlists can be brought offline from the lists:** a long press on an album or a playlist (Home, Library, search) offers Play, Add to queue and Keep offline / Remove from offline. A kept one has a ↓ in front of its name.

@@ -72,7 +72,7 @@ fun SectionHeader(title: String, onSeeAll: (() -> Unit)? = null) {
 
 @Composable
 fun AlbumCard(a: Album, size: Dp = 140.dp, onClick: () -> Unit) {
-    CollectionBox("album", a.id, a.name, a.artist, a.coverArt, onClick, Modifier.width(size)) {
+    CollectionBox("album", a.id, a.name, a.artist, a.coverArt, onClick, Modifier.width(size), album = a) {
         Cover(a.coverArt, size)
         Text(kept("album", a.id) + a.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp))
         Text(a.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, color = Dim)
@@ -94,7 +94,7 @@ fun PlaylistShelf(playlists: List<Playlist>?, onSeeAll: () -> Unit, onOpen: (Pla
     SectionHeader("Playlists", onSeeAll)
     LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         items(playlists.take(20)) { p ->
-            CollectionBox("playlist", p.id, p.name, "${p.songCount} songs", p.coverArt, { onOpen(p) }, Modifier.width(140.dp)) {
+            CollectionBox("playlist", p.id, p.name, "${p.songCount} songs", p.coverArt, { onOpen(p) }, Modifier.width(140.dp), playlist = p) {
                 Cover(p.coverArt, 140.dp)
                 Text(kept("playlist", p.id) + p.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp))
                 Text("${p.songCount} songs", fontSize = 12.sp, color = Dim)
@@ -130,17 +130,7 @@ fun TrackRow(t: Track, showCover: Boolean = true, number: Int? = null, onPlay: (
         Text(fmt(t.duration * 1000L), fontSize = 12.sp, color = Dim)
         Box {
             IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "More", tint = Dim) }
-            DropdownMenu(menu, { menu = false }) {
-                DropdownMenuItem(text = { Text("Play next") }, onClick = { menu = false; Control.playNext(t) })
-                DropdownMenuItem(text = { Text("Add to queue") }, onClick = { menu = false; Control.addToQueue(listOf(t)) })
-                if (cloud.icosahedron.phone.player.Offline.isKept(t.id)) {
-                    DropdownMenuItem(text = { Text("Remove from offline") }, onClick = { menu = false; cloud.icosahedron.phone.player.Offline.unkeep(t) })
-                } else {
-                    val ctx = androidx.compose.ui.platform.LocalContext.current
-                    val cl = LocalClient.current
-                    DropdownMenuItem(text = { Text("Keep offline") }, onClick = { menu = false; keepOffline(ctx, cl, listOf(t)) })
-                }
-            }
+            TargetMenu(Target("track", t.id, t.title, t.artist, t.coverArt, track = t), menu) { menu = false }
         }
     }
 }
@@ -148,7 +138,7 @@ fun TrackRow(t: Track, showCover: Boolean = true, number: Int? = null, onPlay: (
 /** Starts keeping songs on the phone; on mobile data only when that is allowed in Settings. */
 fun keepOffline(context: android.content.Context, client: cloud.icosahedron.phone.data.SubsonicClient, tracks: List<Track>) {
     if (!cloud.icosahedron.phone.player.Offline.cachingAllowed()) {
-        android.widget.Toast.makeText(context, "On mobile data downloads are off (Settings → Offline)", android.widget.Toast.LENGTH_LONG).show()
+        android.widget.Toast.makeText(context, "On mobile data downloads are off (Settings → Downloads)", android.widget.Toast.LENGTH_LONG).show()
         return
     }
     cloud.icosahedron.phone.player.Offline.keep(tracks) { client.streamUrl(it.id) }
@@ -173,34 +163,16 @@ fun AvatarView(size: Dp = 36.dp, modifier: Modifier = Modifier) {
 private fun kept(kind: String, id: String) = if (cloud.icosahedron.phone.player.Offline.isCollectionKept(kind, id)) "↓ " else ""
 
 /**
- * An album or playlist card or row: a tap opens it, a long press offers Play, Add to queue and Keep offline.
+ * An album or playlist card or row: a tap opens it, a long press opens the same menu as the "⋮" button on its page.
  * The songs are fetched when an action needs them.
  */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-fun CollectionBox(kind: String, id: String, name: String, subtitle: String, cover: String?, onClick: () -> Unit, modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
-    val client = LocalClient.current
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
+fun CollectionBox(kind: String, id: String, name: String, subtitle: String, cover: String?, onClick: () -> Unit, modifier: Modifier = Modifier, album: Album? = null, playlist: Playlist? = null, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
     var menu by remember { mutableStateOf(false) }
-    val offline = cloud.icosahedron.phone.player.Offline
-    val isKept = offline.isCollectionKept(kind, id)
-    suspend fun tracks(): List<Track> = if (kind == "album") client.album(id).second else client.playlistTracks(id)
     Box(modifier) {
         Column(Modifier.androidx_combined(onClick) { menu = true }, content = content)
-        DropdownMenu(menu, { menu = false }) {
-            DropdownMenuItem(text = { Text("Play") }, onClick = { menu = false; scope.launch { runCatching { tracks() }.getOrNull()?.let { Control.playTracks(it, 0) } } })
-            DropdownMenuItem(text = { Text("Add to queue") }, onClick = { menu = false; scope.launch { runCatching { tracks() }.getOrNull()?.let { Control.addToQueue(it) } } })
-            if (isKept) DropdownMenuItem(text = { Text("Remove from offline") }, onClick = { menu = false; offline.unkeepCollection(kind, id) })
-            else DropdownMenuItem(text = { Text("Keep offline") }, onClick = {
-                menu = false
-                scope.launch {
-                    val t = runCatching { tracks() }.getOrNull()
-                    if (t.isNullOrEmpty()) android.widget.Toast.makeText(context, "Could not load it", android.widget.Toast.LENGTH_SHORT).show()
-                    else keepCollectionOffline(context, client, kind, id, name, subtitle, cover, t)
-                }
-            })
-        }
+        TargetMenu(Target(kind, id, name, subtitle, cover, album = album, playlist = playlist), menu) { menu = false }
     }
 }
 

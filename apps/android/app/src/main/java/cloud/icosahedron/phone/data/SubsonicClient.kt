@@ -163,6 +163,24 @@ class SubsonicClient(val baseUrl: String, val user: String, val salt: String, va
 
     suspend fun setStarred(id: String, on: Boolean) { call(if (on) "star" else "unstar", "id" to id) }
 
+    suspend fun setAlbumStarred(id: String, on: Boolean) { call(if (on) "star" else "unstar", "albumId" to id) }
+
+    suspend fun addToPlaylist(playlistId: String, songIds: List<String>) {
+        call("updatePlaylist", *(listOf("playlistId" to playlistId) + songIds.map { "songIdToAdd" to it }).toTypedArray())
+    }
+
+    suspend fun createPlaylist(name: String, songIds: List<String>) {
+        call("createPlaylist", *(listOf("name" to name) + songIds.map { "songId" to it }).toTypedArray())
+    }
+
+    suspend fun renamePlaylist(id: String, name: String) { call("updatePlaylist", "playlistId" to id, "name" to name) }
+
+    suspend fun deletePlaylist(id: String) { call("deletePlaylist", "id" to id) }
+
+    /** A share link (Navidrome sharing) for a song, an album or a playlist. */
+    suspend fun createShare(id: String): String? =
+        call("createShare", "id" to id).optJSONObject("shares")?.objs("share")?.firstOrNull()?.str("url")
+
     suspend fun scrobble(id: String, submission: Boolean) {
         call("scrobble", "id" to id, "submission" to submission.toString())
     }

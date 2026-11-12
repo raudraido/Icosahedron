@@ -57,7 +57,7 @@ fun SettingsScreen() {
         Page.LastFm -> Sub("Last.fm", { page = Page.Main }) { LastFmPage() }
         Page.Equalizer -> Sub("Equalizer", { page = Page.Main }) { EqualizerPage() }
         Page.Devices -> Sub("Secure sign-in", { page = Page.Main }) { DevicesPage() }
-        Page.Offline -> Sub("Offline", { page = Page.Main }) { OfflinePage() }
+        Page.Offline -> Sub("Downloads", { page = Page.Main }) { OfflinePage() }
     }
 }
 
@@ -132,8 +132,8 @@ private fun MainSettings(open: (Page) -> Unit) {
             LinkRow("Secure sign-in", when (secure) { true -> "On"; false -> "Off"; null -> "" }) { open(Page.Devices) }
             Header("Sound")
             LinkRow("Equalizer", if (Eq.enabled) "On" else "Off") { open(Page.Equalizer) }
-            Header("Offline")
-            LinkRow("Cache and kept songs", "${cloud.icosahedron.phone.player.Offline.kept.size} kept") { open(Page.Offline) }
+            Header("Downloads")
+            LinkRow("Downloads and cache", "${cloud.icosahedron.phone.player.Offline.kept.size} downloaded") { open(Page.Offline) }
             Header("Lists")
             ToggleRow("Show BPM in song lists", bpm) { bpm = it; Prefs.showBpm = it }
             Header("Lyrics")
@@ -322,11 +322,11 @@ private fun OfflinePage() {
             Row { Text("In the cache now", Modifier.weight(1f)); Text(mb(used), color = Dim) }
             TextButton(onClick = { offline.clearCache(); used = 0 }) { Text("Clear the cache", color = Accent) }
             ToggleRow("Cache and download on mobile data", cellular) { cellular = it; Prefs.cacheOnCellular = it }
-            Header("Kept on this phone")
+            Header("Downloaded")
             Row { Text("${offline.kept.size} songs", Modifier.weight(1f)); Text(mb(keptBytes), color = Dim) }
             if (offline.pending > 0) Note("Downloading: ${offline.pending} left")
-            Note("Use \"Keep offline\" in a song's menu or on an album or playlist. Kept songs are never removed by the cache.")
-            if (offline.kept.isNotEmpty()) TextButton(onClick = { offline.unkeepAll() }) { Text("Remove all kept songs", color = Accent) }
+            Note("Use \"Download\" in the menu of a song, an album or a playlist. Downloaded songs are never removed by the cache.")
+            if (offline.kept.isNotEmpty()) TextButton(onClick = { offline.unkeepAll() }) { Text("Remove all downloads", color = Accent) }
         }
     }
 }

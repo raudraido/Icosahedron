@@ -106,6 +106,17 @@ final class AppModel {
         playlists = (try? await client?.playlists()) ?? []
     }
 
+    /// Adds a whole list (an album, a playlist) to a playlist.
+    func addToPlaylist(_ tracks: [Track], _ playlist: Playlist) async {
+        do {
+            try await client?.addToPlaylist(playlist.id, songIds: tracks.map { $0.id })
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            await refreshPlaylists()
+        } catch {
+            UINotificationFeedbackGenerator().notificationOccurred(.error)
+        }
+    }
+
     func addToPlaylist(_ track: Track, _ playlist: Playlist) async {
         do {
             try await client?.addToPlaylist(playlist.id, songId: track.id)
@@ -126,7 +137,7 @@ final class AppModel {
         AudioCache.shared.unpin(ids)
     }
 
-    /// Keeps a whole album or playlist: it is listed under Cached Songs and its songs are downloaded.
+    /// Keeps a whole album or playlist: it is listed under Downloads and its songs are downloaded.
     func keepCollection(kind: String, id: String, name: String, subtitle: String, coverArt: String?, tracks: [Track]) {
         OfflineCollections.shared.add(OfflineCollection(kind: kind, id: id, name: name, subtitle: subtitle, coverArt: coverArt, tracks: tracks))
         keepOffline(tracks)
@@ -212,6 +223,18 @@ final class AppModel {
     func isStarred(_ t: Track) -> Bool { starredOverrides[t.id] ?? t.starred }
     func rating(_ t: Track) -> Int { ratingOverrides[t.id] ?? t.userRating ?? 0 }
 
+    func isStarred(album a: Album) -> Bool { starredOverrides["album:" + a.id] ?? a.starred }
+
+    func toggleStar(album a: Album) {
+        guard let c = client else { return }
+        let on = !isStarred(album: a)
+        starredOverrides["album:" + a.id] = on
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Task {
+            do { try await c.setAlbumStarred(a.id, on) } catch { starredOverrides["album:" + a.id] = !on }
+        }
+    }
+
     func toggleStar(_ t: Track) {
         guard let c = client else { return }
         let on = !isStarred(t)
@@ -240,10 +263,13 @@ final class AppModel {
         }
     }
 
-    func share(_ t: Track) {
+    func share(_ t: Track) { shareItem(t.id) }
+
+    /// A share link for a song, an album or a playlist (Navidrome sharing).
+    func shareItem(_ id: String) {
         guard let c = client else { return }
         Task {
-            if let url = try? await c.createShare(t.id) {
+            if let url = try? await c.createShare(id) {
                 Presenter.share(url)
             } else {
                 Presenter.alert(String(localized: "Sharing is not available"), String(localized: "Turn on sharing in the Navidrome server settings (ND_ENABLESHARING)."))

@@ -51,7 +51,7 @@ struct AlbumCard: View {
             Text(album.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
         }
         .frame(width: width, alignment: .leading)
-        .collectionMenu(kind: "album", id: album.id, name: album.name, subtitle: album.artist, coverArt: album.coverArt)
+        .collectionMenu(kind: "album", id: album.id, name: album.name, subtitle: album.artist, coverArt: album.coverArt, album: album)
     }
 }
 
@@ -128,7 +128,7 @@ struct PlaylistShelf: View {
                                     Text("\(p.songCount) tracks").font(.caption).foregroundStyle(.secondary).lineLimit(1)
                                 }
                                 .frame(width: 150, alignment: .leading)
-                                .collectionMenu(kind: "playlist", id: p.id, name: p.name, subtitle: "\(p.songCount) tracks", coverArt: p.coverArt)
+                                .collectionMenu(kind: "playlist", id: p.id, name: p.name, subtitle: "\(p.songCount) tracks", coverArt: p.coverArt, playlist: p)
                             }
                             .buttonStyle(.plain)
                         }
@@ -185,6 +185,7 @@ struct TrackRow: View {
 /// A scrollable list of tracks with Play / Shuffle; tapping a row plays from there.
 struct TrackListScreen: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.dismiss) private var dismiss
     let title: String
     let loader: () async throws -> [Track]
     /// Set for a playlist: the list can then be edited (reorder, remove) and the server is updated.
@@ -200,6 +201,14 @@ struct TrackListScreen: View {
                     Button { start(shuffled: false) } label: { Label("Play", systemImage: "play.fill").frame(maxWidth: .infinity) }
                         .buttonStyle(.borderedProminent)
                     Button { start(shuffled: true) } label: { Label("Shuffle", systemImage: "shuffle").frame(maxWidth: .infinity) }
+                        .buttonStyle(.bordered)
+                    Menu {
+                        CollectionMenuItems(
+                            kind: playlist != nil ? "playlist" : "list", id: playlist?.id ?? title, name: title,
+                            subtitle: "\(tracks.count) tracks", coverArt: playlist?.coverArt ?? tracks.first?.coverArt,
+                            playlist: playlist, preloaded: tracks, onRemoved: { dismiss() }
+                        )
+                    } label: { Image(systemName: "ellipsis").frame(width: 24) }
                         .buttonStyle(.bordered)
                 }
                 .listRowSeparator(.hidden)
@@ -225,14 +234,6 @@ struct TrackListScreen: View {
         .toolbar {
             if playlist != nil {
                 ToolbarItem(placement: .topBarTrailing) { EditButton() }
-            }
-            if !tracks.isEmpty {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button { app.keepOffline(tracks) } label: { Label("Keep All Offline", systemImage: "arrow.down.circle") }
-                        Button { app.removeOffline(tracks.map { $0.id }) } label: { Label("Remove Offline", systemImage: "arrow.down.circle.badge.xmark") }
-                    } label: { Image(systemName: "ellipsis.circle") }
-                }
             }
         }
         .task {

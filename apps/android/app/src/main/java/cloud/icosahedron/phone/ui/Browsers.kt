@@ -170,7 +170,7 @@ fun AlbumsBrowser(initial: AlbumSort, onAlbum: (Album) -> Unit) {
             ) {
                 items(albums, key = { it.id }) { a ->
                     if (grid) AlbumCard(a, size = 170.dp) { onAlbum(a) }
-                    else CollectionBox("album", a.id, a.name, a.artist, a.coverArt, { onAlbum(a) }, Modifier.fillMaxWidth()) { Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    else CollectionBox("album", a.id, a.name, a.artist, a.coverArt, { onAlbum(a) }, Modifier.fillMaxWidth(), album = a) { Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Cover(a.coverArt, 56.dp)
                         Column(Modifier.padding(start = 12.dp)) {
                             Text((if (cloud.icosahedron.phone.player.Offline.isCollectionKept("album", a.id)) "↓ " else "") + a.name, maxLines = 2, overflow = TextOverflow.Ellipsis)

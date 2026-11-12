@@ -169,6 +169,10 @@ final class SubsonicClient {
         _ = try await call(on ? "star" : "unstar", [item("id", id)])
     }
 
+    func setAlbumStarred(_ id: String, _ on: Bool) async throws {
+        _ = try await call(on ? "star" : "unstar", [item("albumId", id)])
+    }
+
     /// `submission: false` = "now playing", `true` = a finished play.
     /// `time` is when the play happened (so a delayed, offline-queued scrobble still gets the right time).
     func scrobble(_ id: String, submission: Bool, time: Date? = nil) async throws {
@@ -212,6 +216,12 @@ final class SubsonicClient {
 
     func addToPlaylist(_ playlistId: String, songId: String) async throws {
         _ = try await call("updatePlaylist", [item("playlistId", playlistId), item("songIdToAdd", songId)])
+    }
+
+    func addToPlaylist(_ playlistId: String, songIds: [String]) async throws {
+        var items = [item("playlistId", playlistId)]
+        items += songIds.map { item("songIdToAdd", $0) }
+        _ = try await call("updatePlaylist", items)
     }
 
     func createPlaylist(name: String, songIds: [String]) async throws {

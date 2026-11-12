@@ -33,9 +33,9 @@ struct TrackMenuContent: View {
             }
             Divider()
             if AudioCache.shared.isPinned(track.id) {
-                Button { app.removeOffline([track.id]) } label: { Label("Remove Offline", systemImage: "arrow.down.circle.badge.xmark") }
+                Button { app.removeOffline([track.id]) } label: { Label("Remove Download", systemImage: "arrow.down.circle.badge.xmark") }
             } else {
-                Button { app.keepOffline([track]) } label: { Label("Keep Offline", systemImage: "arrow.down.circle") }
+                Button { app.keepOffline([track]) } label: { Label("Download", systemImage: "arrow.down.circle") }
             }
             Button { app.toggleStar(track) } label: {
                 Label(app.isStarred(track) ? String(localized: "Remove Favorite") : String(localized: "Favorite"), systemImage: app.isStarred(track) ? "heart.slash" : "heart")

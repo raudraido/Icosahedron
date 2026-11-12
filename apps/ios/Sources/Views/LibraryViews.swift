@@ -7,7 +7,7 @@ enum LibrarySection: String, Hashable, CaseIterable {
     case recent = "Recently Played Albums"
     case songs = "Songs"
     case favorites = "Favorite Songs"
-    case cached = "Cached Songs"
+    case cached = "Downloads"
     case directories = "Directories"
     case playlists = "Playlists"
     case radios = "Radios"
@@ -20,7 +20,7 @@ enum LibrarySection: String, Hashable, CaseIterable {
         case .recent: return "Recently Played Albums"
         case .songs: return "Songs"
         case .favorites: return "Favorite Songs"
-        case .cached: return "Cached Songs"
+        case .cached: return "Downloads"
         case .directories: return "Directories"
         case .playlists: return "Playlists"
         case .radios: return "Radios"
@@ -222,7 +222,7 @@ struct CachedSongsScreen: View {
             Section {
                 Picker("", selection: $onlyKept) {
                     Text("All").tag(false)
-                    Text("Kept Offline").tag(true)
+                    Text("Downloaded").tag(true)
                 }
                 .pickerStyle(.segmented)
                 Text("\(playable.count) songs · cache \(bytes(sizes.auto)) · kept offline \(bytes(sizes.pinned))")
@@ -261,12 +261,12 @@ struct CachedSongsScreen: View {
                 row(e, playable: playable)
             }
             if shown.isEmpty {
-                Text(onlyKept ? "Nothing kept offline yet. Use \"Keep Offline\" in a track's menu." : "No songs cached yet.")
+                Text(onlyKept ? "Nothing downloaded yet. Use \"Download\" in a track's, album's or playlist's menu." : "No songs cached yet.")
                     .foregroundStyle(.secondary)
             }
         }
         .listStyle(.plain)
-        .navigationTitle("Cached Songs")
+        .navigationTitle("Downloads")
         .navigationBarTitleDisplayMode(.inline)
         .task { if let c = app.client { await AudioCache.shared.fillMissingMetadata(client: c) } }
     }
@@ -292,9 +292,9 @@ struct CachedSongsScreen: View {
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) { remove(e) } label: { Label("Remove", systemImage: "trash") }
             if e.pinned {
-                Button { app.removeOffline([e.id]) } label: { Label("Unpin", systemImage: "pin.slash") }.tint(.orange)
+                Button { app.removeOffline([e.id]) } label: { Label("Remove Download", systemImage: "pin.slash") }.tint(.orange)
             } else {
-                Button { app.keepOffline([e.track]) } label: { Label("Keep", systemImage: "arrow.down.circle") }.tint(.blue)
+                Button { app.keepOffline([e.track]) } label: { Label("Download", systemImage: "arrow.down.circle") }.tint(.blue)
             }
         }
     }

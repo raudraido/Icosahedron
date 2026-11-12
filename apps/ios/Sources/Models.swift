@@ -119,10 +119,13 @@ struct Album: Identifiable, Hashable {
     var coverArt: String?
     var year: Int?
     var songCount: Int
+    /// Marked as a favorite on the server.
+    var starred: Bool = false
 
     init?(subsonic d: [String: Any]) {
         guard let id = J.str(d, "id") else { return nil }
         self.id = id
+        starred = d["starred"] != nil
         name = J.str(d, "name") ?? J.str(d, "title") ?? ""
         artist = J.str(d, "artist") ?? ""
         artistId = J.str(d, "artistId")

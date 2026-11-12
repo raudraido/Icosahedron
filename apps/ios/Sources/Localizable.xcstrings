@@ -2400,6 +2400,86 @@
           }
         }
       }
+    },
+    "Download": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laadi alla"
+          }
+        }
+      }
+    },
+    "Remove Download": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eemalda allalaadimine"
+          }
+        }
+      }
+    },
+    "Downloads": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allalaadimised"
+          }
+        }
+      }
+    },
+    "Downloaded": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alla laaditud"
+          }
+        }
+      }
+    },
+    "Album": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Album"
+          }
+        }
+      }
+    },
+    "Playlist": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esitusloend"
+          }
+        }
+      }
+    },
+    "Albums and Playlists": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Albumid ja esitusloendid"
+          }
+        }
+      }
+    },
+    "Nothing downloaded yet. Use \"Download\" in a track's, album's or playlist's menu.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Midagi pole alla laaditud. Kasuta loo, albumi või esitusloendi menüüs „Laadi alla“."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

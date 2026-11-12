@@ -43,9 +43,12 @@ targets:
   IcosahedronCarPlay:
     type: application
     platform: iOS
+    # Sources holds the other target's generated Info.plist: it must not be copied into this app a second time
     sources:
       - path: Sources
+        excludes: ["Info.plist"]
       - path: CarPlay
+        excludes: ["Info.plist", "*.entitlements"]
     entitlements:
       path: CarPlay/Icosahedron-CarPlay.entitlements
       properties:

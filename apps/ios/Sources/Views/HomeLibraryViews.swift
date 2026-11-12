@@ -89,7 +89,7 @@ struct AlbumDetailView: View {
                         .buttonStyle(.bordered)
                     Menu {
                         CollectionMenuItems(kind: "album", id: album.id, name: album.name, subtitle: album.artist, coverArt: album.coverArt, album: album, preloaded: tracks)
-                    } label: { Image(systemName: "ellipsis").frame(width: 24) }
+                    } label: { Image(systemName: "ellipsis").rotationEffect(.degrees(90)).frame(width: 24, height: 22) }
                         .buttonStyle(.bordered)
                 }
                 .disabled(tracks.isEmpty)

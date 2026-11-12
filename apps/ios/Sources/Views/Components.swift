@@ -208,7 +208,7 @@ struct TrackListScreen: View {
                             subtitle: "\(tracks.count) tracks", coverArt: playlist?.coverArt ?? tracks.first?.coverArt,
                             playlist: playlist, preloaded: tracks, onRemoved: { dismiss() }
                         )
-                    } label: { Image(systemName: "ellipsis").frame(width: 24) }
+                    } label: { Image(systemName: "ellipsis").rotationEffect(.degrees(90)).frame(width: 24, height: 22) }
                         .buttonStyle(.bordered)
                 }
                 .listRowSeparator(.hidden)

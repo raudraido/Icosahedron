@@ -2,6 +2,11 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
+## 0.1.8
+
+- **Tap the cover in Now Playing** to see the song's details under a smaller cover (title, artist, album, year, genre, format, bitrate, sample rate, bit depth, channels, length, file size, path, BPM, plays, date added); the artist and the album open their pages. Tap the cover again to go back. This is how the iOS app works.
+- **A tap on Now Playing no longer reaches the screen under it** (it could press something there, for example "next song").
+
 ## 0.1.7
 
 **One menu for albums, playlists and songs, the same as in the iOS app.**

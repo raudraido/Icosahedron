@@ -3,6 +3,8 @@ package cloud.icosahedron.phone.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -50,9 +53,14 @@ fun NowPlayingScreen(onClose: () -> Unit) {
     val tint = rememberCoverTint(t?.coverArt)
     val bg by animateColorAsState(tint ?: Panel, label = "tint")
     var panel by remember { mutableStateOf(0) } // 0 cover, 1 lyrics, 2 queue
+    var info by remember { mutableStateOf(false) } // the cover tapped: the song's details under a smaller cover
     var dragging by remember { mutableStateOf<Float?>(null) }
 
-    Column(Modifier.fillMaxSize().background(bg).padding(horizontal = 20.dp, vertical = 8.dp)) {
+    Column(
+        Modifier.fillMaxSize().background(bg).padding(horizontal = 20.dp, vertical = 8.dp)
+            // the screen is on top of the app: a tap that nothing here uses must not reach what is under it
+            .pointerInput(Unit) { detectTapGestures { } },
+    ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onClose) { Icon(Icons.Filled.KeyboardArrowDown, "Close") }
             Text(if (Control.remote) "Playing on ${targetName()}" else "Now playing", color = if (Control.remote) Accent else Dim, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
@@ -63,8 +71,9 @@ fun NowPlayingScreen(onClose: () -> Unit) {
                 t == null -> Text("Nothing is playing", color = Dim)
                 panel == 1 -> LyricsPanel(t)
                 panel == 2 -> QueuePanel()
+                info -> InfoPanel(t, onClose, onCover = { info = false })
                 else -> androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Cover(t.coverArt, minOf(maxWidth, maxHeight))
+                    Cover(t.coverArt, minOf(maxWidth, maxHeight), modifier = Modifier.clickable { info = true })
                 }
             }
         }
@@ -94,9 +103,9 @@ fun NowPlayingScreen(onClose: () -> Unit) {
             IconButton(onClick = { Control.repeatTo(!Control.repeatOn) }) { Icon(painterResource(R.drawable.ic_repeat), "Repeat", tint = if (Control.repeatOn) Accent else Color.White) }
         }
         Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-            IconButton(onClick = { panel = if (panel == 1) 0 else 1 }) { Icon(painterResource(R.drawable.ic_lyrics), "Lyrics", tint = if (panel == 1) Accent else Color.White) }
+            IconButton(onClick = { panel = if (panel == 1) 0 else 1; info = false }) { Icon(painterResource(R.drawable.ic_lyrics), "Lyrics", tint = if (panel == 1) Accent else Color.White) }
             if (!Control.remote) SpeedButton()
-            IconButton(onClick = { panel = if (panel == 2) 0 else 2 }) { Icon(painterResource(R.drawable.ic_queue), "Queue", tint = if (panel == 2) Accent else Color.White) }
+            IconButton(onClick = { panel = if (panel == 2) 0 else 2; info = false }) { Icon(painterResource(R.drawable.ic_queue), "Queue", tint = if (panel == 2) Accent else Color.White) }
         }
     }
 }
@@ -164,3 +173,61 @@ private fun SpeedButton() {
 }
 
 private fun speedLabel(s: Float) = (if (s == s.toInt().toFloat()) s.toInt().toString() else s.toString().trimEnd('0')) + "×"
+
+/**
+ * The details of the playing song, under a smaller cover (tap the cover to go back). The queue's songs can come
+ * from another device with only the basics, so the full song is fetched once.
+ */
+@Composable
+private fun InfoPanel(track: cloud.icosahedron.phone.data.Track, onClose: () -> Unit, onCover: () -> Unit) {
+    val client = LocalClient.current
+    val opener = LocalOpener.current
+    val full by load(track.id) { client.song(track.id) }
+    val t = full ?: track
+    fun row(label: String, value: String, small: Boolean = false, onClick: (() -> Unit)? = null): @Composable () -> Unit = {
+        Row(
+            Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(label, color = Color(0xA6FFFFFF))
+            Text(value, fontSize = if (small) 12.sp else 16.sp, textAlign = TextAlign.End, color = if (onClick != null) Accent else Color.White, modifier = Modifier.weight(1f).padding(start = 12.dp))
+        }
+    }
+    val sizeText = t.size?.let { "%.1f MB".format(it / 1048576.0) }
+    val rate = t.samplingRate?.let { hz -> (hz / 1000.0).let { k -> if (k == Math.rint(k)) "%.0f kHz".format(k) else "%.1f kHz".format(k) } }
+    val channelText = t.channels?.let { when (it) { 1 -> "Mono"; 2 -> "Stereo"; else -> "$it channels" } }
+    val added = t.created?.take(10)
+    LazyColumn(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+        item { Cover(t.coverArt, 110.dp, modifier = Modifier.clickable(onClick = onCover).padding(bottom = 12.dp)) }
+        val cards = listOf(
+            listOfNotNull<@Composable () -> Unit>(
+                row("Title", t.title),
+                t.artistId?.let { id -> row("Artist", t.artist) { onClose(); opener.artist(id) } } ?: row("Artist", t.artist),
+                t.album?.takeIf { it.isNotEmpty() }?.let { name -> t.albumId?.let { id -> row("Album", name) { onClose(); opener.album(id) } } ?: row("Album", name) },
+                if (t.trackNumber > 0) row("Track", if (t.discNumber > 1) "${t.discNumber}-${t.trackNumber}" else "${t.trackNumber}") else null,
+                t.year?.let { row("Year", it.toString()) },
+                t.genre?.takeIf { it.isNotEmpty() }?.let { row("Genre", it) },
+            ),
+            listOfNotNull<@Composable () -> Unit>(
+                t.format?.takeIf { it.isNotEmpty() }?.let { row("Format", it.uppercase()) },
+                t.bitrate?.let { row("Bitrate", "$it kbps") },
+                rate?.let { row("Sample rate", it) },
+                t.bitDepth?.takeIf { it > 0 }?.let { row("Bit depth", "$it-bit") },
+                channelText?.let { row("Channels", it) },
+                row("Length", fmt(t.duration * 1000L)),
+                sizeText?.let { row("File size", it) },
+                t.path?.takeIf { it.isNotEmpty() }?.let { row("Path", it, small = true) },
+            ),
+            listOfNotNull<@Composable () -> Unit>(
+                t.bpm?.let { row("BPM", it.toString()) },
+                t.playCount?.let { row("Plays", it.toString()) },
+                added?.let { row("Added", it) },
+            ),
+        ).filter { it.isNotEmpty() }
+        items(cards) { rows ->
+            androidx.compose.foundation.layout.Column(Modifier.fillMaxWidth().padding(vertical = 6.dp).background(Color(0x22000000), androidx.compose.foundation.shape.RoundedCornerShape(14.dp))) {
+                rows.forEach { it() }
+            }
+        }
+    }
+}

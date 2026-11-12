@@ -30,6 +30,14 @@ data class Track(
     val bitrate: Int?,
     val format: String?,
     val bpm: Int? = null,
+    // Technical details, only on songs read from the server's own song objects.
+    val size: Long? = null,
+    val path: String? = null,
+    val samplingRate: Int? = null,
+    val bitDepth: Int? = null,
+    val channels: Int? = null,
+    val playCount: Int? = null,
+    val created: String? = null,
 ) {
     /** The track object of the sync protocol (the shape the desktop, web and iOS apps use). */
     fun toWire(): JSONObject = JSONObject().apply {
@@ -58,6 +66,7 @@ data class Track(
                 o.str("album"), o.str("albumId"), o.int("track") ?: 0, o.int("discNumber") ?: 0,
                 o.int("duration") ?: 0, o.str("coverArt"), o.has("starred"),
                 o.int("year"), o.str("genre"), o.int("bitRate"), o.str("suffix"), o.int("bpm")?.takeIf { it > 0 },
+                o.str("size")?.toLongOrNull(), o.str("path"), o.int("samplingRate"), o.int("bitDepth"), o.int("channelCount"), o.int("playCount"), o.str("created"),
             )
         }
 

@@ -45,12 +45,10 @@ struct MainTabs: View {
                 .navigationTransition(.zoom(sourceID: "cover", in: zoom))
         }
         .tabBarMinimizeBehavior(.onScrollDown)
-        // Secure sign-in: another device asks this phone to approve it.
-        .sheet(item: Binding(get: { app.sync.approvals.first }, set: { _ in })) { request in
-            ApprovalPromptView(request: request)
-                .presentationDetents([.medium])
-                .interactiveDismissDisabled()
-        }
+        // Secure sign-in: another device asks this phone to approve it. Shown in a window of its own, so it
+        // is on top of the player and of any sheet.
+        .onChange(of: app.sync.approvals) { _, list in ApprovalWindow.shared.show(list.first, app: app) }
+        .onAppear { ApprovalWindow.shared.show(app.sync.approvals.first, app: app) }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await app.sync.refreshApprovals() } }
         }

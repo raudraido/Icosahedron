@@ -55,6 +55,59 @@ struct ApprovalPromptView: View {
     }
 }
 
+/// The approval prompt as a card over a dimmed screen: it is shown in a window of its own (below), not as a
+/// sheet, because a sheet cannot open while the player (a full-screen cover) or another sheet is up.
+struct ApprovalOverlay: View {
+    let request: SecureSignIn.Pending
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.55).ignoresSafeArea()
+            ApprovalPromptView(request: request)
+                .background(Theme.background, in: RoundedRectangle(cornerRadius: 24))
+                .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.12)))
+                .padding(.horizontal, 16)
+                .frame(maxWidth: 460)
+        }
+        .preferredColorScheme(.dark)
+    }
+}
+
+/// Shows the prompt above everything the app has on screen (the player, sheets, menus): another window at alert level.
+@MainActor
+final class ApprovalWindow {
+    static let shared = ApprovalWindow()
+    private var window: UIWindow?
+
+    func show(_ request: SecureSignIn.Pending?, app: AppModel) {
+        guard let request else { hide(); return }
+        let root = ApprovalOverlay(request: request).environment(app)
+        if let host = window?.rootViewController as? UIHostingController<AnyView> {
+            host.rootView = AnyView(root)
+            window?.isHidden = false
+            return
+        }
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        guard let scene = scenes.first(where: { $0.activationState == .foregroundActive }) ?? scenes.first else { return }
+        let w = UIWindow(windowScene: scene)
+        w.windowLevel = UIWindow.Level.alert + 1
+        w.backgroundColor = .clear
+        let host = UIHostingController(rootView: AnyView(root))
+        host.view.backgroundColor = .clear
+        w.rootViewController = host
+        w.makeKeyAndVisible()
+        window = w
+    }
+
+    private func hide() {
+        guard let w = window else { return }
+        let scene = w.windowScene
+        w.isHidden = true
+        window = nil
+        scene?.windows.first(where: { !$0.isHidden })?.makeKey() // the app's own window takes the keyboard focus back
+    }
+}
+
 /// The sign-in of a server with secure sign-in: a number on this screen, approved on a device that is already signed in.
 struct SignInApprovalView: View {
     let base: URL

@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 // Each product has its own version (see docs/releasing.md):
-//   node scripts/bump-version.mjs <desktop|server|ios|android> X.Y.Z
+//   node scripts/bump-version.mjs <desktop|server|ios|android|android-phone> X.Y.Z
 // desktop  -> root package.json and lock file         tag vX.Y.Z          changelog CHANGELOG.md
 // server   -> apps/server package.json and lock file  tag server-vX.Y.Z   changelog apps/server/CHANGELOG.md
 //             (the engine and the web app it serves are one product)
 // ios      -> apps/ios/VERSION                         tag ios-vX.Y.Z      changelog apps/ios/CHANGELOG.md
 // android  -> apps/android-tv/VERSION                  tag android-vX.Y.Z  changelog apps/android-tv/CHANGELOG.md
+// android-phone -> apps/android/VERSION            tag android-phone-vX.Y.Z  changelog apps/android/CHANGELOG.md
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -15,12 +16,13 @@ const PRODUCTS = {
   server: { json: ["apps/server/package.json", "apps/server/package-lock.json"], tag: (v) => `server-v${v}`, changelog: "apps/server/CHANGELOG.md" },
   ios: { file: "apps/ios/VERSION", tag: (v) => `ios-v${v}`, changelog: "apps/ios/CHANGELOG.md" },
   android: { file: "apps/android-tv/VERSION", tag: (v) => `android-v${v}`, changelog: "apps/android-tv/CHANGELOG.md" },
+  "android-phone": { file: "apps/android/VERSION", tag: (v) => `android-phone-v${v}`, changelog: "apps/android/CHANGELOG.md" },
 };
 
 const [product, version] = process.argv.slice(2);
 const p = PRODUCTS[product];
 if (!p || !/^\d+\.\d+\.\d+$/.test(version ?? "")) {
-  console.error("usage: node scripts/bump-version.mjs <desktop|server|ios|android> X.Y.Z");
+  console.error("usage: node scripts/bump-version.mjs <desktop|server|ios|android|android-phone> X.Y.Z");
   process.exit(1);
 }
 

@@ -26,6 +26,7 @@ A music player for your own [Navidrome](https://www.navidrome.org/) / Subsonic s
 | **Web engine** | Small Docker service: sync hub, Navidrome proxy, BPM store, Last.fm, serves the web app | [`apps/server`](apps/server) | [docs/deploy-server.md](docs/deploy-server.md) |
 | **Web app** | The desktop UI in a browser, installable as a PWA; served by the engine | built from `src/` | [docs/web.md](docs/web.md) |
 | **iOS app** | Native SwiftUI app for iPhone and iPad (gapless, offline cache, lyrics, Siri/Shortcuts, â€¦) | [`apps/ios`](apps/ios) | [docs/ios.md](docs/ios.md) |
+| **Android phone app** | Native Kotlin app for Android phones, like the iOS app: browse, play, lyrics, queue, approve sign-ins | [`apps/android`](apps/android) | [docs/android.md](docs/android.md) |
 | **Android TV app** | Native Kotlin app for Google TV / Android TV: plays through the TV, browses with the remote, appears as a device in the other apps | [`apps/android-tv`](apps/android-tv) | [docs/android-tv.md](docs/android-tv.md) |
 
 How they fit together: [docs/architecture.md](docs/architecture.md). The sync wire protocol: [docs/sync-protocol.md](docs/sync-protocol.md).
@@ -81,7 +82,7 @@ The native audio engine can be rebuilt on its own with `npm run build:native` â€
 
 ## Releases
 
-Every app has its own version and its own release: a `vX.Y.Z` tag publishes the desktop app, `server-vX.Y.Z` the Docker image (engine and web app), `ios-vX.Y.Z` the iOS `.ipa`, `android-vX.Y.Z` the Android TV APK. See [docs/releasing.md](docs/releasing.md), [docs/compatibility.md](docs/compatibility.md) and the changelogs ([desktop](CHANGELOG.md), [server](apps/server/CHANGELOG.md), [iOS](apps/ios/CHANGELOG.md), [Android TV](apps/android-tv/CHANGELOG.md)).
+Every app has its own version and its own release: a `vX.Y.Z` tag publishes the desktop app, `server-vX.Y.Z` the Docker image (engine and web app), `ios-vX.Y.Z` the iOS `.ipa`, `android-vX.Y.Z` the Android TV APK, `android-phone-vX.Y.Z` the Android phone APK. See [docs/releasing.md](docs/releasing.md), [docs/compatibility.md](docs/compatibility.md) and the changelogs ([desktop](CHANGELOG.md), [server](apps/server/CHANGELOG.md), [iOS](apps/ios/CHANGELOG.md), [Android TV](apps/android-tv/CHANGELOG.md), [Android phone](apps/android/CHANGELOG.md)).
 
 ## License
 

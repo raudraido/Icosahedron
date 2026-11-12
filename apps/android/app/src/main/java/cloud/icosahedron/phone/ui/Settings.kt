@@ -1,5 +1,9 @@
 package cloud.icosahedron.phone.ui
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -7,10 +11,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -19,37 +30,216 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cloud.icosahedron.phone.App
 import cloud.icosahedron.phone.BuildConfig
+import cloud.icosahedron.phone.data.LastFm
+import cloud.icosahedron.phone.data.Prefs
+import cloud.icosahedron.phone.data.Quality
 import cloud.icosahedron.phone.data.SecureSignIn
+import cloud.icosahedron.phone.player.Eq
 import kotlinx.coroutines.launch
 import java.text.DateFormat
 import java.util.Date
 
+private enum class Page { Main, Sync, LastFm, Equalizer, Devices }
+
 @Composable
 fun SettingsScreen() {
+    var page by remember { mutableStateOf(Page.Main) }
+    BackHandler(enabled = page != Page.Main) { page = Page.Main }
+    when (page) {
+        Page.Main -> MainSettings(open = { page = it })
+        Page.Sync -> Sub("Sync Server", { page = Page.Main }) { SyncPage() }
+        Page.LastFm -> Sub("Last.fm", { page = Page.Main }) { LastFmPage() }
+        Page.Equalizer -> Sub("Equalizer", { page = Page.Main }) { EqualizerPage() }
+        Page.Devices -> Sub("Secure sign-in", { page = Page.Main }) { DevicesPage() }
+    }
+}
+
+@Composable
+private fun Sub(title: String, back: () -> Unit, content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxSize()) {
+        TopBar(title, back)
+        Column(Modifier.padding(horizontal = 16.dp)) { content() }
+    }
+}
+
+@Composable
+private fun Header(text: String) = Text(text, color = Accent, fontSize = 13.sp, modifier = Modifier.padding(top = 20.dp, bottom = 6.dp))
+
+@Composable
+private fun Note(text: String) = Text(text, color = Dim, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
+
+@Composable
+private fun LinkRow(label: String, value: String = "", onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f))
+        if (value.isNotEmpty()) Text(value, color = Dim, fontSize = 13.sp)
+        Text("  ›", color = Dim)
+    }
+}
+
+@Composable
+private fun ToggleRow(label: String, on: Boolean, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f))
+        Switch(on, onChange, colors = SwitchDefaults.colors(checkedTrackColor = Accent))
+    }
+}
+
+@Composable
+private fun ChoiceRow(label: String, value: String, options: List<String>, text: (String) -> String, onPick: (String) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Row(Modifier.fillMaxWidth().clickable { open = true }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f))
+        androidx.compose.foundation.layout.Box {
+            Text(text(value) + " ▾", color = Dim, fontSize = 13.sp)
+            DropdownMenu(open, { open = false }) {
+                options.forEach { o -> DropdownMenuItem(text = { Text((if (o == value) "✓ " else "") + text(o)) }, onClick = { onPick(o); open = false }) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MainSettings(open: (Page) -> Unit) {
     val app = App.instance
     val client = LocalClient.current
     val sync = app.sync
-    val scope = rememberCoroutineScope()
-    var reload by remember { mutableIntStateOf(0) }
-    val secure by load(reload) { SecureSignIn.isOn(client) }
-    val devices by load(reload to secure) { if (secure == true) SecureSignIn.devices(client) else null }
+    var lyrics by remember { mutableStateOf(Prefs.lyricsOnline) }
+    var wifi by remember { mutableStateOf(Prefs.qualityWifi) }
+    var cell by remember { mutableStateOf(Prefs.qualityCellular) }
+    val secure by load("secure") { SecureSignIn.isOn(client) }
 
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         item {
             Text("Settings", fontSize = 28.sp, color = Accent, modifier = Modifier.padding(vertical = 16.dp))
-            Text("Account", color = Dim, fontSize = 13.sp)
-            Text("${client.user} at ${client.baseUrl}")
-            Text("Sync: ${sync?.status ?: "off"}${sync?.name?.let { " · this phone is \"$it\"" } ?: ""}", color = Dim, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
-            Text("Secure sign-in: ${when (secure) { true -> "on"; false -> "off"; null -> "…" }}", color = Dim, fontSize = 13.sp)
-            Text("Icosahedron Android ${BuildConfig.VERSION_NAME}", color = Dim, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
+            Header("About")
+            Row { Text("Version", Modifier.weight(1f)); Text(BuildConfig.VERSION_NAME, color = Dim) }
+            Header("Account")
+            Row { Text("Server", Modifier.weight(1f)); Text(client.baseUrl.substringAfter("://"), color = Dim) }
+            Row(Modifier.padding(top = 6.dp)) { Text("User", Modifier.weight(1f)); Text(client.user, color = Dim) }
+            Header("Connections")
+            LinkRow("Sync Server", when (sync?.status) { "online" -> "Connected"; "connecting" -> "Connecting…"; else -> "Not reachable" }) { open(Page.Sync) }
+            LinkRow("Last.fm") { open(Page.LastFm) }
+            LinkRow("Secure sign-in", when (secure) { true -> "On"; false -> "Off"; null -> "" }) { open(Page.Devices) }
+            Header("Sound")
+            LinkRow("Equalizer", if (Eq.enabled) "On" else "Off") { open(Page.Equalizer) }
+            Header("Lyrics")
+            ToggleRow("Look up lyrics online (LRCLIB)", lyrics) { lyrics = it; Prefs.lyricsOnline = it }
+            Header("Playback quality")
+            ChoiceRow("Wi-Fi", wifi, Quality.options, Quality::label) { wifi = it; Prefs.qualityWifi = it }
+            ChoiceRow("Cellular", cell, Quality.options, Quality::label) { cell = it; Prefs.qualityCellular = it }
+            Note("Wi-Fi and wired use the Wi-Fi profile, mobile data the Cellular one. Transcoding is done by your Navidrome server. It applies to the songs you start from now on.")
+            Note("Right now: ${if (Quality.onCellular()) "Cellular" else "Wi-Fi"} · ${Quality.label(Quality.current())}")
+            OutlinedButton(onClick = { app.signOut() }, modifier = Modifier.padding(top = 24.dp, bottom = 24.dp).fillMaxWidth()) { Text("Sign out") }
         }
-        if (secure == true) {
-            item { Text("Trusted devices", fontSize = 18.sp, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)) }
-            val d = devices
+    }
+}
+
+// ── Sync ──
+@Composable
+private fun SyncPage() {
+    val sync = App.instance.sync
+    val scope = rememberCoroutineScope()
+    if (sync == null) { Note("Not signed in."); return }
+    var name by remember(sync.name) { mutableStateOf(sync.name ?: "") }
+    LazyColumn(Modifier.fillMaxSize()) {
+        item {
+            Header("Connection")
+            Row { Text("Status", Modifier.weight(1f)); Text(sync.status, color = Dim) }
+            Note("The sync server is the address you signed in with. To use a different one, sign out and sign in with it.")
+            if (sync.status == "online") {
+                Header("This phone")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.OutlinedTextField(name, { name = it }, singleLine = true, modifier = Modifier.weight(1f), label = { Text("Name") })
+                    TextButton(onClick = { sync.rename(sync.myId, name.trim()) }, enabled = name.isNotBlank() && name != sync.name) { Text("Save", color = Accent) }
+                }
+                Header("Registered players")
+            }
+        }
+        if (sync.status == "online") {
+            items(sync.registry, key = { it.id }) { d ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(d.name + if (d.id == sync.myId) " (this phone)" else "")
+                        Text("${d.kind} · ${if (d.online) "online" else "last seen " + DateFormat.getDateInstance(DateFormat.SHORT).format(Date(d.lastSeen))}", fontSize = 12.sp, color = if (d.online) Accent else Dim)
+                    }
+                    if (!d.online && d.id != sync.myId) TextButton(onClick = { sync.forget(d.id) }) { Text("Forget", color = Accent) }
+                }
+            }
+            item { Note("Every player signed in with your account. Players that stay offline for 90 days are removed automatically.") }
+        }
+    }
+}
+
+// ── Last.fm ──
+@Composable
+private fun LastFmPage() {
+    val client = LocalClient.current
+    val context = LocalContext.current
+    val fm = remember { LastFm() }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) { fm.refresh(client) }
+    when (fm.state) {
+        LastFm.State.UNKNOWN -> Note("Not available (needs the sync server).")
+        LastFm.State.NOT_CONFIGURED -> Note("The sync server has no Last.fm API key yet (LASTFM_API_KEY and LASTFM_API_SECRET on it).")
+        LastFm.State.DISCONNECTED ->
+            if (fm.pendingToken == null) {
+                OutlinedButton(onClick = { scope.launch { fm.begin(client)?.let { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it))) } } }, modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) { Text("Connect to Last.fm") }
+            } else {
+                Note("Approve the connection in the browser, then come back and finish.")
+                OutlinedButton(onClick = { scope.launch { fm.finish(client) } }, modifier = Modifier.fillMaxWidth()) { Text("Finish connecting") }
+                TextButton(onClick = { fm.pendingToken = null }) { Text("Cancel") }
+            }
+        LastFm.State.CONNECTED -> {
+            Header("Account")
+            Text(fm.username)
+            ToggleRow("Scrobble", fm.scrobble) { on -> scope.launch { fm.setScrobbling(on, client) } }
+            TextButton(onClick = { scope.launch { fm.disconnect(client) } }) { Text("Disconnect", color = Accent) }
+        }
+    }
+    fm.message?.let { Text(it, color = Accent, fontSize = 13.sp) }
+    Note("Scrobbles go through your server, so one connection covers all your devices.")
+}
+
+// ── Equalizer ──
+@Composable
+private fun EqualizerPage() {
+    if (!Eq.available) { Note("This phone has no equalizer for the player."); return }
+    Column {
+        ToggleRow("Equalizer", Eq.enabled) { Eq.turn(it) }
+        Eq.freqs.forEachIndexed { b, hz ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(if (hz >= 1000) "${hz / 1000} kHz" else "$hz Hz", fontSize = 12.sp, color = Dim, modifier = Modifier.padding(end = 8.dp).fillMaxWidth(0.2f))
+                Slider(
+                    Eq.levels[b].toFloat(), { Eq.setLevel(b, it.toInt()) }, valueRange = Eq.minLevel.toFloat()..Eq.maxLevel.toFloat(),
+                    colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Accent), enabled = Eq.enabled,
+                )
+            }
+        }
+        TextButton(onClick = { Eq.reset() }) { Text("Reset", color = Accent) }
+    }
+}
+
+// ── Secure sign-in ──
+@Composable
+private fun DevicesPage() {
+    val client = LocalClient.current
+    val scope = rememberCoroutineScope()
+    var reload by remember { mutableIntStateOf(0) }
+    val secure by load(reload) { SecureSignIn.isOn(client) }
+    val devices by load(reload to secure) { if (secure == true) SecureSignIn.devices(client) else null }
+    Text("Secure sign-in: ${when (secure) { true -> "on"; false -> "off"; null -> "…" }}", modifier = Modifier.padding(top = 12.dp))
+    if (secure == false) Note("Switch it on from the desktop or iOS app (Settings → Sync Server → Secure sign-in).")
+    if (secure == true) {
+        Header("Trusted devices")
+        val d = devices
+        LazyColumn {
             items(d?.first ?: emptyList(), key = { it.id }) { dev ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -59,9 +249,6 @@ fun SettingsScreen() {
                     if (dev.id != d?.second) TextButton(onClick = { scope.launch { SecureSignIn.remove(client, dev.id); reload++ } }) { Text("Remove", color = Accent) }
                 }
             }
-        }
-        item {
-            OutlinedButton(onClick = { app.signOut() }, modifier = Modifier.padding(top = 24.dp).fillMaxWidth()) { Text("Sign out") }
         }
     }
 }

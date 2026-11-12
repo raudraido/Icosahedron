@@ -24,6 +24,7 @@ fun IcoTheme(content: @Composable () -> Unit) {
             surface = Panel, onSurface = Color.White, surfaceVariant = PanelHi, onSurfaceVariant = Dim,
             secondaryContainer = PanelHi, onSecondaryContainer = Color.White,
         ),
-        content = content,
-    )
+    ) {
+        androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides Color.White, content = content)
+    }
 }

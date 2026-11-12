@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -78,7 +79,7 @@ private sealed interface Route {
     data class AlbumList(val type: String, val title: String) : Route
 }
 
-private enum class Dest { Home, Library, Search, Settings }
+private enum class Dest { Home, Library, Search, Devices, Settings }
 
 @Composable
 fun MainScreen() {
@@ -90,6 +91,8 @@ fun MainScreen() {
     val stack = remember { mutableStateListOf<Route>() }
     var showPlayer by remember { mutableStateOf(false) }
 
+    LaunchedEffect(Control.remote) { while (Control.remote) { delay(500); Control.tick = System.currentTimeMillis() } }
+
     CompositionLocalProvider(LocalClient provides client) {
         Box(Modifier.fillMaxSize()) {
             Scaffold(
@@ -98,7 +101,7 @@ fun MainScreen() {
                     Column {
                         MiniPlayer(onOpen = { showPlayer = true })
                         NavigationBar(containerColor = Panel) {
-                            listOf(Dest.Home to Icons.Filled.Home, Dest.Library to Icons.Filled.List, Dest.Search to Icons.Filled.Search, Dest.Settings to Icons.Filled.Settings).forEach { (t, icon) ->
+                            listOf(Dest.Home to Icons.Filled.Home, Dest.Library to Icons.Filled.List, Dest.Search to Icons.Filled.Search, Dest.Devices to Icons.Filled.Phone, Dest.Settings to Icons.Filled.Settings).forEach { (t, icon) ->
                                 NavigationBarItem(
                                     selected = tab == t, onClick = { tab = t; stack.clear() },
                                     icon = { Icon(icon, t.name) }, label = { Text(t.name) },
@@ -124,6 +127,7 @@ fun MainScreen() {
                             )
                             Dest.Library -> LibraryScreen(libraryTab, { libraryTab = it }, push)
                             Dest.Search -> SearchScreen(push)
+                            Dest.Devices -> DevicesScreen()
                             Dest.Settings -> SettingsScreen()
                         }
                     }
@@ -141,19 +145,19 @@ fun MainScreen() {
 // ── Mini player ──
 @Composable
 private fun MiniPlayer(onOpen: () -> Unit) {
-    val t = Playback.current ?: return
+    val t = Control.track ?: return
     Column(Modifier.fillMaxWidth().clickable(onClick = onOpen).background(Panel)) {
-        if (Playback.durationMs > 0) LinearProgressIndicator(progress = { (Playback.positionMs.toFloat() / Playback.durationMs).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().height(2.dp), color = Accent, trackColor = PanelHi)
+        if (Control.durationMs > 0) LinearProgressIndicator(progress = { (Control.positionMs.toFloat() / Control.durationMs).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().height(2.dp), color = Accent, trackColor = PanelHi)
         Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Cover(t.coverArt, 44.dp)
             Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                 Text(t.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(t.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, color = Dim)
+                Text(if (Control.remote) "on ${targetName()}" else t.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, color = if (Control.remote) Accent else Dim)
             }
-            IconButton(onClick = { Playback.toggle() }) {
-                Icon(painterResource(if (Playback.isPlaying) R.drawable.ic_pause else R.drawable.ic_play), "Play / pause")
+            IconButton(onClick = { Control.toggle() }) {
+                Icon(painterResource(if (Control.isPlaying) R.drawable.ic_pause else R.drawable.ic_play), "Play / pause")
             }
-            IconButton(onClick = { Playback.next() }) { Icon(painterResource(R.drawable.ic_next), "Next") }
+            IconButton(onClick = { Control.next() }) { Icon(painterResource(R.drawable.ic_next), "Next") }
         }
     }
 }
@@ -173,7 +177,7 @@ private fun HomeScreen(push: (Route) -> Unit, allPlaylists: () -> Unit) {
         item {
             Text("Icosahedron", fontSize = 28.sp, color = Accent, modifier = Modifier.padding(16.dp))
             Button(
-                onClick = { scope.launch { runCatching { client.randomSongs(100) }.getOrNull()?.let { Playback.playTracks(it, 0) } } },
+                onClick = { scope.launch { runCatching { client.randomSongs(100) }.getOrNull()?.let { Control.playTracks(it, 0) } } },
                 modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
             ) { Text("Random mix") }
         }
@@ -193,30 +197,10 @@ private fun LibraryScreen(selected: Int, onSelect: (Int) -> Unit, push: (Route) 
             listOf("Albums", "Artists", "Playlists").forEachIndexed { i, s -> Tab(selected == i, { onSelect(i) }, text = { Text(s) }) }
         }
         when (selected) {
-            0 -> AlbumGrid("alphabeticalByName", push)
-            1 -> ArtistsList(push)
+            0 -> AlbumsBrowser(AlbumSort.Name, onAlbum = { push(Route.AlbumR(it.id)) })
+            1 -> ArtistsBrowser(onArtist = { push(Route.ArtistR(it.id)) })
             else -> PlaylistsList(push)
         }
-    }
-}
-
-@Composable
-private fun AlbumGrid(type: String, push: (Route) -> Unit) {
-    val client = LocalClient.current
-    val albums = remember(type) { mutableStateListOf<Album>() }
-    var done by remember(type) { mutableStateOf(false) }
-    var loading by remember(type) { mutableStateOf(false) }
-    suspend fun more() {
-        if (loading || done) return
-        loading = true
-        val page = runCatching { client.albums(type, 60, albums.size) }.getOrDefault(emptyList())
-        if (page.isEmpty()) done = true else albums.addAll(page.filter { n -> albums.none { it.id == n.id } })
-        loading = false
-    }
-    LaunchedEffect(type) { more() }
-    LazyVerticalGrid(GridCells.Fixed(2), Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        items(albums, key = { it.id }) { a -> AlbumCard(a, size = 170.dp) { push(Route.AlbumR(a.id)) } }
-        if (!done) item { LaunchedEffect(albums.size) { more() }; Box(Modifier.fillMaxWidth().padding(16.dp), Alignment.Center) { CircularProgressIndicator(color = Accent) } }
     }
 }
 
@@ -224,15 +208,8 @@ private fun AlbumGrid(type: String, push: (Route) -> Unit) {
 private fun AlbumListScreen(type: String, title: String, onBack: () -> Unit, push: (Route) -> Unit) {
     Column(Modifier.fillMaxSize()) {
         TopBar(title, onBack)
-        AlbumGrid(type, push)
+        AlbumsBrowser(AlbumSort.values().firstOrNull { it.type == type } ?: AlbumSort.Name, onAlbum = { push(Route.AlbumR(it.id)) })
     }
-}
-
-@Composable
-private fun ArtistsList(push: (Route) -> Unit) {
-    val client = LocalClient.current
-    val artists by load("artists") { client.artists() }
-    LazyColumn(Modifier.fillMaxSize()) { items(artists ?: emptyList(), key = { it.id }) { a -> ArtistRow(a) { push(Route.ArtistR(a.id)) } } }
 }
 
 @Composable
@@ -270,7 +247,7 @@ private fun SearchScreen(push: (Route) -> Unit) {
                 if (r.second.isNotEmpty()) item { AlbumShelf("Albums", r.second, null) { push(Route.AlbumR(it.id)) } }
                 if (r.third.isNotEmpty()) {
                     item { SectionHeader("Songs") }
-                    itemsIndexed(r.third, key = { _, t -> "t" + t.id }) { i, t -> TrackRow(t) { Playback.playTracks(r.third, i) } }
+                    itemsIndexed(r.third, key = { _, t -> "t" + t.id }) { i, t -> TrackRow(t) { Control.playTracks(r.third, i) } }
                 }
             }
         }
@@ -289,8 +266,8 @@ fun TopBar(title: String, onBack: () -> Unit) {
 @Composable
 private fun PlayShuffle(tracks: List<Track>) {
     Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Button(onClick = { Playback.playTracks(tracks, 0) }, modifier = Modifier.weight(1f)) { Text("Play") }
-        OutlinedButton(onClick = { Playback.playTracks(tracks.shuffled(), 0) }, modifier = Modifier.weight(1f)) { Text("Shuffle") }
+        Button(onClick = { Control.playTracks(tracks, 0) }, modifier = Modifier.weight(1f)) { Text("Play") }
+        OutlinedButton(onClick = { Control.playTracks(tracks.shuffled(), 0) }, modifier = Modifier.weight(1f)) { Text("Shuffle") }
     }
 }
 
@@ -314,7 +291,7 @@ private fun AlbumScreen(id: String, onBack: () -> Unit, push: (Route) -> Unit) {
             }
             if (tracks.isNotEmpty()) PlayShuffle(tracks)
         }
-        itemsIndexed(tracks, key = { _, t -> t.id }) { i, t -> TrackRow(t, showCover = false, number = if (t.trackNumber > 0) t.trackNumber else i + 1) { Playback.playTracks(tracks, i) } }
+        itemsIndexed(tracks, key = { _, t -> t.id }) { i, t -> TrackRow(t, showCover = false, number = if (t.trackNumber > 0) t.trackNumber else i + 1) { Control.playTracks(tracks, i) } }
     }
 }
 
@@ -338,6 +315,6 @@ private fun PlaylistScreen(id: String, name: String, onBack: () -> Unit) {
     val list = tracks ?: emptyList()
     LazyColumn(Modifier.fillMaxSize()) {
         item { TopBar(name, onBack); if (list.isNotEmpty()) PlayShuffle(list) }
-        itemsIndexed(list) { i, t -> TrackRow(t) { Playback.playTracks(list, i) } }
+        itemsIndexed(list) { i, t -> TrackRow(t) { Control.playTracks(list, i) } }
     }
 }

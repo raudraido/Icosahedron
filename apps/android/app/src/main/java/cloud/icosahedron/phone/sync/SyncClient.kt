@@ -37,6 +37,28 @@ class SyncClient(private val session: Session, private val deviceId: String, pri
     var name by mutableStateOf<String?>(null)
         private set
 
+    data class RegDevice(val id: String, val name: String, val kind: String, val online: Boolean, val lastSeen: Long)
+    /** Every player of the account the engine knows, online or not. */
+    var registry by mutableStateOf<List<RegDevice>>(emptyList())
+        private set
+
+    data class Dev(val id: String, val name: String, val kind: String)
+    /** What another player is doing: its own queue and state (docs/connect.md). */
+    data class RemoteState(val queue: List<Track>, val index: Int, val playing: Boolean, val shuffle: Boolean, val repeatOn: Boolean) {
+        val track: Track? get() = queue.getOrNull(index)
+    }
+
+    /** The players online right now, this phone first. */
+    var devices by mutableStateOf<List<Dev>>(emptyList())
+        private set
+    var remoteStates by mutableStateOf<Map<String, RemoteState>>(emptyMap())
+        private set
+    /** The player the controls act on; null is this phone. */
+    var targetId by mutableStateOf<String?>(null)
+        private set
+    private val positions = HashMap<String, Pair<Double, Long>>() // ms and when it arrived
+    private val lastSeek = HashMap<String, Long>()
+
     /** Sign-in requests from other devices waiting for this phone to approve. */
     var approvals by mutableStateOf<List<Pending>>(emptyList())
         private set
@@ -105,6 +127,77 @@ class SyncClient(private val session: Session, private val deviceId: String, pri
         main.postDelayed({ open() }, min(30_000L, 1000L shl min(retry, 5)))
     }
 
+    private fun applyDevices(m: JSONObject) {
+        val a = m.optJSONArray("devices") ?: return
+        devices = (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { Dev(it.optString("deviceId"), it.optString("name", "Device"), it.optString("kind", "web")) }
+            .sortedWith(compareByDescending<Dev> { it.id == deviceId }.thenBy { it.name.lowercase() })
+        val online = devices.map { it.id }.toSet()
+        if (targetId != null && targetId !in online) targetId = null
+        if (remoteStates.keys.any { it !in online }) remoteStates = remoteStates.filterKeys { it in online }
+    }
+
+    private fun applyRemote(s: JSONObject, id: String) {
+        if (id.isEmpty() || id == deviceId) return
+        val prev = remoteStates[id]
+        val queue = s.optJSONArray("queue")?.let { tracksOf(it) } ?: prev?.queue ?: emptyList()
+        val next = RemoteState(queue, s.optInt("index", 0), s.optBoolean("playing"), s.optBoolean("shuffle"), s.optBoolean("repeat"))
+        if (next != prev) remoteStates = remoteStates + (id to next)
+        val now = System.currentTimeMillis()
+        if ((lastSeek[id] ?: 0) + 2000 > now) return // a state that was already on its way would pull the bar back
+        val reported = s.optDouble("positionMs", 0.0)
+        val old = positions[id]
+        if (old != null && prev != null && prev.playing && next.playing && prev.track?.id == next.track?.id) {
+            val expected = old.first + (now - old.second)
+            if (kotlin.math.abs(reported - expected) < 1500) { positions[id] = maxOf(reported, expected) to now; return }
+        }
+        positions[id] = reported to now
+    }
+
+    fun stateOf(id: String?): RemoteState? = id?.let { remoteStates[it] }
+
+    /** Another player's position in ms, moving on while it plays. */
+    fun positionOf(id: String?): Long {
+        val p = positions[id ?: return 0] ?: return 0
+        val playing = remoteStates[id]?.playing == true
+        val pos = p.first + if (playing) System.currentTimeMillis() - p.second else 0
+        val limit = (remoteStates[id]?.track?.duration ?: 0) * 1000L
+        return (if (limit > 0) minOf(pos.toLong(), limit) else pos.toLong())
+    }
+
+    /** Chooses the player the controls act on. It only controls: music moves with an explicit [transfer]. */
+    fun setTarget(id: String?) { targetId = if (id == deviceId) null else id }
+
+    fun command(target: String, cmd: String, args: JSONObject? = null) {
+        val o = JSONObject().put("type", "command").put("target", target).put("cmd", cmd)
+        if (args != null) o.put("args", args)
+        send(o)
+    }
+
+    fun seek(target: String, ms: Long) {
+        command(target, "seek", JSONObject().put("positionMs", ms))
+        positions[target] = ms.toDouble() to System.currentTimeMillis()
+        lastSeek[target] = System.currentTimeMillis()
+    }
+
+    /** Moves [source]'s playback to [target]: the source pauses, the target continues where it was. */
+    fun transfer(source: String, target: String) = send(JSONObject().put("type", "transfer").put("source", source).put("target", target))
+
+    /** Starts [tracks] on another player (a window of a very long list). */
+    fun playOn(target: String, tracks: List<Track>, index: Int) {
+        if (tracks.isEmpty()) return
+        val start = maxOf(0, index - 20)
+        val window = tracks.drop(start).take(1000)
+        command(target, "load", JSONObject().put("state", JSONObject().put("queue", JSONArray(window.map { it.toWire() })).put("index", index - start).put("positionMs", 0).put("playing", true)))
+    }
+
+    /** at: "now", "next" or "end". */
+    fun enqueue(target: String, tracks: List<Track>, at: String) =
+        command(target, "enqueue", JSONObject().put("at", at).put("tracks", JSONArray(tracks.map { it.toWire() })))
+
+    val myId: String get() = deviceId
+    fun rename(target: String, to: String) = send(JSONObject().put("type", "rename").put("target", target).put("name", to))
+    fun forget(target: String) = send(JSONObject().put("type", "forget").put("target", target))
+
     private fun send(o: JSONObject) { ws?.send(o.toString()) }
 
     private fun handle(m: JSONObject) {
@@ -114,8 +207,19 @@ class SyncClient(private val session: Session, private val deviceId: String, pri
                 status = "online"
                 name = m.optString("name").takeIf { it.isNotEmpty() }
                 lastQueueIds = emptyList()
+                applyDevices(m)
+                remoteStates = emptyMap(); positions.clear()
+                m.optJSONObject("states")?.let { st -> st.keys().forEach { id -> st.optJSONObject(id)?.let { applyRemote(it, id) } } }
                 publish(true)
                 refreshApprovals()
+            }
+            "devices" -> applyDevices(m)
+            "state" -> m.optJSONObject("state")?.let { applyRemote(it, m.optString("from")) }
+            "registry" -> {
+                val a = m.optJSONArray("devices") ?: JSONArray()
+                registry = (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map {
+                    RegDevice(it.optString("deviceId"), it.optString("name", "Device"), it.optString("kind", "web"), it.optBoolean("online"), it.optLong("lastSeen"))
+                }.sortedWith(compareByDescending<RegDevice> { it.id == deviceId }.thenByDescending { it.online }.thenBy { it.name.lowercase() })
             }
             "approval" -> m.optJSONObject("request")?.let(Pending::fromJson)?.let { p ->
                 if (p.expiresAt > System.currentTimeMillis() && approvals.none { it.id == p.id }) {

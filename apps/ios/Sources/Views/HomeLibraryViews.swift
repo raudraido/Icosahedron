@@ -12,17 +12,22 @@ struct HomeView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    // Starts at once: no list to open and press Play on a second time.
-                    Button { Task { await startRandomMix() } } label: {
+                    // Quick buttons (more can go next to Random mix, like on Android). Random mix starts at once:
+                    // no list to open and press Play on a second time.
+                    ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
-                            if startingMix { ProgressView() } else { Image(systemName: "shuffle") }
-                            Text("Random mix")
+                            Button { Task { await startRandomMix() } } label: {
+                                HStack(spacing: 6) {
+                                    if startingMix { ProgressView() } else { Image(systemName: "shuffle") }
+                                    Text("Random mix")
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .buttonBorderShape(.capsule)
+                            .disabled(startingMix)
                         }
-                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .padding(.horizontal)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(startingMix)
-                    .padding(.horizontal)
 
                     AlbumShelf(title: "Discover", albums: random, seeAll: ("random", String(localized: "Discover")))
                     AlbumShelf(title: "Recently added", albums: newest, seeAll: ("newest", String(localized: "Recently added")))
@@ -33,6 +38,7 @@ struct HomeView: View {
                 .padding(.vertical)
             }
             .navigationTitle("Home")
+            .navigationBarTitleDisplayMode(.inline)
             .libraryDestinations()
             .profileButton()
             .task { await load() }

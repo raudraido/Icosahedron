@@ -2,6 +2,10 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
+## 0.1.11
+
+- **Album and playlist pages on a wide screen** (a tablet, a phone on its side, a car) work like Now Playing: the cover, the names and the Play / Shuffle / ⋮ buttons stay at the left, and only the song list scrolls at the right. On a narrow screen nothing changes. The same goes for a playlist and for a kept album or playlist under Library → Downloads.
+
 ## 0.1.10
 
 - **Home:** the big "Icosahedron" title is gone. **Random mix** is now a small button in a row of quick buttons (more can be added next to it) with the profile picture at the right.

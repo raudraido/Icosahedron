@@ -126,6 +126,19 @@ final class AppModel {
         AudioCache.shared.unpin(ids)
     }
 
+    /// Keeps a whole album or playlist: it is listed under Cached Songs and its songs are downloaded.
+    func keepCollection(kind: String, id: String, name: String, subtitle: String, coverArt: String?, tracks: [Track]) {
+        OfflineCollections.shared.add(OfflineCollection(kind: kind, id: id, name: name, subtitle: subtitle, coverArt: coverArt, tracks: tracks))
+        keepOffline(tracks)
+    }
+
+    /// Removes it; songs that another kept album or playlist also holds stay.
+    func removeCollection(kind: String, id: String) {
+        guard let c = OfflineCollections.shared.remove(kind, id) else { return }
+        let others = Set(OfflineCollections.shared.items.flatMap { $0.tracks.map { $0.id } })
+        removeOffline(c.tracks.map { $0.id }.filter { !others.contains($0) })
+    }
+
     func loadBPM() async {
         guard let c = client, let r = try? await c.engine("GET", "/bpm"), r.status == 200,
               let obj = try? JSONSerialization.jsonObject(with: r.data) as? [String: Any] else { return }

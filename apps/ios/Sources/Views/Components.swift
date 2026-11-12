@@ -42,10 +42,16 @@ struct AlbumCard: View {
             CoverImage(id: album.coverArt, size: 300)
                 .frame(width: width, height: width)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
-            Text(album.name).font(.subheadline.weight(.semibold)).lineLimit(1)
+            HStack(spacing: 4) {
+                if OfflineCollections.shared.contains("album", album.id) {
+                    Image(systemName: "arrow.down.circle.fill").font(.caption2).foregroundStyle(.secondary)
+                }
+                Text(album.name).font(.subheadline.weight(.semibold)).lineLimit(1)
+            }
             Text(album.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
         }
         .frame(width: width, alignment: .leading)
+        .collectionMenu(kind: "album", id: album.id, name: album.name, subtitle: album.artist, coverArt: album.coverArt)
     }
 }
 
@@ -122,6 +128,7 @@ struct PlaylistShelf: View {
                                     Text("\(p.songCount) tracks").font(.caption).foregroundStyle(.secondary).lineLimit(1)
                                 }
                                 .frame(width: 150, alignment: .leading)
+                                .collectionMenu(kind: "playlist", id: p.id, name: p.name, subtitle: "\(p.songCount) tracks", coverArt: p.coverArt)
                             }
                             .buttonStyle(.plain)
                         }

@@ -238,6 +238,25 @@ struct CachedSongsScreen: View {
             }
             .listRowSeparator(.hidden)
 
+            if !OfflineCollections.shared.items.isEmpty {
+                Section("Albums and Playlists") {
+                    ForEach(OfflineCollections.shared.items) { c in
+                        NavigationLink {
+                            OfflineCollectionScreen(collection: c)
+                        } label: {
+                            HStack(spacing: 12) {
+                                CoverImage(id: c.coverArt, size: 100)
+                                    .frame(width: 48, height: 48).clipShape(RoundedRectangle(cornerRadius: 6))
+                                VStack(alignment: .leading) {
+                                    Text(c.name).lineLimit(1)
+                                    Text("\(c.kind == "album" ? String(localized: "Album") : String(localized: "Playlist")) · \(c.tracks.count)").font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             ForEach(shown) { e in
                 row(e, playable: playable)
             }

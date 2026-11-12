@@ -170,13 +170,13 @@ fun AlbumsBrowser(initial: AlbumSort, onAlbum: (Album) -> Unit) {
             ) {
                 items(albums, key = { it.id }) { a ->
                     if (grid) AlbumCard(a, size = 170.dp) { onAlbum(a) }
-                    else Row(Modifier.fillMaxWidth().clickable { onAlbum(a) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    else CollectionBox("album", a.id, a.name, a.artist, a.coverArt, { onAlbum(a) }, Modifier.fillMaxWidth()) { Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Cover(a.coverArt, 56.dp)
                         Column(Modifier.padding(start = 12.dp)) {
-                            Text(a.name, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text((if (cloud.icosahedron.phone.player.Offline.isCollectionKept("album", a.id)) "↓ " else "") + a.name, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             Text(listOfNotNull(a.artist, a.year?.toString()).joinToString(" · "), fontSize = 12.sp, color = Dim, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
-                    }
+                    } }
                 }
             }
             if (letters.size > 1) LetterIndex(letters) { l ->

@@ -2,6 +2,11 @@
 
 A native SwiftUI app for iPhone and iPad (iOS 26.1 or later), built as an unsigned `.ipa` (sign it with SideStore, AltStore, Sideloadly or iloader: [docs/ios.md](../../docs/ios.md)). It has been part of the shared releases 0.15.3 to 0.15.9 (see the [main changelog](../../CHANGELOG.md)); from here it has its **own version, release and changelog**. What works with which server: [docs/compatibility.md](../../docs/compatibility.md).
 
+## 0.2.3
+
+- **Albums and playlists can be kept offline from the lists:** a long press on an album or a playlist (Home, Albums, Playlists) offers Play, Add to Queue and Keep Offline / Remove Offline. A kept album has a small download mark.
+- **Kept albums and playlists show under Library → Cached Songs** (Albums and Playlists) and open without a connection, with Play, Shuffle and a remove button.
+
 ## 0.2.2
 
 - **Fixed: the sign-in approval prompt did not show while the player (Now Playing) or a sheet was open;** it appeared only after you left it. It now comes up on top of everything.

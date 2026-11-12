@@ -153,6 +153,7 @@ struct AlbumsBrowser: View {
         }
         .padding(.vertical, 8)
         .contentShape(Rectangle())
+        .collectionMenu(kind: "album", id: a.id, name: a.name, subtitle: a.artist, coverArt: a.coverArt)
     }
 
     private var sortMenu: some View {

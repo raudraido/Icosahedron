@@ -2,6 +2,11 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
+## 0.1.9
+
+- **A wide screen (a tablet, a phone on its side, a car) is used properly:** the tabs move to a rail at the left instead of a bar at the bottom, **Now Playing puts the cover on one side and the controls on the other**, and the album and artist grids take as many columns as fit.
+- **Car systems with Android Automotive OS** now find the app as a media app (it was marked for Android Auto only); it then shows in the car's media list with the library tree (Recently played, Playlists, Albums, Artists, Random mix).
+
 ## 0.1.8
 
 - **Tap the cover in Now Playing** to see the song's details under a smaller cover (title, artist, album, year, genre, format, bitrate, sample rate, bit depth, channels, length, file size, path, BPM, plays, date added); the artist and the album open their pages. Tap the cover again to go back. This is how the iOS app works.

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -56,17 +57,16 @@ fun NowPlayingScreen(onClose: () -> Unit) {
     var info by remember { mutableStateOf(false) } // the cover tapped: the song's details under a smaller cover
     var dragging by remember { mutableStateOf<Float?>(null) }
 
-    Column(
-        Modifier.fillMaxSize().background(bg).padding(horizontal = 20.dp, vertical = 8.dp)
-            // the screen is on top of the app: a tap that nothing here uses must not reach what is under it
-            .pointerInput(Unit) { detectTapGestures { } },
-    ) {
+    val header: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onClose) { Icon(Icons.Filled.KeyboardArrowDown, "Close") }
             Text(if (Control.remote) "Playing on ${targetName()}" else "Now playing", color = if (Control.remote) Accent else Dim, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
             Box(Modifier.size(48.dp))
         }
-        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+    }
+    // The cover, or what replaces it (lyrics, the queue, the song's details)
+    val art: @Composable () -> Unit = {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             when {
                 t == null -> Text("Nothing is playing", color = Dim)
                 panel == 1 -> LyricsPanel(t)
@@ -77,6 +77,8 @@ fun NowPlayingScreen(onClose: () -> Unit) {
                 }
             }
         }
+    }
+    val meta: @Composable () -> Unit = {
         if (t != null) {
             Text(t.title, fontSize = 22.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 12.dp))
             Text(t.artist, fontSize = 15.sp, color = Dim, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -93,6 +95,8 @@ fun NowPlayingScreen(onClose: () -> Unit) {
                 Text(fmt(Control.durationMs), fontSize = 12.sp, color = Dim)
             }
         }
+    }
+    val buttons: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { Control.shuffleTo(!Control.shuffle) }) { Icon(painterResource(R.drawable.ic_shuffle), "Shuffle", tint = if (Control.shuffle) Accent else Color.White) }
             IconButton(onClick = { Control.previous() }) { Icon(painterResource(R.drawable.ic_prev), "Previous", Modifier.size(34.dp)) }
@@ -106,6 +110,28 @@ fun NowPlayingScreen(onClose: () -> Unit) {
             IconButton(onClick = { panel = if (panel == 1) 0 else 1; info = false }) { Icon(painterResource(R.drawable.ic_lyrics), "Lyrics", tint = if (panel == 1) Accent else Color.White) }
             if (!Control.remote) SpeedButton()
             IconButton(onClick = { panel = if (panel == 2) 0 else 2; info = false }) { Icon(painterResource(R.drawable.ic_queue), "Queue", tint = if (panel == 2) Accent else Color.White) }
+        }
+    }
+
+    androidx.compose.foundation.layout.BoxWithConstraints(
+        Modifier.fillMaxSize().background(bg).padding(horizontal = 20.dp, vertical = 8.dp)
+            // the screen is on top of the app: a tap that nothing here uses must not reach what is under it
+            .pointerInput(Unit) { detectTapGestures { } },
+    ) {
+        // A wide screen (a tablet, a phone on its side, a car): the cover on one side, the controls on the other
+        val wide = maxWidth > maxHeight && maxWidth >= 600.dp
+        if (wide) {
+            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                Box(Modifier.weight(1f).fillMaxHeight().padding(vertical = 8.dp)) { art() }
+                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center) { header(); meta(); buttons() }
+            }
+        } else {
+            Column(Modifier.fillMaxSize()) {
+                header()
+                Box(Modifier.weight(1f).fillMaxWidth()) { art() }
+                meta()
+                buttons()
+            }
         }
     }
 }

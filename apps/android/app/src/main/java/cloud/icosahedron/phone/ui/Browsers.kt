@@ -164,12 +164,12 @@ fun AlbumsBrowser(initial: AlbumSort, onAlbum: (Album) -> Unit) {
         val letters = if (sort.hasIndex && filter.let { it is AlbumFilter.All || true }) orderLetters(albums.map { letterOf(if (sort == AlbumSort.AlbumArtist) it.artist else it.name) }.toSet()) else emptyList()
         Row(Modifier.fillMaxSize()) {
             LazyVerticalGrid(
-                GridCells.Fixed(if (grid) 2 else 1), Modifier.weight(1f), state = state,
+                if (grid) GridCells.Adaptive(160.dp) else GridCells.Fixed(1), Modifier.weight(1f), state = state,
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(if (grid) 14.dp else 4.dp),
             ) {
                 items(albums, key = { it.id }) { a ->
-                    if (grid) AlbumCard(a, size = 170.dp) { onAlbum(a) }
+                    if (grid) AlbumCard(a, size = 160.dp) { onAlbum(a) }
                     else CollectionBox("album", a.id, a.name, a.artist, a.coverArt, { onAlbum(a) }, Modifier.fillMaxWidth(), album = a) { Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Cover(a.coverArt, 56.dp)
                         Column(Modifier.padding(start = 12.dp)) {
@@ -220,7 +220,7 @@ fun ArtistsBrowser(onArtist: (Artist) -> Unit) {
         }
         val letters = if (sort == ArtistSort.Name) orderLetters(list.map { letterOf(it.name) }.toSet()) else emptyList()
         Row(Modifier.fillMaxSize()) {
-            LazyVerticalGrid(GridCells.Fixed(if (grid) 3 else 1), Modifier.weight(1f), state = state, contentPadding = PaddingValues(horizontal = if (grid) 12.dp else 0.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(if (grid) 14.dp else 0.dp)) {
+            LazyVerticalGrid(if (grid) GridCells.Adaptive(110.dp) else GridCells.Fixed(1), Modifier.weight(1f), state = state, contentPadding = PaddingValues(horizontal = if (grid) 12.dp else 0.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(if (grid) 14.dp else 0.dp)) {
                 items(list, key = { it.id }) { a ->
                     if (grid) Column(Modifier.clickable { onArtist(a) }, horizontalAlignment = Alignment.CenterHorizontally) {
                         Cover(a.coverArt, 96.dp, round = true)

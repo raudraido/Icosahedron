@@ -11,6 +11,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.hardware.type.automotive" android:required="false" />
 
     <application
         android:name=".App"
@@ -22,6 +23,8 @@
 
         <!-- Android Auto: the app is a media app (browse tree and playback come from PlaybackService) -->
         <meta-data android:name="com.google.android.gms.car.application" android:resource="@xml/automotive_app_desc" />
+        <!-- Android Automotive OS (a car's own system) looks for the same file under this name -->
+        <meta-data android:name="com.android.automotive" android:resource="@xml/automotive_app_desc" />
 
         <activity
             android:name=".MainActivity"

@@ -2,6 +2,13 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
+## 0.1.2
+
+- **The queue is remembered:** after the app is closed or the phone restarts, the queue, the song and the position are back (paused). A play button on a headset or in a car with nothing loaded continues where it was.
+- **BPM in song lists** (from the song's tags; a switch in Settings → Lists).
+- **Secure sign-in can be switched on from the phone** (Settings → Secure sign-in, administrator): the recovery codes are shown once, you can make new ones, make an app password for another Subsonic app, or turn it off.
+- Still to come: Android Auto, the offline cache and downloads.
+
 ## 0.1.1
 
 The rest of what 0.1.0 was meant to have (0.1.0 was built a little early). Install it over 0.1.0.

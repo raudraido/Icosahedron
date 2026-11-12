@@ -28,6 +28,9 @@ class App : Application() {
     var sync by mutableStateOf<SyncClient?>(null)
         private set
 
+    /** Shown once after secure sign-in is switched on or new codes are made; null when nothing is to show. */
+    var secretsToShow by mutableStateOf<Pair<String, List<String>>?>(null)
+
     /** True while an activity is on screen; a sign-in request then needs no notification. */
     @Volatile var foreground = false
 
@@ -45,6 +48,7 @@ class App : Application() {
         store.save(s)
         session = s
         Playback.client = s.client()
+        Playback.restoreSession()
         sync?.stop()
         sync = SyncClient(s, store.deviceId(), SyncClient.defaultName()).also { it.start() }
     }
@@ -53,6 +57,7 @@ class App : Application() {
         sync?.stop()
         sync = null
         Playback.stop()
+        Playback.clearSaved()
         Playback.client = null
         store.clear()
         session = null

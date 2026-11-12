@@ -2,6 +2,15 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
+## 0.1.18
+
+**Now Playing is redone so it can be used in a shaking car.**
+
+- **The "Now playing" text is gone** (only the arrow stays; "Playing on …" shows in the accent colour when you control another device).
+- **The title is big and bold** (up to two lines) with the **favorite heart at the right edge of the same row**; the artist is under it, bigger and brighter. This is so on every screen size.
+- **On a wide screen (a car, a tablet) everything is spread over the whole height** instead of bunched in the middle, with big targets far apart: the arrow, the heart, shuffle and repeat are 76 dp, previous and next 88 dp, and play / pause is the biggest, a white filled circle of 112 dp. Lyrics, speed, queue and the menu are tall blocks (88 dp) with the **name under each icon**. The seek bar has a bigger handle and bigger times.
+- Pulling the screen down to close it now needs a longer pull (200 dp), so a bump in the road does not close it.
+
 ## 0.1.17
 
 - **The tabs in the side rail (wide screens) are bigger and start at the top:** each one is a tall, wide block (84 dp high, the rail is 112 dp wide) with the icon above its name, and the whole block is the target, so it is easy to hit in a car that shakes. The selected one is marked with a rounded background. On a low screen they are 60 dp high without names. The round cover with the progress ring stays at the bottom.

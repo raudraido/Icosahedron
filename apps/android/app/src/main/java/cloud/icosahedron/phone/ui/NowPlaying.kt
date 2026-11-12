@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -44,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
@@ -55,6 +58,7 @@ import cloud.icosahedron.phone.data.Lyrics
 import cloud.icosahedron.phone.player.Playback
 
 /** The full player: cover, seek bar, controls; lyrics and the queue replace the cover. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun NowPlayingScreen(onClose: () -> Unit) {
     BackHandler(onBack = onClose)
@@ -72,7 +76,7 @@ fun NowPlayingScreen(onClose: () -> Unit) {
     // ── Pull the screen down from anywhere to close it ──
     // Lists (lyrics, queue, details) scroll first; only a pull at their top closes the screen.
     val offset = remember { androidx.compose.animation.core.Animatable(0f) }
-    val threshold = with(androidx.compose.ui.platform.LocalDensity.current) { 140.dp.toPx() }
+    val threshold = with(androidx.compose.ui.platform.LocalDensity.current) { 200.dp.toPx() }
     fun release(velocityY: Float) {
         if (offset.value > threshold || velocityY > 1800f) onClose() else scope.launch { offset.animateTo(0f) }
     }
@@ -112,11 +116,12 @@ fun NowPlayingScreen(onClose: () -> Unit) {
         }
     }
 
-    val header: @Composable () -> Unit = {
+    // "big" is the wide screen (a car, a tablet): bigger text, bigger targets with room between them, words under the icons
+    val header: @Composable (Boolean) -> Unit = { big ->
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onClose) { Icon(Icons.Filled.KeyboardArrowDown, "Close") }
-            Text(if (Control.remote) "Playing on ${targetName()}" else "Now playing", color = if (Control.remote) Accent else Dim, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-            Box(Modifier.size(48.dp))
+            IconButton(onClick = onClose, modifier = Modifier.size(if (big) 76.dp else 48.dp)) { Icon(Icons.Filled.KeyboardArrowDown, "Close", Modifier.size(if (big) 40.dp else 28.dp)) }
+            if (Control.remote) Text("Playing on ${targetName()}", color = Accent, fontSize = if (big) 18.sp else 14.sp, modifier = Modifier.weight(1f).padding(start = 8.dp))
+            else Box(Modifier.weight(1f))
         }
     }
     // The cover, or what replaces it (lyrics, the queue, the song's details)
@@ -133,11 +138,19 @@ fun NowPlayingScreen(onClose: () -> Unit) {
             }
         }
     }
-    // The song, the seek bar, and under it the smaller buttons: favorite, lyrics, speed, queue, the menu
-    val meta: @Composable () -> Unit = {
+    // The song (the title big, the favorite heart at the right edge of the same row), the artist, the seek bar and the times
+    val meta: @Composable (Boolean) -> Unit = { big ->
         if (t != null) {
-            Text(t.title, fontSize = 22.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 12.dp))
-            Text(t.artist, fontSize = 15.sp, color = Dim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val fav = Favorites.track(t)
+            Row(Modifier.fillMaxWidth().padding(top = if (big) 0.dp else 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(t.title, fontSize = if (big) 30.sp else 22.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = if (big) 36.sp else 28.sp)
+                    Text(t.artist, fontSize = if (big) 22.sp else 15.sp, color = Color(0xCCFFFFFF), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                IconButton(onClick = { Favorites.toggleTrack(client, t, scope) }, modifier = Modifier.size(if (big) 76.dp else 56.dp)) {
+                    Icon(if (fav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, if (fav) "Remove Favorite" else "Favorite", Modifier.size(if (big) 40.dp else 28.dp), tint = if (fav) Accent else Color.White)
+                }
+            }
             val dur = Control.durationMs.coerceAtLeast(1)
             val shown = dragging ?: (Control.positionMs.toFloat() / dur)
             Slider(
@@ -145,38 +158,45 @@ fun NowPlayingScreen(onClose: () -> Unit) {
                 onValueChange = { dragging = it },
                 onValueChangeFinished = { dragging?.let { Control.seekTo((it * dur).toLong()) }; dragging = null },
                 colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Accent, inactiveTrackColor = Color(0x44FFFFFF)),
+                thumb = { SliderDefaults.Thumb(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, thumbSize = androidx.compose.ui.unit.DpSize(if (big) 10.dp else 4.dp, if (big) 56.dp else 44.dp), colors = SliderDefaults.colors(thumbColor = Color.White)) },
             )
             Row(Modifier.fillMaxWidth()) {
-                Text(fmt((shown * dur).toLong()), fontSize = 12.sp, color = Dim, modifier = Modifier.weight(1f))
-                Text(fmt(Control.durationMs), fontSize = 12.sp, color = Dim)
+                Text(fmt((shown * dur).toLong()), fontSize = if (big) 16.sp else 12.sp, color = Color(0xCCFFFFFF), modifier = Modifier.weight(1f))
+                Text(fmt(Control.durationMs), fontSize = if (big) 16.sp else 12.sp, color = Color(0xCCFFFFFF))
             }
-            val fav = Favorites.track(t)
-            Row(Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { Favorites.toggleTrack(client, t, scope) }) {
-                    Icon(if (fav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, if (fav) "Remove Favorite" else "Favorite", tint = if (fav) Accent else Color.White)
-                }
-                IconButton(onClick = { panel = if (panel == 1) 0 else 1; info = false }) { Icon(painterResource(R.drawable.ic_lyrics), "Lyrics", tint = if (panel == 1) Accent else Color.White) }
-                if (!Control.remote) SpeedButton()
-                IconButton(onClick = { panel = if (panel == 2) 0 else 2; info = false }) { Icon(painterResource(R.drawable.ic_queue), "Queue", tint = if (panel == 2) Accent else Color.White) }
-                Box {
-                    IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "More") }
-                    CompositionLocalProvider(LocalOpener provides opener) {
-                        TargetMenu(Target("track", t.id, t.title, t.artist, t.coverArt, track = t), menu) { menu = false }
-                    }
+        }
+    }
+    // Lyrics, speed, queue and the menu (the favorite is next to the title)
+    val tools: @Composable (Boolean) -> Unit = { big ->
+        if (t != null) Row(Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+            @Composable fun tool(label: String, active: Boolean, onClick: () -> Unit, icon: @Composable (Color) -> Unit) {
+                val tintColor = if (active) Accent else Color.White
+                if (big) ToolBlock(label, active, onClick) { icon(tintColor) } else IconButton(onClick = onClick) { icon(tintColor) }
+            }
+            tool("Lyrics", panel == 1, { panel = if (panel == 1) 0 else 1; info = false }) { c -> Icon(painterResource(R.drawable.ic_lyrics), "Lyrics", tint = c) }
+            if (!Control.remote) SpeedButton(big)
+            tool("Queue", panel == 2, { panel = if (panel == 2) 0 else 2; info = false }) { c -> Icon(painterResource(R.drawable.ic_queue), "Queue", tint = c) }
+            Box {
+                tool("More", false, { menu = true }) { c -> Icon(Icons.Filled.MoreVert, "More", tint = c) }
+                CompositionLocalProvider(LocalOpener provides opener) {
+                    TargetMenu(Target("track", t.id, t.title, t.artist, t.coverArt, track = t), menu) { menu = false }
                 }
             }
         }
     }
-    // The playback controls, at the very bottom and big
-    val controls: @Composable () -> Unit = {
-        Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 16.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { Control.shuffleTo(!Control.shuffle) }, modifier = Modifier.size(56.dp)) { Icon(painterResource(R.drawable.ic_shuffle), "Shuffle", Modifier.size(28.dp), tint = if (Control.shuffle) Accent else Color.White) }
-            IconButton(onClick = { Control.previous() }, modifier = Modifier.size(64.dp)) { Icon(painterResource(R.drawable.ic_prev), "Previous", Modifier.size(44.dp)) }
-            IconButton(onClick = { Control.toggle() }, modifier = Modifier.size(88.dp)) {
-                Icon(painterResource(if (Control.isPlaying) R.drawable.ic_pause else R.drawable.ic_play), "Play / pause", Modifier.size(68.dp))
+    // The playback controls, at the very bottom: play is the biggest (a filled circle), the others are far apart
+    val controls: @Composable (Boolean) -> Unit = { big ->
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = if (big) 20.dp else 16.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { Control.shuffleTo(!Control.shuffle) }, modifier = Modifier.size(if (big) 76.dp else 56.dp)) { Icon(painterResource(R.drawable.ic_shuffle), "Shuffle", Modifier.size(if (big) 36.dp else 28.dp), tint = if (Control.shuffle) Accent else Color.White) }
+            IconButton(onClick = { Control.previous() }, modifier = Modifier.size(if (big) 88.dp else 64.dp)) { Icon(painterResource(R.drawable.ic_prev), "Previous", Modifier.size(if (big) 56.dp else 44.dp)) }
+            Box(
+                Modifier.size(if (big) 112.dp else 84.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Color.White).clickable { Control.toggle() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(painterResource(if (Control.isPlaying) R.drawable.ic_pause else R.drawable.ic_play), "Play / pause", Modifier.size(if (big) 64.dp else 48.dp), tint = Bg)
             }
-            IconButton(onClick = { Control.next() }, modifier = Modifier.size(64.dp)) { Icon(painterResource(R.drawable.ic_next), "Next", Modifier.size(44.dp)) }
-            IconButton(onClick = { Control.repeatTo(!Control.repeatOn) }, modifier = Modifier.size(56.dp)) { Icon(painterResource(R.drawable.ic_repeat), "Repeat", Modifier.size(28.dp), tint = if (Control.repeatOn) Accent else Color.White) }
+            IconButton(onClick = { Control.next() }, modifier = Modifier.size(if (big) 88.dp else 64.dp)) { Icon(painterResource(R.drawable.ic_next), "Next", Modifier.size(if (big) 56.dp else 44.dp)) }
+            IconButton(onClick = { Control.repeatTo(!Control.repeatOn) }, modifier = Modifier.size(if (big) 76.dp else 56.dp)) { Icon(painterResource(R.drawable.ic_repeat), "Repeat", Modifier.size(if (big) 36.dp else 28.dp), tint = if (Control.repeatOn) Accent else Color.White) }
         }
     }
 
@@ -194,16 +214,35 @@ fun NowPlayingScreen(onClose: () -> Unit) {
         if (wide) {
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 Box(Modifier.weight(1f).fillMaxHeight().padding(vertical = 8.dp)) { art() }
-                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center) { header(); meta(); controls() }
+                // spread over the whole height instead of bunched in the middle
+                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
+                    header(true)
+                    meta(true)
+                    tools(true)
+                    controls(true)
+                }
             }
         } else {
             Column(Modifier.fillMaxSize()) {
-                header()
+                header(false)
                 Box(Modifier.weight(1f).fillMaxWidth()) { art() }
-                meta()
-                controls()
+                meta(false)
+                tools(false)
+                controls(false)
             }
         }
+    }
+}
+
+/** A tool under the seek bar on a wide screen: a tall block (the whole block is the target) with the icon and its name. */
+@Composable
+private fun ToolBlock(label: String, active: Boolean, onClick: () -> Unit, icon: @Composable () -> Unit) {
+    Column(
+        Modifier.widthIn(min = 92.dp).height(88.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(18.dp)).clickable(onClick = onClick).padding(horizontal = 8.dp),
+        verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { icon() }
+        Text(label, fontSize = 15.sp, color = if (active) Accent else Color(0xCCFFFFFF))
     }
 }
 
@@ -248,10 +287,12 @@ private fun QueuePanel() {
 
 /** The speed: a few steps and "Keep pitch" (on: the voice does not get higher or lower). */
 @Composable
-private fun SpeedButton() {
+private fun SpeedButton(big: Boolean = false) {
     var open by remember { mutableStateOf(false) }
     Box {
-        androidx.compose.material3.TextButton(onClick = { open = true }) {
+        if (big) ToolBlock("Speed", Playback.speed != 1f, { open = true }) {
+            Text(speedLabel(Playback.speed), color = if (Playback.speed != 1f) Accent else Color.White, fontSize = 24.sp)
+        } else androidx.compose.material3.TextButton(onClick = { open = true }) {
             Text(speedLabel(Playback.speed), color = if (Playback.speed != 1f) Accent else Color.White, fontSize = 16.sp)
         }
         androidx.compose.material3.DropdownMenu(open, { open = false }) {

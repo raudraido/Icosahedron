@@ -4,6 +4,7 @@ A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, b
 
 ## 0.1.14
 
+- **The sign-in form is small on a wide screen** (a car, a tablet): the fields and the button are only about as wide as the title, in the middle, not as wide as the screen; the logo and the title are a bit smaller.
 - **Playing in the background is firmer:** the player holds the CPU and the Wi-Fi awake while a song plays (with the screen off or the app left, the phone could put the stream to sleep and the music stopped after a while), and the app now keeps its media service connected, so Android moves it to the foreground with its notification as soon as a song starts and the music goes on when you leave the app.
 
 ## 0.1.13

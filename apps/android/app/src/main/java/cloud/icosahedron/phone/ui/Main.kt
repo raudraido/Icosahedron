@@ -77,6 +77,7 @@ private sealed interface Route {
     data class ArtistR(val id: String) : Route
     data class PlaylistR(val id: String, val name: String) : Route
     data class AlbumList(val type: String, val title: String) : Route
+    data class OfflineR(val kind: String, val id: String) : Route
 }
 
 private enum class Dest { Home, Library, Search, Devices, Settings }
@@ -120,6 +121,7 @@ fun MainScreen() {
                         is Route.AlbumR -> AlbumScreen(top.id, onBack = { stack.removeLast() }, push = push)
                         is Route.ArtistR -> ArtistScreen(top.id, onBack = { stack.removeLast() }, push = push)
                         is Route.PlaylistR -> PlaylistScreen(top.id, top.name, onBack = { stack.removeLast() })
+                        is Route.OfflineR -> OfflineCollectionScreen(top.kind, top.id, onBack = { stack.removeLast() })
                         is Route.AlbumList -> AlbumListScreen(top.type, top.title, onBack = { stack.removeLast() }, push = push)
                         null -> when (tab) {
                             Dest.Home -> HomeScreen(
@@ -197,6 +199,7 @@ private fun HomeScreen(push: (Route) -> Unit, allPlaylists: () -> Unit, onProfil
 // ── Library ──
 @Composable
 private fun LibraryScreen(selected: Int, onSelect: (Int) -> Unit, push: (Route) -> Unit) {
+    val openOffline = { k: String, i: String -> push(Route.OfflineR(k, i)) }
     Column(Modifier.fillMaxSize()) {
         TabRow(selected, containerColor = Bg, contentColor = Accent) {
             listOf("Albums", "Artists", "Playlists", "Offline").forEachIndexed { i, s -> Tab(selected == i, { onSelect(i) }, text = { Text(s) }) }
@@ -205,7 +208,7 @@ private fun LibraryScreen(selected: Int, onSelect: (Int) -> Unit, push: (Route) 
             0 -> AlbumsBrowser(AlbumSort.Name, onAlbum = { push(Route.AlbumR(it.id)) })
             1 -> ArtistsBrowser(onArtist = { push(Route.ArtistR(it.id)) })
             2 -> PlaylistsList(push)
-            else -> OfflineList()
+            else -> OfflineList(open = openOffline)
         }
     }
 }
@@ -224,9 +227,11 @@ private fun PlaylistsList(push: (Route) -> Unit) {
     val lists by load("playlists-all") { client.playlists() }
     LazyColumn(Modifier.fillMaxSize()) {
         items(lists ?: emptyList(), key = { it.id }) { p ->
-            Row(Modifier.fillMaxWidth().clickable { push(Route.PlaylistR(p.id, p.name)) }.padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Cover(p.coverArt, 52.dp)
-                Column(Modifier.padding(start = 12.dp)) { Text(p.name, maxLines = 1, overflow = TextOverflow.Ellipsis); Text("${p.songCount} songs", fontSize = 12.sp, color = Dim) }
+            CollectionBox("playlist", p.id, p.name, "${p.songCount} songs", p.coverArt, { push(Route.PlaylistR(p.id, p.name)) }, Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Cover(p.coverArt, 52.dp)
+                    Column(Modifier.padding(start = 12.dp)) { Text((if (cloud.icosahedron.phone.player.Offline.isCollectionKept("playlist", p.id)) "↓ " else "") + p.name, maxLines = 1, overflow = TextOverflow.Ellipsis); Text("${p.songCount} songs", fontSize = 12.sp, color = Dim) }
+                }
             }
         }
     }
@@ -270,17 +275,20 @@ fun TopBar(title: String, onBack: () -> Unit) {
 }
 
 @Composable
-private fun PlayShuffle(tracks: List<Track>) {
+private fun PlayShuffle(tracks: List<Track>, collection: cloud.icosahedron.phone.player.Offline.Collection? = null) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val client = LocalClient.current
-    val allKept = tracks.isNotEmpty() && tracks.all { cloud.icosahedron.phone.player.Offline.isKept(it.id) }
+    val allKept = if (collection != null) cloud.icosahedron.phone.player.Offline.isCollectionKept(collection.kind, collection.id) else tracks.isNotEmpty() && tracks.all { cloud.icosahedron.phone.player.Offline.isKept(it.id) }
     Column {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Button(onClick = { Control.playTracks(tracks, 0) }, modifier = Modifier.weight(1f)) { Text("Play") }
             OutlinedButton(onClick = { Control.playTracks(tracks.shuffled(), 0) }, modifier = Modifier.weight(1f)) { Text("Shuffle") }
         }
         androidx.compose.material3.TextButton(
-            onClick = { if (allKept) tracks.forEach { cloud.icosahedron.phone.player.Offline.unkeep(it) } else keepOffline(ctx, client, tracks) },
+            onClick = {
+                if (collection != null) { if (allKept) cloud.icosahedron.phone.player.Offline.unkeepCollection(collection.kind, collection.id) else keepCollectionOffline(ctx, client, collection.kind, collection.id, collection.name, collection.subtitle, collection.cover, tracks) }
+                else if (allKept) tracks.forEach { cloud.icosahedron.phone.player.Offline.unkeep(it) } else keepOffline(ctx, client, tracks)
+            },
             modifier = Modifier.padding(horizontal = 8.dp),
         ) { Text(if (allKept) "Remove from offline" else "Keep offline", color = Accent) }
     }
@@ -304,7 +312,7 @@ private fun AlbumScreen(id: String, onBack: () -> Unit, push: (Route) -> Unit) {
                 )
                 if (album?.year != null) Text(album.year.toString(), color = Dim, fontSize = 12.sp)
             }
-            if (tracks.isNotEmpty()) PlayShuffle(tracks)
+            if (tracks.isNotEmpty()) PlayShuffle(tracks, album?.let { cloud.icosahedron.phone.player.Offline.Collection("album", it.id, it.name, it.artist, it.coverArt, tracks) })
         }
         itemsIndexed(tracks, key = { _, t -> t.id }) { i, t -> TrackRow(t, showCover = false, number = if (t.trackNumber > 0) t.trackNumber else i + 1) { Control.playTracks(tracks, i) } }
     }
@@ -329,14 +337,14 @@ private fun PlaylistScreen(id: String, name: String, onBack: () -> Unit) {
     val tracks by load(id) { client.playlistTracks(id) }
     val list = tracks ?: emptyList()
     LazyColumn(Modifier.fillMaxSize()) {
-        item { TopBar(name, onBack); if (list.isNotEmpty()) PlayShuffle(list) }
+        item { TopBar(name, onBack); if (list.isNotEmpty()) PlayShuffle(list, cloud.icosahedron.phone.player.Offline.Collection("playlist", id, name, "${list.size} songs", list.firstOrNull()?.coverArt, list)) }
         itemsIndexed(list) { i, t -> TrackRow(t) { Control.playTracks(list, i) } }
     }
 }
 
 /** The songs kept on the phone: they play without a network. */
 @Composable
-private fun OfflineList() {
+private fun OfflineList(open: (String, String) -> Unit) {
     val songs = cloud.icosahedron.phone.player.Offline.kept
     val pending = cloud.icosahedron.phone.player.Offline.pending
     LazyColumn(Modifier.fillMaxSize()) {
@@ -351,6 +359,31 @@ private fun OfflineList() {
                 OutlinedButton(onClick = { Control.playTracks(songs.shuffled(), 0) }, modifier = Modifier.weight(1f)) { Text("Shuffle") }
             }
         }
+        if (cloud.icosahedron.phone.player.Offline.collections.isNotEmpty()) {
+            item { SectionHeader("Albums and playlists") }
+            items(cloud.icosahedron.phone.player.Offline.collections.toList(), key = { it.kind + it.id }) { c ->
+                Row(Modifier.fillMaxWidth().clickable { open(c.kind, c.id) }.padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Cover(c.cover, 52.dp)
+                    Column(Modifier.padding(start = 12.dp)) { Text(c.name, maxLines = 1, overflow = TextOverflow.Ellipsis); Text((if (c.kind == "album") "Album" else "Playlist") + " · ${c.tracks.size} songs", fontSize = 12.sp, color = Dim) }
+                }
+            }
+            item { SectionHeader("Songs") }
+        }
         itemsIndexed(songs.toList(), key = { _, t -> t.id }) { i, t -> TrackRow(t) { Control.playTracks(songs.toList(), i) } }
+    }
+}
+
+/** A kept album or playlist, from the phone: opens without a network. */
+@Composable
+private fun OfflineCollectionScreen(kind: String, id: String, onBack: () -> Unit) {
+    val c = cloud.icosahedron.phone.player.Offline.collections.firstOrNull { it.kind == kind && it.id == id }
+    if (c == null) { onBack(); return }
+    LazyColumn(Modifier.fillMaxSize()) {
+        item {
+            TopBar(c.name, onBack)
+            Text(c.subtitle, color = Dim, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp))
+            PlayShuffle(c.tracks, c)
+        }
+        itemsIndexed(c.tracks, key = { _, t -> t.id }) { i, t -> TrackRow(t) { Control.playTracks(c.tracks, i) } }
     }
 }

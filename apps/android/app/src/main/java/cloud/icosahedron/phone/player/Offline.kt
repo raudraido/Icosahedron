@@ -49,6 +49,12 @@ object Offline {
 
     /** The songs kept on the phone, in the order they were kept. */
     val kept = mutableStateListOf<Track>()
+    /** An album or a playlist kept offline, with its songs, so it opens without a network. */
+    class Collection(val kind: String, val id: String, val name: String, val subtitle: String, val cover: String?, val tracks: List<Track>)
+
+    val collections = mutableStateListOf<Collection>()
+    fun isCollectionKept(kind: String, id: String) = collections.any { it.kind == kind && it.id == id }
+
     /** How many songs are still waiting to be downloaded; 0 when idle. */
     var pending by mutableIntStateOf(0)
         private set
@@ -68,6 +74,7 @@ object Offline {
         lru = SimpleCache(File(appContext.cacheDir, "audio"), evictor, db)
         keptCache = SimpleCache(File(appContext.filesDir, "offline"), NoOpCacheEvictor(), db)
         loadKept()
+        loadCollections()
     }
 
     // ── Keys: a kept song has one key whatever the quality; the others are per quality ──
@@ -131,6 +138,45 @@ object Offline {
         scope.launch { try { file.writeText(JSONArray(snapshot.map { it.toWire() }).toString()) } catch (_: Exception) { } }
     }
 
+    private val collectionsFile get() = File(appContext.filesDir, "collections.json")
+
+    private fun loadCollections() {
+        try {
+            val a = JSONArray(collectionsFile.readText())
+            collections.addAll((0 until a.length()).mapNotNull { i ->
+                val o = a.getJSONObject(i)
+                val ts = o.getJSONArray("tracks").let { t -> (0 until t.length()).mapNotNull { Track.fromWire(t.getJSONObject(it)) } }
+                Collection(o.getString("kind"), o.getString("id"), o.getString("name"), o.optString("subtitle"), o.optString("cover").ifEmpty { null }, ts)
+            })
+        } catch (_: Exception) { }
+    }
+
+    private fun saveCollections() {
+        val snapshot = collections.toList()
+        scope.launch {
+            try {
+                collectionsFile.writeText(JSONArray(snapshot.map { c ->
+                    org.json.JSONObject().put("kind", c.kind).put("id", c.id).put("name", c.name).put("subtitle", c.subtitle)
+                        .put("cover", c.cover ?: "").put("tracks", JSONArray(c.tracks.map { it.toWire() }))
+                }).toString())
+            } catch (_: Exception) { }
+        }
+    }
+
+    /** Keeps a whole album or playlist: it shows in Library → Offline and its songs are downloaded. */
+    fun keepCollection(c: Collection, urlFor: (Track) -> String) {
+        if (!isCollectionKept(c.kind, c.id)) { collections.add(c); saveCollections() }
+        keep(c.tracks, urlFor)
+    }
+
+    /** The songs that another kept collection also holds stay. */
+    fun unkeepCollection(kind: String, id: String) {
+        val c = collections.firstOrNull { it.kind == kind && it.id == id } ?: return
+        collections.remove(c); saveCollections()
+        val others = collections.flatMap { it.tracks }.map { it.id }.toSet()
+        c.tracks.filter { it.id !in others }.forEach { unkeep(it) }
+    }
+
     /** Downloads the songs in the background, one at a time. */
     fun keep(tracks: List<Track>, urlFor: (Track) -> String) {
         synchronized(queueLock) {
@@ -161,7 +207,7 @@ object Offline {
         scope.launch { try { keptCache.removeResource("kept:${t.id}") } catch (_: Exception) { } }
     }
 
-    fun unkeepAll() = kept.toList().forEach { unkeep(it) }
+    fun unkeepAll() { collections.clear(); saveCollections(); kept.toList().forEach { unkeep(it) } }
 }
 
 /** The oldest songs go first when the cache is over its limit; the limit can be changed while it runs. */

@@ -2,6 +2,8 @@ package cloud.icosahedron.phone.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -70,9 +72,9 @@ fun SectionHeader(title: String, onSeeAll: (() -> Unit)? = null) {
 
 @Composable
 fun AlbumCard(a: Album, size: Dp = 140.dp, onClick: () -> Unit) {
-    Column(Modifier.width(size).clickable(onClick = onClick)) {
+    CollectionBox("album", a.id, a.name, a.artist, a.coverArt, onClick, Modifier.width(size)) {
         Cover(a.coverArt, size)
-        Text(a.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp))
+        Text(kept("album", a.id) + a.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp))
         Text(a.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, color = Dim)
     }
 }
@@ -92,9 +94,9 @@ fun PlaylistShelf(playlists: List<Playlist>?, onSeeAll: () -> Unit, onOpen: (Pla
     SectionHeader("Playlists", onSeeAll)
     LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         items(playlists.take(20)) { p ->
-            Column(Modifier.width(140.dp).clickable { onOpen(p) }) {
+            CollectionBox("playlist", p.id, p.name, "${p.songCount} songs", p.coverArt, { onOpen(p) }, Modifier.width(140.dp)) {
                 Cover(p.coverArt, 140.dp)
-                Text(p.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp))
+                Text(kept("playlist", p.id) + p.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp))
                 Text("${p.songCount} songs", fontSize = 12.sp, color = Dim)
             }
         }
@@ -166,4 +168,50 @@ fun AvatarView(size: Dp = 36.dp, modifier: Modifier = Modifier) {
         if (img != null) androidx.compose.foundation.Image(img.asImageBitmap(), "Account", Modifier.size(size), contentScale = ContentScale.Crop)
         else Text(user.take(1).uppercase(), fontSize = (size.value * 0.5f).sp, color = androidx.compose.ui.graphics.Color.White)
     }
+}
+
+private fun kept(kind: String, id: String) = if (cloud.icosahedron.phone.player.Offline.isCollectionKept(kind, id)) "↓ " else ""
+
+/**
+ * An album or playlist card or row: a tap opens it, a long press offers Play, Add to queue and Keep offline.
+ * The songs are fetched when an action needs them.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun CollectionBox(kind: String, id: String, name: String, subtitle: String, cover: String?, onClick: () -> Unit, modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    val client = LocalClient.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var menu by remember { mutableStateOf(false) }
+    val offline = cloud.icosahedron.phone.player.Offline
+    val isKept = offline.isCollectionKept(kind, id)
+    suspend fun tracks(): List<Track> = if (kind == "album") client.album(id).second else client.playlistTracks(id)
+    Box(modifier) {
+        Column(Modifier.androidx_combined(onClick) { menu = true }, content = content)
+        DropdownMenu(menu, { menu = false }) {
+            DropdownMenuItem(text = { Text("Play") }, onClick = { menu = false; scope.launch { runCatching { tracks() }.getOrNull()?.let { Control.playTracks(it, 0) } } })
+            DropdownMenuItem(text = { Text("Add to queue") }, onClick = { menu = false; scope.launch { runCatching { tracks() }.getOrNull()?.let { Control.addToQueue(it) } } })
+            if (isKept) DropdownMenuItem(text = { Text("Remove from offline") }, onClick = { menu = false; offline.unkeepCollection(kind, id) })
+            else DropdownMenuItem(text = { Text("Keep offline") }, onClick = {
+                menu = false
+                scope.launch {
+                    val t = runCatching { tracks() }.getOrNull()
+                    if (t.isNullOrEmpty()) android.widget.Toast.makeText(context, "Could not load it", android.widget.Toast.LENGTH_SHORT).show()
+                    else keepCollectionOffline(context, client, kind, id, name, subtitle, cover, t)
+                }
+            })
+        }
+    }
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+private fun Modifier.androidx_combined(onClick: () -> Unit, onLong: () -> Unit): Modifier =
+    this.combinedClickable(onClick = onClick, onLongClick = onLong)
+
+fun keepCollectionOffline(context: android.content.Context, client: cloud.icosahedron.phone.data.SubsonicClient, kind: String, id: String, name: String, subtitle: String, cover: String?, tracks: List<Track>) {
+    if (!cloud.icosahedron.phone.player.Offline.cachingAllowed()) {
+        android.widget.Toast.makeText(context, "On mobile data downloads are off (Settings → Offline)", android.widget.Toast.LENGTH_LONG).show()
+        return
+    }
+    cloud.icosahedron.phone.player.Offline.keepCollection(cloud.icosahedron.phone.player.Offline.Collection(kind, id, name, subtitle, cover, tracks)) { client.streamUrl(it.id) }
 }

@@ -120,6 +120,9 @@ class SubsonicClient(val baseUrl: String, val user: String, val salt: String, va
         return Album.fromSubsonic(a) to a.objs("song").mapNotNull { Track.fromSubsonic(it) }
     }
 
+    suspend fun song(id: String): Track? =
+        call("getSong", "id" to id).optJSONObject("song")?.let { Track.fromSubsonic(it) }
+
     suspend fun playlists(): List<Playlist> =
         call("getPlaylists").optJSONObject("playlists")?.objs("playlist")?.mapNotNull { Playlist.fromSubsonic(it) } ?: emptyList()
 

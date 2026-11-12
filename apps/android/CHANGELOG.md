@@ -2,6 +2,11 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
+## 0.1.16
+
+- **Now Playing closes when you pull it down from anywhere** (the cover, the title, the controls, empty space), not only with the small arrow. The screen follows your finger and goes away when you pull far enough or flick it down; otherwise it springs back. The lists inside it (lyrics, the queue, the song's details) scroll first: only a pull at their very top closes the screen. The arrow and the back button still work.
+- **The buttons are rearranged:** the playback controls (shuffle, previous, play / pause, next, repeat) are at the very bottom and bigger. Under the seek bar there is a row of smaller buttons: **favorite (♥)**, lyrics, speed, queue and the **⋮ menu** (the same menu as everywhere else: Play Next, Add to Queue, Add to Device Queue, Download, Favorite, Add to Playlist, Share, Show Album, Show Artist).
+
 ## 0.1.15
 
 - **Now Playing background:** the colour of the cover now fades down into the dark of the app (a gradient, top to bottom) and changes smoothly with each song, as on the TV; before it was one flat colour.

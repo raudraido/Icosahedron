@@ -52,7 +52,8 @@ fun NowPlayingScreen(onClose: () -> Unit) {
     BackHandler(onBack = onClose)
     val t = Control.track
     val tint = rememberCoverTint(t?.coverArt)
-    val bg by animateColorAsState(tint ?: Panel, label = "tint")
+    // The colour of the cover fades into the dark of the app (top to bottom) and changes smoothly with the song, like on the TV
+    val bg by animateColorAsState(tint ?: Panel, androidx.compose.animation.core.tween(800), label = "tint")
     var panel by remember { mutableStateOf(0) } // 0 cover, 1 lyrics, 2 queue
     var info by remember { mutableStateOf(false) } // the cover tapped: the song's details under a smaller cover
     var dragging by remember { mutableStateOf<Float?>(null) }
@@ -114,7 +115,7 @@ fun NowPlayingScreen(onClose: () -> Unit) {
     }
 
     androidx.compose.foundation.layout.BoxWithConstraints(
-        Modifier.fillMaxSize().background(bg).padding(horizontal = 20.dp, vertical = 8.dp)
+        Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(bg, Bg))).padding(horizontal = 20.dp, vertical = 8.dp)
             // the screen is on top of the app: a tap that nothing here uses must not reach what is under it
             .pointerInput(Unit) { detectTapGestures { } },
     ) {

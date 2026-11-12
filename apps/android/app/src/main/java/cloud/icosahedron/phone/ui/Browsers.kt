@@ -165,7 +165,7 @@ fun AlbumsBrowser(initial: AlbumSort, onAlbum: (Album) -> Unit) {
         Row(Modifier.fillMaxSize()) {
             LazyVerticalGrid(
                 if (grid) GridCells.Adaptive(160.dp) else GridCells.Fixed(1), Modifier.weight(1f), state = state,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 8.dp + LocalBottomInset.current),
                 horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(if (grid) 14.dp else 4.dp),
             ) {
                 items(albums, key = { it.id }) { a ->
@@ -220,7 +220,7 @@ fun ArtistsBrowser(onArtist: (Artist) -> Unit) {
         }
         val letters = if (sort == ArtistSort.Name) orderLetters(list.map { letterOf(it.name) }.toSet()) else emptyList()
         Row(Modifier.fillMaxSize()) {
-            LazyVerticalGrid(if (grid) GridCells.Adaptive(110.dp) else GridCells.Fixed(1), Modifier.weight(1f), state = state, contentPadding = PaddingValues(horizontal = if (grid) 12.dp else 0.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(if (grid) 14.dp else 0.dp)) {
+            LazyVerticalGrid(if (grid) GridCells.Adaptive(110.dp) else GridCells.Fixed(1), Modifier.weight(1f), state = state, contentPadding = PaddingValues(start = if (grid) 12.dp else 0.dp, end = if (grid) 12.dp else 0.dp, top = 4.dp, bottom = 4.dp + LocalBottomInset.current), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(if (grid) 14.dp else 0.dp)) {
                 items(list, key = { it.id }) { a ->
                     if (grid) Column(Modifier.clickable { onArtist(a) }, horizontalAlignment = Alignment.CenterHorizontally) {
                         Cover(a.coverArt, 96.dp, round = true)

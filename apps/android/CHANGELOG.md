@@ -2,6 +2,10 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
+## 0.1.12
+
+- **A small player card instead of a bar on a wide screen** (a tablet, a phone on its side, a car): in the bottom right corner a round cover with a ring that shows the progress, and ⏮ ⏯ ⏭ under it. A tap on the cover opens Now Playing; a long press shows the song's name and artist. It floats over the content, so the width is not used up, and the lists leave room at the bottom so nothing hides behind it. On a narrow screen (a phone held upright) the bar stays as it was.
+
 ## 0.1.11
 
 - **Album and playlist pages on a wide screen** (a tablet, a phone on its side, a car) work like Now Playing: the cover, the names and the Play / Shuffle / ⋮ buttons stay at the left, and only the song list scrolls at the right. On a narrow screen nothing changes. The same goes for a playlist and for a kept album or playlist under Library → Downloads.

@@ -2,6 +2,10 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
+## 0.1.15
+
+- **Now Playing background:** the colour of the cover now fades down into the dark of the app (a gradient, top to bottom) and changes smoothly with each song, as on the TV; before it was one flat colour.
+
 ## 0.1.14
 
 - **The sign-in form is small on a wide screen** (a car, a tablet): the fields and the button are only about as wide as the title, in the middle, not as wide as the screen; the logo and the title are a bit smaller.

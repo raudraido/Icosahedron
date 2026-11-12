@@ -73,12 +73,16 @@ object Playback {
                 true,
             )
             .setHandleAudioBecomingNoisy(true)
+            // Keeps the CPU and the Wi-Fi awake while a song plays: with the screen off or the app in the background the phone
+            // may otherwise sleep and the stream stops after a while
+            .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
         val prefs = appContext.getSharedPreferences("playback", Context.MODE_PRIVATE)
         speed = prefs.getFloat("speed", 1f)
         keepPitch = prefs.getBoolean("keepPitch", true)
         applySpeed()
         Eq.init(appContext)
+        bindService()
         // The system can fail to give the player a session (the audio service restarting): -1 then breaks every song
         ensureAudioSession()
         // The equalizer is an audio effect inside the system's audio service: it is only made when it is on (or being set up)
@@ -110,6 +114,20 @@ object Playback {
                 if (queue.isNotEmpty()) { sync(); scrobbleWhenDue(); onTick?.invoke(); saveSession() }
             }
         }
+    }
+
+    private var controller: com.google.common.util.concurrent.ListenableFuture<androidx.media3.session.MediaController>? = null
+
+    /**
+     * Keeps the media service connected for as long as the app lives. Media3 then moves the service to the foreground
+     * (with the notification) by itself when a song starts and back when it stops, which is what lets the music go on
+     * when the app is left.
+     */
+    private fun bindService() {
+        try {
+            val token = androidx.media3.session.SessionToken(appContext, android.content.ComponentName(appContext, PlaybackService::class.java))
+            controller = androidx.media3.session.MediaController.Builder(appContext, token).buildAsync()
+        } catch (_: Exception) { }
     }
 
     private var lastAudioRepair = 0L

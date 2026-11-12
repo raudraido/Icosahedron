@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -99,18 +100,21 @@ fun LoginScreen(onSignedIn: (Session) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Image(painterResource(R.drawable.logo), null, Modifier.size(88.dp))
-        Text("Icosahedron", fontSize = 32.sp, color = Accent)
-        val w = waiting
-        if (w != null) {
-            WaitStep(w, onSignedIn, onCancel = { waiting = null })
-        } else {
-            found.forEach { f -> AssistChip(onClick = { url = f.address }, label = { Text("${f.name} · ${f.address}") }) }
-            Field("Server (https://music.example.com)", url, { url = it }, KeyboardType.Uri)
-            Field("Username", user, { user = it }, KeyboardType.Text)
-            Field("Password", pass, { pass = it }, KeyboardType.Password, secret = true)
-            error?.let { Text(it, color = Accent) }
-            Button(onClick = { go() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Signing in…" else "Sign in") }
+        Image(painterResource(R.drawable.logo), null, Modifier.size(72.dp))
+        Text("Icosahedron", fontSize = 28.sp, color = Accent)
+        // The form is as wide as it needs to be, not as wide as the screen (a car or a tablet is much wider than a phone)
+        Column(Modifier.widthIn(max = 280.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            val w = waiting
+            if (w != null) {
+                WaitStep(w, onSignedIn, onCancel = { waiting = null })
+            } else {
+                found.forEach { f -> AssistChip(onClick = { url = f.address }, label = { Text("${f.name} · ${f.address}") }) }
+                Field("Server (https://music.example.com)", url, { url = it }, KeyboardType.Uri)
+                Field("Username", user, { user = it }, KeyboardType.Text)
+                Field("Password", pass, { pass = it }, KeyboardType.Password, secret = true)
+                error?.let { Text(it, color = Accent) }
+                Button(onClick = { go() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Signing in…" else "Sign in") }
+            }
         }
     }
 }

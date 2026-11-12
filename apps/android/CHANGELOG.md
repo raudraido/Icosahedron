@@ -2,6 +2,10 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
+## 0.1.17
+
+- **The tabs in the side rail (wide screens) are bigger and start at the top:** each one is a tall, wide block (84 dp high, the rail is 112 dp wide) with the icon above its name, and the whole block is the target, so it is easy to hit in a car that shakes. The selected one is marked with a rounded background. On a low screen they are 60 dp high without names. The round cover with the progress ring stays at the bottom.
+
 ## 0.1.16
 
 - **Now Playing closes when you pull it down from anywhere** (the cover, the title, the controls, empty space), not only with the small arrow. The screen follows your finger and goes away when you pull far enough or flick it down; otherwise it springs back. The lists inside it (lyrics, the queue, the song's details) scroll first: only a pull at their very top closes the screen. The arrow and the back button still work.

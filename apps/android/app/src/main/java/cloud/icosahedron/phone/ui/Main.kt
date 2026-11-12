@@ -17,8 +17,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.NavigationRailItem
-import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -68,6 +66,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.painterResource
@@ -148,14 +147,11 @@ fun MainScreen() {
             }
             if (wide) {
                 Row(Modifier.fillMaxSize()) {
-                    Column(Modifier.fillMaxHeight().width(88.dp).background(Panel).padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                      Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                    // The tabs start at the top and are big: in a car that shakes a small target is easy to miss
+                    Column(Modifier.fillMaxHeight().width(112.dp).background(Panel).padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                      Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         destinations.forEach { (t, icon) ->
-                            NavigationRailItem(
-                                selected = tab == t, onClick = { tab = t; stack.clear() },
-                                icon = { Icon(icon, t.name) }, label = if (compact) null else ({ Text(t.name, fontSize = 11.sp) }), alwaysShowLabel = !compact,
-                                colors = NavigationRailItemDefaults.colors(selectedIconColor = Accent, selectedTextColor = Accent, indicatorColor = PanelHi, unselectedIconColor = Dim, unselectedTextColor = Dim),
-                            )
+                            RailTab(icon, t.name, selected = tab == t, compact = compact) { tab = t; stack.clear() }
                         }
                       }
                         RailPlayer(compact, onOpen = { showPlayer = true })
@@ -187,6 +183,21 @@ fun MainScreen() {
                 NowPlayingScreen(onClose = { showPlayer = false })
             }
         }
+    }
+}
+
+// A tab in the side rail: the whole rounded block is the target (tall and wide), icon above the name
+@Composable
+private fun RailTab(icon: androidx.compose.ui.graphics.vector.ImageVector, name: String, selected: Boolean, compact: Boolean, onClick: () -> Unit) {
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 8.dp).height(if (compact) 60.dp else 84.dp)
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
+            .background(if (selected) PanelHi else androidx.compose.ui.graphics.Color.Transparent)
+            .clickable(onClick = onClick),
+        verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(icon, name, Modifier.size(if (compact) 30.dp else 34.dp), tint = if (selected) Accent else Dim)
+        if (!compact) Text(name, fontSize = 13.sp, color = if (selected) Accent else Dim, modifier = Modifier.padding(top = 4.dp))
     }
 }
 

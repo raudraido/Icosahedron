@@ -1,0 +1,212 @@
+package cloud.icosahedron.phone.player
+
+import android.content.Context
+import android.content.Intent
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import cloud.icosahedron.phone.data.SubsonicClient
+import cloud.icosahedron.phone.data.Track
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+/**
+ * This TV's player: one ExoPlayer for the whole process (the media service shares it for the
+ * session and background playback) and the queue as Compose state for the screens. The queue
+ * index is the position in the order the queue is shown; shuffle only changes what plays next.
+ */
+object Playback {
+    private lateinit var appContext: Context
+    lateinit var player: ExoPlayer
+        private set
+    var client: SubsonicClient? = null
+
+    var queue by mutableStateOf<List<Track>>(emptyList())
+        private set
+    var index by mutableIntStateOf(-1)
+        private set
+    var isPlaying by mutableStateOf(false)
+        private set
+    var positionMs by mutableLongStateOf(0L)
+        private set
+    var durationMs by mutableLongStateOf(0L)
+        private set
+    var shuffle by mutableStateOf(false)
+        private set
+    var repeatAll by mutableStateOf(false)
+        private set
+
+    val current: Track? get() = queue.getOrNull(index)
+
+    /** Called when what this player does changes (track, play state, queue, shuffle, repeat). */
+    var onChanged: (() -> Unit)? = null
+    /** Called about every half second while something is loaded; the sync client publishes the position from it. */
+    var onTick: (() -> Unit)? = null
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var scrobbledId: String? = null
+
+    fun init(context: Context) {
+        if (::player.isInitialized) return
+        appContext = context.applicationContext
+        player = ExoPlayer.Builder(appContext)
+            .setAudioAttributes(
+                AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(),
+                true,
+            )
+            .setHandleAudioBecomingNoisy(true)
+            .build()
+        player.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) { sync(); onChanged?.invoke() }
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) { sync(); nowPlaying(); onChanged?.invoke() }
+            override fun onPlaybackStateChanged(playbackState: Int) { sync(); onChanged?.invoke() }
+            override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) { sync(); onChanged?.invoke() }
+            override fun onRepeatModeChanged(repeatMode: Int) { sync(); onChanged?.invoke() }
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int,
+            ) { sync() }
+        })
+        scope.launch {
+            while (true) {
+                delay(500)
+                if (queue.isNotEmpty()) { sync(); scrobbleWhenDue(); onTick?.invoke() }
+            }
+        }
+    }
+
+    /** Copies the player's state into the Compose state. */
+    private fun sync() {
+        index = if (queue.isEmpty()) -1 else player.currentMediaItemIndex.coerceIn(0, queue.size - 1)
+        isPlaying = player.isPlaying
+        positionMs = player.currentPosition.coerceAtLeast(0)
+        durationMs = player.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: ((current?.duration ?: 0) * 1000L)
+        shuffle = player.shuffleModeEnabled
+        repeatAll = player.repeatMode != Player.REPEAT_MODE_OFF
+    }
+
+    private fun item(t: Track): MediaItem {
+        val c = client
+        return MediaItem.Builder()
+            .setMediaId(t.id)
+            .setUri(c?.streamUrl(t.id))
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(t.title).setArtist(t.artist).setAlbumTitle(t.album)
+                    .setArtworkUri(c?.coverUrl(t.coverArt, 512)?.let { android.net.Uri.parse(it) })
+                    .build(),
+            )
+            .build()
+    }
+
+    /**
+     * Keeps the media service running so playback survives leaving the app (it may refuse from the
+     * background). A plain start, not startForegroundService: Media3 moves the service to the foreground
+     * itself once music plays, and a foreground start that is not answered with startForeground within a
+     * few seconds (the track is still buffering, or fails) kills the app.
+     */
+    private fun ensureService() {
+        try {
+            appContext.startService(Intent(appContext, PlaybackService::class.java))
+        } catch (_: Exception) { /* playback itself does not depend on it */ }
+    }
+
+    fun playTracks(tracks: List<Track>, start: Int = 0, startPositionMs: Long = 0, playWhenReady: Boolean = true) {
+        if (tracks.isEmpty()) return
+        queue = tracks
+        player.setMediaItems(tracks.map(::item), start.coerceIn(0, tracks.size - 1), startPositionMs)
+        player.prepare()
+        player.playWhenReady = playWhenReady
+        scrobbledId = null
+        ensureService()
+        sync()
+        onChanged?.invoke()
+    }
+
+    /** Right after the current track (starts playing when nothing is queued). */
+    fun playNext(track: Track) = insert(listOf(track), at = if (queue.isEmpty()) 0 else index + 1)
+
+    fun addToQueue(tracks: List<Track>) = insert(tracks, at = queue.size)
+
+    /** Inserts after `at - 1`; returns where the first inserted track landed. */
+    fun insert(tracks: List<Track>, at: Int): Int {
+        if (tracks.isEmpty()) return at
+        if (queue.isEmpty()) { playTracks(tracks, 0); return 0 }
+        val pos = at.coerceIn(0, queue.size)
+        player.addMediaItems(pos, tracks.map(::item))
+        queue = queue.toMutableList().apply { addAll(pos, tracks) }
+        sync()
+        onChanged?.invoke()
+        return pos
+    }
+
+    fun jump(i: Int) {
+        if (i !in queue.indices) return
+        player.seekTo(i, 0)
+        player.play()
+        sync()
+    }
+
+    fun remove(i: Int) {
+        if (i !in queue.indices) return
+        player.removeMediaItem(i)
+        queue = queue.toMutableList().apply { removeAt(i) }
+        sync()
+        onChanged?.invoke()
+    }
+
+    /** Array-move: the item at `from` ends up at index `to`. */
+    fun move(from: Int, to: Int) {
+        if (from !in queue.indices || to !in queue.indices || from == to) return
+        player.moveMediaItem(from, to)
+        queue = queue.toMutableList().apply { add(to, removeAt(from)) }
+        sync()
+        onChanged?.invoke()
+    }
+
+    fun toggle() { if (player.isPlaying) player.pause() else { player.play(); ensureService() } }
+    fun play() { player.play(); ensureService() }
+    fun pause() = player.pause()
+    fun next() { player.seekToNextMediaItem(); sync() }
+    fun previous() { player.seekToPrevious(); sync() }
+    fun seekTo(ms: Long) { player.seekTo(ms.coerceAtLeast(0)); sync(); onChanged?.invoke() }
+    fun shuffleTo(on: Boolean) { player.shuffleModeEnabled = on }
+    fun repeatTo(on: Boolean) { player.repeatMode = if (on) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF }
+    fun setVolume(percent: Int) { player.volume = (percent.coerceIn(0, 100)) / 100f }
+
+    fun stop() {
+        player.stop()
+        player.clearMediaItems()
+        queue = emptyList()
+        sync()
+        onChanged?.invoke()
+    }
+
+    // The server's play count: "now playing" at the start, the play itself after half the track.
+    private fun nowPlaying() {
+        val t = current ?: return
+        val c = client ?: return
+        scope.launch(Dispatchers.IO) { try { c.scrobble(t.id, false) } catch (_: Exception) { } }
+    }
+
+    private fun scrobbleWhenDue() {
+        val t = current ?: return
+        if (scrobbledId == t.id || !isPlaying) return
+        val dur = durationMs
+        if (dur > 0 && positionMs >= minOf(dur / 2, 4 * 60_000L)) {
+            scrobbledId = t.id
+            val c = client ?: return
+            scope.launch(Dispatchers.IO) { try { c.scrobble(t.id, true) } catch (_: Exception) { } }
+        }
+    }
+}

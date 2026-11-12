@@ -1,0 +1,89 @@
+name: Android phone build
+
+# Builds the Android phone app (apps/android) into an APK on a GitHub runner. On a `v*`
+# tag the APK is published as its own release (tag `android-phone-vX.Y.Z`, which must match apps/android/VERSION). Without the signing secrets it is signed with the debug
+# key (an update then needs the old app uninstalled first); see docs/android.md for a fixed key.
+on:
+  push:
+    branches: [master]
+    paths: ["apps/android/**", ".github/workflows/android-phone.yml"]
+    tags: ["android-phone-v*"]
+  pull_request:
+    paths: ["apps/android/**", ".github/workflows/android-phone.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # attach the APK to a release on tags
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Version
+        run: |
+          VERSION="$(tr -d '[:space:]' < apps/android/VERSION)"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          # 0.1.0 -> 100, 0.15.9 -> 1509: grows with every release, which is what an APK update needs
+          echo "VERSION_CODE=$(node -p "const [a,b,c]='$VERSION'.split('.').map(Number); a*10000+b*100+c")" >> "$GITHUB_ENV"
+
+      - name: The tag matches the version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: test "${GITHUB_REF_NAME#android-phone-v}" = "$VERSION"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.10.2
+
+      - name: Signing key (when the secrets exist)
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            echo "ANDROID_KEYSTORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" >> "$GITHUB_ENV"
+            echo "ANDROID_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}" >> "$GITHUB_ENV"
+            echo "ANDROID_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build
+        working-directory: apps/android
+        run: |
+          set -o pipefail
+          gradle --no-daemon :app:assembleRelease -PversionName="$VERSION" -PversionCode="$VERSION_CODE" 2>&1 | tee build.log
+
+      - name: Name the APK
+        working-directory: apps/android
+        run: |
+          APK=app/build/outputs/apk/release/app-release.apk
+          ls -la "$APK"
+          cp "$APK" "Icosahedron-Android-$VERSION.apk"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: Icosahedron-Android-apk
+          path: apps/android/Icosahedron-Android-*.apk
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: android-phone-build-log
+          path: apps/android/build.log
+
+      - name: Release notes
+        if: startsWith(github.ref, 'refs/tags/')
+        run: node scripts/release-notes.mjs apps/android/CHANGELOG.md "$VERSION" > release-notes.md
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Android phone app ${{ env.VERSION }}
+          body_path: release-notes.md
+          files: apps/android/Icosahedron-Android-*.apk

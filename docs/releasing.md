@@ -8,6 +8,7 @@ Every product has its own version, tag, changelog and release. Nothing forces th
 | **Server** (engine + the web app it serves) | `apps/server/package.json` | `server-vX.Y.Z` | [apps/server/CHANGELOG.md](../apps/server/CHANGELOG.md) | the Docker image `ghcr.io/<owner>/icosahedron-server` (`X.Y.Z`, `X.Y`, `latest`) |
 | **iOS app** | `apps/ios/VERSION` | `ios-vX.Y.Z` | [apps/ios/CHANGELOG.md](../apps/ios/CHANGELOG.md) | unsigned `.ipa` |
 | **Android TV app** | `apps/android-tv/VERSION` | `android-vX.Y.Z` | [apps/android-tv/CHANGELOG.md](../apps/android-tv/CHANGELOG.md) | `.apk` |
+| **Android phone app** | `apps/android/VERSION` | `android-phone-vX.Y.Z` | [apps/android/CHANGELOG.md](../apps/android/CHANGELOG.md) | `.apk` |
 
 The web app has no number of its own: it is built into the server image, so it carries the server's version (Settings → System → About shows it). Which versions work together is described by protocol numbers, not version numbers: see [compatibility.md](compatibility.md).
 
@@ -37,6 +38,7 @@ The web app has no number of its own: it is built into the server image, so it c
 | `server-vX.Y.Z` | `server.yml` | Runs the engine's tests, publishes the Docker image as `X.Y.Z`, `X.Y` and `latest`, and creates the release with the changelog text |
 | `ios-vX.Y.Z` | `ios.yml` | Builds the unsigned `.ipa` and publishes it as a release |
 | `android-vX.Y.Z` | `android.yml` | Builds the `.apk` and publishes it as a release |
+| `android-phone-vX.Y.Z` | `android-phone.yml` | Builds the phone `.apk` and publishes it as a release |
 
 ## Without releasing
 

@@ -2,8 +2,7 @@
 
 A native SwiftUI app for iPhone and iPad (iOS 26.1 or later), built as an unsigned `.ipa` (sign it with SideStore, AltStore, Sideloadly or iloader: [docs/ios.md](../../docs/ios.md)). It has been part of the shared releases 0.15.3 to 0.15.9 (see the [main changelog](../../CHANGELOG.md)); from here it has its **own version, release and changelog**. What works with which server: [docs/compatibility.md](../../docs/compatibility.md).
 
-## Unreleased
-
+## 0.2.7
 - **Profile picture:** it is now a plain round picture at the right end of the Home quick-button row, like on Android (it used to be a small picture inside a system button at the top left). Library no longer has it; tap the picture on Home for settings.
 - **The mini player is our own bar,** the same on Android and iOS: cover, title and artist, play / pause and next, with a thin progress line, always above the tab bar and always the same shape. The system's player bar changed its look while scrolling and flickered; the tab bar no longer shrinks when you scroll either.
 

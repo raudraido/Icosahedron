@@ -2,8 +2,7 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
-## Unreleased
-
+## 0.1.31
 - **Much lighter on the battery:**
   - The app no longer wakes twice a second all the time. The play position, the scrobble and the report to the sync server now run only while a song plays (every 3 s with the app in the background); when paused, nothing runs.
   - The saved queue is written only when it changes, when you pause, and every 30 s while playing (it used to be rewritten every 15 s even when nothing happened).

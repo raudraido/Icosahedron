@@ -17,6 +17,10 @@ on:
         type: string
         default: patch
         required: true
+      rebuild:
+        description: "Rebuild with no changes: no 'Unreleased' needed, the release text says so"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -36,6 +40,24 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: Rebuild without changes (adds the changelog text)
+        if: ${{ inputs.rebuild }}
+        run: |
+          case "${{ inputs.product }}" in
+            desktop) f=CHANGELOG.md ;;
+            server) f=apps/server/CHANGELOG.md ;;
+            ios) f=apps/ios/CHANGELOG.md ;;
+            android-phone) f=apps/android/CHANGELOG.md ;;
+            android) f=apps/android-tv/CHANGELOG.md ;;
+          esac
+          if ! grep -q '^## Unreleased' "$f"; then
+            node -e '
+              const fs=require("fs"); const f=process.argv[1]; const t=fs.readFileSync(f,"utf8").split("\n");
+              const i=t.findIndex(l=>/^## /.test(l));
+              t.splice(i,0,"## Unreleased","","- A new build with no changes in the app.","");
+              fs.writeFileSync(f,t.join("\n"));' "$f"
+          fi
 
       - name: Bump the version and name the changelog section
         id: bump

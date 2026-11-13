@@ -30,6 +30,8 @@ The workflow ([release.yml](../.github/workflows/release.yml)) then:
 3. commits that to `master` and pushes the tag,
 4. starts the product's build workflow on the tag, which builds and publishes the release.
 
+Tick **rebuild** to release with no changes (a new build for a store, say): no `Unreleased` section is needed and the release text is "A new build with no changes in the app."
+
 By hand it is the same: `node scripts/bump-version.mjs <product> patch`, commit, `git tag <tag>`, push both.
 
 **How often:** not for every small change. Every merge to `master` already builds the apps (the artifacts are in the Actions run), so a release is for when there is something worth installing: a finished feature, a fix people wait for, or a set of small changes. Versions: `patch` for fixes and small changes, `minor` for a feature, `major` when something stops working with older parts ([compatibility.md](compatibility.md)). The Android phone app stays `0.1.x` (only the last number grows) and its releases are marked **pre-release** until it is on Google Play.

@@ -122,6 +122,8 @@ private fun MainSettings(open: (Page) -> Unit) {
             Text("Settings", fontSize = 28.sp, color = Accent, modifier = Modifier.padding(vertical = 16.dp))
             Header("About")
             Row { Text("Version", Modifier.weight(1f)); Text(BuildConfig.VERSION_NAME, color = Dim) }
+            val context = androidx.compose.ui.platform.LocalContext.current
+            LinkRow("Privacy policy") { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/raudraido/Icosahedron/blob/master/docs/privacy.md"))) }
             Header("Account")
             ProfilePictureRow()
             Row { Text("Server", Modifier.weight(1f)); Text(client.baseUrl.substringAfter("://"), color = Dim) }

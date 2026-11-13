@@ -2,7 +2,7 @@
 
 *Icosahedron (the Android app `cloud.icosahedron.phone`, the iOS app, the desktop app, and the Icosahedron server). Last changed: 2026-11-13.*
 
-Icosahedron is a music player for a music server you (or someone you know) run yourself. **The developer does not run any server for it and receives no data from the apps.**
+Icosahedron is a music player for a music server you (or someone you know) run yourself. The developer is the Icosahedron open-source project (github.com/raudraido/Icosahedron). **The developer does not run any server for it and receives no data from the apps.**
 
 ## What the app stores on your device
 
@@ -19,7 +19,7 @@ Everything the app sends goes to **the server whose address you typed in**, and 
 
 Who can see that data is decided by whoever runs that server. If it is your own, nobody else. This policy does not cover other people's servers.
 
-If you connect **Last.fm**, the plays you make are passed on to Last.fm by your server, under Last.fm's own privacy policy. If you do not connect it, nothing goes to Last.fm. Lyrics may be looked up from lyrics services by your server or by the app, using the title and artist of the song.
+If you connect **Last.fm**, the plays you make are passed on to Last.fm by your server, under Last.fm's own privacy policy. If you do not connect it, nothing goes to Last.fm. If your server has no lyrics for a song, the app looks them up at **LRCLIB** (lrclib.net, a free public lyrics database) and sends it the song's title, artist, album and length (nothing that identifies you except the usual IP address of any web request); LRCLIB's own terms apply to that request.
 
 ## What the app does not do
 

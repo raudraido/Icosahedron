@@ -2,8 +2,7 @@
 
 A native SwiftUI app for iPhone and iPad (iOS 26.1 or later), built as an unsigned `.ipa` (sign it with SideStore, AltStore, Sideloadly or iloader: [docs/ios.md](../../docs/ios.md)). It has been part of the shared releases 0.15.3 to 0.15.9 (see the [main changelog](../../CHANGELOG.md)); from here it has its **own version, release and changelog**. What works with which server: [docs/compatibility.md](../../docs/compatibility.md).
 
-## Unreleased
-
+## 0.2.10
 - **The right cover, always:** when the song changed, a cover that was already loaded could stay on screen (the mini player, Now Playing) instead of the new song's cover, or the old one stayed until the new one had loaded. Fixed.
 
 ## Unreleased

@@ -120,9 +120,7 @@ final class PlayerModel {
             guard let self else { return }
             for item in self.player.items() { EQManager.shared.attach(to: item) }
         }
-        timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 600), queue: .main) { [weak self] time in
-            self?.tick(time)
-        }
+        installTimeObserver(seconds: 0.5)
         // The player is the source of truth for which track is playing: when its current item
         // becomes the one we queued behind the old one (gapless), or empties (queue ran out),
         // the model catches up. Comparing against our own state (not flags) keeps this
@@ -142,13 +140,34 @@ final class PlayerModel {
         load(startPaused: startPaused, startAt: startAt)
     }
 
+    /// The progress clock runs twice a second with the app on screen and every 5 s otherwise (a locked phone does not need
+    /// the progress bar moving; the lock screen extrapolates the time itself).
+    func setAppActive(_ active: Bool) {
+        let want = active ? 0.5 : 5.0
+        guard want != timeObserverInterval else { return }
+        installTimeObserver(seconds: want)
+    }
+
+    @ObservationIgnored private var timeObserverInterval = 0.0
+    private func installTimeObserver(seconds: Double) {
+        if let o = timeObserver { player.removeTimeObserver(o) }
+        timeObserverInterval = seconds
+        timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: seconds, preferredTimescale: 600), queue: .main) { [weak self] time in
+            self?.tick(time)
+        }
+    }
+
     func resume() {
         guard current != nil else { return }
+        activateSession()
         // Nothing loaded any more (the queue ran out): start the current track again.
         if playingItem == nil { load(); return }
         player.play()
         isPlaying = true
         updateNowPlaying()
+        // A restored queue was loaded paused without fetching anything: playing it starts the fetching
+        preloadNext()
+        cacheCurrentSoon()
         changed()
     }
 
@@ -192,7 +211,9 @@ final class PlayerModel {
         // The periodic clock keeps reporting the old time until the seek has finished; ignore it
         // meanwhile, otherwise the progress bar jumps back for a moment.
         seeking = true
-        player.seek(to: CMTime(seconds: t, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+        // Exact only for a local file; on a stream an exact seek makes AVPlayer read far ahead to find the spot
+        let tol = playingLocal ? CMTime.zero : CMTime(seconds: 1, preferredTimescale: 600)
+        player.seek(to: CMTime(seconds: t, preferredTimescale: 600), toleranceBefore: tol, toleranceAfter: tol) { [weak self] _ in
             DispatchQueue.main.async { self?.seeking = false }
         }
         position = t
@@ -297,8 +318,11 @@ final class PlayerModel {
         for item in player.items() { item.audioTimePitchAlgorithm = pitchAlgorithm }
     }
 
+    @ObservationIgnored private var pendingShuffleId: String?
+
     func toggleShuffle() {
         shuffle.toggle()
+        pendingShuffleId = nil
         preloadNext() // the track queued behind the current one may no longer be the right one
         changed()
     }
@@ -349,8 +373,10 @@ final class PlayerModel {
             trackStartedAt = Date()
             onNowPlaying?(t)
         }
-        preloadNext()
-        cacheCurrentSoon()
+        if !startPaused { activateSession() }
+        // Opening the app with the saved queue must not download anything: a paused load fetches only when it is played
+        preloadNext(prefetch: !startPaused)
+        if !startPaused { cacheCurrentSoon() }
         updateQualityLabel()
         changed()
     }
@@ -441,8 +467,12 @@ final class PlayerModel {
         guard !queue.isEmpty, index >= 0 else { return nil }
         if let id = nextOverrideId, let i = queue.firstIndex(where: { $0.id == id }), i != index { return i }
         if shuffle, queue.count > 1 {
+            // The same pick until it is played: every preload (a queue edit, a switch) would otherwise choose again and
+            // throw away the download of the one before
+            if let id = pendingShuffleId, let i = queue.firstIndex(where: { $0.id == id }), i != index { return i }
             var n = Int.random(in: 0..<queue.count)
             while n == index { n = Int.random(in: 0..<queue.count) }
+            pendingShuffleId = queue[n].id
             return n
         }
         if index + 1 < queue.count { return index + 1 }
@@ -450,7 +480,7 @@ final class PlayerModel {
     }
 
     /// Puts the next track behind the current one so it is already loaded when this one ends.
-    private func preloadNext(reuseIndex: Int? = nil) {
+    private func preloadNext(reuseIndex: Int? = nil, prefetch: Bool = true) {
         if let q = queuedNext {
             player.remove(q.item)
             queuedNext = nil
@@ -463,7 +493,7 @@ final class PlayerModel {
         player.insert(item, after: player.items().last)
         queuedNext = (item, idx)
         cache.setProtected(protectedIds())
-        if cachingAllowed {
+        if cachingAllowed, prefetch {
             cache.prefetch(queue[idx], client: client, quality: wantedQuality()) // the next track is fetched in full right away
         }
     }
@@ -513,7 +543,7 @@ final class PlayerModel {
         let s = time.seconds
         if s.isFinite, !seeking { position = s }
         scrobbleIfDue()
-        if isPlaying, Date().timeIntervalSince(lastPositionSave) > 15 { saveSession() }
+        if isPlaying, Date().timeIntervalSince(lastPositionSave) > 30 { saveSession() }
         if let d = player.currentItem?.duration.seconds, d.isFinite, d > 0 { duration = d }
         if let item = player.currentItem, item.status == .failed, let cur = current, !handlingFailure {
             handlingFailure = true
@@ -545,10 +575,15 @@ final class PlayerModel {
 
     // MARK: Lock screen & audio session
 
+    /// Takes the audio session when playback starts.
+    private func activateSession() {
+        try? AVAudioSession.sharedInstance().setActive(true)
+    }
+
     private func configureSession() {
         let s = AVAudioSession.sharedInstance()
         try? s.setCategory(.playback, mode: .default)
-        try? s.setActive(true)
+        // Not activated here: opening the app must not silence the music of other apps. activateSession() runs when something plays.
         NotificationCenter.default.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] n in
             guard let self,
                   let raw = n.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,

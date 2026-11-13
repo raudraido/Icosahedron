@@ -38,10 +38,11 @@ final class AppModel {
                 self?.player.restoreLastSession(play: true)
             }
         }
+        sync.isOnline = { [weak self] in self?.net.isOnline ?? true }
         net.onChange = { [weak self] in
             guard let self else { return }
             self.player.networkChanged()
-            if self.net.isOnline { self.flushScrobbles() }
+            if self.net.isOnline { self.flushScrobbles(); self.sync.reconnectNow() }
             if let c = self.client { Task { await AudioCache.shared.fillMissingMetadata(client: c) } }
         }
         AudioCache.shared.onChanged = { [weak self] in self?.cacheRevision += 1 }

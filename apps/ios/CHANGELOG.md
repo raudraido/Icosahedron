@@ -6,6 +6,17 @@ A native SwiftUI app for iPhone and iPad (iOS 26.1 or later), built as an unsign
 
 - **The right cover, always:** when the song changed, a cover that was already loaded could stay on screen (the mini player, Now Playing) instead of the new song's cover, or the old one stayed until the new one had loaded. Fixed.
 
+## Unreleased
+
+- **Lighter on the battery:**
+  - While a song plays, the app reports to the sync server every 10 s on screen and every 30 s in the background (it was every 3 s, which kept the mobile radio awake); every real change is still sent at once.
+  - The progress clock ticks every 5 s when the app is not on screen (twice a second on screen), and the saved queue position is written every 30 s.
+  - Opening the app with a saved queue no longer downloads anything; the next song and the current one are fetched when you press play.
+  - With shuffle the next song is picked once, not again at every queue change (each new pick threw away the download of the one before).
+  - The audio session is taken when playback starts, not at launch, so opening the app no longer silences other apps' music.
+  - Seeking in a streamed song is no longer frame-exact (a local file still is): an exact seek made the player read far ahead.
+- **A steadier sync link:** one socket at a time (a retry could open a second one), messages from an old socket are ignored, a ping every minute finds a link that died in a Wi-Fi / cellular switch, no retries while the phone has no network and a reconnect at once when it is back, and the wait between retries grows up to 5 minutes.
+
 ## 0.2.9
 - **Now Playing closes with a pull down every time:** a pull of about 90 pt (or a quick flick) that is mostly downward on the top bar, the cover or the title always closes it, however slow or slanted. Before, only the system's own gesture closed it, and that one needed a quick, straight pull and gave way to anything under the finger. The seek bar, the buttons and the queue / lyrics lists are left alone, so scrolling them does not close it.
 

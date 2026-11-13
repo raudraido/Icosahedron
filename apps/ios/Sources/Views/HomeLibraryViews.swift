@@ -7,6 +7,7 @@ struct HomeView: View {
     @State private var random: [Album] = []
     @State private var error: String?
     @State private var startingMix = false
+    @State private var showSettings = false
 
     var body: some View {
         NavigationStack {
@@ -14,19 +15,25 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     // Quick buttons (more can go next to Random mix, like on Android). Random mix starts at once:
                     // no list to open and press Play on a second time.
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            Button { Task { await startRandomMix() } } label: {
-                                HStack(spacing: 6) {
-                                    if startingMix { ProgressView() } else { Image(systemName: "shuffle") }
-                                    Text("Random mix")
+                    // The profile picture sits at the right end of the row, like on Android.
+                    HStack(spacing: 12) {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                Button { Task { await startRandomMix() } } label: {
+                                    HStack(spacing: 6) {
+                                        if startingMix { ProgressView() } else { Image(systemName: "shuffle") }
+                                        Text("Random mix")
+                                    }
                                 }
+                                .buttonStyle(.borderedProminent)
+                                .buttonBorderShape(.capsule)
+                                .disabled(startingMix)
                             }
-                            .buttonStyle(.borderedProminent)
-                            .buttonBorderShape(.capsule)
-                            .disabled(startingMix)
+                            .padding(.leading)
                         }
-                        .padding(.horizontal)
+                        Button { showSettings = true } label: { AvatarView(size: 36) }
+                            .buttonStyle(.plain)
+                            .padding(.trailing)
                     }
 
                     AlbumShelf(title: "Discover", albums: random, seeAll: ("random", String(localized: "Discover")))
@@ -40,7 +47,7 @@ struct HomeView: View {
             .navigationTitle("Home")
             .navigationBarTitleDisplayMode(.inline)
             .libraryDestinations()
-            .profileButton()
+            .sheet(isPresented: $showSettings) { SettingsView() }
             .task { await load() }
             .refreshable { await load() }
         }

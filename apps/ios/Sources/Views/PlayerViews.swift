@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Mini player above the tab bar. Opens the full-screen player. When nothing plays on
+/// Mini player above the tab bar (our own bar, always the same shape: the system's bottom accessory changed shape while scrolling). Opens the full-screen player. When nothing plays on
 /// this phone but another device is playing, shows that instead (with "Play here").
 struct MiniPlayerBar: View {
     @Environment(AppModel.self) private var app
@@ -49,7 +49,7 @@ struct MiniPlayerBar: View {
             Button(action: open) {
                 HStack(spacing: 10) {
                     CoverImage(id: cover, size: 100)
-                        .frame(width: 36, height: 36).clipShape(RoundedRectangle(cornerRadius: 6))
+                        .frame(width: 44, height: 44).clipShape(RoundedRectangle(cornerRadius: 6))
                         .matchedTransitionSource(id: "cover", in: zoom)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(title).font(.subheadline.weight(.semibold)).lineLimit(1)
@@ -70,7 +70,16 @@ struct MiniPlayerBar: View {
                 .accessibilityLabel("Next")
         }
         .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .foregroundStyle(.primary)
+        .background(.regularMaterial)
+        .overlay(alignment: .top) {
+            // A thin progress line, like on Android
+            GeometryReader { g in
+                Rectangle().fill(Theme.accent).frame(width: g.size.width * min(max(progress, 0), 1), height: 2)
+            }
+            .frame(height: 2)
+        }
     }
 }
 

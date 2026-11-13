@@ -31,26 +31,45 @@ struct MainTabs: View {
 
     var body: some View {
         TabView(selection: Bindable(app.router).tab) {
-            Tab("Home", systemImage: "house.fill", value: Router.AppTab.home) { HomeView() }
-            Tab("Library", systemImage: "music.note.square.stack.fill", value: Router.AppTab.library) { LibraryView() }
-            Tab("Devices", systemImage: "hifispeaker.2.fill", value: Router.AppTab.devices) { DevicesTab() }
-            Tab("Search", systemImage: "magnifyingglass", value: Router.AppTab.search, role: .search) { SearchView() }
+            Tab("Home", systemImage: "house.fill", value: Router.AppTab.home) { HomeView().miniPlayer(.home, zoom: zoom, show: showPlayer) }
+            Tab("Library", systemImage: "music.note.square.stack.fill", value: Router.AppTab.library) { LibraryView().miniPlayer(.library, zoom: zoom, show: showPlayer) }
+            Tab("Devices", systemImage: "hifispeaker.2.fill", value: Router.AppTab.devices) { DevicesTab().miniPlayer(.devices, zoom: zoom, show: showPlayer) }
+            Tab("Search", systemImage: "magnifyingglass", value: Router.AppTab.search, role: .search) { SearchView().miniPlayer(.search, zoom: zoom, show: showPlayer) }
         }
         // The player is presented from here, not from the mini player: the system rebuilds the
         // accessory on every playback tick, which tore the player (and any sheet on it) down.
         .tabViewStyle(.sidebarAdaptable)
-        .tabViewBottomAccessory(isEnabled: showPlayer) { MiniPlayerBar(zoom: zoom) }
         .fullScreenCover(isPresented: Bindable(app.router).showPlayer) {
             NowPlayingView()
                 .navigationTransition(.zoom(sourceID: "cover", in: zoom))
         }
-        .tabBarMinimizeBehavior(.onScrollDown)
         // Secure sign-in: another device asks this phone to approve it. Shown in a window of its own, so it
         // is on top of the player and of any sheet.
         .onChange(of: app.sync.approvals) { _, list in ApprovalWindow.shared.show(list.first, app: app) }
         .onAppear { ApprovalWindow.shared.show(app.sync.approvals.first, app: app) }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await app.sync.refreshApprovals() } }
+        }
+    }
+}
+
+extension View {
+    /// The mini player above the tab bar of one tab (only the tab on screen has it, so the cover's zoom
+    /// transition has a single source).
+    func miniPlayer(_ tab: Router.AppTab, zoom: Namespace.ID, show: Bool) -> some View {
+        modifier(MiniPlayerInset(tab: tab, zoom: zoom, show: show))
+    }
+}
+
+private struct MiniPlayerInset: ViewModifier {
+    @Environment(AppModel.self) private var app
+    let tab: Router.AppTab
+    let zoom: Namespace.ID
+    let show: Bool
+
+    func body(content: Content) -> some View {
+        content.safeAreaInset(edge: .bottom, spacing: 0) {
+            if show && app.router.tab == tab { MiniPlayerBar(zoom: zoom) }
         }
     }
 }

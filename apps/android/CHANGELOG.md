@@ -2,8 +2,7 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
-## Unreleased
-
+## 0.1.26
 - The app now targets **Android 16 (API 36)**, which Google Play requires for new apps. Nothing is changed for you; it plays, browses and works with Android Auto as before.
 
 ## 0.1.25

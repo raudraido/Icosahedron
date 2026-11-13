@@ -2,8 +2,7 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
-## Unreleased
-
+## 0.1.29
 - **The launcher icon is the real logo,** a little smaller so that none of its corners is cut by a round launcher: a transparent background and the same logo file the app shows (the lines between the triangles are see-through, as in the app). It used to be a plain picture that the launcher put on a small white circle.
 
 ## 0.1.28

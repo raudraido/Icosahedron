@@ -2,8 +2,7 @@
 
 A native app (Kotlin, Jetpack Compose for TV, Media3) for Google TV and Android TV: [docs/android-tv.md](../../docs/android-tv.md).
 
-## Unreleased
-
+## 0.2.1
 - **The app icon is the bare logo:** a transparent background, no circle or plate behind it, as big as the visible area allows.
 
 ## 0.2.0

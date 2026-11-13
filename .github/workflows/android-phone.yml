@@ -85,5 +85,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: Android phone app ${{ env.VERSION }}
+          prerelease: true   # until the app is on Google Play
           body_path: release-notes.md
           files: apps/android/Icosahedron-Android-*.apk

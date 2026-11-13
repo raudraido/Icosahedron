@@ -29,18 +29,19 @@ struct CoverImage: View {
 
 /// A picture from a web address that is kept in memory: a view that is built again (a tab change, the mini
 /// player) shows it at once instead of going blank and loading it a second time.
+enum ImageMemory {
+    static let cache = NSCache<NSString, UIImage>()
+}
+
 struct CachedImage<Placeholder: View>: View {
-    private static var cache: NSCache<NSString, UIImage> {
-        struct Holder { static let cache = NSCache<NSString, UIImage>() }
-        return Holder.cache
-    }
+    private var cache: NSCache<NSString, UIImage> { ImageMemory.cache }
     let url: URL
     @ViewBuilder var placeholder: () -> Placeholder
     @State private var loaded: UIImage?
 
     var body: some View {
         Group {
-            if let img = loaded ?? Self.cache.object(forKey: url.absoluteString as NSString) {
+            if let img = loaded ?? cache.object(forKey: url.absoluteString as NSString) {
                 Image(uiImage: img).resizable().scaledToFill()
             } else {
                 placeholder()
@@ -48,9 +49,9 @@ struct CachedImage<Placeholder: View>: View {
         }
         .task(id: url) {
             let key = url.absoluteString as NSString
-            if Self.cache.object(forKey: key) != nil { return }
+            if cache.object(forKey: key) != nil { return }
             guard let (data, _) = try? await URLSession.shared.data(from: url), let img = UIImage(data: data) else { return }
-            Self.cache.setObject(img, forKey: key)
+            cache.setObject(img, forKey: key)
             loaded = img
         }
     }

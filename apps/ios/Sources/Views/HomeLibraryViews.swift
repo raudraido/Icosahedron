@@ -31,7 +31,7 @@ struct HomeView: View {
                             }
                             .padding(.leading)
                         }
-                        Button { showSettings = true } label: { AvatarView(size: 36) }
+                        Button { showSettings = true } label: { AvatarView(size: 44) }
                             .buttonStyle(.plain)
                             .padding(.trailing)
                     }
@@ -42,10 +42,10 @@ struct HomeView: View {
                     PlaylistShelf(playlists: app.playlists)
                     if let error { Text(error).font(.footnote).foregroundStyle(.red).padding(.horizontal) }
                 }
-                .padding(.vertical)
+                .padding(.bottom)
+                .padding(.top, 4)
             }
-            .navigationTitle("Home")
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar) // no title: the quick buttons start at the top
             .libraryDestinations()
             .sheet(isPresented: $showSettings) { SettingsView() }
             .task { await load() }

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 108 dp layer, 72 dp of it visible: the logo (460 x 436) spans the whole visible width, so its left and right
-     points touch the edge of a circular mask but are not cut. -->
+<!-- 108 dp layer, 72 dp of it visible (66 dp safe in a circle): the logo (460 x 436, white lines instead of holes so it looks the same on any wallpaper) is 62 dp wide, so its
+     points stay inside any mask and are not cut. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:width="72dp" android:height="68.2dp" android:gravity="center">
-        <bitmap android:gravity="fill" android:src="@drawable/logo" />
+    <item android:width="62dp" android:height="58.8dp" android:gravity="center">
+        <bitmap android:gravity="fill" android:src="@drawable/logo_launcher" />
     </item>
 </layer-list>

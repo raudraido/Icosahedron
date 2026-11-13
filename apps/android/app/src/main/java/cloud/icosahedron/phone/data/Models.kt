@@ -38,6 +38,8 @@ data class Track(
     val channels: Int? = null,
     val playCount: Int? = null,
     val created: String? = null,
+    /** An internet radio's own address (it does not come from the library). */
+    val directUrl: String? = null,
 ) {
     /** The track object of the sync protocol (the shape the desktop, web and iOS apps use). */
     fun toWire(): JSONObject = JSONObject().apply {
@@ -117,6 +119,30 @@ data class Playlist(val id: String, val name: String, val songCount: Int, val co
         fun fromSubsonic(o: JSONObject): Playlist? {
             val id = o.str("id") ?: return null
             return Playlist(id, o.str("name") ?: "", o.int("songCount") ?: 0, o.str("coverArt"))
+        }
+    }
+}
+
+/** An internet radio station of the server. */
+data class Radio(val id: String, val name: String, val url: String) {
+    /** A live stream as a track: no length, played from its own address. */
+    fun toTrack() = Track("radio-$id", name, "Internet radio", null, null, null, 0, 0, 0, null, false, null, null, null, null, directUrl = url)
+    companion object {
+        fun fromSubsonic(o: JSONObject): Radio? {
+            val id = o.str("id") ?: return null
+            val url = o.str("streamUrl") ?: return null
+            return Radio(id, o.str("name") ?: "Radio", url)
+        }
+    }
+}
+
+/** A folder or a song in the server's folder (directory) view. */
+data class DirEntry(val id: String, val title: String, val isDir: Boolean, val track: Track?) {
+    companion object {
+        fun fromSubsonic(o: JSONObject, forceDir: Boolean = false): DirEntry? {
+            val id = o.str("id") ?: return null
+            val dir = forceDir || o.optBoolean("isDir", false)
+            return DirEntry(id, o.str("title") ?: o.str("name") ?: "", dir, if (dir) null else Track.fromSubsonic(o))
         }
     }
 }

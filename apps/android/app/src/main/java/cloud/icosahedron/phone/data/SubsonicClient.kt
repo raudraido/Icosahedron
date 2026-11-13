@@ -158,6 +158,24 @@ class SubsonicClient(val baseUrl: String, val user: String, val salt: String, va
         call("getRandomSongs", "size" to count.toString()).optJSONObject("randomSongs")?.objs("song")
             ?.mapNotNull { Track.fromSubsonic(it) } ?: emptyList()
 
+    /** Every song, a page at a time (Navidrome answers an empty search with the whole library). */
+    suspend fun songs(offset: Int, size: Int): List<Track> =
+        call("search3", "query" to "", "artistCount" to "0", "albumCount" to "0", "songCount" to size.toString(), "songOffset" to offset.toString())
+            .optJSONObject("searchResult3")?.objs("song")?.mapNotNull { Track.fromSubsonic(it) } ?: emptyList()
+
+    /** The top level of the folder view. */
+    suspend fun directoryRoot(): List<DirEntry> {
+        val root = call("getIndexes").optJSONObject("indexes") ?: return emptyList()
+        return root.objs("index").flatMap { it.objs("artist") }.mapNotNull { DirEntry.fromSubsonic(it, forceDir = true) } +
+            root.objs("child").mapNotNull { DirEntry.fromSubsonic(it) }
+    }
+
+    suspend fun directory(id: String): List<DirEntry> =
+        call("getMusicDirectory", "id" to id).optJSONObject("directory")?.objs("child")?.mapNotNull { DirEntry.fromSubsonic(it) } ?: emptyList()
+
+    suspend fun radios(): List<Radio> =
+        call("getInternetRadioStations").optJSONObject("internetRadioStations")?.objs("internetRadioStation")?.mapNotNull { Radio.fromSubsonic(it) } ?: emptyList()
+
     suspend fun starred(): List<Track> =
         call("getStarred2").optJSONObject("starred2")?.objs("song")?.mapNotNull { Track.fromSubsonic(it) } ?: emptyList()
 

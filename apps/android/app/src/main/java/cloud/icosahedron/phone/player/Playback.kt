@@ -143,7 +143,7 @@ object Playback {
     /** Fetches the next song into the cache while this one plays. */
     private fun prefetchNext() {
         val next = queue.getOrNull(index + 1)
-        Offline.prefetch(next, next?.let { client?.streamUrl(it.id) })
+        Offline.prefetch(next, next?.takeIf { it.directUrl == null }?.let { client?.streamUrl(it.id) })
     }
 
     /** Copies the player's state into the Compose state. */
@@ -168,8 +168,8 @@ object Playback {
         val c = client
         return MediaItem.Builder()
             .setMediaId(t.id)
-            .setUri(c?.streamUrl(t.id))
-            .setCustomCacheKey(Offline.keyFor(t))
+            .setUri(t.directUrl ?: c?.streamUrl(t.id))
+            .apply { if (t.directUrl == null) setCustomCacheKey(Offline.keyFor(t)) } // a live radio is never cached
             .setMediaMetadata(
                 MediaMetadata.Builder()
                     .setTitle(t.title).setArtist(t.artist).setAlbumTitle(t.album)

@@ -1682,6 +1682,9 @@ export async function tryAutoConnect() {
   ).then((conn) => useStore.getState().setLastfmConnection(conn)).catch(() => {});
   const [result, activeServerId] = await Promise.all([api.tryAutoConnectSaved(), activeServerIdPromise]);
   if (!result) return;
+  // The first look (above) came before the sign-in finished: a Last.fm connection that is kept on the sync
+  // server cannot be asked for until the app is signed in, so ask again now.
+  const lastfmKey = activeServerId ?? LASTFM_DEFAULT_SERVER_KEY;
   useStore.setState({
     connected: true,
     serverUrl: result.url,
@@ -1689,6 +1692,7 @@ export async function tryAutoConnect() {
     activeServerId,
       coverUrl: (coverId, size = 200) => platform.coverUrl(coverId, size),
   });
+  api.lastfmGetConnection(lastfmKey).then((conn) => useStore.getState().setLastfmConnection(conn)).catch(() => {});
   try {
     await useStore.getState().restoreSession();
   } catch { /* a failed session restore shouldn't be treated as a bad-credentials error */ }

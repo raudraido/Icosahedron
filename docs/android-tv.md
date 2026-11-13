@@ -10,6 +10,8 @@ A native app (Kotlin, Jetpack Compose for TV, Media3) in `apps/android-tv`. It i
 - **Sync:** appears as a TV in Devices; other apps can start music on it, control it, edit its queue and *Send* their playback to it. It publishes its own state, so the other apps show what the TV plays.
 - Background playback through a media session, so the music goes on when you leave the app.
 
+With secure sign-in on, Quick Connect gives the TV its own trusted device (not yet tried on a real TV).
+
 Not yet: controlling other devices from the TV, lyrics, offline, translations (English only).
 
 ## Install (sideload)

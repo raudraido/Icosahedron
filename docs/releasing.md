@@ -18,7 +18,7 @@ The web app has no number of its own: it is built into the server image, so it c
 2. Bump that product's version:
 
    ```bash
-   node scripts/bump-version.mjs <desktop|server|ios|android> X.Y.Z
+   node scripts/bump-version.mjs <desktop|server|ios|android|android-phone> X.Y.Z
    ```
 
    It updates the product's version file(s) and prints the tag to use.

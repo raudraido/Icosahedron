@@ -1,6 +1,6 @@
-# Secure sign-in (plan)
+# Secure sign-in
 
-Status: **steps 1 (the engine), 2 (desktop and web) and 3 (iOS) are built, off by default**; Android TV follows (step 4). This is the design for "a password must never be the only thing between the internet and your music".
+Status: **built and in use** (off by default): the engine, the desktop and web apps, iOS and the Android phone app. The Android TV app gets its own device through Quick Connect (step 4, no code change in the TV app; not yet tried on a real TV). Step 5 (phone notifications through ntfy, a first-run guide, QR invites) is not built. This is the design for "a password must never be the only thing between the internet and your music".
 
 ## Goal
 

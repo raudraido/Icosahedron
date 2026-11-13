@@ -3,34 +3,37 @@
 ## Components
 
 ```
-┌────────────────┐   ┌────────────────┐   ┌────────────────┐
-│ Desktop (Electron)│ │ Web app (browser)│ │ iOS (SwiftUI)  │
-│  React UI        │ │  same React UI   │ │  own UI + code │
-│  Rust audio      │ │  <audio> element │ │  AVPlayer      │
-└───────┬──────────┘ └────────┬─────────┘ └───────┬────────┘
-        │  Subsonic API       │  via proxy        │ Subsonic API (direct or via the engine)
-        │  + sync (WebSocket) │  + sync           │ + sync
-        ▼                     ▼                   ▼
-   ┌──────────────────────────────────────────────────────┐
-   │ Web engine (apps/server, Node 22, Docker)            │
-   │  /sync    WebSocket hub                              │
-   │  /rest /api /auth   same-origin Navidrome proxy      │
-   │  /bpm     BPM store            /lastfm/*  Last.fm    │
-   │  /        web app (static)     /healthz /config.json │
-   └───────────────────────────┬──────────────────────────┘
-                               ▼
-                       Navidrome / Subsonic
+┌──────────────┐ ┌─────────────┐ ┌─────────────┐ ┌───────────────┐ ┌─────────────┐
+│ Desktop       │ │ Web app      │ │ iOS         │ │ Android phone │ │ Android TV  │
+│ Electron+React│ │ same React UI│ │ SwiftUI     │ │ Kotlin,       │ │ Kotlin,     │
+│ Rust audio    │ │ <audio>      │ │ AVPlayer    │ │ Compose,      │ │ Compose TV, │
+│               │ │              │ │             │ │ Media3        │ │ Media3      │
+└──────┬────────┘ └──────┬───────┘ └──────┬──────┘ └──────┬────────┘ └──────┬──────┘
+       │ Subsonic API    │ via proxy      │ Subsonic API   │ Subsonic API    │ Subsonic API
+       │ + sync (WebSocket) + sync        │ + sync         │ + sync          │ + sync
+       ▼                 ▼                ▼                ▼                 ▼
+   ┌─────────────────────────────────────────────────────────────────────────┐
+   │ Web engine (apps/server, Node 22, Docker)                               │
+   │  /sync    WebSocket hub                  /device/*  secure sign-in      │
+   │  /rest /api /auth   Navidrome proxy      /share/*   public share pages  │
+   │  /bpm  BPM store    /lastfm/*  Last.fm   /avatar /tour /quickconnect/*  │
+   │  /     web app (static)   /healthz /config.json                         │
+   └──────────────────────────────────┬──────────────────────────────────────┘
+                                      ▼
+                              Navidrome / Subsonic
 ```
 
 The engine is optional. Without it, each client talks to Navidrome directly and nothing is shared between devices.
+
+**Naming:** *Icosahedron HUB* is the project; the players (and the Docker image `icosahedron-server`) keep the name *Icosahedron*.
 
 ## Accounts and authentication
 
 There is no account system of its own: **your Navidrome account is your account.**
 
-- A client computes a Subsonic token (`t = md5(password + salt)`) and sends `u`, `t`, `s`.
-- The engine verifies them by replaying `ping` against Navidrome and caches a positive answer for 10 minutes.
-- The engine never sees or stores your password. Per-user state (queue, settings, Last.fm session) is keyed by the Navidrome username.
+- By default a client computes a Subsonic token (`t = md5(password + salt)`) and sends `u`, `t`, `s`. The engine verifies them by replaying `ping` against Navidrome and caches a positive answer for 10 minutes. The engine never stores your password.
+- **With secure sign-in on** ([secure-sign-in.md](secure-sign-in.md)) the password is only used to ask to be let in. A new device is **approved by a device that is already trusted** and then gets a **device secret** that takes the password's place (same `u`, `t`, `s` shape, so every place that builds URLs keeps working). The engine finds the device by its secret and forwards to Navidrome with the `Remote-User` header (Navidrome `ExtAuth.TrustedSources` lists only the engine), strips any such header a client sends, and closes `/auth/*`. Navidrome is then reachable only from the engine.
+- Per-user state (queue, settings, Last.fm session, trusted devices) is keyed by the Navidrome username.
 
 ## What lives where
 
@@ -41,8 +44,9 @@ There is no account system of its own: **your Navidrome account is your account.
 | BPM values | Engine `bpm.json` (shared by all users: BPM belongs to the track) |
 | Last.fm API secret | Engine environment (never on a device) |
 | Last.fm session key | Engine `lastfm.json` (mode 600) |
-| Saved logins | Desktop: OS secret store; web: browser storage; iOS: Keychain |
-| Cached audio | Desktop: none; iOS: on the phone (cache and "kept offline") |
+| Trusted devices and their secrets, one-use invites, the sign-in history | Engine `devices.json` (mode 600), `invites.json`, `signins.json` |
+| Saved logins | Desktop: OS secret store; web: browser storage; iOS: Keychain; Android: app storage |
+| Cached and downloaded audio | Desktop: none; iOS and Android: on the phone (the cache, and downloaded songs, albums and playlists) |
 
 ## The shared UI (desktop and web)
 
@@ -56,6 +60,10 @@ The React UI in `src/` runs in Electron and in a browser. It never talks to Elec
 The **Subsonic client** (`src/lib/subsonic/`) is shared by the Electron main process and the browser.
 
 Sync itself is `src/lib/sync.ts` (WebSocket client, publishes the playing device's state, handles commands), `src/lib/settingsSync.ts` (shared preferences) and the devices popover `src/components/DevicePicker.tsx`.
+
+## The native apps
+
+The Android phone app (`apps/android`) and the Android TV app (`apps/android-tv`) share their data, player and sync layers in spirit (the code is copied, not a library); see [android.md](android.md) and [android-tv.md](android-tv.md). The phone app is also a media app for Android Auto.
 
 ## The iOS app
 

@@ -2,6 +2,16 @@
 
 Electron + React (the UI in `src/`) with a native Rust audio engine (`native/audio-engine`): gapless playback, 10-band equalizer, BPM analysis, Chromecast / AirPlay 2 / DLNA casting.
 
+## What it does
+
+- Gapless playback with a native Rust engine, a 10-band equalizer and **playback speed** 0.5×–2× (pitch follows the speed on the desktop; the web app keeps the pitch).
+- **Casting** to Chromecast, AirPlay 2 and DLNA devices (Windows and Linux).
+- **BPM** analysis (with a correction for drum & bass, which otherwise reads half speed), kept in the shared BPM store.
+- **One click plays** a song, tick boxes select several; synced lyrics; Last.fm.
+- **On Tour:** upcoming concerts of the artist (Ticketmaster).
+- **Settings → Navidrome plugins** for a Navidrome administrator: what is installed, what uses it, switches and settings.
+- Sync, remote control and **secure sign-in** with the other devices ([architecture.md](architecture.md)).
+
 ## Install
 
 Download from the [Releases](https://github.com/raudraido/Icosahedron/releases) page:

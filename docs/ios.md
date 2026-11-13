@@ -23,9 +23,12 @@ If the iloader AppImage opens an empty window with `EGL_BAD_PARAMETER` in the te
 
 - **Playback:** gapless, instant start, background audio, lock screen and Dynamic Island, speed 0.5×–2× with *Keep Pitch*, 10-band equalizer, AirPlay, queue with drag-to-reorder.
 - **Now Playing:** blurred cover background, "1 of N" with remaining time, favorite, "…" menu, track info and synced lyrics under a cover that shrinks to the corner, landscape / iPad two-column layout.
-- **Library:** Artists, Albums, Newest, Recently Played, Songs, Favorites, Cached Songs, Directories, Playlists, Radios; search.
-- **Track menu:** play next, add to queue, Instant Mix, show album/artist, keep offline, favorite, rating (1–5), share, add to playlist, info.
-- **Offline:** an audio cache (the next track is downloaded in full ahead of time; size set in Settings) and *Keep Offline* for songs you want for good. *Cached Songs* works without a connection.
+- **Home:** a row of quick buttons (Random mix), then Discover, Newest, Recently Played, Most Played and Playlists, each with *See All*.
+- **Library:** Albums and Artists with sort, filters (favorites, decade, genre), grid or list and a letter index; Newest, Recently Played, Songs, Favorite Songs, Downloads, Directories, Playlists, Radios; search.
+- **One menu for songs, albums and playlists** (the "…" button on a page, a long press elsewhere): play next, add to queue, add to a device's queue, **Download**, favorite (albums too), add to playlist, share, show album / artist, and for a song Instant Mix, rating (1–5) and info.
+- **Offline:** an audio cache (the next track is downloaded in full ahead of time; size set in Settings) and **Download** for songs, albums and playlists you want for good. *Library → Downloads* (cache, kept songs, kept albums and playlists) works without a connection.
+- **Secure sign-in:** a sign-in request from another device appears in its own window above everything (also above Now Playing); the app signs in with a number to be approved on another device ([secure-sign-in.md](secure-sign-in.md)).
+- **Remembers what played:** the queue, the song and the position come back at the next launch, and a "play" from a car or a headset with the app closed starts the last queue.
 - **Quality per connection:** separate Wi-Fi and Cellular profiles — direct play, or MP3/AAC 96–320 kbps transcoded by Navidrome. iOS Low Data Mode counts as cellular. Nothing is downloaded in the background on cellular unless allowed.
 - **Plays:** counted after half the track or 4 minutes, stored on disk first and sent when online with their real time (Navidrome, and Last.fm through the engine).
 - **Playlists:** create, rename, delete, reorder, remove tracks, save the queue as a playlist.

@@ -2,8 +2,7 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
-## Unreleased
-
+## 0.1.30
 - **Settings → About → Privacy policy** opens the privacy policy (Google Play wants the link inside the app).
 
 ## 0.1.29

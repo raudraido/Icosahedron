@@ -2,6 +2,10 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
+## Unreleased
+
+- Preparing for **Google Play**: the build now also makes the signed bundle (`.aab`) that Google Play takes. Nothing changes in the app itself.
+
 ## 0.1.23
 - **Library looks like the iOS app's:** a plain list of the ways to browse, with the same names and order: Artists, Albums, Newest Albums, Recently Played Albums, Songs, Favorite Songs, Downloads, Directories, Playlists, Radios. Each opens its own page with a back button; Albums and Artists keep their sort and filters as before.
 - **New pages:** **Songs** (every song in the library, loaded as you scroll, with Shuffle all), **Directories** (the server's folders) and **Radios** (the server's internet radio stations; a radio plays live and is never cached).

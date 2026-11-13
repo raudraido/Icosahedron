@@ -50,6 +50,19 @@ jobs:
           # An .app without its executable is not a build: fail loudly instead of shipping it.
           test -f "$APP/Icosahedron"
 
+      # The CarPlay variant (docs/carplay.md) is only compiled here, for the simulator: it is not shipped, because it needs the
+      # CarPlay entitlement and a paid account. This keeps its code from rotting until it can be run.
+      - name: Compile the CarPlay variant (simulator)
+        working-directory: apps/ios
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Icosahedron.xcodeproj -scheme IcosahedronCarPlay \
+            -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build-carplay \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build-carplay.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)"
+
       - name: Package IPA
         working-directory: apps/ios
         run: |

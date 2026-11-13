@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.19.0
+
+**Works with server 0.18.x.**
+
+- **Downloads:** keep songs, albums and playlists on this computer so they play without the server. Right-click a song (or several ticked ones), an album card or a playlist and choose **Download** / **Remove Download**; the album page has a download button next to Share. The files are kept in the app's data folder and played from there (through a small server that only listens on this computer), so they start at once and cost no network.
+- **A Downloads tab** (next to Favorites) lists the songs, albums and playlists you kept, with Play, Shuffle and Remove, and how much space they use. **Settings → Downloads** shows the same totals and removes everything.
+- **Opens without the server:** if the server cannot be reached when the app starts and there are downloads, the app opens on the Downloads tab with a bar "Offline: … Only your downloads play" and a *Try again* button, instead of stopping at the sign-in screen.
+- The web app has no downloads (a browser keeps no music for later; use the desktop or the phone apps).
+
 ## 0.18.1
 
 **Works with server 0.18.x.**

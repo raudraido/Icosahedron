@@ -8,6 +8,7 @@ Electron + React (the UI in `src/`) with a native Rust audio engine (`native/aud
 - **Casting** to Chromecast, AirPlay 2 and DLNA devices (Windows and Linux).
 - **BPM** analysis (with a correction for drum & bass, which otherwise reads half speed), kept in the shared BPM store.
 - **One click plays** a song, tick boxes select several; synced lyrics; Last.fm.
+- **Downloads:** songs, albums and playlists kept on the computer (right-click → Download), played without the server; a Downloads tab, Settings → Downloads, and the app opens offline on that tab when the server cannot be reached.
 - **On Tour:** upcoming concerts of the artist (Ticketmaster).
 - **Settings → Navidrome plugins** for a Navidrome administrator: what is installed, what uses it, switches and settings.
 - Sync, remote control and **secure sign-in** with the other devices ([architecture.md](architecture.md)).

@@ -4,6 +4,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { api, Track } from "../lib/api";
 import { fmtDuration } from "../lib/api";
 import { useStore } from "../store";
+import { useDownloads } from "../lib/downloads";
 import { CoverArt } from "./CoverArt";
 import { Icon } from "./Icon";
 import { IconBtn } from "./IconBtn";
@@ -1168,6 +1169,18 @@ export function TrackTable({
     }];
   }
 
+  // Download / Remove Download for the song (or all the ticked ones); desktop only
+  function downloadMenuItem(tracks: Track[]): MenuEntry[] {
+    const dl = useDownloads.getState();
+    if (!dl.supported) return [];
+    const kept = tracks.every((t) => dl.has(t.id));
+    return [{
+      label: kept ? "Remove Download" : tracks.length > 1 ? `Download ${tracks.length} Songs` : "Download",
+      icon: "img/download.png",
+      onClick: () => { void (kept ? dl.removeTracks(tracks.map((t) => t.id)) : dl.download(tracks)); },
+    }];
+  }
+
   function buildTrackMenu(track: Track): MenuEntry[] {
     const filterByItems = buildFilterByItems(track);
     // With several rows ticked, the queue and playlist entries act on all of them.
@@ -1200,6 +1213,7 @@ export function TrackTable({
         onClick: () => toggleFavoriteFromMenu(track),
       },
       { label: "Share", icon: "img/share.png", onClick: () => openShareDialog({ id: track.id, type: "song", name: track.title }) },
+      ...downloadMenuItem(group),
       ...(extraMenuItems ? extraMenuItems(track) : []),
     ];
   }

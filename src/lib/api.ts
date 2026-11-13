@@ -34,6 +34,24 @@ export interface Album {
   release_types: string[] | null;
 }
 
+/** An album or a playlist kept on this computer (desktop downloads). */
+export interface DownloadCollection {
+  kind: "album" | "playlist";
+  id: string;
+  name: string;
+  subtitle: string;
+  cover_id: string | null;
+  tracks: Track[];
+}
+export type DownloadCollectionInfo = Omit<DownloadCollection, "tracks">;
+export interface DownloadsState {
+  ids: string[];
+  collections: DownloadCollection[];
+  bytes: number;
+  pending: number;
+  current: string | null;
+}
+
 export interface Track {
   id: string;
   title: string;
@@ -227,7 +245,11 @@ async function freshStreamUrl(url: string): Promise<string> {
     const u = new URL(url);
     if (!u.pathname.endsWith("/rest/stream")) return url;
     const id = u.searchParams.get("id");
-    return id ? await invoke<string>("stream_url", { songId: id }) : url;
+    if (!id) return url;
+    // A downloaded song plays from this computer (no server needed)
+    const local = await invoke<string | null>("downloads_local_url", { songId: id }).catch(() => null);
+    if (local) return local;
+    return await invoke<string>("stream_url", { songId: id });
   } catch {
     return url;
   }
@@ -254,7 +276,7 @@ export const api = {
   setActiveServer: (id: string | null) => invoke<void>("set_active_server", { id }),
   connectServer: (id: string) => invoke<{ url: string; username: string } | null>("connect_server", { id }),
   testServer: (id: string) => invoke<boolean>("test_server", { id }),
-  tryAutoConnectSaved: () => invoke<{ url: string; username: string } | null>("try_auto_connect"),
+  tryAutoConnectSaved: () => invoke<{ url: string; username: string; offline?: boolean } | null>("try_auto_connect"),
   getMusicFolders: () => invoke<{ id: string; name: string }[]>("get_music_folders"),
   setServerLibrary: (id: string, folderIds: string[], folderNames: string[]) =>
     invoke<void>("set_server_library", { id, folderIds, folderNames }),
@@ -363,6 +385,14 @@ export const api = {
   coverArtUrl: (coverId: string, size?: number) =>
     invoke<string>("cover_art_url", { coverId, size: size ?? null }),
   streamUrl: (songId: string) => invoke<string>("stream_url", { songId }),
+
+  // ── Downloads (desktop only; the web app answers with nothing) ──
+  downloadsState: () => invoke<DownloadsState>("downloads_state"),
+  downloadsTracks: () => invoke<Track[]>("downloads_tracks"),
+  downloadsAdd: (tracks: Track[], collection: DownloadCollectionInfo | null) => invoke<void>("downloads_add", { tracks, collection }),
+  downloadsRemoveTrack: (songId: string) => invoke<void>("downloads_remove_track", { songId }),
+  downloadsRemoveCollection: (kind: string, id: string) => invoke<void>("downloads_remove_collection", { kind, id }),
+  downloadsRemoveAll: () => invoke<void>("downloads_remove_all"),
 
   // ── Lyrics (queue panel's Lyrics tab) ──────────────────────────────────
   lyricsServer: (artist: string, title: string) => invoke<string | null>("lyrics_server", { artist, title }),

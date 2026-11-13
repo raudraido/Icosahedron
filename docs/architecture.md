@@ -46,7 +46,7 @@ There is no account system of its own: **your Navidrome account is your account.
 | Last.fm session key | Engine `lastfm.json` (mode 600) |
 | Trusted devices and their secrets, one-use invites, the sign-in history | Engine `devices.json` (mode 600), `invites.json`, `signins.json` |
 | Saved logins | Desktop: OS secret store; web: browser storage; iOS: Keychain; Android: app storage |
-| Cached and downloaded audio | Desktop: none; iOS and Android: on the phone (the cache, and downloaded songs, albums and playlists) |
+| Cached and downloaded audio | Web: none. Desktop: downloads in `<userData>/downloads` (with `index.json`), played through a server on 127.0.0.1. iOS and Android: on the phone (the cache, and downloaded songs, albums and playlists) |
 
 ## The shared UI (desktop and web)
 

@@ -8,6 +8,7 @@ import { Icon } from "../components/Icon";
 import { IconBtn } from "../components/IconBtn";
 import { SearchBox } from "../components/SearchBox";
 import { ContextMenu } from "../components/ContextMenu";
+import { useDownloads } from "../lib/downloads";
 import { PromptDialog } from "../components/PromptDialog";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { TrackTable } from "../components/TrackTable";
@@ -446,6 +447,20 @@ export function Playlists() {
   const [searchText, setSearchText] = useState("");
   const [bgMenu, setBgMenu] = useState<{ x: number; y: number } | null>(null);
   const [itemMenu, setItemMenu] = useState<{ x: number; y: number; playlist: Playlist } | null>(null);
+  // Download / Remove Download for a playlist (desktop only): the songs are fetched when asked for
+  const dl = useDownloads();
+  function downloadPlaylistItem(p: Playlist) {
+    if (!dl.supported) return [];
+    const kept = dl.hasCollection("playlist", p.id);
+    return [{
+      label: kept ? "Remove Download" : "Download", icon: "img/download.png",
+      onClick: async () => {
+        if (kept) return dl.removeCollection("playlist", p.id);
+        const tracks = await api.getPlaylistTracks(p.id).catch(() => []);
+        if (tracks.length) await dl.download(tracks, { kind: "playlist", id: p.id, name: p.name, subtitle: `${tracks.length} songs`, cover_id: p.cover_id });
+      },
+    }];
+  }
   const openShareDialog = useStore((s) => s.openShareDialog);
   const [renameTarget, setRenameTarget] = useState<Playlist | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Playlist | null>(null);
@@ -529,6 +544,7 @@ export function Playlists() {
         <ContextMenu
           x={itemMenu.x} y={itemMenu.y}
           items={[
+            ...downloadPlaylistItem(itemMenu.playlist),
             { label: "Share", icon: "img/share.png", onClick: () => openShareDialog({ id: itemMenu.playlist.id, type: "playlist", name: itemMenu.playlist.name }) },
             { label: "Rename Playlist", icon: "img/info.png", onClick: () => setRenameTarget(itemMenu.playlist) },
             { label: "Delete Playlist", icon: "img/remove.png", color: "#E53935", onClick: () => setDeleteTarget(itemMenu.playlist) },

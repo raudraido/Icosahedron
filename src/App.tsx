@@ -10,6 +10,9 @@ import { Artists } from "./screens/Artists";
 import { Tracks } from "./screens/Tracks";
 import { Playlists } from "./screens/Playlists";
 import { Starred } from "./screens/Starred";
+import { Downloads } from "./screens/Downloads";
+import { platform } from "./platform";
+import { useDownloads } from "./lib/downloads";
 import { Placeholder } from "./screens/Placeholder";
 import { NowPlaying } from "./screens/NowPlaying";
 import { Home } from "./screens/Home";
@@ -39,6 +42,8 @@ const NAV: { id: Tab; label: string; icon: string }[] = [
   { id: "tracks",     label: "Tracks",      icon: "img/tracks.png" },
   { id: "playlists",  label: "Playlists",   icon: "img/playlists.png" },
   { id: "starred",    label: "Favorites",   icon: "img/heart.png" },
+  // Downloads are a desktop feature (a browser keeps no music for later), so the tab is only there in the desktop app
+  ...(platform.kind === "electron" ? [{ id: "downloads" as Tab, label: "Downloads", icon: "img/download.png" }] : []),
   { id: "mixBuilder", label: "Mix Builder", icon: "img/mix.png" },
   { id: "visualizer", label: "Visualizer",  icon: "img/visualizer.png" },
 ];
@@ -190,6 +195,7 @@ function NavTab({
 }
 
 function DesktopApp() {
+  const offline = useStore((s) => s.offline);
   const activeTab    = useStore((s) => s.activeTab);
   const setTab       = useStore((s) => s.setTab);
   const pushNav      = useStore((s) => s.pushNav);
@@ -331,6 +337,12 @@ function DesktopApp() {
         <LeftPanel />
 
         <div className="flex flex-col flex-1 overflow-hidden" style={{ background: "var(--main-bg)" }}>
+          {offline && (
+            <div className="flex items-center" style={{ gap: 12, padding: "6px 16px", background: "var(--card-bg)", borderBottom: "1px solid var(--border)", color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>
+              <span style={{ flex: 1 }}>Offline: the server cannot be reached. Only your downloads play.</span>
+              <button onClick={() => window.location.reload()} style={{ background: "transparent", border: "1px solid var(--border)", borderRadius: 4, padding: "3px 12px", color: "var(--text-primary)", cursor: "pointer" }}>Try again</button>
+            </div>
+          )}
           {/* Tab bar — two fixed sections, not centered against the old
               app's main_header addStretch()-on-both-sides model: nav
               (back/forward) arrows in the left corner (moved here from
@@ -422,6 +434,7 @@ function DesktopApp() {
             <div className="absolute inset-0 flex flex-col tab-pane" style={{ display: activeTab === "tracks"     ? "flex" : "none" }}>{mounted.has("tracks")     && <Tracks />}</div>
             <div className="absolute inset-0 flex flex-col tab-pane" style={{ display: activeTab === "playlists"  ? "flex" : "none" }}>{mounted.has("playlists")  && <Playlists />}</div>
             <div className="absolute inset-0 flex flex-col tab-pane" style={{ display: activeTab === "starred"    ? "flex" : "none" }}>{mounted.has("starred")    && <Starred />}</div>
+            <div className="absolute inset-0 flex flex-col tab-pane" style={{ display: activeTab === "downloads"  ? "flex" : "none" }}>{mounted.has("downloads")  && <Downloads />}</div>
             <div className="absolute inset-0 flex flex-col tab-pane" style={{ display: activeTab === "mixBuilder" ? "flex" : "none" }}>{mounted.has("mixBuilder") && <Placeholder label="Mix Builder" />}</div>
             <div className="absolute inset-0 flex flex-col tab-pane" style={{ display: activeTab === "visualizer" ? "flex" : "none" }}>{mounted.has("visualizer") && <Placeholder label="Visualizer" />}</div>
             <div className="absolute inset-0 flex flex-col tab-pane" style={{ display: activeTab === "settings"   ? "flex" : "none" }}>{mounted.has("settings")   && <Settings />}</div>
@@ -452,6 +465,7 @@ function AppInner() {
 
   useEffect(() => {
     applyTheme(loadSavedTheme());
+    void useDownloads.getState().refresh(); // what is already kept on this computer (desktop only)
     tryAutoConnect().finally(() => setBooting(false));
 
     // Show scrollbar thumb while scrolling — mirrors old app's isScrollActive / scrollHideTimer(600ms)

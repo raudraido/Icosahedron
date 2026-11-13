@@ -2,6 +2,10 @@
 
 A native SwiftUI app for iPhone and iPad (iOS 26.1 or later), built as an unsigned `.ipa` (sign it with SideStore, AltStore, Sideloadly or iloader: [docs/ios.md](../../docs/ios.md)). It has been part of the shared releases 0.15.3 to 0.15.9 (see the [main changelog](../../CHANGELOG.md)); from here it has its **own version, release and changelog**. What works with which server: [docs/compatibility.md](../../docs/compatibility.md).
 
+## Unreleased
+
+- **The right cover, always:** when the song changed, a cover that was already loaded could stay on screen (the mini player, Now Playing) instead of the new song's cover, or the old one stayed until the new one had loaded. Fixed.
+
 ## 0.2.9
 - **Now Playing closes with a pull down every time:** a pull of about 90 pt (or a quick flick) that is mostly downward on the top bar, the cover or the title always closes it, however slow or slanted. Before, only the system's own gesture closed it, and that one needed a quick, straight pull and gave way to anything under the finger. The seek bar, the buttons and the queue / lyrics lists are left alone, so scrolling them does not close it.
 

@@ -37,11 +37,12 @@ struct CachedImage<Placeholder: View>: View {
     private var cache: NSCache<NSString, UIImage> { ImageMemory.cache }
     let url: URL
     @ViewBuilder var placeholder: () -> Placeholder
-    @State private var loaded: UIImage?
+    /// The picture and the address it belongs to: a view that gets a new address must not keep showing the old picture.
+    @State private var loaded: (url: URL, image: UIImage)?
 
     var body: some View {
         Group {
-            if let img = loaded ?? cache.object(forKey: url.absoluteString as NSString) {
+            if let img = (loaded?.url == url ? loaded?.image : nil) ?? cache.object(forKey: url.absoluteString as NSString) {
                 Image(uiImage: img).resizable().scaledToFill()
             } else {
                 placeholder()
@@ -49,10 +50,10 @@ struct CachedImage<Placeholder: View>: View {
         }
         .task(id: url) {
             let key = url.absoluteString as NSString
-            if cache.object(forKey: key) != nil { return }
+            if let hit = cache.object(forKey: key) { loaded = (url, hit); return }
             guard let (data, _) = try? await URLSession.shared.data(from: url), let img = UIImage(data: data) else { return }
             cache.setObject(img, forKey: key)
-            loaded = img
+            loaded = (url, img)
         }
     }
 }

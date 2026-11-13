@@ -26,7 +26,7 @@
 - **Play everywhere, keep it in step:** one queue and position follow you; the *Devices* list shows every device of your account with what it plays; *Send* and *Play here* move playback, and any device can control another.
 - **Secure sign-in for a server on the internet:** a new device has to be approved by a device that is already signed in, so a password alone gets nobody in ([docs/secure-sign-in.md](docs/secure-sign-in.md)).
 - **Gapless playback** (desktop, iOS, Android), 10-band equalizer, **playback speed** 0.5×–2× with the pitch kept, lyrics (timed, from the server or LRCLIB), **BPM**, favorites, ratings, playlists, share links.
-- **Offline:** an audio cache and *Download* for songs, albums and playlists (iOS, Android).
+- **Offline:** an audio cache and *Download* for songs, albums and playlists (iOS, Android); *Download* on the desktop too, and the desktop app opens without the server when it has downloads. The web app has no offline music.
 - **In the car:** Android Auto from the Android phone app; CarPlay is a skeleton that has not been run yet ([docs/carplay.md](docs/carplay.md)). The car's own Now Playing screen works from the iOS app.
 - **On the TV:** Android TV / Google TV, signed in with Quick Connect.
 - **Also:** casting to Chromecast / AirPlay 2 / DLNA (desktop), Last.fm scrobbling, upcoming concerts for the artist (Ticketmaster), a settings page for Navidrome's plugins.

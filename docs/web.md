@@ -25,6 +25,7 @@ When an administrator has switched it on ([secure-sign-in.md](secure-sign-in.md)
 
 ## Limits
 
+- **No offline music.** The service worker keeps the app's own files, so the page opens offline, but a browser keeps no music for later (and iOS Safari drops stored data after a week of not being used). Downloads are in the desktop and the phone apps.
 - **No gapless** between tracks: one persistent `<audio>` element.
 - **iOS Safari does not show title and cover on the lock screen** for any web page we tried (even a minimal test page); other iPhone browsers do. Use the [iOS app](ios.md) for that.
 - The **equalizer is not available on iOS Safari** (WebAudio output stops in the background there).

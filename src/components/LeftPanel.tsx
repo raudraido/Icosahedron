@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useStore } from "../store";
 import { api, Playlist } from "../lib/api";
+import { useDownloads } from "../lib/downloads";
 import { getRecentTracks, formatRelativeTime, LastFmTrack } from "../lib/lastfm";
 import { NewPlaylistDialog } from "../screens/Playlists";
 import { ArtistTokens, matchesArtistCredit } from "./ArtistTokens";
@@ -345,6 +346,7 @@ function PlaylistsPanel() {
   const openShareDialog = useStore((s) => s.openShareDialog);
   const addTrackToQueue = useStore((s) => s.appendToQueue);
   const [menu, setMenu] = useState<{ x: number; y: number; playlist: Playlist } | null>(null);
+  const downloads = useDownloads();
   const [height, setHeight] = useState(() => loadJSON(LS_PLAYLISTS_HEIGHT, PLAYLISTS_DEFAULT_HEIGHT));
   const [collapsed, setCollapsed] = useState(() => loadJSON(LS_PLAYLISTS_COLLAPSED, false));
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -574,6 +576,15 @@ function PlaylistsPanel() {
             { label: "Play Now", icon: "img/sub_play.png", onClick: () => playPlaylist(menu.playlist) },
             { label: "Play Next", icon: "img/sub_next.png", onClick: () => playPlaylist(menu.playlist, (tracks) => tracks.forEach((t) => addTrackNext(t))) },
             { label: "Add to Queue", icon: "img/queue.png", onClick: () => playPlaylist(menu.playlist, (tracks) => addTrackToQueue(tracks)) },
+            ...(downloads.supported ? [{
+              label: downloads.hasCollection("playlist", menu.playlist.id) ? "Remove Download" : "Download", icon: "img/download.png",
+              onClick: async () => {
+                const p = menu.playlist;
+                if (downloads.hasCollection("playlist", p.id)) return downloads.removeCollection("playlist", p.id);
+                const tracks = await api.getPlaylistTracks(p.id).catch(() => []);
+                if (tracks.length) await downloads.download(tracks, { kind: "playlist", id: p.id, name: p.name, subtitle: `${tracks.length} songs`, cover_id: p.cover_id });
+              },
+            }] : []),
             "separator",
             { label: "Open Playlist", icon: "img/sub_artist.png", onClick: () => openPlaylist(menu.playlist) },
             { label: "Share", icon: "img/share.png", onClick: () => openShareDialog({ id: menu.playlist.id, type: "playlist", name: menu.playlist.name }) },

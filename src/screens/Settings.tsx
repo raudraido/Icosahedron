@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 import { useStore, activeLastfmKey } from "../store";
 import { api, UpdateInfo, UpdateDownloadProgress, TraySettings } from "../lib/api";
+import { useDownloads, formatBytes as formatSize } from "../lib/downloads";
 import { applyTheme, loadSavedTheme, saveTheme, saveCustomTheme, deleteCustomTheme, isBuiltInThemeName, allThemes, CREAM, AppTheme } from "../lib/theme";
 import { PromptDialog } from "../components/PromptDialog";
 import { DEFAULT_HOTKEYS, loadHotkeyBindings, saveHotkeyBindings, bindingFromEvent } from "../lib/hotkeys";
@@ -26,10 +27,11 @@ import { useAvatar, removeMyAvatar } from "../lib/avatar";
 // account switch" discussion this was born from); only System and Themes
 // have real functionality today.
 
-type SettingsTab = "system" | "playback" | "integrations" | "sync" | "appearance" | "themes" | "servers" | "users" | "plugins" | "themeBuilder" | "hotkeys";
+type SettingsTab = "system" | "downloads" | "playback" | "integrations" | "sync" | "appearance" | "themes" | "servers" | "users" | "plugins" | "themeBuilder" | "hotkeys";
 
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: "system",       label: "System" },
+  ...(platform.kind === "electron" ? [{ id: "downloads" as SettingsTab, label: "Downloads" }] : []),
   { id: "playback",     label: "Playback" },
   { id: "integrations", label: "Integrations" },
   { id: "sync",         label: "Sync Server" },
@@ -520,6 +522,47 @@ function ProfilePictureRow() {
         </div>
       ) : (
         <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>A profile picture is kept by the sync server (Settings → Sync Server).</span>
+      )}
+    </div>
+  );
+}
+
+// What is kept on this computer (the Downloads tab in the app list has the songs themselves)
+function DownloadsTab() {
+  const { ids, collections, bytes, pending, refresh, removeAll } = useDownloads();
+  const [confirm, setConfirm] = useState(false);
+  useEffect(() => { void refresh(); }, [refresh]);
+  return (
+    <div className="flex flex-col" style={{ gap: 24, maxWidth: 480 }}>
+      <Section title="Downloads">
+        <Row label="Songs" value={String(ids.size)} />
+        <Row label="Albums and playlists" value={String(collections.length)} />
+        <Row label="Space used" value={formatSize(bytes)} />
+        {pending > 0 && <Row label="Still downloading" value={String(pending)} />}
+        <div style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)", lineHeight: 1.5 }}>
+          Songs, albums and playlists you download are kept in this app's data folder and play without the server. Right-click a song,
+          an album or a playlist and choose Download.
+        </div>
+        <button
+          onClick={() => setConfirm(true)}
+          disabled={ids.size === 0 && pending === 0}
+          style={{
+            alignSelf: "flex-start", marginTop: 4, background: "transparent", color: "var(--error)",
+            border: "1px solid var(--error)", borderRadius: 4, padding: "7px 16px", cursor: "pointer", opacity: ids.size === 0 && pending === 0 ? 0.4 : 1,
+          }}
+        >
+          Remove all downloads
+        </button>
+      </Section>
+      {confirm && (
+        <ConfirmDialog
+          title="Remove all downloads"
+          message="Every downloaded song, album and playlist is removed from this computer."
+          confirmLabel="Remove"
+          danger
+          onConfirm={() => { setConfirm(false); void removeAll(); }}
+          onCancel={() => setConfirm(false)}
+        />
       )}
     </div>
   );
@@ -1796,6 +1839,7 @@ export function Settings() {
         <div className="flex-1" style={{ position: "relative", minHeight: 0 }}>
           <div ref={scrollRef} className="h-full overflow-y-auto scroll-clean" style={{ padding: 28 }}>
             {tab === "system" && <SystemTab />}
+            {tab === "downloads" && <DownloadsTab />}
             {tab === "playback" && <PlaybackTab />}
             {tab === "integrations" && <IntegrationsTab />}
             {tab === "sync" && <SyncServerTab />}

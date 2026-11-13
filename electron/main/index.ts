@@ -20,6 +20,7 @@ import { getCachedBpm, setCachedBpm, getAllCachedBpm } from "./bpmCache";
 import { captureScreens } from "./screenCapture";
 import { checkForUpdate, downloadAndInstallUpdate } from "./updater";
 import * as lastfm from "./lastfm";
+import * as downloads from "./downloads";
 import {
   saveSession as saveLastFmSession, loadSessionForDisplay as loadLastFmSession, getSessionKey as getLastFmSessionKey,
   clearSession as clearLastFmSession, setToggle as setLastFmToggle,
@@ -357,12 +358,18 @@ function registerIpcHandlers(): void {
     if (!activeId) return null;
     const creds = await loadServerCredentials(activeId);
     if (!creds) return null;
+    const c = new SubsonicClient(creds.url, creds.username, creds.password, creds.musicFolderIds);
     try {
-      const c = new SubsonicClient(creds.url, creds.username, creds.password, creds.musicFolderIds);
       await c.ping();
       client = c;
       return { url: creds.url, username: creds.username };
     } catch {
+      // The server cannot be reached (no network, or it is down). With downloads on this computer the app opens
+      // anyway, offline: the Downloads screen plays them from the computer; "try again" reloads when the server is back.
+      if ((await downloads.state()).ids.length > 0) {
+        client = c;
+        return { url: creds.url, username: creds.username, offline: true };
+      }
       return null;
     }
   });
@@ -470,6 +477,15 @@ function registerIpcHandlers(): void {
   ipcMain.handle("cover_art_url", (_e, { coverId, size }) => requireClient().coverArtUrl(coverId, size ?? undefined));
   ipcMain.handle("sync_auth", () => requireClient().syncAuth());
   ipcMain.handle("stream_url", (_e, { songId }) => requireClient().streamUrl(songId));
+
+  // ── Downloads (electron/main/downloads.ts): songs kept on this computer, played through a server on 127.0.0.1 ──
+  ipcMain.handle("downloads_state", () => downloads.state());
+  ipcMain.handle("downloads_tracks", () => downloads.tracks());
+  ipcMain.handle("downloads_local_url", (_e, { songId }) => downloads.localUrl(songId));
+  ipcMain.handle("downloads_add", (_e, { tracks, collection }) => downloads.add(tracks, collection ?? null, (id) => requireClient().streamUrl(id)));
+  ipcMain.handle("downloads_remove_track", (_e, { songId }) => downloads.removeTrack(songId));
+  ipcMain.handle("downloads_remove_collection", (_e, { kind, id }) => downloads.removeCollection(kind, id));
+  ipcMain.handle("downloads_remove_all", () => downloads.removeAll());
 
   ipcMain.handle("get_scan_status", () => requireClient().getScanStatus());
 

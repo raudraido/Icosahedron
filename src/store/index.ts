@@ -7,7 +7,7 @@ import { measureCastDelay } from "../lib/castCalibration";
 import { platform } from "../platform";
 
 export type Tab =
-  | "home" | "nowPlaying" | "albums" | "artists" | "tracks" | "playlists" | "starred"
+  | "home" | "nowPlaying" | "albums" | "artists" | "tracks" | "playlists" | "starred" | "downloads"
   | "mixBuilder" | "visualizer" | "settings";
 
 export type NavEntry = {
@@ -44,6 +44,8 @@ export type NavEntry = {
 interface AppStore {
   // connection
   connected: boolean;
+  /** Opened without the server (it could not be reached) with downloads on this computer: only they play. */
+  offline: boolean;
   serverUrl: string;
   username: string;
   connect: (url: string, user: string, pass: string, remember: boolean) => Promise<void>;
@@ -689,6 +691,7 @@ function loadPlaybackSpeed(): number {
 
 export const useStore = create<AppStore>((set, get) => ({
   connected: false,
+  offline: false,
   serverUrl: "",
   username: "",
   coverUrl: () => "",
@@ -1687,6 +1690,8 @@ export async function tryAutoConnect() {
   const lastfmKey = activeServerId ?? LASTFM_DEFAULT_SERVER_KEY;
   useStore.setState({
     connected: true,
+    offline: !!result.offline,
+    ...(result.offline ? { activeTab: "downloads" as Tab, navHistory: [{ tab: "downloads" as Tab }], navPos: 0 } : {}),
     serverUrl: result.url,
     username: result.username,
     activeServerId,

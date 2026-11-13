@@ -2,6 +2,9 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FixedSizeList, ListChildComponentProps } from "react-window";
 import { api, Album } from "../lib/api";
+import { DownloadButton } from "../components/DownloadButton";
+import { ContextMenu } from "../components/ContextMenu";
+import { useDownloads } from "../lib/downloads";
 import { CoverArt } from "../components/CoverArt";
 import { useStore } from "../store";
 import { Icon } from "../components/Icon";
@@ -100,13 +103,39 @@ export const AlbumCard = React.memo(function AlbumCard({ album, onOpen }: { albu
     if (tracks.length) appendToQueue(tracks);
   }
 
+  // Right-click on a card: the album's own menu (Play, Add to Queue, Download)
+  const [cardMenu, setCardMenu] = useState<{ x: number; y: number } | null>(null);
+  const downloadsSupported = useDownloads((s) => s.supported);
+  const albumKept = useDownloads((s) => s.collections.some((c) => c.kind === "album" && c.id === album.id));
+  const downloadAlbum = useDownloads((s) => s.download);
+  const removeAlbumDownload = useDownloads((s) => s.removeCollection);
+
   return (
     <button
       onClick={() => onOpen(album)}
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setCardMenu({ x: e.clientX, y: e.clientY }); }}
       onMouseEnter={() => { setHovered(true); fetchTracks(); }}
       onMouseLeave={() => setHovered(false)}
       className="text-left group grid-card"
     >
+      {cardMenu && (
+        <ContextMenu
+          x={cardMenu.x} y={cardMenu.y}
+          items={[
+            { label: "Play Now", icon: "img/sub_play.png", onClick: async () => { const t = await fetchTracks(); if (t.length) playTrack(t[0], t); } },
+            { label: "Add to Queue", icon: "img/queue.png", onClick: async () => { const t = await fetchTracks(); if (t.length) appendToQueue(t); } },
+            ...(downloadsSupported ? [{
+              label: albumKept ? "Remove Download" : "Download", icon: "img/download.png",
+              onClick: async () => {
+                if (albumKept) return removeAlbumDownload("album", album.id);
+                const t = await fetchTracks();
+                if (t.length) await downloadAlbum(t, { kind: "album", id: album.id, name: album.name, subtitle: album.artist, cover_id: album.cover_id });
+              },
+            }] : []),
+          ]}
+          onClose={() => setCardMenu(null)}
+        />
+      )}
       <div style={{ position: "relative", overflow: "hidden", borderRadius: "8px 8px 0 0" }}>
         <CoverArt coverId={album.cover_id} size={200} className="w-full aspect-square rounded-t-lg group-hover:brightness-75 group-hover:scale-[1.03] transition-all" />
         <div
@@ -410,6 +439,7 @@ function AlbumDetail({ album }: { album: Album }) {
               >
                 <Icon src="img/share.png" size={20} style={{ background: "var(--text-secondary)" }} />
               </button>
+              <DownloadButton tracks={tracks} collection={{ kind: "album", id: album.id, name: album.name, subtitle: album.artist, cover_id: album.cover_id }} />
             </div>
           </div>
         </div>

@@ -15,7 +15,9 @@ import { pipeline } from "node:stream/promises";
 // hands the files out with Range support; the engine plays them like any other stream.
 
 export interface DownloadedTrack { id: string; format?: string | null; [k: string]: unknown }
-interface Entry { track: DownloadedTrack; file: string; size: number; at: number }
+// `cache`: a song that was only played (kept for the next time, removed oldest first over the limit), not downloaded on purpose.
+// `at` is when it was downloaded, or for a cached song when it was last used.
+interface Entry { track: DownloadedTrack; file: string; size: number; at: number; cache?: boolean }
 export interface DownloadCollection {
   kind: "album" | "playlist";
   id: string;
@@ -24,7 +26,8 @@ export interface DownloadCollection {
   cover_id: string | null;
   tracks: DownloadedTrack[]; // in order, so the page opens offline
 }
-interface Index { tracks: Record<string, Entry>; collections: DownloadCollection[] }
+interface Index { tracks: Record<string, Entry>; collections: DownloadCollection[]; cacheLimitMb?: number }
+const DEFAULT_CACHE_MB = 1024;
 
 const MIME: Record<string, string> = {
   mp3: "audio/mpeg", flac: "audio/flac", m4a: "audio/mp4", mp4: "audio/mp4", aac: "audio/aac",
@@ -52,7 +55,7 @@ async function load(): Promise<Index> {
   if (index) return index;
   try {
     const raw = JSON.parse(await readFile(indexPath(), "utf-8")) as Partial<Index>;
-    index = { tracks: raw.tracks ?? {}, collections: raw.collections ?? [] };
+    index = { tracks: raw.tracks ?? {}, collections: raw.collections ?? [], cacheLimitMb: raw.cacheLimitMb };
   } catch {
     index = { tracks: {}, collections: [] };
   }
@@ -115,12 +118,13 @@ export async function localUrl(id: string): Promise<string | null> {
   const entry = (await load()).tracks[id];
   if (!entry) return null;
   try { await stat(join(dir(), entry.file)); } catch { return null; }
+  if (entry.cache) entry.at = Date.now(); // used: the last one to go
   await ensureServer();
   return `http://127.0.0.1:${port}/dl/${token}/${encodeURIComponent(id)}.${extOf(entry.file) || "bin"}`;
 }
 
 // ── Downloading ──
-async function fetchOne(track: DownloadedTrack, url: string): Promise<void> {
+async function fetchOne(track: DownloadedTrack, url: string, cache = false): Promise<void> {
   const res = await fetch(url);
   if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
   const type = (res.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
@@ -134,7 +138,7 @@ async function fetchOne(track: DownloadedTrack, url: string): Promise<void> {
   await rename(tmp, join(dir(), file));
   const size = (await stat(join(dir(), file))).size;
   const data = await load();
-  data.tracks[track.id] = { track, file, size, at: Date.now() };
+  data.tracks[track.id] = { track, file, size, at: Date.now(), ...(cache ? { cache: true } : {}) };
   await save();
 }
 
@@ -164,7 +168,13 @@ export async function add(tracks: DownloadedTrack[], collection: Omit<DownloadCo
     await save();
   }
   for (const t of tracks) {
-    if (data.tracks[t.id] || queue.some((q) => q.track.id === t.id) || current === t.id) continue;
+    const have = data.tracks[t.id];
+    if (have?.cache) { // already on disk from playing it: keep it for good, no new download
+      data.tracks[t.id] = { track: t, file: have.file, size: have.size, at: Date.now() };
+      await save();
+      continue;
+    }
+    if (have || queue.some((q) => q.track.id === t.id) || current === t.id) continue;
     queue.push({ track: t, urlFor: () => urlFor(t.id) });
   }
   void work();
@@ -199,7 +209,7 @@ export async function removeAll(): Promise<void> {
   const data = await load();
   aborting = true;
   queue = [];
-  for (const id of Object.keys(data.tracks)) await dropTrack(id);
+  for (const [id, e] of Object.entries(data.tracks)) if (!e.cache) await dropTrack(id);
   data.collections = [];
   await save();
 }
@@ -210,21 +220,70 @@ export interface DownloadsState {
   bytes: number;
   pending: number;
   current: string | null;
+  cacheBytes: number;
+  cacheSongs: number;
+  cacheLimitMb: number;
 }
 
 export async function state(): Promise<DownloadsState> {
   const data = await load();
-  const entries = Object.values(data.tracks);
+  const all = Object.values(data.tracks);
+  const entries = all.filter((e) => !e.cache);
+  const cached = all.filter((e) => e.cache);
   return {
     ids: entries.map((e) => e.track.id),
     collections: data.collections,
     bytes: entries.reduce((n, e) => n + e.size, 0),
     pending: queue.length + (current ? 1 : 0),
     current,
+    cacheBytes: cached.reduce((n, e) => n + e.size, 0),
+    cacheSongs: cached.length,
+    cacheLimitMb: data.cacheLimitMb ?? DEFAULT_CACHE_MB,
   };
 }
 
 /** The downloaded songs, oldest first. */
 export async function tracks(): Promise<DownloadedTrack[]> {
-  return Object.values((await load()).tracks).sort((a, b) => a.at - b.at).map((e) => e.track);
+  return Object.values((await load()).tracks).filter((e) => !e.cache).sort((a, b) => a.at - b.at).map((e) => e.track);
+}
+
+// ── The cache: songs that were played ──
+const caching = new Set<string>();
+
+async function evict(): Promise<void> {
+  const data = await load();
+  const limit = (data.cacheLimitMb ?? DEFAULT_CACHE_MB) * 1024 * 1024;
+  const cached = Object.values(data.tracks).filter((e) => e.cache).sort((a, b) => a.at - b.at);
+  let total = cached.reduce((n, e) => n + e.size, 0);
+  for (const e of cached) {
+    if (total <= limit) break;
+    total -= e.size;
+    await dropTrack(e.track.id);
+  }
+  await save();
+}
+
+/** Keeps a played song for the next time (in the background; the song itself streams as usual). */
+export async function cacheSong(id: string, urlFor: () => string): Promise<void> {
+  const data = await load();
+  if ((data.cacheLimitMb ?? DEFAULT_CACHE_MB) <= 0) return;
+  if (data.tracks[id] || caching.has(id) || current === id || queue.some((q) => q.track.id === id)) return;
+  caching.add(id);
+  try {
+    await fetchOne({ id }, urlFor(), true);
+    await evict();
+  } catch { /* offline or refused: nothing to keep */ } finally {
+    caching.delete(id);
+  }
+}
+
+export async function setCacheLimit(mb: number): Promise<void> {
+  (await load()).cacheLimitMb = Math.max(0, Math.round(mb));
+  await evict();
+}
+
+export async function clearCache(): Promise<void> {
+  const data = await load();
+  for (const [id, e] of Object.entries(data.tracks)) if (e.cache) await dropTrack(id);
+  await save();
 }

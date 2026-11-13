@@ -50,6 +50,10 @@ export interface DownloadsState {
   bytes: number;
   pending: number;
   current: string | null;
+  /** Songs kept only because they were played (a cache, removed oldest first over the limit). */
+  cacheBytes: number;
+  cacheSongs: number;
+  cacheLimitMb: number;
 }
 
 export interface Track {
@@ -240,7 +244,7 @@ export interface ServerProfile {
  * device secret) the kept URLs are refused and nothing plays. So the URL is made again from the track id,
  * with the current sign-in, when it is used.
  */
-async function freshStreamUrl(url: string): Promise<string> {
+async function freshStreamUrl(url: string, cache = false): Promise<string> {
   try {
     const u = new URL(url);
     if (!u.pathname.endsWith("/rest/stream")) return url;
@@ -249,6 +253,7 @@ async function freshStreamUrl(url: string): Promise<string> {
     // A downloaded song plays from this computer (no server needed)
     const local = await invoke<string | null>("downloads_local_url", { songId: id }).catch(() => null);
     if (local) return local;
+    if (cache) void invoke("downloads_cache_song", { songId: id }).catch(() => {}); // keep it for next time
     return await invoke<string>("stream_url", { songId: id });
   } catch {
     return url;
@@ -393,6 +398,8 @@ export const api = {
   downloadsRemoveTrack: (songId: string) => invoke<void>("downloads_remove_track", { songId }),
   downloadsRemoveCollection: (kind: string, id: string) => invoke<void>("downloads_remove_collection", { kind, id }),
   downloadsRemoveAll: () => invoke<void>("downloads_remove_all"),
+  downloadsCacheLimit: (mb: number) => invoke<void>("downloads_cache_limit", { mb }),
+  downloadsClearCache: () => invoke<void>("downloads_clear_cache"),
 
   // ── Lyrics (queue panel's Lyrics tab) ──────────────────────────────────
   lyricsServer: (artist: string, title: string) => invoke<string | null>("lyrics_server", { artist, title }),
@@ -428,9 +435,9 @@ export const api = {
   // `volume` here is 0-1 (the store keeps its own volume as a 0-100 int for
   // the UI/localStorage and divides by 100 at these call sites).
   audioPlay: async (url: string, volume: number, durationHint: number, manual = true, startPaused = false) =>
-    invoke<void>("audio_play", { url: await freshStreamUrl(url), volume, durationHint, manual, startPaused }),
+    invoke<void>("audio_play", { url: await freshStreamUrl(url, true), volume, durationHint, manual, startPaused }),
   audioChainPreload: async (url: string, durationHint: number) =>
-    invoke<void>("audio_chain_preload", { url: await freshStreamUrl(url), durationHint }),
+    invoke<void>("audio_chain_preload", { url: await freshStreamUrl(url, true), durationHint }),
   audioPause: () => invoke<void>("audio_pause"),
   audioResume: () => invoke<void>("audio_resume"),
   /** Resumes `offsetMs` after the latest AirPlay stream's first audio went out; timed natively, to the microsecond. */

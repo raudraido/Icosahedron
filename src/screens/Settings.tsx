@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 import { useStore, activeLastfmKey } from "../store";
@@ -531,9 +531,45 @@ function ProfilePictureRow() {
 function DownloadsTab() {
   const { ids, collections, bytes, pending, refresh, removeAll } = useDownloads();
   const [confirm, setConfirm] = useState(false);
-  useEffect(() => { void refresh(); }, [refresh]);
+  const [cache, setCache] = useState<{ bytes: number; songs: number; limitMb: number } | null>(null);
+  const readCache = useCallback(async () => {
+    try {
+      const st = await api.downloadsState();
+      setCache({ bytes: st.cacheBytes, songs: st.cacheSongs, limitMb: st.cacheLimitMb });
+    } catch { /* no downloads module */ }
+  }, []);
+  useEffect(() => { void refresh(); void readCache(); }, [refresh, readCache]);
   return (
     <div className="flex flex-col" style={{ gap: 24, maxWidth: 480 }}>
+      {cache && (
+        <Section title="Cache">
+          <Row label="Played songs kept" value={`${cache.songs} · ${formatSize(cache.bytes)}`} />
+          <div className="flex items-center" style={{ gap: 12, padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
+            <span style={{ width: 140, flexShrink: 0, color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>Limit</span>
+            <select
+              value={cache.limitMb}
+              onChange={async (e) => { await api.downloadsCacheLimit(Number(e.target.value)); void readCache(); }}
+              style={{ background: "var(--bg-elevated, transparent)", color: "var(--text-primary)", border: "1px solid var(--border, #444)", borderRadius: 4, padding: "4px 8px" }}
+            >
+              {[[0, "Off"], [512, "512 MB"], [1024, "1 GB"], [2048, "2 GB"], [5120, "5 GB"], [10240, "10 GB"]].map(([mb, label]) => (
+                <option key={mb} value={mb}>{label}</option>
+              ))}
+              {![0, 512, 1024, 2048, 5120, 10240].includes(cache.limitMb) && <option value={cache.limitMb}>{cache.limitMb} MB</option>}
+            </select>
+          </div>
+          <div style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)", lineHeight: 1.5 }}>
+            Songs you play are kept for the next time (and for when the server is away). When the limit is passed, the song played longest ago goes first.
+            Downloaded songs are never removed by the cache.
+          </div>
+          <button
+            onClick={async () => { await api.downloadsClearCache(); void readCache(); }}
+            disabled={cache.songs === 0}
+            style={{ alignSelf: "flex-start", marginTop: 4, background: "transparent", color: "var(--text-primary)", border: "1px solid var(--border, #555)", borderRadius: 4, padding: "7px 16px", cursor: "pointer", opacity: cache.songs === 0 ? 0.4 : 1 }}
+          >
+            Clear cache
+          </button>
+        </Section>
+      )}
       <Section title="Downloads">
         <Row label="Songs" value={String(ids.size)} />
         <Row label="Albums and playlists" value={String(collections.length)} />

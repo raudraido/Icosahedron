@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Played songs are kept for the next time:** a song you play is also saved on the computer, so it starts at once the next time and plays when the server is away. **Settings → Downloads → Cache** shows how much is kept, sets the limit (off, 512 MB to 10 GB, 1 GB by default) and clears it; over the limit the song played longest ago goes first. Downloaded songs are never touched by the cache, and a cached song you download is kept for good without downloading it again.
+
 ## 0.19.0
 
 **Works with server 0.18.x.**

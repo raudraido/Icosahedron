@@ -486,6 +486,9 @@ function registerIpcHandlers(): void {
   ipcMain.handle("downloads_remove_track", (_e, { songId }) => downloads.removeTrack(songId));
   ipcMain.handle("downloads_remove_collection", (_e, { kind, id }) => downloads.removeCollection(kind, id));
   ipcMain.handle("downloads_remove_all", () => downloads.removeAll());
+  ipcMain.handle("downloads_cache_song", (_e, { songId }) => { void downloads.cacheSong(songId, () => requireClient().streamUrl(songId)); });
+  ipcMain.handle("downloads_cache_limit", (_e, { mb }) => downloads.setCacheLimit(mb));
+  ipcMain.handle("downloads_clear_cache", () => downloads.clearCache());
 
   ipcMain.handle("get_scan_status", () => requireClient().getScanStatus());
 

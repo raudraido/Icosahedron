@@ -25,7 +25,7 @@ Every `android-phone-vX.Y.Z` release has `Icosahedron-Android-X.Y.Z.apk`. Open i
 2. *Open* the folder `apps/android`. Let Gradle sync.
 3. Run it on an emulator (Device Manager, any phone with API 26+) or on a phone with USB debugging on.
 
-From the command line: `gradle :app:assembleRelease -PversionName=0.1.0 -PversionCode=100` (Gradle 8.10, JDK 17, Android SDK 35) writes `app/build/outputs/apk/release/app-release.apk`. An emulator reaches a server on your computer as `http://10.0.2.2:<port>`.
+From the command line: `gradle :app:assembleRelease -PversionName=0.1.0 -PversionCode=100` (Gradle 8.10, JDK 17, Android SDK 36) writes `app/build/outputs/apk/release/app-release.apk`. An emulator reaches a server on your computer as `http://10.0.2.2:<port>`.
 
 ## Code
 

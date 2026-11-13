@@ -129,5 +129,5 @@ services:
 ## Later
 
 - **Updates:** each release makes a new `.aab`; upload it to the track (*Internal → Closed → Production*), or later with the Play API from the workflow.
-- **Target API:** Google raises the minimum every year (August); the app targets 35 and must be rebuilt for the new level in time.
+- **Target API:** Google raises the minimum every year (August); the app targets **36** (Play refused 35 for new apps in 2026-11) and must be rebuilt for the new level in time.
 - **TV:** a separate listing for `cloud.icosahedron.tv` (TV banner, D-pad, the *TV* form factor in the Play Console).

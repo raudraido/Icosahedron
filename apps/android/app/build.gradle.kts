@@ -10,12 +10,12 @@ val appVersionCode = (project.findProperty("versionCode") as String?)?.toIntOrNu
 
 android {
     namespace = "cloud.icosahedron.phone"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "cloud.icosahedron.phone"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = appVersionCode
         versionName = appVersionName
     }

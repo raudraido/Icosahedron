@@ -7,7 +7,7 @@ Needs Android 8.0 (API 26) or newer.
 ## What it does
 
 - **Sign in** with the server address (found on the network when it is near); with **secure sign-in** on the phone shows a number to be approved on a device that is already signed in, and it approves other devices' sign-ins itself (a card over everything, a notification in the background). It can switch secure sign-in on and off and shows the trusted devices.
-- **Home** (a quick-button row with Random mix, Discover, Recently played, Newest, Most played, Playlists, each with *See all*), **Library** (Albums and Artists with sort, filters, grid or list and a letter index; Playlists; **Favorite Songs**; **Downloads**) that remembers how you left it, and search.
+- **Home** (a quick-button row with Random mix, Discover, Recently played, Newest, Most played, Playlists, each with *See all*), **Library** (a list like the iOS app's: Artists, Albums, Newest, Recently Played, Songs, Favorite Songs, Downloads, Directories, Playlists, Radios; Albums and Artists with sort, filters, grid or list and a letter index, remembered; on a wide screen the same as tabs), and search.
 - **One menu for songs, albums and playlists** (the ⋮ button, a long press): Play Next, Add to Queue, Add to Device Queue, Download, Favorite, Add to Playlist, Share, Show Album / Artist, Rename / Delete.
 - **Now Playing:** cover colours, seek bar with the times at its ends, lyrics (timed), the queue, the song's details (tap the cover), speed 0.5×–2× with the pitch kept, the favorite heart; pull it down from anywhere to close it. Built to be used in a car: big targets, words under the icons.
 - **Devices:** every device of your account and what it plays; tap one to control it (everything you play then starts there), *Send* and *Play here*.

@@ -90,6 +90,8 @@ private sealed interface Route {
     data class PlaylistR(val id: String, val name: String) : Route
     data class AlbumList(val type: String, val title: String) : Route
     data class OfflineR(val kind: String, val id: String) : Route
+    data class Lib(val section: LibSection) : Route
+    data class Dir(val id: String?, val title: String) : Route
 }
 
 private enum class Dest { Home, Library, Search, Devices, Settings }
@@ -131,13 +133,19 @@ fun MainScreen() {
                         is Route.PlaylistR -> PlaylistScreen(top.id, top.name, onBack = { stack.removeLast() })
                         is Route.OfflineR -> OfflineCollectionScreen(top.kind, top.id, onBack = { stack.removeLast() })
                         is Route.AlbumList -> AlbumListScreen(top.type, top.title, onBack = { stack.removeLast() }, push = push)
+                        is Route.Lib -> LibrarySectionScreen(top.section, onBack = { stack.removeLast() }, push = push)
+                        is Route.Dir -> Column(Modifier.fillMaxSize()) {
+                            TopBar(top.title, onBack = { stack.removeLast() })
+                            DirectoryScreen(top.id) { id, title -> push(Route.Dir(id, title)) }
+                        }
                         null -> when (tab) {
                             Dest.Home -> HomeScreen(
                                 push = push,
-                                allPlaylists = { libraryTab = 2; tab = Dest.Library },
+                                allPlaylists = { if (wide) { libraryTab = 2; tab = Dest.Library } else push(Route.Lib(LibSection.Playlists)) },
                                 onProfile = { tab = Dest.Settings },
                             )
-                            Dest.Library -> LibraryScreen(libraryTab, { libraryTab = it; cloud.icosahedron.phone.data.Prefs.libraryTab = it }, push)
+                            Dest.Library -> if (wide) LibraryScreen(libraryTab, { libraryTab = it; cloud.icosahedron.phone.data.Prefs.libraryTab = it }, push)
+                                else LibraryHome { s -> push(sectionRoute(s)) }
                             Dest.Search -> SearchScreen(push)
                             Dest.Devices -> DevicesScreen()
                             Dest.Settings -> SettingsScreen()
@@ -291,6 +299,31 @@ private fun LibraryScreen(selected: Int, onSelect: (Int) -> Unit, push: (Route) 
             2 -> PlaylistsList(push)
             3 -> FavoriteSongs()
             else -> OfflineList(open = openOffline)
+        }
+    }
+}
+
+/** Newest and Recently Played are the album lists; the rest are pages of their own. */
+private fun sectionRoute(s: LibSection): Route = when (s) {
+    LibSection.Newest -> Route.AlbumList("newest", s.title)
+    LibSection.Recent -> Route.AlbumList("recent", s.title)
+    LibSection.Directories -> Route.Dir(null, s.title)
+    else -> Route.Lib(s)
+}
+
+@Composable
+private fun LibrarySectionScreen(s: LibSection, onBack: () -> Unit, push: (Route) -> Unit) {
+    Column(Modifier.fillMaxSize()) {
+        TopBar(s.title, onBack)
+        when (s) {
+            LibSection.Artists -> ArtistsBrowser(onArtist = { push(Route.ArtistR(it.id)) })
+            LibSection.Albums -> AlbumsBrowser(AlbumSort.Name, onAlbum = { push(Route.AlbumR(it.id)) }, persist = true)
+            LibSection.Songs -> SongsScreen()
+            LibSection.Favorites -> FavoriteSongs()
+            LibSection.Downloads -> OfflineList(open = { k, i -> push(Route.OfflineR(k, i)) })
+            LibSection.Playlists -> PlaylistsList(push)
+            LibSection.Radios -> RadiosScreen()
+            else -> {}
         }
     }
 }

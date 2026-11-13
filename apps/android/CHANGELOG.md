@@ -2,6 +2,12 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
+## Unreleased
+
+- **Library looks like the iOS app's:** a plain list of the ways to browse, with the same names and order: Artists, Albums, Newest Albums, Recently Played Albums, Songs, Favorite Songs, Downloads, Directories, Playlists, Radios. Each opens its own page with a back button; Albums and Artists keep their sort and filters as before.
+- **New pages:** **Songs** (every song in the library, loaded as you scroll, with Shuffle all), **Directories** (the server's folders) and **Radios** (the server's internet radio stations; a radio plays live and is never cached).
+- On a wide screen (a car, a tablet, the phone on its side) Library stays as it was, with the tabs.
+
 ## 0.1.22
 
 - **The Library remembers how you left it:** the tab you were on, how Albums are sorted and filtered (and grid or list), and how Artists are sorted (favorites only, grid or list). It used to start from the default every time you came back to Library. The "See all" pages from Home still open with the order they were asked for.

@@ -98,22 +98,33 @@ Graphics:
 
 ## Demo server for the reviewers
 
-A small Navidrome with a few songs under a Creative Commons licence (for example from the Free Music Archive or Jamendo, with a licence that allows it), a **public read-only account**, reachable from the internet over https, for example on a separate subdomain of raud.cloud. Do **not** use your own library or account. Docker Compose:
+A small Navidrome with ten songs by Kevin MacLeod (incompetech.com, Creative Commons Attribution 4.0, credits in `CREDITS.txt` in the music folder) and a **public non-admin account**. Not the real library, not a real account. It runs on the Docker host as the container `navidrome-demo` (folder `~/icosahedron-demo`: `docker-compose.yml`, `music/`, `data/`), listening on port **4534** on the LAN.
+
+| | |
+|---|---|
+| LAN address | `http://10.0.0.18:4534` |
+| Account for the reviewers | user `reviewer`, password `icosahedron-review` (not an admin; safe to publish) |
+| Admin (private) | user `demo-admin`, the password is kept with the upload key, not here |
+
+**To make it reachable for Google** (the reviewers are outside the LAN): add a DNS record (for example `demo.raud.cloud`) and a proxy host in Nginx Proxy Manager from `https://demo.raud.cloud` to `http://10.0.0.18:4534` with a Let's Encrypt certificate, then use that address below. Until then Google cannot sign in.
+
+Text for *App access → Instructions* (replace the address if it differs):
+
+> The app needs a Navidrome music server. Use this demo server: address **https://demo.raud.cloud**, user name **reviewer**, password **icosahedron-review**. Sign in, open *Library → Songs*, tap a song to play it, then tap the player at the bottom to open Now Playing. No other account is needed. The demo library has ten Creative Commons songs.
+
+Test it before submitting: sign in from a phone that is **not** on the home Wi-Fi.
 
 ```yaml
+# ~/icosahedron-demo/docker-compose.yml
 services:
-  navidrome:
+  navidrome-demo:
     image: deluan/navidrome:latest
-    ports: ["4533:4533"]
-    volumes:
-      - ./music:/music:ro
-      - ./data:/data
-    environment:
-      ND_SCANSCHEDULE: 1h
-      ND_BASEURL: ""
+    container_name: navidrome-demo
+    restart: unless-stopped
+    ports: ["4534:4533"]
+    volumes: ["./music:/music:ro", "./data:/data"]
+    environment: { ND_SCANSCHEDULE: 1h, ND_SESSIONTIMEOUT: 24h }
 ```
-
-Create a user `reviewer` (not an admin) with a password that is safe to publish, and write the server address, the user and the password into *App access → Instructions*, with one line on how to try it: *Sign in, open Library → Songs, play a song, open Now Playing.* If reviewers should also see the secure sign-in screen, put it behind the Icosahedron server and say so.
 
 ## Later
 

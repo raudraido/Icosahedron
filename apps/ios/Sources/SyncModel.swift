@@ -77,6 +77,10 @@ final class SyncModel {
     @ObservationIgnored private var lastQueueIds: [String] = []
     @ObservationIgnored private var wasPlaying = false
     @ObservationIgnored private var timer: Timer?
+    @ObservationIgnored private var lastPublishAt = Date.distantPast
+    @ObservationIgnored private var lastPingAt = Date()
+    /// Set by the app model: no point in retrying while the phone has no network.
+    @ObservationIgnored var isOnline: () -> Bool = { true }
     /// The shared settings blob as the engine holds it (nil until it has been received: until then
     /// nothing is published, or this phone would wipe the other devices' settings).
     @ObservationIgnored private var settingsBlob: [String: String]?
@@ -111,8 +115,20 @@ final class SyncModel {
         wanted = true
         retry = 0
         player.onChange = { [weak self] in self?.publish() }
-        timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
-            if self?.player?.isPlaying == true { self?.publish() }
+        // Other devices extrapolate the position from the last report, so a report every 10 s is enough on screen and every
+        // 30 s in the background (every real change is still sent at once). A packet every 3 s kept the radio awake.
+        timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            let every: TimeInterval = UIApplication.shared.applicationState == .active ? 10 : 30
+            if self.player?.isPlaying == true, Date().timeIntervalSince(self.lastPublishAt) >= every { self.publish() }
+            // A socket that died unnoticed (a Wi-Fi to cellular switch in the background) is found by a ping
+            if self.task != nil, self.status == "online", Date().timeIntervalSince(self.lastPingAt) >= 60 {
+                self.lastPingAt = Date()
+                let t = self.task
+                t?.sendPing { error in
+                    if error != nil, let t { DispatchQueue.main.async { self.closed(t) } }
+                }
+            }
         }
         settingsObserver = NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
             self?.settingsMaybeChanged()
@@ -135,8 +151,15 @@ final class SyncModel {
         remoteStates = [:]
     }
 
+    /// The network is back: connect at once instead of waiting for the retry timer.
+    func reconnectNow() {
+        guard wanted, task == nil else { return }
+        retry = 0
+        open()
+    }
+
     private func open() {
-        guard wanted, let client else { return }
+        guard wanted, task == nil, let client else { return } // one socket at a time
         var comps = URLComponents(url: client.baseURL, resolvingAgainstBaseURL: false)!
         comps.scheme = comps.scheme == "https" ? "wss" : "ws"
         comps.path = "/sync"
@@ -162,7 +185,7 @@ final class SyncModel {
                 if case .string(let text) = message,
                    let data = text.data(using: .utf8),
                    let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                    DispatchQueue.main.async { self.handle(obj) }
+                    DispatchQueue.main.async { if self.task === t { self.handle(obj) } } // not from an old socket
                 }
                 self.receive(t)
             }
@@ -176,9 +199,11 @@ final class SyncModel {
         devices = []
         activeDeviceId = nil
         remoteStates = [:]
-        guard wanted else { return }
+        guard wanted, isOnline() else { return } // offline: the network monitor calls reconnectNow() when it is back
         retry += 1
-        let delay = min(30.0, pow(2.0, Double(retry)))
+        // 2 s doubling to 5 min, with some jitter
+        let base = min(300.0, pow(2.0, Double(retry)))
+        let delay = base + Double.random(in: 0...(base * 0.2))
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.open() }
     }
 
@@ -451,6 +476,7 @@ final class SyncModel {
         guard status == "online", Switch.playback.isOn, let player, !player.queue.isEmpty else { return }
         guard force || player.isPlaying || wasPlaying else { return }
         wasPlaying = player.isPlaying
+        lastPublishAt = Date()
         let ids = player.queue.map { $0.id }
         var state: [String: Any] = [
             "index": player.index, "positionMs": Int(player.position * 1000), "playing": player.isPlaying,

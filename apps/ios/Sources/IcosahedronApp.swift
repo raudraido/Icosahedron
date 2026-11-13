@@ -13,6 +13,7 @@ struct IcosahedronApp: App {
                 .preferredColorScheme(.dark)
                 .task { await app.restore() }
                 .onChange(of: scenePhase) { _, phase in
+                    app.player.setAppActive(phase == .active)
                     if phase == .active { app.flushScrobbles() }
                 }
         }

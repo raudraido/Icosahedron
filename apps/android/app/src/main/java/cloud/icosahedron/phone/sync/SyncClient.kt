@@ -14,6 +14,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import cloud.icosahedron.phone.data.Track
+import cloud.icosahedron.phone.data.Prefs
 import cloud.icosahedron.phone.player.Playback
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -65,7 +66,7 @@ class SyncClient(private val session: Session, private val deviceId: String, pri
     private val scope = CoroutineScope(Dispatchers.Main)
 
     private val main = Handler(Looper.getMainLooper())
-    private val http = OkHttpClient.Builder().pingInterval(25, TimeUnit.SECONDS).build()
+    private val http = OkHttpClient.Builder().pingInterval(60, TimeUnit.SECONDS).build()
     private var ws: WebSocket? = null
     private var wanted = false
     private var retry = 0
@@ -73,16 +74,53 @@ class SyncClient(private val session: Session, private val deviceId: String, pri
     private var wasPlaying = false
     private var lastTick = 0L
 
+    private val cm by lazy { App.instance.getSystemService(android.net.ConnectivityManager::class.java) }
+    private var visible = true
+    private var netWatching = false
+    private val netCallback = object : android.net.ConnectivityManager.NetworkCallback() {
+        // The network is back: connect at once instead of waiting for a timer that polled it blind
+        override fun onAvailable(network: android.net.Network) {
+            main.post { if (wanted && ws == null) { retry = 0; open() } }
+        }
+    }
+    private val idleClose = Runnable {
+        if (!visible && !Playback.isPlaying && !Prefs.syncInBackground) { ws?.close(1000, "idle"); ws = null; status = "off" }
+    }
+
+    /** The app came to the screen or left it. With the setting off, the link is dropped a minute after the app is left while nothing plays. */
+    fun appVisible(v: Boolean) {
+        visible = v
+        main.removeCallbacks(idleClose)
+        if (v) { if (wanted && ws == null) { retry = 0; open() } } else considerIdle()
+    }
+
+    private fun considerIdle() {
+        main.removeCallbacks(idleClose)
+        if (!visible && !Prefs.syncInBackground && !Playback.isPlaying) main.postDelayed(idleClose, 60_000)
+    }
+
     fun start() {
         wanted = true
         retry = 0
-        Playback.onChanged = { main.post { publish(false) } }
+        if (!netWatching) {
+            try { cm.registerDefaultNetworkCallback(netCallback); netWatching = true } catch (_: Exception) { }
+        }
+        Playback.onChanged = {
+            main.post {
+                // Playback starting brings the link back, playback stopping lets it go (when the setting says so)
+                if (wanted && ws == null && (visible || Playback.isPlaying)) { retry = 0; open() }
+                publish(false)
+                considerIdle()
+            }
+        }
         Playback.onTick = { if (Playback.isPlaying && System.currentTimeMillis() - lastTick > 3000) publish(false) }
         open()
     }
 
     fun stop() {
         wanted = false
+        if (netWatching) { try { cm.unregisterNetworkCallback(netCallback) } catch (_: Exception) { }; netWatching = false }
+        main.removeCallbacks(idleClose)
         Playback.onChanged = null
         Playback.onTick = null
         ws?.close(1000, "bye")
@@ -92,6 +130,7 @@ class SyncClient(private val session: Session, private val deviceId: String, pri
 
     private fun open() {
         if (!wanted) return
+        if (!visible && !Playback.isPlaying && !Prefs.syncInBackground) return // battery saver: no link (and no retries) in the background
         val url = session.url.trimEnd('/').replaceFirst(Regex("^http"), "ws") + "/sync"
         status = "connecting"
         ws = http.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
@@ -123,8 +162,12 @@ class SyncClient(private val session: Session, private val deviceId: String, pri
         status = "off"
         // 4003 = bad credentials: do not hammer the engine
         if (!wanted || code == 4003) return
+        // No network: wait for the network callback instead of trying again blind
+        if (cm.activeNetwork == null) return
         retry++
-        main.postDelayed({ open() }, min(30_000L, 1000L shl min(retry, 5)))
+        // 1 s doubling to 5 min, with some jitter so that many devices do not return together
+        val wait = min(300_000L, 1000L shl min(retry, 8))
+        main.postDelayed({ if (ws == null) open() }, wait + (Math.random() * wait * 0.2).toLong())
     }
 
     private fun applyDevices(m: JSONObject) {

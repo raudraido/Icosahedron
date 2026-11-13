@@ -99,7 +99,7 @@ object Playback {
             }
         })
         player.addListener(object : Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) { sync(); onChanged?.invoke() }
+            override fun onIsPlayingChanged(isPlaying: Boolean) { sync(); updateTicker(); onChanged?.invoke() }
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) { sync(); nowPlaying(); prefetchNext(); onChanged?.invoke() }
             override fun onPlaybackStateChanged(playbackState: Int) { sync(); onChanged?.invoke() }
             override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) { sync(); onChanged?.invoke() }
@@ -108,11 +108,29 @@ object Playback {
                 oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int,
             ) { sync() }
         })
-        scope.launch {
-            while (true) {
-                delay(500)
-                if (queue.isNotEmpty()) { sync(); scrobbleWhenDue(); onTick?.invoke(); saveSession() }
+    }
+
+    private var tickJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * The tick (the position on screen, the scrobble, the hub report, the saved position) runs only while a song plays:
+     * twice a second with the app on screen, every 3 s in the background. Paused, nothing wakes the phone; every state
+     * change still comes through the player's listeners.
+     */
+    private fun updateTicker() {
+        if (player.isPlaying) {
+            if (tickJob?.isActive == true) return
+            prefetchNext()
+            tickJob = scope.launch {
+                while (true) {
+                    if (queue.isNotEmpty()) { sync(); scrobbleWhenDue(); onTick?.invoke(); saveSession() }
+                    delay(if (cloud.icosahedron.phone.App.instance.foreground) 500 else 3000)
+                }
             }
+        } else {
+            tickJob?.cancel()
+            tickJob = null
+            if (queue.isNotEmpty() && !player.playWhenReady) saveSession(force = true) // paused: the position where it stopped (not for every buffering)
         }
     }
 
@@ -142,6 +160,7 @@ object Playback {
 
     /** Fetches the next song into the cache while this one plays. */
     private fun prefetchNext() {
+        if (!player.playWhenReady) return // nothing plays (the saved queue was only restored): do not fetch anything
         val next = queue.getOrNull(index + 1)
         Offline.prefetch(next, next?.takeIf { it.directUrl == null }?.let { client?.streamUrl(it.id) })
     }
@@ -273,12 +292,13 @@ object Playback {
     private var lastSig = ""
     private var lastSave = 0L
 
-    private fun saveSession() {
+    private fun saveSession(force: Boolean = false) {
         val q = queue
         if (q.isEmpty()) return
         val sig = q.size.toString() + q.first().id + q.last().id + index + (current?.id ?: "")
         val now = System.currentTimeMillis()
-        if (sig == lastSig && now - lastSave < 15_000) return
+        // Written when the queue or the song changed, when playback stops, and every 30 s while a song plays (for the position)
+        if (!force && sig == lastSig && (!isPlaying || now - lastSave < 30_000)) return
         lastSig = sig; lastSave = now
         val idx = index; val pos = positionMs; val user = client?.user
         scope.launch(Dispatchers.IO) {

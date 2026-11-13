@@ -2,6 +2,16 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
+## Unreleased
+
+- **Much lighter on the battery:**
+  - The app no longer wakes twice a second all the time. The play position, the scrobble and the report to the sync server now run only while a song plays (every 3 s with the app in the background); when paused, nothing runs.
+  - The saved queue is written only when it changes, when you pause, and every 30 s while playing (it used to be rewritten every 15 s even when nothing happened).
+  - The next song is fetched only while playing, not each time the app starts with a saved queue.
+  - The link to the sync server pings every 60 s instead of 25 s, reconnects at once when the network returns instead of trying blind every 30 s, and backs off up to 5 minutes when the server is away.
+  - Remote-control ticking stops when the app is not on the screen.
+- **Settings → Sync Server → Stay connected in the background** (on by default): switch it off to drop the link a minute after you leave the app while nothing plays. Then sign-in requests and control from other devices only reach the phone when the app is open or playing.
+
 ## 0.1.30
 - **Settings → About → Privacy policy** opens the privacy policy (Google Play wants the link inside the app).
 

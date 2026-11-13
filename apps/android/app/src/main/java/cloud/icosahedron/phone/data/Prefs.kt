@@ -17,6 +17,10 @@ object Prefs {
     var cacheLimitMb: Int
         get() = p.getInt("cacheLimitMb", 1024)
         set(v) { p.edit().putInt("cacheLimitMb", v).apply() }
+    /** Stay connected to the sync server with the app in the background (sign-in requests, control from other devices). */
+    var syncInBackground: Boolean
+        get() = p.getBoolean("syncInBackground", true)
+        set(v) { p.edit().putBoolean("syncInBackground", v).apply() }
     var cacheOnCellular: Boolean
         get() = p.getBoolean("cacheOnCellular", false)
         set(v) { p.edit().putBoolean("cacheOnCellular", v).apply() }

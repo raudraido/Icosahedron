@@ -107,7 +107,17 @@ fun MainScreen() {
     var showPlayer by remember { mutableStateOf(false) }
 
     LaunchedEffect(client) { cloud.icosahedron.phone.data.Avatar.refresh(client) }
-    LaunchedEffect(Control.remote) { while (Control.remote) { delay(500); Control.tick = System.currentTimeMillis() } }
+    // The remote device's position moves on the screen; no need to tick while the app is not on it
+    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    var onScreen by remember { mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) }
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val o = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_START) onScreen = true else if (e == androidx.lifecycle.Lifecycle.Event.ON_STOP) onScreen = false
+        }
+        lifecycleOwner.lifecycle.addObserver(o)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(o) }
+    }
+    LaunchedEffect(Control.remote, onScreen) { while (Control.remote && onScreen) { delay(500); Control.tick = System.currentTimeMillis() } }
 
     val opener = remember {
         object : Opener {

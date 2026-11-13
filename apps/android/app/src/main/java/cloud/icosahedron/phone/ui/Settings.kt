@@ -161,6 +161,9 @@ private fun SyncPage() {
         item {
             Header("Connection")
             Row { Text("Status", Modifier.weight(1f)); Text(sync.status, color = Dim) }
+            var background by remember { mutableStateOf(Prefs.syncInBackground) }
+            ToggleRow("Stay connected in the background", background) { background = it; Prefs.syncInBackground = it }
+            Note("On: sign-in requests and control from your other devices reach this phone even when the app is closed (a small cost in battery). Off: the link is dropped a minute after you leave the app while nothing plays, and comes back when you open it or play.")
             Note("The sync server is the address you signed in with. To use a different one, sign out and sign in with it.")
             if (sync.status == "online") {
                 Header("This phone")

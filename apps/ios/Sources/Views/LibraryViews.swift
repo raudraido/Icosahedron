@@ -69,7 +69,6 @@ struct LibraryView: View {
             .navigationTitle("Library")
             .navigationDestination(for: LibrarySection.self) { destination($0) }
             .libraryDestinations()
-            .profileButton()
         }
     }
 

@@ -260,9 +260,6 @@ struct TrackListScreen: View {
 }
 
 extension View {
-    /// Top-left account button (opens settings / devices) for the main tabs.
-    func profileButton() -> some View { modifier(ProfileButton()) }
-
     /// The navigation targets every tab shares.
     func libraryDestinations() -> some View {
         navigationDestination(for: Album.self) { AlbumDetailView(album: $0) }
@@ -274,16 +271,3 @@ extension View {
     }
 }
 
-struct ProfileButton: ViewModifier {
-    @State private var show = false
-
-    func body(content: Content) -> some View {
-        content
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { show = true } label: { AvatarView(size: 30) }
-                }
-            }
-            .sheet(isPresented: $show) { SettingsView() }
-    }
-}

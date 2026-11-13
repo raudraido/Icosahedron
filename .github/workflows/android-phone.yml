@@ -65,6 +65,29 @@ jobs:
           ls -la "$APK"
           cp "$APK" "Icosahedron-Android-$VERSION.apk"
 
+      # The Android App Bundle for Google Play, signed with the *upload key* (a different key from the APK's:
+      # Google signs what users get). Only when the PLAY_UPLOAD_* secrets exist; see docs/google-play.md.
+      - name: Play bundle (when the upload key exists)
+        working-directory: apps/android
+        env:
+          UPLOAD_B64: ${{ secrets.PLAY_UPLOAD_KEYSTORE_BASE64 }}
+          UPLOAD_PASSWORD: ${{ secrets.PLAY_UPLOAD_KEYSTORE_PASSWORD }}
+          UPLOAD_ALIAS: ${{ secrets.PLAY_UPLOAD_KEY_ALIAS }}
+          UPLOAD_KEY_PASSWORD: ${{ secrets.PLAY_UPLOAD_KEY_PASSWORD }}
+        run: |
+          if [ -z "$UPLOAD_B64" ]; then echo "No upload key: skipping the Play bundle"; exit 0; fi
+          echo "$UPLOAD_B64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/upload.jks" ANDROID_KEYSTORE_PASSWORD="$UPLOAD_PASSWORD" \
+          ANDROID_KEY_ALIAS="$UPLOAD_ALIAS" ANDROID_KEY_PASSWORD="$UPLOAD_KEY_PASSWORD" \
+            gradle --no-daemon :app:bundleRelease -PversionName="$VERSION" -PversionCode="$VERSION_CODE"
+          cp app/build/outputs/bundle/release/app-release.aab "Icosahedron-Android-$VERSION.aab"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: Icosahedron-Android-aab
+          path: apps/android/Icosahedron-Android-*.aab
+          if-no-files-found: ignore
+
       - uses: actions/upload-artifact@v5
         with:
           name: Icosahedron-Android-apk

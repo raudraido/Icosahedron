@@ -52,10 +52,4 @@ Without a car: install the **Android Auto Desktop Head Unit** (Android Studio â†
 
 ## Google Play (not published yet)
 
-The app is installed from a GitHub release for now. What publishing needs (checked 2026-11, confirm in the Play Console):
-
-- A **Play Console account** (25 USD once). An organization account needs a **D-U-N-S number** and a verified website; a personal account made after 2023 must first run a **closed test with at least 12 testers for 14 days**. The account declares its **trader status** (an organization is a trader under the EU rules).
-- An **Android App Bundle** (`.aab`) instead of the APK, and **Play App Signing**: Google signs the store version, so it is signed differently from the GitHub APK (a user has to uninstall one to install the other).
-- A **target API level** that meets Google's yearly requirement (the app targets 35; check what is asked now).
-- The store listing: icon, feature graphic, screenshots, descriptions, a **privacy policy URL**, the Data safety form, the content rating, and the declaration for the media-playback foreground service.
-- **Test access for the reviewers:** the app is useless without a Navidrome server, so a demo server and account must be given in the *App access* form.
+The app is installed from a GitHub release for now. The plan, the upload key, the store texts, the forms and the demo server for the reviewers are in [google-play.md](google-play.md); the privacy policy is [privacy.md](privacy.md). The Play version is signed differently from the GitHub APK (a user has to uninstall one to install the other).

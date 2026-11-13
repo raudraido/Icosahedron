@@ -40,11 +40,13 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         App.instance.foreground = true
+        App.instance.sync?.appVisible(true)
         App.instance.sync?.refreshApprovals()
     }
 
     override fun onStop() {
         App.instance.foreground = false
+        App.instance.sync?.appVisible(false)
         super.onStop()
     }
 }

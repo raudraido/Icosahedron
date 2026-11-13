@@ -13,13 +13,7 @@ struct CoverImage: View {
         Theme.card
             .overlay {
                 if let url = app.client?.coverURL(id, size: size) {
-                    AsyncImage(url: url) { phase in
-                        if let image = phase.image {
-                            image.resizable().scaledToFill()
-                        } else {
-                            placeholder
-                        }
-                    }
+                    CachedImage(url: url) { placeholder }
                 } else {
                     placeholder
                 }
@@ -30,6 +24,36 @@ struct CoverImage: View {
 
     private var placeholder: some View {
         Image(systemName: "music.note").font(.title2).foregroundStyle(.secondary)
+    }
+}
+
+/// A picture from a web address that is kept in memory: a view that is built again (a tab change, the mini
+/// player) shows it at once instead of going blank and loading it a second time.
+enum ImageMemory {
+    static let cache = NSCache<NSString, UIImage>()
+}
+
+struct CachedImage<Placeholder: View>: View {
+    private var cache: NSCache<NSString, UIImage> { ImageMemory.cache }
+    let url: URL
+    @ViewBuilder var placeholder: () -> Placeholder
+    @State private var loaded: UIImage?
+
+    var body: some View {
+        Group {
+            if let img = loaded ?? cache.object(forKey: url.absoluteString as NSString) {
+                Image(uiImage: img).resizable().scaledToFill()
+            } else {
+                placeholder()
+            }
+        }
+        .task(id: url) {
+            let key = url.absoluteString as NSString
+            if cache.object(forKey: key) != nil { return }
+            guard let (data, _) = try? await URLSession.shared.data(from: url), let img = UIImage(data: data) else { return }
+            cache.setObject(img, forKey: key)
+            loaded = img
+        }
     }
 }
 

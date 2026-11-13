@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.1
+
+**Works with server 0.18.x.**
+
+- **Fixed: a Last.fm connection that is kept on the sync server looked lost after every restart of the desktop app** (Settings → Last.fm showed "Connect" again, and the plays of the first half minute were not scrobbled). At start the app asked the sync server about Last.fm before it had finished signing in, took the missing answer for "no connection" and kept that for 30 seconds. It now does not keep an answer it could not get, and it asks again as soon as the sign-in at start has finished. Nothing was lost on the server: the connection was there all along.
+
 ## 0.18.0
 
 **Works with server 0.17.x** (Navidrome's own plugin API, through the sync server).

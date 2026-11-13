@@ -44,7 +44,11 @@ export function withEngineLastFm(base: Platform): Platform {
     if (cache && Date.now() - cache.at < TTL_MS) return cache.value;
     let value: EngineState | null = null;
     const cfg = await engine("/lastfm/config");
-    if (cfg?.ok) {
+    // No answer at all (the app is still signing in at start, or the engine is down): do not keep that
+    // for the cache's lifetime, or a connection that lives on the engine looks lost for 30 seconds
+    // after every start and the plays in that time are not scrobbled.
+    if (!cfg) return null;
+    if (cfg.ok) {
       const c = await cfg.json().catch(() => null);
       if (c?.configured) {
         const r = await engine("/lastfm/connection");

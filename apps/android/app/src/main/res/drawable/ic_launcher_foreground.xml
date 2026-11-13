@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 108 dp layer, 72 dp of it visible (66 dp safe in a circle): the logo (460 x 436, white lines instead of holes so it looks the same on any wallpaper) is 62 dp wide, so its
-     points stay inside any mask and are not cut. -->
+<!-- The real logo (public/img/icon.png, the same file the app shows), unchanged and on a transparent background.
+     108 dp layer, 72 dp of it visible (66 dp safe inside a circle): the logo (460 x436) is 62 dp wide, so none of
+     its corners is cut by a round launcher. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:width="62dp" android:height="58.8dp" android:gravity="center">
-        <bitmap android:gravity="fill" android:src="@drawable/logo_launcher" />
+        <bitmap android:gravity="fill" android:src="@drawable/logo" />
     </item>
 </layer-list>

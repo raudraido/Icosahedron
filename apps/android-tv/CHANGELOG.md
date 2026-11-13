@@ -4,7 +4,7 @@ A native app (Kotlin, Jetpack Compose for TV, Media3) for Google TV and Android 
 
 ## Unreleased
 
-- **The app icon looks the same on any background:** the lines between the triangles are white (they were holes) and the logo is a little smaller, so no corner is cut.
+- **The app icon is the real logo,** a little smaller so that none of its corners is cut: a transparent background and the same logo file the app shows, with no circle or plate behind it.
 
 ## 0.2.1
 - **The app icon is the bare logo:** a transparent background, no circle or plate behind it, as big as the visible area allows.

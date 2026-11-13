@@ -4,7 +4,7 @@ A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, b
 
 ## Unreleased
 
-- **The launcher icon looks the same on any wallpaper:** the lines between the triangles were holes, so on a dark wallpaper they showed up black. They are white now, and the logo is a little smaller so that none of its corners is cut by a round launcher.
+- **The launcher icon is the real logo,** a little smaller so that none of its corners is cut by a round launcher: a transparent background and the same logo file the app shows (the lines between the triangles are see-through, as in the app). It used to be a plain picture that the launcher put on a small white circle.
 
 ## 0.1.28
 - A new build with no changes in the app.

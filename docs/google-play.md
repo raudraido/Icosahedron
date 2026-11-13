@@ -80,7 +80,7 @@ Graphics:
 | Item | Size |
 |---|---|
 | App icon | 512 × 512 PNG, 32-bit, up to 1 MB: [apps/android/store/play-icon-512.png](../apps/android/store/play-icon-512.png), the bare logo on a transparent background (no plate, no rounded corners of its own) |
-| Feature graphic | 1024 × 500 PNG or JPG |
+| Feature graphic | 1024 × 500 PNG or JPG: [apps/android/store/feature-graphic-1024x500.png](../apps/android/store/feature-graphic-1024x500.png) (the real logo and the name on the app's dark background; no transparency is allowed here) |
 | Phone screenshots | at least 2, up to 8, 16:9 or 9:16, 320–3840 px on a side. Suggested: Home, Library, Album, Now Playing, Devices, Downloads |
 | 7" and 10" tablet screenshots | recommended (the wide layout) |
 

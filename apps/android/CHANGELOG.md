@@ -2,6 +2,10 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
+## Unreleased
+
+- **The launcher icon is the bare logo:** a transparent background, no white circle or plate behind it, and the logo as big as the visible area allows (it used to be a plain picture that the launcher put on a small white circle).
+
 ## 0.1.26
 - The app now targets **Android 16 (API 36)**, which Google Play requires for new apps. Nothing is changed for you; it plays, browses and works with Android Auto as before.
 

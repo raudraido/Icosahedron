@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The launcher icon is the bare logo: a transparent background (no plate, no circle) and the logo as big as the
+     visible area allows. The launcher's mask (circle, squircle, ...) only trims what is outside the logo. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@android:color/transparent" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>

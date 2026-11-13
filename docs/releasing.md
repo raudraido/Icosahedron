@@ -12,25 +12,33 @@ Every product has its own version, tag, changelog and release. Nothing forces th
 
 The web app has no number of its own: it is built into the server image, so it carries the server's version (Settings → System → About shows it). Which versions work together is described by protocol numbers, not version numbers: see [compatibility.md](compatibility.md).
 
-## Steps (any product)
+## Branches and pull requests
 
-1. Create a branch, make the changes, and open a PR to `master`.
-2. Bump that product's version:
+- **One branch per change**, named `<area>/<short-description>`: `desktop/`, `server/`, `ios/`, `android/` (phone), `android-tv/`, `docs/`, `ci/`. Examples: `android/rail-player`, `ios/carplay`, `docs/releasing`.
+- Open a PR to `master`, wait for CI, **squash-merge**. The branch is deleted by GitHub when the PR is merged (*Automatically delete head branches* is on), so there is nothing to clean up. Do not push more commits to a branch after its PR was merged; start a new branch from `master`.
+- **A PR does not bump a version and does not tag.** It adds a line about what changed to the product's changelog under `## Unreleased` (create the heading at the top if it is not there). Several PRs can then run side by side without fighting over the version number.
+- The text under `## Unreleased` is what the people who read the release will see, so write it for them.
 
-   ```bash
-   node scripts/bump-version.mjs <desktop|server|ios|android|android-phone> X.Y.Z
-   ```
+## Releasing (any product)
 
-   It updates the product's version file(s) and prints the tag to use.
-3. Add a `## X.Y.Z` section to the product's changelog. **Its text becomes the text of the GitHub release** (`scripts/release-notes.mjs` cuts it out), so write it for the people who read the release.
-4. Merge the PR.
-5. Tag the merge commit and push the tag (the tag must equal the version, the workflow checks it):
+One button: **Actions → Release → Run workflow** on `master`. Pick the product and the version (`patch`, `minor`, `major` or an exact `X.Y.Z`).
 
-   ```bash
-   git tag server-v0.17.0 && git push origin server-v0.17.0
-   ```
+The workflow ([release.yml](../.github/workflows/release.yml)) then:
+
+1. bumps the product's version file(s) (`scripts/bump-version.mjs`),
+2. renames `## Unreleased` in the changelog to `## X.Y.Z` (it stops if there is no such section),
+3. commits that to `master` and pushes the tag,
+4. starts the product's build workflow on the tag, which builds and publishes the release.
+
+By hand it is the same: `node scripts/bump-version.mjs <product> patch`, commit, `git tag <tag>`, push both.
+
+**How often:** not for every small change. Every merge to `master` already builds the apps (the artifacts are in the Actions run), so a release is for when there is something worth installing: a finished feature, a fix people wait for, or a set of small changes. Versions: `patch` for fixes and small changes, `minor` for a feature, `major` when something stops working with older parts ([compatibility.md](compatibility.md)). The Android phone app stays `0.1.x` (only the last number grows) and its releases are marked **pre-release** until it is on Google Play.
+
+Release checklist: [compatibility.md](compatibility.md) lists the current versions; update it when a release changes which versions work together.
 
 ## What a tag does
+
+The Release workflow pushes the tag and starts these itself (a push made with the built-in token does not start other workflows). A tag pushed by hand starts them as usual.
 
 | Tag | Workflow | Result |
 |---|---|---|
@@ -38,7 +46,7 @@ The web app has no number of its own: it is built into the server image, so it c
 | `server-vX.Y.Z` | `server.yml` | Runs the engine's tests, publishes the Docker image as `X.Y.Z`, `X.Y` and `latest`, and creates the release with the changelog text |
 | `ios-vX.Y.Z` | `ios.yml` | Builds the unsigned `.ipa` and publishes it as a release |
 | `android-vX.Y.Z` | `android.yml` | Builds the `.apk` and publishes it as a release |
-| `android-phone-vX.Y.Z` | `android-phone.yml` | Builds the phone `.apk` and publishes it as a release |
+| `android-phone-vX.Y.Z` | `android-phone.yml` | Builds the phone `.apk` and publishes it as a **pre-release** |
 
 ## Without releasing
 

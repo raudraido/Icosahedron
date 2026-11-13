@@ -1,0 +1,80 @@
+name: Release
+
+# One button for every product: Actions -> Release -> Run workflow.
+# It bumps the product's version, turns the changelog's "## Unreleased" section into
+# "## X.Y.Z", commits that to master, tags it and starts the product's build workflow,
+# which publishes the GitHub release. See docs/releasing.md.
+on:
+  workflow_dispatch:
+    inputs:
+      product:
+        description: Product to release
+        type: choice
+        required: true
+        options: [desktop, server, ios, android-phone, android]
+      version:
+        description: "patch, minor, major or an exact X.Y.Z"
+        type: string
+        default: patch
+        required: true
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency: release   # one release at a time, so two never bump master together
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Bump the version and name the changelog section
+        id: bump
+        run: node scripts/bump-version.mjs "${{ inputs.product }}" "${{ inputs.version }}"
+
+      - name: The changelog must have something to say
+        run: |
+          if [ "${{ steps.bump.outputs.has_notes }}" != "true" ]; then
+            echo "::error::${{ steps.bump.outputs.changelog }} has no '## Unreleased' section. Add what changed under it (merge it to master) and run this again."
+            exit 1
+          fi
+          node scripts/release-notes.mjs "${{ steps.bump.outputs.changelog }}" "${{ steps.bump.outputs.version }}" > /dev/null
+
+      - name: Commit, tag, push
+        env:
+          TAG: ${{ steps.bump.outputs.tag }}
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: |
+          if git rev-parse "$TAG" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "$TAG" >/dev/null 2>&1; then
+            echo "::error::Tag $TAG already exists"; exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Release ${{ inputs.product }} $VERSION"
+          git tag "$TAG"
+          git push origin master "$TAG"
+
+      # Pushes made with the built-in token do not start other workflows, so start the build here.
+      - name: Start the build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.bump.outputs.tag }}
+        run: |
+          case "${{ inputs.product }}" in
+            desktop) wf=build.yml ;;
+            server) wf=server.yml ;;
+            ios) wf=ios.yml ;;
+            android-phone) wf=android-phone.yml ;;
+            android) wf=android.yml ;;
+          esac
+          gh workflow run "$wf" --ref "$TAG"
+          echo "Released ${{ inputs.product }} ${{ steps.bump.outputs.version }} as $TAG; the build ($wf) was started." >> "$GITHUB_STEP_SUMMARY"

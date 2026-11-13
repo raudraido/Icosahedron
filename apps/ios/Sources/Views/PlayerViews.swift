@@ -123,22 +123,41 @@ struct NowPlayingView: View {
         }
     }
 
+    // MARK: Closing
+
+    /// Pull down to close. The system's own dismissal only starts for a quick, straight pull and gives way to
+    /// anything under the finger, so this one is ours: a pull of about 90 pt (or a quick flick) that is mostly
+    /// downward always closes. It is put on the header, the cover and the title, not on the seek bar, the
+    /// buttons or the scrolling lists.
+    private var closeGesture: some Gesture {
+        DragGesture(minimumDistance: 16)
+            .onEnded { v in
+                let down = v.translation.height, side = abs(v.translation.width)
+                guard down > 0, down > side * 1.2 else { return }
+                if down > 90 || (down > 30 && v.predictedEndTranslation.height > 260) { dismiss() }
+            }
+    }
+
     // MARK: Layouts
 
     /// Portrait: everything in one column; the cover shrinks to the corner for info/lyrics.
     private func narrowLayout(_ s: NowPlayingSource) -> some View {
         VStack(spacing: 14) {
-            header(s)
+            header(s).contentShape(Rectangle()).simultaneousGesture(closeGesture)
             if showQueue {
                 QueueView()
             } else if showInfo, s.current != nil {
-                infoHeader(s)
+                infoHeader(s).contentShape(Rectangle()).simultaneousGesture(closeGesture)
                 InfoTabs(track: s.current)
             } else {
-                Spacer(minLength: 0)
-                artwork(s)
-                Spacer(minLength: 0)
-                titleRow(s)
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    artwork(s)
+                    Spacer(minLength: 0)
+                    titleRow(s)
+                }
+                .contentShape(Rectangle())
+                .simultaneousGesture(closeGesture)
             }
             progress(s)
             controls(s)
@@ -156,8 +175,10 @@ struct NowPlayingView: View {
                 Spacer(minLength: 0)
             }
             .frame(width: side)
+            .contentShape(Rectangle())
+            .simultaneousGesture(closeGesture)
             VStack(spacing: 12) {
-                header(s)
+                header(s).contentShape(Rectangle()).simultaneousGesture(closeGesture)
                 if showQueue {
                     QueueView()
                 } else if showInfo, s.current != nil {

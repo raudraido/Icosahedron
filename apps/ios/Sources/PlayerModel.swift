@@ -157,6 +157,12 @@ final class PlayerModel {
         }
     }
 
+    /// The position read from the player itself (the published `position` moves twice a second, too coarse for the words of a karaoke line).
+    func livePosition() -> Double {
+        let t = player.currentTime().seconds
+        return t.isFinite ? t : position
+    }
+
     func resume() {
         guard current != nil else { return }
         activateSession()

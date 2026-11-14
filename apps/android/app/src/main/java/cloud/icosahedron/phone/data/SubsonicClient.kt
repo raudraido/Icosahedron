@@ -94,11 +94,26 @@ class SubsonicClient(val baseUrl: String, val user: String, val salt: String, va
      * one, else the plain one. Empty when the server has none or does not support it.
      */
     suspend fun lyrics(id: String): List<LyricLine> {
-        val lists = call("getLyricsBySongId", "id" to id).optJSONObject("lyricsList")?.objs("structuredLyrics") ?: return emptyList()
-        val pick = lists.firstOrNull { it.optBoolean("synced") } ?: lists.firstOrNull() ?: return emptyList()
+        // enhanced=true: Navidrome 0.63+ then also sends the words' own times (cueLine) when the song has a karaoke lyrics file
+        val lists = call("getLyricsBySongId", "id" to id, "enhanced" to "true").optJSONObject("lyricsList")?.objs("structuredLyrics") ?: return emptyList()
+        // The main track: a server may also send a translation or a pronunciation as separate entries
+        val pick = lists.firstOrNull { it.optBoolean("synced") && (it.str("kind") ?: "main") == "main" }
+            ?: lists.firstOrNull { it.optBoolean("synced") } ?: lists.firstOrNull() ?: return emptyList()
         val synced = pick.optBoolean("synced")
         val offset = pick.optLong("offset", 0)
-        return pick.objs("line").map { LyricLine(if (synced) it.optLong("start") + offset else null, it.optString("value")) }
+        // The words of each line: only the main voice (a duet's other voice and the backing vocals are left out)
+        val agents = pick.objs("agents")
+        val main = agents.firstOrNull { it.str("role") == "main" }?.str("id")
+        val wordsByLine = HashMap<Int, List<LyricWord>>()
+        if (synced) for (cl in pick.objs("cueLine")) {
+            val agent = cl.str("agentId")
+            if (agents.isNotEmpty() && main != null && agent != null && agent != main) continue
+            val i = cl.optInt("index", -1)
+            if (i < 0 || i in wordsByLine) continue
+            val words = cl.objs("cue").map { c -> LyricWord(c.optString("value"), c.optLong("start") + offset, if (c.has("end") && !c.isNull("end")) c.optLong("end") + offset else null) }
+            if (words.isNotEmpty()) wordsByLine[i] = words
+        }
+        return pick.objs("line").mapIndexed { i, l -> LyricLine(if (synced) l.optLong("start") + offset else null, l.optString("value"), wordsByLine[i]) }
     }
 
     suspend fun albums(type: String, size: Int = 40, offset: Int = 0, genre: String? = null, fromYear: Int? = null, toYear: Int? = null): List<Album> =

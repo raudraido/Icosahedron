@@ -1,9 +1,19 @@
 import Foundation
 
+/// One word (or syllable) of a line with its own timing: the server's karaoke lyrics, when the song has them.
+struct LyricsWord: Hashable {
+    var text: String
+    /// Seconds into the track.
+    var start: Double
+    var end: Double?
+}
+
 struct LyricsLine: Hashable {
     /// Start time in seconds; nil for unsynced lyrics.
     var time: Double?
     var text: String
+    /// The words with their own times, when the server has karaoke lyrics for the song.
+    var words: [LyricsWord]?
 }
 
 enum LyricsParser {

@@ -179,7 +179,7 @@ struct NowPlayingView: View {
         case .lyrics:
             LyricsView(track: s.current)
         case .info where s.current != nil:
-            InfoPanel(track: s.current)
+            InfoPanel(track: s.current, onBack: { show(.info) })
         default:
             VStack(spacing: 0) {
                 Spacer(minLength: 0)

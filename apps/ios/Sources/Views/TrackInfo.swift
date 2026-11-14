@@ -5,6 +5,8 @@ import SwiftUI
 struct InfoPanel: View {
     @Environment(AppModel.self) private var app
     let track: Track?
+    /// Back to the big cover: a tap on the small cover at the top, or anywhere on the panel that is not a button.
+    var onBack: (() -> Void)?
     @State private var detail: Track?
     @State private var bpm: Double?
 
@@ -13,6 +15,14 @@ struct InfoPanel: View {
         ScrollView {
             if let t {
                 VStack(spacing: 14) {
+                    if let onBack {
+                        CoverImage(id: t.coverArt, size: 300)
+                            .frame(width: 110, height: 110)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .onTapGesture(perform: onBack)
+                            .accessibilityLabel("Back to the cover")
+                            .accessibilityAddTraits(.isButton)
+                    }
                     card {
                         row("Title", t.title)
                         if let a = Artist(track: t) {
@@ -48,6 +58,8 @@ struct InfoPanel: View {
                     }
                 }
                 .padding(.vertical, 4)
+                .contentShape(Rectangle())
+                .onTapGesture { onBack?() }
             }
         }
         .scrollIndicators(.hidden)

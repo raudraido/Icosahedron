@@ -2,6 +2,10 @@
 
 A native SwiftUI app for iPhone and iPad (iOS 26.1 or later), built as an unsigned `.ipa` (sign it with SideStore, AltStore, Sideloadly or iloader: [docs/ios.md](../../docs/ios.md)). It has been part of the shared releases 0.15.3 to 0.15.9 (see the [main changelog](../../CHANGELOG.md)); from here it has its **own version, release and changelog**. What works with which server: [docs/compatibility.md](../../docs/compatibility.md).
 
+## Unreleased
+
+- **Back from the song's details:** in the details of the playing song (a tap on the cover opens them) a tap on the small cover at the top, or anywhere on the panel that is not a link (Artist, Album), goes back to the big cover. It was missing on the iPhone since the new layout.
+
 ## 0.2.13
 - **Lyrics word by word:** when the song has karaoke lyrics on the server (Navidrome 0.63+ with a TTML or enhanced-LRC lyrics file), the sung line is drawn word by word, like on the desktop: the words already sung are white, the one being sung is in the accent colour, the rest is dim. It checks the position 10 times a second, only while the lyrics are on the screen and the sung line has timed words; every other song (and the LRCLIB lyrics, which only have lines) works as before.
 

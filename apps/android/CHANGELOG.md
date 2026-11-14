@@ -2,6 +2,11 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
+## Unreleased
+
+- **Songs is a real page now:** a search box, quick views (**All, Recently added, Most played, Never played, Favorites, Random**), **Sort** (title, artist, album, year, date added, play count, length, BPM, random; the direction can be flipped) and **Filter** (favorites, never played, decades, BPM ranges such as 170–180, genres). The rows show the artist and the album, and at the right the value you sort by (plays, year, BPM, date). **Play** and **Shuffle** work on what the filter shows, and the count is exact. The server does the work (Navidrome's own API), a page at a time, so a library of tens of thousands of songs needs nothing stored on the phone.
+- **The password, once, when the server is not the Icosahedron server:** Navidrome's own API cannot take the saved token, so the page asks for the account password once. It is kept encrypted in the Android Keystore and used only to sign in to that API; signing out removes it. With the Icosahedron server nothing is asked. If the server's own API cannot be reached, Songs stays the plain list.
+
 ## 0.1.31
 - **Much lighter on the battery:**
   - The app no longer wakes twice a second all the time. The play position, the scrobble and the report to the sync server now run only while a song plays (every 3 s with the app in the background); when paused, nothing runs.

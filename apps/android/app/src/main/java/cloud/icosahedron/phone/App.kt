@@ -58,6 +58,7 @@ class App : Application() {
         sync = null
         Playback.stop()
         Playback.clearSaved()
+        cloud.icosahedron.phone.data.SecretStore.clear()
         cloud.icosahedron.phone.data.Avatar.clear()
         Playback.client = null
         store.clear()

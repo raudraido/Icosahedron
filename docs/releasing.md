@@ -17,7 +17,7 @@ The web app has no number of its own: it is built into the server image, so it c
 - **One branch per change**, named `<area>/<short-description>`: `desktop/`, `server/`, `ios/`, `android/` (phone), `android-tv/`, `docs/`, `ci/`. Examples: `android/rail-player`, `ios/carplay`, `docs/releasing`.
 - Open a PR to `master`, wait for CI, **squash-merge**. The branch is deleted by GitHub when the PR is merged (*Automatically delete head branches* is on), so there is nothing to clean up. Do not push more commits to a branch after its PR was merged; start a new branch from `master`.
 - **A PR does not bump a version and does not tag.** It adds a line about what changed to the product's changelog under `## Unreleased` (create the heading at the top if it is not there). Several PRs can then run side by side without fighting over the version number.
-- The text under `## Unreleased` is what the people who read the release will see, so write it for them.
+- The text under `## Unreleased` is what the people who read the release will see, so write it for them. Add to the `## Unreleased` heading that is already there; if two PRs each add one, the release joins them into one.
 
 ## Releasing (any product)
 

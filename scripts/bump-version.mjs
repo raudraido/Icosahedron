@@ -55,7 +55,26 @@ if (p.file) {
 const changelog = path.join(root, p.changelog);
 let renamed = false;
 if (existsSync(changelog)) {
-  const text = readFileSync(changelog, "utf8");
+  let text = readFileSync(changelog, "utf8");
+  // Two PRs can each add an "## Unreleased" heading: join them into the first one, so that nothing is left behind
+  // when the first is given its number (the others would stay as a stray section between two releases).
+  const lines = text.split("\n");
+  const heads = lines.map((l, i) => (/^## Unreleased\s*$/.test(l) ? i : -1)).filter((i) => i >= 0);
+  if (heads.length > 1) {
+    const bodies = [];
+    const kept = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (heads.includes(i)) {
+        let j = i + 1;
+        while (j < lines.length && !/^## /.test(lines[j])) j++;
+        bodies.push(lines.slice(i + 1, j).join("\n").trim());
+        if (i === heads[0]) kept.push("## Unreleased", "", "@@UNRELEASED@@", "");
+        i = j - 1;
+      } else kept.push(lines[i]);
+    }
+    text = kept.join("\n").replace("@@UNRELEASED@@", bodies.filter(Boolean).join("\n\n"));
+    console.log(`${p.changelog}: joined ${heads.length} "Unreleased" sections`);
+  }
   if (/^## Unreleased\s*$/m.test(text)) {
     writeFileSync(changelog, text.replace(/^## Unreleased\s*$/m, `## ${version}`));
     renamed = true;

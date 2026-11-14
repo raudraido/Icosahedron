@@ -41,6 +41,8 @@ enum SongSort: String, CaseIterable, Identifiable {
 enum SongFilter: Hashable {
     case all, favorites, unplayed
     case genre(id: String, name: String)
+    /// Every song the artist is on, with the compilations and the guest appearances.
+    case artist(id: String, name: String)
     case decade(from: Int, to: Int, label: String)
     case bpm(from: Int, to: Int?, label: String)
 
@@ -50,6 +52,7 @@ enum SongFilter: Hashable {
         case .favorites: return "fav"
         case .unplayed: return "unplayed"
         case .genre(let id, _): return "g:\(id)"
+        case .artist(let id, _): return "a:\(id)"
         case .decade(let f, let t, _): return "y:\(f)-\(t)"
         case .bpm(let f, let t, _): return "b:\(f)-\(t.map(String.init) ?? "")"
         }
@@ -60,7 +63,7 @@ enum SongFilter: Hashable {
         case .all: return String(localized: "All songs")
         case .favorites: return String(localized: "Favorites")
         case .unplayed: return String(localized: "Never played")
-        case .genre(_, let name): return name
+        case .genre(_, let name), .artist(_, let name): return name
         case .decade(_, _, let l), .bpm(_, _, let l): return l
         }
     }
@@ -165,6 +168,7 @@ final class NativeAPI {
         if !s.isEmpty { out.append(URLQueryItem(name: "title", value: s)) } // Navidrome matches it against the title, the artist and the album
         switch q.filter {
         case .genre(let id, _): out.append(URLQueryItem(name: "genre_id", value: id))
+        case .artist(let id, _): out.append(URLQueryItem(name: "artist_id", value: id))
         case .favorites: out.append(URLQueryItem(name: "starred", value: "true"))
         default: break
         }
@@ -202,6 +206,40 @@ final class NativeAPI {
         let from = try await firstWhere { $0 >= r.min }
         let to = r.max == nil ? total : try await firstWhere { $0 > r.max! }
         return (from, to)
+    }
+
+    /// Every album the artist is on as Navidrome counts it (its own, the compilations, where it only appears), with the album artist's id.
+    func artistAlbums(_ c: SubsonicClient, _ artistId: String) async throws -> [(album: Album, albumArtistId: String?)] {
+        let rows = try await get(c, "api/album", [
+            URLQueryItem(name: "_start", value: "0"), URLQueryItem(name: "_end", value: "1000"),
+            URLQueryItem(name: "_sort", value: "name"), URLQueryItem(name: "_order", value: "ASC"),
+            URLQueryItem(name: "artist_id", value: artistId),
+        ]).rows
+        return rows.compactMap { r in Album(native: r).map { ($0, J.str(r, "albumArtistId")) } }
+    }
+
+    /// All the artist's songs in album order, up to `limit`.
+    func artistSongs(_ c: SubsonicClient, _ artistId: String, limit: Int = 3000) async throws -> [Track] {
+        var out: [Track] = []
+        var q = SongQuery(); q.filter = .artist(id: artistId, name: ""); q.sort = .album
+        while out.count < limit {
+            let page = try await page(c, q, start: out.count, end: out.count + 500)
+            out += page
+            if page.count < 500 { break }
+        }
+        return out.sorted {
+            ($0.album ?? "", $0.discNumber, $0.trackNumber) < ($1.album ?? "", $1.discNumber, $1.trackNumber)
+        }
+    }
+
+    /// The songs for "Play" on an artist: all of them through the server's own API, else those of the artist's own albums.
+    func allSongs(_ c: SubsonicClient, artistId: String) async -> [Track] {
+        if await ensure(c), let all = try? await artistSongs(c, artistId), !all.isEmpty { return all }
+        var out: [Track] = []
+        for album in ((try? await c.artist(artistId))?.1 ?? []).prefix(60) {
+            out += (try? await c.album(album.id))?.1 ?? []
+        }
+        return out
     }
 
     func genres(_ c: SubsonicClient) async throws -> [(id: String, name: String)] {

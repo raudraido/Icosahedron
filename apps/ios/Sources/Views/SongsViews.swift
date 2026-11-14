@@ -26,13 +26,21 @@ struct SongsScreen: View {
     }
 }
 
-private struct NativeSongsView: View {
+struct NativeSongsView: View {
     @Environment(AppModel.self) private var app
+    /// A page of one artist's songs: the filter is fixed, in album order, with no quick views and no sort or filter menus.
+    var fixedFilter: SongFilter?
+
+    init(fixedFilter: SongFilter? = nil) {
+        self.fixedFilter = fixedFilter
+        _filter = State(initialValue: fixedFilter ?? .all)
+    }
+
     @AppStorage("songSort") private var sortRaw = SongSort.title.rawValue
     @AppStorage("songSortAsc") private var asc = true
     @State private var search = ""
     @State private var debounced = ""
-    @State private var filter: SongFilter = .all
+    @State private var filter: SongFilter
     @State private var songs: [Track] = []
     @State private var total = 0
     @State private var base = 0
@@ -41,8 +49,8 @@ private struct NativeSongsView: View {
     @State private var genres: [(id: String, name: String)] = []
     private let pageSize = 100
 
-    private var sort: SongSort { SongSort(rawValue: sortRaw) ?? .title }
-    private var query: SongQuery { SongQuery(search: debounced, filter: filter, sort: sort, asc: asc) }
+    private var sort: SongSort { fixedFilter != nil ? .album : (SongSort(rawValue: sortRaw) ?? .title) }
+    private var query: SongQuery { SongQuery(search: debounced, filter: filter, sort: sort, asc: fixedFilter != nil ? true : asc) }
 
     private static let decades: [SongFilter] = [
         .decade(from: 2020, to: 2029, label: "2020s"), .decade(from: 2010, to: 2019, label: "2010s"),
@@ -58,7 +66,7 @@ private struct NativeSongsView: View {
 
     var body: some View {
         List {
-            chips.listRowSeparator(.hidden).listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+            if fixedFilter == nil { chips.listRowSeparator(.hidden).listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16)) }
             summary.listRowSeparator(.hidden)
             if failed { Text("Could not load the songs.").foregroundStyle(Theme.accent).listRowSeparator(.hidden) }
             if !loading, !failed, total == 0 { Text("No songs match.").foregroundStyle(.secondary).listRowSeparator(.hidden) }
@@ -74,7 +82,7 @@ private struct NativeSongsView: View {
         .listStyle(.plain)
         .searchable(text: $search, prompt: "Search songs, artists, albums")
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) { sortMenu; filterMenu }
+            ToolbarItemGroup(placement: .topBarTrailing) { if fixedFilter == nil { sortMenu; filterMenu } }
         }
         .task(id: search) {
             try? await Task.sleep(nanoseconds: 350_000_000)

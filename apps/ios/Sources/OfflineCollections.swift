@@ -85,10 +85,12 @@ struct CollectionMenuItems: View {
             } label: { Label("Add to Device Queue", systemImage: "hifispeaker.2") }
         }
         Divider()
-        if downloaded {
-            Button { toggleDownload() } label: { Label("Remove Download", systemImage: "arrow.down.circle.badge.xmark") }
-        } else {
-            Button { toggleDownload() } label: { Label("Download", systemImage: "arrow.down.circle") }
+        if kind != "artist" { // an artist's songs are not kept as one collection
+            if downloaded {
+                Button { toggleDownload() } label: { Label("Remove Download", systemImage: "arrow.down.circle.badge.xmark") }
+            } else {
+                Button { toggleDownload() } label: { Label("Download", systemImage: "arrow.down.circle") }
+            }
         }
         if let album {
             if app.isStarred(album: album) {
@@ -106,7 +108,7 @@ struct CollectionMenuItems: View {
                 }
             }
         } label: { Label("Add to Playlist", systemImage: "text.badge.plus") }
-        if kind != "list" {
+        if kind != "list", kind != "artist" {
             Button { app.shareItem(id) } label: { Label("Share", systemImage: "square.and.arrow.up") }
         }
         if let album, let artistId = album.artistId, let artist = Artist(subsonic: ["id": artistId, "name": album.artist]) {
@@ -153,6 +155,7 @@ struct CollectionMenuItems: View {
         guard let c = app.client else { return nil }
         if kind == "album" { return (try? await c.album(id))?.1 }
         if kind == "playlist" { return try? await c.playlistTracks(id) }
+        if kind == "artist" { return await NativeAPI.shared.allSongs(c, artistId: id) }
         return nil
     }
 }

@@ -125,6 +125,27 @@ final class SubsonicClient {
         return (Artist(subsonic: a), J.arr(a["album"]).compactMap { Album(subsonic: $0) })
     }
 
+    /// The biography, the Last.fm link and the similar artists that are in the library.
+    func artistInfo(_ id: String) async throws -> ArtistInfo? {
+        let r = try await call("getArtistInfo2", [item("id", id), item("count", "20")])
+        guard let o = r["artistInfo2"] as? [String: Any] else { return nil }
+        // The text comes with HTML (a link to Last.fm at its end): only the words are kept
+        var bio = J.str(o, "biography") ?? ""
+        bio = bio.replacingOccurrences(of: "<a [^>]*>.*?</a>\\.?", with: "", options: [.regularExpression])
+        bio = bio.replacingOccurrences(of: "<[^>]+>", with: "", options: [.regularExpression]).trimmingCharacters(in: .whitespacesAndNewlines)
+        return ArtistInfo(biography: bio, lastFmUrl: J.str(o, "lastFmUrl"), similar: J.arr(o["similarArtist"]).compactMap { Artist(subsonic: $0) })
+    }
+
+    func topSongs(artistName: String, count: Int = 5) async throws -> [Track] {
+        let r = try await call("getTopSongs", [item("artist", artistName), item("count", String(count))])
+        let s = (r["topSongs"] as? [String: Any]) ?? [:]
+        return J.arr(s["song"]).compactMap { Track(subsonic: $0) }
+    }
+
+    func setArtistStarred(_ id: String, _ on: Bool) async throws {
+        _ = try await call(on ? "star" : "unstar", [item("artistId", id)])
+    }
+
     func album(_ id: String) async throws -> (Album?, [Track]) {
         let r = try await call("getAlbum", [item("id", id)])
         let a = (r["album"] as? [String: Any]) ?? [:]

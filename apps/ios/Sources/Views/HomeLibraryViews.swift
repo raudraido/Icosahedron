@@ -127,23 +127,3 @@ struct AlbumDetailView: View {
     }
 }
 
-struct ArtistDetailView: View {
-    @Environment(AppModel.self) private var app
-    let artist: Artist
-    @State private var albums: [Album] = []
-    private let columns = [GridItem(.adaptive(minimum: 150), spacing: 14, alignment: .top)]
-
-    var body: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 18) {
-                ForEach(albums) { a in
-                    NavigationLink(value: a) { AlbumCard(album: a, width: 160) }.buttonStyle(.plain)
-                }
-            }
-            .padding()
-        }
-        .navigationTitle(artist.name)
-        .navigationBarTitleDisplayMode(.inline)
-        .task { albums = (try? await app.client?.artist(artist.id).1) ?? [] }
-    }
-}

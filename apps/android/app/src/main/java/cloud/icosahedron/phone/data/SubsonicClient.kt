@@ -144,6 +144,18 @@ class SubsonicClient(val baseUrl: String, val user: String, val salt: String, va
         return Artist.fromSubsonic(a) to a.objs("album").mapNotNull { Album.fromSubsonic(it) }
     }
 
+    /** The biography, the Last.fm link and the similar artists that are in the library; null when the server has none of it. */
+    suspend fun artistInfo(id: String): ArtistInfo? {
+        val o = call("getArtistInfo2", "id" to id, "count" to "20").optJSONObject("artistInfo2") ?: return null
+        // The text comes with HTML (a link to Last.fm at its end): only the words are kept
+        val bio = (o.str("biography") ?: "").replace(Regex("<a [^>]*>.*?</a>\\.?", RegexOption.DOT_MATCHES_ALL), "").replace(Regex("<[^>]+>"), "").trim()
+        val similar = o.objs("similarArtist").mapNotNull { Artist.fromSubsonic(it) }
+        return ArtistInfo(bio, o.str("lastFmUrl"), similar)
+    }
+
+    suspend fun topSongs(artistName: String, count: Int = 5): List<Track> =
+        call("getTopSongs", "artist" to artistName, "count" to count.toString()).optJSONObject("topSongs")?.objs("song")?.mapNotNull { Track.fromSubsonic(it) } ?: emptyList()
+
     suspend fun album(id: String): Pair<Album?, List<Track>> {
         val a = call("getAlbum", "id" to id).optJSONObject("album") ?: return null to emptyList()
         return Album.fromSubsonic(a) to a.objs("song").mapNotNull { Track.fromSubsonic(it) }
@@ -195,6 +207,8 @@ class SubsonicClient(val baseUrl: String, val user: String, val salt: String, va
         call("getStarred2").optJSONObject("starred2")?.objs("song")?.mapNotNull { Track.fromSubsonic(it) } ?: emptyList()
 
     suspend fun setStarred(id: String, on: Boolean) { call(if (on) "star" else "unstar", "id" to id) }
+
+    suspend fun setArtistStarred(id: String, on: Boolean) { call(if (on) "star" else "unstar", "artistId" to id) }
 
     suspend fun setAlbumStarred(id: String, on: Boolean) { call(if (on) "star" else "unstar", "albumId" to id) }
 

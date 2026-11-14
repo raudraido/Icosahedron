@@ -153,6 +153,12 @@ struct Album: Identifiable, Hashable {
     var songCount: Int
     /// Marked as a favorite on the server.
     var starred: Bool = false
+    /// "album", "ep", "single", "compilation"…: the OpenSubsonic release types (empty when the server has none).
+    var releaseTypes: [String] = []
+    var compilation = false
+
+    var isSingleOrEp: Bool { releaseTypes.contains { $0.localizedCaseInsensitiveContains("single") || $0.caseInsensitiveCompare("ep") == .orderedSame } }
+    var isCompilation: Bool { compilation || releaseTypes.contains { $0.localizedCaseInsensitiveContains("compilation") } }
 
     init?(subsonic d: [String: Any]) {
         guard let id = J.str(d, "id") else { return nil }
@@ -164,6 +170,22 @@ struct Album: Identifiable, Hashable {
         coverArt = J.str(d, "coverArt")
         year = J.int(d, "year")
         songCount = J.int(d, "songCount") ?? 0
+        releaseTypes = (d["releaseTypes"] as? [String]) ?? []
+        compilation = (d["isCompilation"] as? Bool) ?? false
+    }
+
+    /// From an album of Navidrome's own API (/api/album).
+    init?(native d: [String: Any]) {
+        guard let id = J.str(d, "id") else { return nil }
+        self.id = id
+        name = J.str(d, "name") ?? ""
+        artist = J.str(d, "albumArtist") ?? ""
+        artistId = J.str(d, "albumArtistId")
+        coverArt = "al-" + id
+        year = (J.int(d, "maxYear") ?? J.int(d, "minYear")).flatMap { $0 > 0 ? $0 : nil }
+        songCount = J.int(d, "songCount") ?? 0
+        releaseTypes = ((d["tags"] as? [String: Any])?["releasetype"] as? [String]) ?? []
+        compilation = (d["compilation"] as? Bool) ?? false
     }
 }
 
@@ -172,6 +194,7 @@ struct Artist: Identifiable, Hashable {
     var name: String
     var coverArt: String?
     var albumCount: Int
+    var starred = false
 
     init?(subsonic d: [String: Any]) {
         guard let id = J.str(d, "id") else { return nil }
@@ -179,7 +202,15 @@ struct Artist: Identifiable, Hashable {
         name = J.str(d, "name") ?? ""
         coverArt = J.str(d, "coverArt")
         albumCount = J.int(d, "albumCount") ?? 0
+        starred = d["starred"] != nil
     }
+}
+
+/// What the server knows about an artist (Last.fm / Spotify through Navidrome): the text, the link and the similar artists that are in the library.
+struct ArtistInfo {
+    var biography: String
+    var lastFmUrl: String?
+    var similar: [Artist]
 }
 
 struct Playlist: Identifiable, Hashable {

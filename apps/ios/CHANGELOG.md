@@ -20,10 +20,6 @@ A native SwiftUI app for iPhone and iPad (iOS 26.1 or later), built as an unsign
 ## 0.2.10
 - **The right cover, always:** when the song changed, a cover that was already loaded could stay on screen (the mini player, Now Playing) instead of the new song's cover, or the old one stayed until the new one had loaded. Fixed.
 
-## Unreleased
-
-- **Lyrics word by word:** when the song has karaoke lyrics on the server (Navidrome 0.63+ with a TTML or enhanced-LRC lyrics file), the sung line is drawn word by word, like on the desktop: the words already sung are white, the one being sung is in the accent colour, the rest is dim. It checks the position 10 times a second, only while the lyrics are on the screen and the sung line has timed words; every other song (and the LRCLIB lyrics, which only have lines) works as before.
-
 - **Lighter on the battery:**
   - While a song plays, the app reports to the sync server every 10 s on screen and every 30 s in the background (it was every 3 s, which kept the mobile radio awake); every real change is still sent at once.
   - The progress clock ticks every 5 s when the app is not on screen (twice a second on screen), and the saved queue position is written every 30 s.

@@ -2,8 +2,7 @@
 
 A native SwiftUI app for iPhone and iPad (iOS 26.1 or later), built as an unsigned `.ipa` (sign it with SideStore, AltStore, Sideloadly or iloader: [docs/ios.md](../../docs/ios.md)). It has been part of the shared releases 0.15.3 to 0.15.9 (see the [main changelog](../../CHANGELOG.md)); from here it has its **own version, release and changelog**. What works with which server: [docs/compatibility.md](../../docs/compatibility.md).
 
-## Unreleased
-
+## 0.2.15
 - **A real artist page:** the picture, the number of albums and songs, **Play**, **Shuffle** and a menu with the queue (Play Next, Add to Queue, Add to Device Queue, Add to Playlist) for **all** the artist's songs, the compilations and guest appearances too; the **biography** (a few lines, tap for more, with a Last.fm link); the **popular songs**; the **Albums**, **Singles & EPs**, **Compilations** and **Appears on** as rows of covers (newest first); and the **similar artists** that are in your library. A heart marks the artist as a favorite. The text, the popular songs and the similar artists come from what Navidrome is set up to use (Last.fm, Spotify) and are left out when it has none; "Appears on", the compilations and the songs of the whole artist come from the server's own API (as for Songs) and are left out when it cannot be reached. **All songs** opens every song of the artist in album order.
 
 ## 0.2.14

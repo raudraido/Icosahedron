@@ -2,8 +2,7 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
-## Unreleased
-
+## 0.1.34
 - **Back from the song's details:** in the details of the playing song (a tap on the cover opens them) a tap on the small cover at the top, or anywhere on the panel that is not a link (Artist, Album), goes back to the big cover.
 
 ## 0.1.33

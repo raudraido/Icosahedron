@@ -2,6 +2,15 @@
 
 A native SwiftUI app for iPhone and iPad (iOS 26.1 or later), built as an unsigned `.ipa` (sign it with SideStore, AltStore, Sideloadly or iloader: [docs/ios.md](../../docs/ios.md)). It has been part of the shared releases 0.15.3 to 0.15.9 (see the [main changelog](../../CHANGELOG.md)); from here it has its **own version, release and changelog**. What works with which server: [docs/compatibility.md](../../docs/compatibility.md).
 
+## Unreleased
+
+- **Now Playing is laid out like the Android player, and less crowded:**
+  - Top: an arrow to close it (and "Playing on …" when another device plays), with AirPlay and the devices button at the right. The "1 of N" and time-left pills are gone.
+  - The title big with the artist and the album under it, and the favorite heart at the right of the title; the seek bar has the time played at its left end and the time left (with a minus) at its right.
+  - One row of tools: **Lyrics** (new button), the speed, the **Queue** and the **⋮ menu** (the song's menu, and the Equalizer in it).
+  - Controls at the bottom: shuffle, previous, a big white play circle, next, repeat.
+  - Lyrics, the queue and the song's details (tap the cover) take the cover's place, and the title, the seek bar and the controls stay.
+
 ## 0.2.10
 - **The right cover, always:** when the song changed, a cover that was already loaded could stay on screen (the mini player, Now Playing) instead of the new song's cover, or the old one stayed until the new one had loaded. Fixed.
 

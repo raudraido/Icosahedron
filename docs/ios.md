@@ -22,7 +22,7 @@ If the iloader AppImage opens an empty window with `EGL_BAD_PARAMETER` in the te
 ## Features
 
 - **Playback:** gapless, instant start, background audio, lock screen and Dynamic Island, speed 0.5×–2× with *Keep Pitch*, 10-band equalizer, AirPlay, queue with drag-to-reorder.
-- **Now Playing:** blurred cover background, "1 of N" with remaining time, favorite, "…" menu, track info and synced lyrics under a cover that shrinks to the corner, landscape / iPad two-column layout.
+- **Now Playing:** blurred cover background; the title with the favorite heart, the seek bar with the times at its ends, a row of tools (lyrics, speed, queue, the ⋮ menu with the equalizer), big controls; lyrics, the queue and the track info (tap the cover) take the cover's place; AirPlay and the devices at the top; landscape / iPad two-column layout.
 - **Home:** a row of quick buttons (Random mix) with the profile picture at its right end, then Discover, Newest, Recently Played, Most Played and Playlists, each with *See All*.
 - **Library:** Albums and Artists with sort, filters (favorites, decade, genre), grid or list and a letter index; Newest, Recently Played, Songs, Favorite Songs, Downloads, Directories, Playlists, Radios; search.
 - **One menu for songs, albums and playlists** (the "…" button on a page, a long press elsewhere): play next, add to queue, add to a device's queue, **Download**, favorite (albums too), add to playlist, share, show album / artist, and for a song Instant Mix, rating (1–5) and info.

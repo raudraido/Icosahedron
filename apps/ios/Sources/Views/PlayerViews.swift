@@ -87,11 +87,11 @@ struct NowPlayingView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
     @State private var scrub: Double?
-    @State private var showQueue = false
+    /// What takes the cover's place, like on Android: the queue, the lyrics, or the song's details (tap the cover).
+    private enum Panel { case cover, queue, lyrics, info }
+    @State private var panel: Panel = .cover
     @State private var showDevices = false
-    @State private var showInfo = false
     @State private var showEQ = false
-    @Namespace private var artNS
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -140,59 +140,59 @@ struct NowPlayingView: View {
 
     // MARK: Layouts
 
-    /// Portrait: everything in one column; the cover shrinks to the corner for info/lyrics.
+    /// Portrait, like the Android player from top to bottom: the way out (and the devices), the cover or what replaces
+    /// it, the song with its favorite heart, the seek bar with the times at its ends, the tools, the controls.
     private func narrowLayout(_ s: NowPlayingSource) -> some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 12) {
             header(s).contentShape(Rectangle()).simultaneousGesture(closeGesture)
-            if showQueue {
-                QueueView()
-            } else if showInfo, s.current != nil {
-                infoHeader(s).contentShape(Rectangle()).simultaneousGesture(closeGesture)
-                InfoTabs(track: s.current)
-            } else {
-                VStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    artwork(s)
-                    Spacer(minLength: 0)
-                    titleRow(s)
-                }
-                .contentShape(Rectangle())
-                .simultaneousGesture(closeGesture)
-            }
+            panelOrCover(s)
+            titleRow(s).contentShape(Rectangle()).simultaneousGesture(closeGesture)
             progress(s)
+            tools(s)
             controls(s)
-            bottomBar(s)
         }
     }
 
-    /// Landscape and iPad: the cover on the left, everything else on the right.
+    /// Landscape and iPad: the cover (or its replacement) on the left, everything else on the right.
     private func wideLayout(_ s: NowPlayingSource, _ size: CGSize) -> some View {
         let side = max(160, min(size.height - 90, size.width * 0.42))
         return HStack(spacing: 32) {
-            VStack {
-                Spacer(minLength: 0)
-                artwork(s).frame(width: side)
-                Spacer(minLength: 0)
-            }
-            .frame(width: side)
-            .contentShape(Rectangle())
-            .simultaneousGesture(closeGesture)
+            panelOrCover(s)
+                .frame(width: side)
             VStack(spacing: 12) {
                 header(s).contentShape(Rectangle()).simultaneousGesture(closeGesture)
-                if showQueue {
-                    QueueView()
-                } else if showInfo, s.current != nil {
-                    InfoTabs(track: s.current)
-                } else {
-                    Spacer(minLength: 0)
-                    titleRow(s)
-                    Spacer(minLength: 0)
-                }
+                Spacer(minLength: 0)
+                titleRow(s)
                 progress(s)
+                tools(s)
                 controls(s)
-                bottomBar(s)
             }
         }
+    }
+
+    /// The cover, or the queue / the lyrics / the details that take its place.
+    @ViewBuilder
+    private func panelOrCover(_ s: NowPlayingSource) -> some View {
+        switch panel {
+        case .queue:
+            QueueView()
+        case .lyrics:
+            LyricsView(track: s.current)
+        case .info where s.current != nil:
+            InfoPanel(track: s.current)
+        default:
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                artwork(s)
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+            .simultaneousGesture(closeGesture)
+        }
+    }
+
+    private func show(_ p: Panel) {
+        withAnimation(.snappy) { panel = panel == p ? .cover : p }
     }
 
     // MARK: Pieces
@@ -210,55 +210,34 @@ struct NowPlayingView: View {
             .ignoresSafeArea()
     }
 
+    /// The way out at the left (and who plays, when it is another device); AirPlay and the devices at the right.
     private func header(_ s: NowPlayingSource) -> some View {
-        TimelineView(.periodic(from: .now, by: 1)) { ctx in
-            HStack {
-                pill("\(max(s.index + 1, 0)) of \(s.queue.count)")
-                Spacer()
-                pill("-\(formatLong(s.queueRemaining(at: ctx.date))) / \(formatLong(s.queueTotal))")
+        HStack(spacing: 14) {
+            Button { dismiss() } label: { Image(systemName: "chevron.down").font(.title3.weight(.semibold)).frame(width: 44, height: 44) }
+                .accessibilityLabel("Close")
+            if s.isRemote, let name = s.targetName {
+                Text("Playing on \(name)").font(.subheadline).foregroundStyle(Theme.accent).lineLimit(1)
             }
+            Spacer(minLength: 0)
+            // AirPlay and the equalizer act on this phone's own sound: while another device is the target they stay in
+            // place but inactive.
+            AirPlayButton().frame(width: 30, height: 30).accessibilityLabel("AirPlay")
+                .allowsHitTesting(!s.isRemote)
+                .opacity(s.isRemote ? 0.3 : 1)
+            devicesButton(s)
         }
-        .overlay(Capsule().fill(.white.opacity(0.45)).frame(width: 40, height: 5)) // drag handle hint
-    }
-
-    private func pill(_ text: LocalizedStringKey) -> some View {
-        Text(text)
-            .font(.footnote.weight(.semibold)).monospacedDigit()
-            .padding(.horizontal, 12).padding(.vertical, 6)
-            .background(.ultraThinMaterial, in: Capsule())
+        .buttonStyle(.plain)
     }
 
     private func artwork(_ s: NowPlayingSource) -> some View {
         CoverImage(id: s.current?.coverArt, size: 800)
             .aspectRatio(1, contentMode: .fit)
             .clipShape(RoundedRectangle(cornerRadius: 14))
-            .matchedGeometryEffect(id: "art", in: artNS)
             .shadow(color: .black.opacity(0.5), radius: 26, y: 12)
             .scaleEffect(s.isPlaying || reduceMotion ? 1 : 0.86)
             .animation(reduceMotion ? nil : .spring(response: 0.45, dampingFraction: 0.75), value: s.isPlaying)
             .contentShape(Rectangle())
-            .onTapGesture { if s.current != nil { toggleInfo() } }
-    }
-
-    /// Info mode: the cover has shrunk to the top-left corner, title and actions beside it.
-    private func infoHeader(_ s: NowPlayingSource) -> some View {
-        HStack(spacing: 12) {
-            CoverImage(id: s.current?.coverArt, size: 300)
-                .frame(width: 84, height: 84)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .matchedGeometryEffect(id: "art", in: artNS)
-                .onTapGesture { toggleInfo() }
-            VStack(alignment: .leading, spacing: 3) {
-                Text(s.current?.title ?? emptyTitle(s)).font(.headline).lineLimit(2)
-                subtitle(s.current)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            if let t = s.current, t.directURL == nil { actionButtons(t, size: 38) }
-        }
-    }
-
-    private func toggleInfo() {
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { showInfo.toggle() }
+            .onTapGesture { if s.current != nil { show(.info) } }
     }
 
     /// "Nothing playing", or which device has nothing when another one is the target.
@@ -267,55 +246,37 @@ struct NowPlayingView: View {
         return String(localized: "Nothing playing")
     }
 
+    /// The title big, the artist and the album under it, the favorite heart at the right edge of the same row.
     private func titleRow(_ s: NowPlayingSource) -> some View {
         HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(s.current?.title ?? emptyTitle(s)).font(.title2.bold()).lineLimit(2)
-                subtitle(s.current)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            if let t = s.current, t.directURL == nil { actionButtons(t, size: 44) }
-        }
-    }
-
-    private func actionButtons(_ t: Track, size: CGFloat) -> some View {
-        HStack(spacing: 10) {
-            Button { app.toggleStar(t) } label: {
-                Image(systemName: app.isStarred(t) ? "heart.fill" : "heart")
-                    .accessibilityLabel(LocalizedStringKey(app.isStarred(t) ? "Remove Favorite" : "Favorite"))
-                    .font(.title3).foregroundStyle(app.isStarred(t) ? Color.red : Color.white)
-                    .frame(width: size, height: size)
-                    .background(.ultraThinMaterial, in: Circle())
-            }
-            Menu {
-                TrackMenuContent(track: t)
-            } label: {
-                Image(systemName: "ellipsis").font(.title3)
-                    .accessibilityLabel("More")
-                    .frame(width: size, height: size)
-                    .background(.ultraThinMaterial, in: Circle())
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func subtitle(_ t: Track?) -> some View {
-        if let t {
-            HStack(spacing: 4) {
-                Text(t.artist).lineLimit(1)
-                if let album = t.album, !album.isEmpty {
-                    Text("•")
-                    Text(album).lineLimit(1)
+                if let t = s.current {
+                    Text(t.artist).font(.body).foregroundStyle(.white.opacity(0.8)).lineLimit(1)
+                    if let album = t.album, !album.isEmpty {
+                        Text(album).font(.subheadline).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+                    }
                 }
             }
-            .font(.body).foregroundStyle(.white.opacity(0.75))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if let t = s.current, t.directURL == nil {
+                Button { app.toggleStar(t) } label: {
+                    Image(systemName: app.isStarred(t) ? "heart.fill" : "heart")
+                        .font(.title2).foregroundStyle(app.isStarred(t) ? Theme.accent : Color.white)
+                        .frame(width: 48, height: 48)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(LocalizedStringKey(app.isStarred(t) ? "Remove Favorite" : "Favorite"))
+            }
         }
     }
 
+    /// The seek bar with the time played at its left end and the time left (with a minus) at its right end.
     private func progress(_ s: NowPlayingSource) -> some View {
         TimelineView(.periodic(from: .now, by: 0.5)) { ctx in
             let pos = scrub ?? s.position(at: ctx.date)
-            VStack(spacing: 2) {
+            HStack(spacing: 8) {
+                Text(formatTime(pos)).frame(minWidth: 38, alignment: .leading)
                 Slider(
                     value: Binding(get: { pos }, set: { scrub = $0 }),
                     in: 0...max(s.duration, 1),
@@ -327,46 +288,43 @@ struct NowPlayingView: View {
                 .disabled(s.current == nil)
                 .accessibilityLabel("Playback position")
                 .accessibilityValue(String(localized: "\(formatTime(pos)) of \(formatTime(s.duration))"))
-                HStack {
-                    Text(formatTime(pos))
-                    Spacer()
-                    Text(qualityLine(s)).font(.caption2)
-                    Spacer()
-                    Text("-" + formatTime(max(0, s.duration - pos) / (s.isRemote ? 1 : max(app.player.speed, 0.1))))
-                }
-                .font(.caption).foregroundStyle(.white.opacity(0.7)).monospacedDigit()
+                Text("-" + formatTime(max(0, s.duration - pos) / (s.isRemote ? 1 : max(app.player.speed, 0.1))))
+                    .frame(minWidth: 44, alignment: .trailing)
             }
+            .font(.caption).foregroundStyle(.white.opacity(0.75)).monospacedDigit()
         }
     }
 
-    private func qualityLine(_ s: NowPlayingSource) -> String {
-        if !s.isRemote, !app.player.qualityLabel.isEmpty { return app.player.qualityLabel }
-        return qualityText(s.current)
-    }
-
-    private func qualityText(_ t: Track?) -> String {
-        guard let t else { return "" }
-        if t.directURL != nil { return String(localized: "Radio") }
-        return [t.format?.uppercased(), t.bitrate.map { "\($0) kbps" }].compactMap { $0 }.joined(separator: " ")
-    }
-
+    /// The playback controls at the very bottom: play is the biggest (a white circle), the others are far apart.
     private func controls(_ s: NowPlayingSource) -> some View {
         HStack {
+            Button { s.toggleShuffle() } label: { Image(systemName: "shuffle").font(.system(size: 24, weight: .semibold)).frame(width: 52, height: 52) }
+                .accessibilityLabel("Shuffle")
+                .accessibilityValue(LocalizedStringKey(s.shuffle ? "On" : "Off"))
+                .foregroundStyle(s.shuffle ? Theme.accent : Color.white)
             Spacer()
-            Button { s.previous() } label: { Image(systemName: "backward.fill").font(.system(size: 34)) }
+            Button { s.previous() } label: { Image(systemName: "backward.end.fill").font(.system(size: 34)).frame(width: 60, height: 60) }
                 .accessibilityLabel("Previous")
             Spacer()
-            Button { s.toggle() } label: { Image(systemName: s.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 54)) }
-                .accessibilityLabel(LocalizedStringKey(s.isPlaying ? "Pause" : "Play"))
+            Button { s.toggle() } label: {
+                Image(systemName: s.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 36)).foregroundStyle(Theme.background)
+                    .frame(width: 78, height: 78).background(Color.white, in: Circle())
+            }
+            .accessibilityLabel(LocalizedStringKey(s.isPlaying ? "Pause" : "Play"))
             Spacer()
-            Button { s.next() } label: { Image(systemName: "forward.fill").font(.system(size: 34)) }
+            Button { s.next() } label: { Image(systemName: "forward.end.fill").font(.system(size: 34)).frame(width: 60, height: 60) }
                 .accessibilityLabel("Next")
             Spacer()
+            Button { s.toggleRepeat() } label: { Image(systemName: "repeat").font(.system(size: 24, weight: .semibold)).frame(width: 52, height: 52) }
+                .accessibilityLabel("Repeat")
+                .accessibilityValue(LocalizedStringKey(s.repeatOn ? "On" : "Off"))
+                .foregroundStyle(s.repeatOn ? Theme.accent : Color.white)
         }
         .buttonStyle(.plain)
         .disabled(s.current == nil)
         .opacity(s.current == nil ? 0.4 : 1)
-        .padding(.vertical, 6)
+        .padding(.top, 2)
     }
 
     private static let speeds: [Double] = [0.5, 0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0]
@@ -382,66 +340,62 @@ struct NowPlayingView: View {
             Toggle("Keep Pitch", isOn: Binding(get: { p.keepPitch }, set: { p.setKeepPitch($0) }))
         } label: {
             Text(speedLabel(p.speed))
-                .font(.subheadline.weight(.bold)).monospacedDigit()
-                .foregroundStyle(p.speed == 1.0 ? Color.white.opacity(0.75) : Theme.accent)
-                .frame(minWidth: 40)
+                .font(.title3.weight(.bold)).monospacedDigit()
+                .foregroundStyle(p.speed == 1.0 ? Color.white : Theme.accent)
+                .frame(width: 52, height: 44)
         }
     }
 
-    private func bottomBar(_ s: NowPlayingSource) -> some View {
+    /// The tools under the seek bar, like on Android: lyrics, speed, the queue and the menu (the favorite is next to
+    /// the title).
+    private func tools(_ s: NowPlayingSource) -> some View {
         HStack {
-            Button { s.toggleShuffle() } label: { Image(systemName: "shuffle") }
-                .accessibilityLabel("Shuffle")
-                .accessibilityValue(LocalizedStringKey(s.shuffle ? "On" : "Off"))
-                .foregroundStyle(s.shuffle ? Theme.accent : Color.white.opacity(0.75))
             Spacer()
-            Button { s.toggleRepeat() } label: { Image(systemName: "repeat") }
-                .accessibilityLabel("Repeat")
-                .accessibilityValue(LocalizedStringKey(s.repeatOn ? "On" : "Off"))
-                .foregroundStyle(s.repeatOn ? Theme.accent : Color.white.opacity(0.75))
-            // Speed, AirPlay and the equalizer act on this phone's own sound: while another device is
-            // the target they stay in place but inactive.
+            tool("quote.bubble", label: "Lyrics", active: panel == .lyrics) { show(.lyrics) }
             Spacer()
-            speedMenu(app.player)
-                .disabled(s.isRemote)
-                .opacity(s.isRemote ? 0.3 : 1)
-            Spacer()
-            AirPlayButton().frame(width: 30, height: 30).accessibilityLabel("AirPlay")
-                .allowsHitTesting(!s.isRemote)
-                .opacity(s.isRemote ? 0.3 : 1)
-            Spacer()
-            Button { showEQ = true } label: { Image(systemName: "slider.vertical.3") }
-                .foregroundStyle(EQManager.shared.settings.enabled ? Theme.accent : Color.white.opacity(0.75))
-                .accessibilityLabel("Equalizer")
-                .disabled(s.isRemote)
-                .opacity(s.isRemote ? 0.3 : 1)
-            Spacer()
-            devicesButton(s)
-            Spacer()
-            Button { withAnimation(.snappy) { showQueue.toggle(); if showQueue { showInfo = false } } } label: {
-                Image(systemName: "list.bullet")
-                    .accessibilityLabel("Queue")
-                    .padding(8)
-                    .background(showQueue ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.clear), in: RoundedRectangle(cornerRadius: 8))
-                    .foregroundStyle(showQueue ? Color.black : Color.white.opacity(0.75))
+            if !s.isRemote {
+                speedMenu(app.player)
+                Spacer()
             }
+            tool("list.bullet", label: "Queue", active: panel == .queue) { show(.queue) }
+            Spacer()
+            Menu {
+                if let t = s.current { TrackMenuContent(track: t) }
+                Divider()
+                if !s.isRemote {
+                    Button { showEQ = true } label: { Label("Equalizer", systemImage: "slider.vertical.3") }
+                }
+            } label: {
+                Image(systemName: "ellipsis").rotationEffect(.degrees(90)).font(.title3)
+                    .frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("More")
+            .disabled(s.current == nil)
+            Spacer()
         }
+        .foregroundStyle(.white)
         .font(.title3)
         .buttonStyle(.plain)
     }
 
-    /// The devices button: highlighted, with the device's name, while another device is the target.
+    private func tool(_ icon: String, label: LocalizedStringKey, active: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon).font(.title3)
+                .foregroundStyle(active ? Theme.accent : Color.white)
+                .frame(width: 44, height: 44)
+        }
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(active ? .isSelected : [])
+    }
+
+    /// The devices button: highlighted while another device is the target.
     private func devicesButton(_ s: NowPlayingSource) -> some View {
         Button { showDevices = true } label: {
-            VStack(spacing: 1) {
-                Image(systemName: s.isRemote ? "hifispeaker.fill" : "laptopcomputer.and.iphone")
-                if let name = s.targetName {
-                    Text(name).font(.system(size: 9, weight: .semibold)).lineLimit(1).frame(maxWidth: 70)
-                }
-            }
+            Image(systemName: s.isRemote ? "hifispeaker.fill" : "laptopcomputer.and.iphone")
+                .font(.title3).frame(width: 36, height: 36)
         }
         .accessibilityLabel("Devices")
-        .foregroundStyle(s.isRemote ? Theme.accent : (app.sync.status == "online" ? Color.white.opacity(0.75) : Color.white.opacity(0.35)))
+        .foregroundStyle(s.isRemote ? Theme.accent : (app.sync.status == "online" ? Color.white : Color.white.opacity(0.4)))
     }
 }
 

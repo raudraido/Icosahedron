@@ -13,8 +13,7 @@ A native SwiftUI app for iPhone and iPad (iOS 26.1 or later), built as an unsign
 ## 0.2.10
 - **The right cover, always:** when the song changed, a cover that was already loaded could stay on screen (the mini player, Now Playing) instead of the new song's cover, or the old one stayed until the new one had loaded. Fixed.
 
-## Unreleased
-
+## 0.2.12
 - **Lighter on the battery:**
   - While a song plays, the app reports to the sync server every 10 s on screen and every 30 s in the background (it was every 3 s, which kept the mobile radio awake); every real change is still sent at once.
   - The progress clock ticks every 5 s when the app is not on screen (twice a second on screen), and the saved queue position is written every 30 s.

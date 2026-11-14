@@ -93,23 +93,30 @@ data class Album(
     val year: Int?,
     val songCount: Int,
     val starred: Boolean = false,
+    /** "album", "ep", "single", "compilation"…: the OpenSubsonic release types (empty when the server has none). */
+    val releaseTypes: List<String> = emptyList(),
+    val compilation: Boolean = false,
 ) {
+    val isSingleOrEp get() = releaseTypes.any { it.contains("single", true) || it.equals("ep", true) }
+    val isCompilation get() = compilation || releaseTypes.any { it.contains("compilation", true) }
+
     companion object {
         fun fromSubsonic(o: JSONObject): Album? {
             val id = o.str("id") ?: return null
+            val types = o.optJSONArray("releaseTypes")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList()
             return Album(
                 id, o.str("name") ?: o.str("title") ?: "", o.str("artist") ?: "", o.str("artistId"),
-                o.str("coverArt"), o.int("year"), o.int("songCount") ?: 0, o.has("starred"),
+                o.str("coverArt"), o.int("year"), o.int("songCount") ?: 0, o.has("starred"), types, o.optBoolean("isCompilation", false),
             )
         }
     }
 }
 
-data class Artist(val id: String, val name: String, val coverArt: String?, val albumCount: Int) {
+data class Artist(val id: String, val name: String, val coverArt: String?, val albumCount: Int, val starred: Boolean = false) {
     companion object {
         fun fromSubsonic(o: JSONObject): Artist? {
             val id = o.str("id") ?: return null
-            return Artist(id, o.str("name") ?: "", o.str("coverArt"), o.int("albumCount") ?: 0)
+            return Artist(id, o.str("name") ?: "", o.str("coverArt"), o.int("albumCount") ?: 0, o.has("starred"))
         }
     }
 }
@@ -146,3 +153,6 @@ data class DirEntry(val id: String, val title: String, val isDir: Boolean, val t
         }
     }
 }
+
+/** What the server knows about an artist (Last.fm / Spotify through Navidrome): the text, the link and the similar artists that are in the library. */
+data class ArtistInfo(val biography: String, val lastFmUrl: String?, val similar: List<Artist>)

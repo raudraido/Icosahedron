@@ -2,6 +2,10 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
+## Unreleased
+
+- **A real artist page:** the picture, the number of albums and songs, **Play**, **Shuffle** and a menu with the queue (Play Next, Add to Queue, Add to Device Queue, Add to Playlist) for **all** the artist's songs, the compilations and guest appearances too; the **biography** (a few lines, tap for more, with a Last.fm link); the **popular songs**; the **Albums**, **Singles & EPs**, **Compilations** and **Appears on** as rows of covers (newest first); and the **similar artists** that are in your library. A heart marks the artist as a favorite. The text, the popular songs and the similar artists come from what Navidrome is set up to use (Last.fm, Spotify) and are left out when it has none; "Appears on", the compilations and the songs of the whole artist come from the server's own API (as for Songs) and are left out when it cannot be reached. **All songs** opens every song of the artist in album order. On a wide screen (a car, a tablet) the artist keeps the plain album grid for now.
+
 ## 0.1.34
 - **Back from the song's details:** in the details of the playing song (a tap on the cover opens them) a tap on the small cover at the top, or anywhere on the panel that is not a link (Artist, Album), goes back to the big cover.
 

@@ -87,6 +87,7 @@ import kotlinx.coroutines.launch
 private sealed interface Route {
     data class AlbumR(val id: String) : Route
     data class ArtistR(val id: String) : Route
+    data class ArtistSongsR(val id: String, val name: String) : Route
     data class PlaylistR(val id: String, val name: String) : Route
     data class AlbumList(val type: String, val title: String) : Route
     data class OfflineR(val kind: String, val id: String) : Route
@@ -139,7 +140,15 @@ fun MainScreen() {
                     val push = { r: Route -> stack.add(r); Unit }
                     when (top) {
                         is Route.AlbumR -> AlbumScreen(top.id, onBack = { stack.removeLast() }, push = push)
-                        is Route.ArtistR -> ArtistScreen(top.id, onBack = { stack.removeLast() }, push = push)
+                        // A wide screen (a car, a tablet) keeps the plain album grid for now
+                        is Route.ArtistR -> if (wide) ArtistGrid(top.id, onBack = { stack.removeLast() }, push = push) else ArtistPage(
+                            top.id, onBack = { stack.removeLast() }, onAlbum = { push(Route.AlbumR(it.id)) }, onArtist = { push(Route.ArtistR(it.id)) },
+                            onAllSongs = { push(Route.ArtistSongsR(it.id, it.name)) },
+                        )
+                        is Route.ArtistSongsR -> Column(Modifier.fillMaxSize()) {
+                            TopBar(top.name, onBack = { stack.removeLast() })
+                            NativeSongs(cloud.icosahedron.phone.data.SongFilter.Artist(top.id, top.name), cloud.icosahedron.phone.data.SongSort.Album)
+                        }
                         is Route.PlaylistR -> PlaylistScreen(top.id, top.name, onBack = { stack.removeLast() })
                         is Route.OfflineR -> OfflineCollectionScreen(top.kind, top.id, onBack = { stack.removeLast() })
                         is Route.AlbumList -> AlbumListScreen(top.type, top.title, onBack = { stack.removeLast() }, push = push)
@@ -474,7 +483,7 @@ private fun AlbumScreen(id: String, onBack: () -> Unit, push: (Route) -> Unit) {
 }
 
 @Composable
-private fun ArtistScreen(id: String, onBack: () -> Unit, push: (Route) -> Unit) {
+private fun ArtistGrid(id: String, onBack: () -> Unit, push: (Route) -> Unit) {
     val client = LocalClient.current
     val data by load(id) { client.artist(id) }
     val albums = data?.second ?: emptyList()

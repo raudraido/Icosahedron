@@ -206,16 +206,18 @@ private fun PasswordCard(onSubmit: suspend (String) -> Boolean) {
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-private fun NativeSongs() {
+internal fun NativeSongs(initialFilter: SongFilter = SongFilter.All, initialSort: SongSort? = null) {
     val client = LocalClient.current
+    // A page of one artist's songs: the filter is fixed there (no quick views, no filter menu)
+    val fixed = initialFilter !is SongFilter.All
     val scope = rememberCoroutineScope()
     var search by rememberSaveable { mutableStateOf("") }
     var debounced by rememberSaveable { mutableStateOf("") }
-    var filter by remember { mutableStateOf<SongFilter>(SongFilter.All) }
-    var sort by remember { mutableStateOf(runCatching { SongSort.valueOf(Prefs.songSort) }.getOrDefault(SongSort.Title)) }
-    var asc by remember { mutableStateOf(Prefs.songSortAsc) }
+    var filter by remember { mutableStateOf<SongFilter>(initialFilter) }
+    var sort by remember { mutableStateOf(initialSort ?: runCatching { SongSort.valueOf(Prefs.songSort) }.getOrDefault(SongSort.Title)) }
+    var asc by remember { mutableStateOf(if (initialSort != null) true else Prefs.songSortAsc) }
     LaunchedEffect(search) { delay(350); debounced = search.trim() }
-    LaunchedEffect(sort, asc) { Prefs.songSort = sort.name; Prefs.songSortAsc = asc }
+    LaunchedEffect(sort, asc) { if (!fixed) { Prefs.songSort = sort.name; Prefs.songSortAsc = asc } }
     val genres by load("native-genres") { runCatching { NativeApi.genres(client) }.getOrDefault(emptyList()) }
 
     val query = SongQuery(debounced, filter, sort, asc)
@@ -256,7 +258,7 @@ private fun NativeSongs() {
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         )
         // Quick views
-        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (!fixed) Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             @Composable fun chip(label: String, on: Boolean, click: () -> Unit) =
                 androidx.compose.material3.FilterChip(on, click, label = { Text(label) })
             chip("All", filter is SongFilter.All && sort == SongSort.Title) { quick(SongFilter.All, SongSort.Title, true) }
@@ -275,7 +277,7 @@ private fun NativeSongs() {
                     DropdownMenuItem(text = { Text((if (sort == s) "✓ " else "") + s.title) }, onClick = { if (sort == s && s != SongSort.Random) asc = !asc else { sort = s; asc = s.ascByDefault }; close() })
                 }
             } else Text("Sorted by " + range.field.replaceFirstChar { it.uppercase() }, fontSize = 13.sp, color = Dim, modifier = Modifier.padding(end = 8.dp))
-            MenuButton("Filter") { close ->
+            if (!fixed) MenuButton("Filter") { close ->
                 @Composable fun item(label: String, f: SongFilter) = DropdownMenuItem(text = { Text((if (filter == f) "✓ " else "") + label) }, onClick = { filter = f; close() })
                 item("All songs", SongFilter.All)
                 item("Favorites", SongFilter.Favorites)

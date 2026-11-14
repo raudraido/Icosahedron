@@ -26,6 +26,8 @@ sealed interface SongFilter {
     object Favorites : SongFilter { override val key = "fav"; override val label = "Favorites" }
     object Unplayed : SongFilter { override val key = "unplayed"; override val label = "Never played" }
     data class Genre(val id: String, val name: String) : SongFilter { override val key = "g:$id"; override val label = name }
+    /** Every song the artist is on, with the compilations and the guest appearances. */
+    data class Artist(val id: String, val name: String) : SongFilter { override val key = "a:$id"; override val label = name }
     data class Decade(val from: Int, val to: Int, override val label: String) : SongFilter { override val key = "y:$from-$to" }
     data class Bpm(val from: Int, val to: Int?, override val label: String) : SongFilter { override val key = "b:$from-$to" }
 }
@@ -128,6 +130,7 @@ object NativeApi {
         if (q.search.isNotBlank()) p += "title" to q.search.trim() // Navidrome matches it against the title, the artist and the album
         when (val f = q.filter) {
             is SongFilter.Genre -> p += "genre_id" to f.id
+            is SongFilter.Artist -> p += "artist_id" to f.id
             is SongFilter.Favorites -> p += "starred" to "true"
             else -> {}
         }
@@ -168,6 +171,31 @@ object NativeApi {
         val from = firstWhere { it >= r.min }
         val to = if (r.max == null) total else firstWhere { it > r.max }
         from to to
+    }
+
+    /** Every album the artist is on, as Navidrome counts it: its own, the compilations and the ones it only appears on. */
+    suspend fun artistAlbums(c: SubsonicClient, artistId: String): List<Pair<Album, String?>> = withContext(Dispatchers.IO) {
+        val (arr, _) = get(c, "/api/album", listOf("_start" to "0", "_end" to "1000", "_sort" to "name", "_order" to "ASC", "artist_id" to artistId))
+        (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }.mapNotNull { o ->
+            val id = o.str("id") ?: return@mapNotNull null
+            val types = o.optJSONObject("tags")?.optJSONArray("releasetype")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList()
+            Album(
+                id, o.str("name") ?: "", o.str("albumArtist") ?: "", o.str("albumArtistId"), "al-$id",
+                (o.int("maxYear") ?: o.int("minYear"))?.takeIf { it > 0 }, o.int("songCount") ?: 0, false, types, o.optBoolean("compilation", false),
+            ) to o.str("albumArtistId")
+        }
+    }
+
+    /** All the artist's songs in album order, up to [limit]. */
+    suspend fun artistSongs(c: SubsonicClient, artistId: String, limit: Int = 3000): List<Track> {
+        val out = ArrayList<Track>()
+        val q = SongQuery(filter = SongFilter.Artist(artistId, ""), sort = SongSort.Album, asc = true)
+        while (out.size < limit) {
+            val page = page(c, q, out.size, out.size + 500).songs
+            out += page
+            if (page.size < 500) break
+        }
+        return out.sortedWith(compareBy<Track> { it.album ?: "" }.thenBy { it.discNumber }.thenBy { it.trackNumber })
     }
 
     suspend fun genres(c: SubsonicClient): List<Pair<String, String>> = withContext(Dispatchers.IO) {

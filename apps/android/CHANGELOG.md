@@ -2,6 +2,10 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
+## Unreleased
+
+- **Back from the song's details:** in the details of the playing song (a tap on the cover opens them) a tap on the small cover at the top, or anywhere on the panel that is not a link (Artist, Album), goes back to the big cover.
+
 ## 0.1.33
 - **Lyrics word by word:** when the song has karaoke lyrics on the server (Navidrome 0.63+ with a TTML or enhanced-LRC lyrics file), the sung line is drawn word by word, like on the desktop: the words already sung are white, the one being sung is in the accent colour, the rest is dim. It checks the position 10 times a second, only while the lyrics are on the screen and the sung line has timed words; every other song (and the LRCLIB lyrics, which only have lines) works as before.
 

@@ -389,7 +389,8 @@ private fun InfoPanel(track: cloud.icosahedron.phone.data.Track, onClose: () -> 
     val rate = t.samplingRate?.let { hz -> (hz / 1000.0).let { k -> if (k == Math.rint(k)) "%.0f kHz".format(k) else "%.1f kHz".format(k) } }
     val channelText = t.channels?.let { when (it) { 1 -> "Mono"; 2 -> "Stereo"; else -> "$it channels" } }
     val added = t.created?.take(10)
-    LazyColumn(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+    // A tap on the small cover, or anywhere on the panel that is not a link, goes back to the big cover
+    LazyColumn(Modifier.fillMaxSize().clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = onCover), horizontalAlignment = Alignment.CenterHorizontally) {
         item { Cover(t.coverArt, 110.dp, modifier = Modifier.clickable(onClick = onCover).padding(bottom = 12.dp)) }
         val cards = listOf(
             listOfNotNull<@Composable () -> Unit>(

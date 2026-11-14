@@ -116,7 +116,7 @@ fun ArtistRow(a: Artist, onClick: () -> Unit) {
 
 /** A song: tap to play the list from here; the menu adds it to the queue. */
 @Composable
-fun TrackRow(t: Track, showCover: Boolean = true, number: Int? = null, onPlay: () -> Unit) {
+fun TrackRow(t: Track, showCover: Boolean = true, number: Int? = null, subtitle: String? = null, trailing: String? = null, onPlay: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     val playing = Control.track?.id == t.id
     Row(Modifier.fillMaxWidth().clickable(onClick = onPlay).padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -124,10 +124,10 @@ fun TrackRow(t: Track, showCover: Boolean = true, number: Int? = null, onPlay: (
         if (showCover) Cover(t.coverArt, 44.dp, modifier = Modifier.padding(end = 12.dp))
         Column(Modifier.weight(1f)) {
             Text(t.title, maxLines = 1, overflow = TextOverflow.Ellipsis, color = if (playing) Accent else androidx.compose.ui.graphics.Color.White)
-            Text(t.artist + (if (t.bpm != null && cloud.icosahedron.phone.data.Prefs.showBpm) " · ${t.bpm} BPM" else ""), maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, color = Dim)
+            Text(subtitle ?: (t.artist + (if (t.bpm != null && cloud.icosahedron.phone.data.Prefs.showBpm) " · ${t.bpm} BPM" else "")), maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, color = Dim)
         }
         if (cloud.icosahedron.phone.player.Offline.isKept(t.id)) Text("↓ ", fontSize = 12.sp, color = Accent)
-        Text(fmt(t.duration * 1000L), fontSize = 12.sp, color = Dim)
+        Text(trailing ?: fmt(t.duration * 1000L), fontSize = 12.sp, color = Dim)
         Box {
             IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "More", tint = Dim) }
             TargetMenu(Target("track", t.id, t.title, t.artist, t.coverArt, track = t), menu) { menu = false }

@@ -28,6 +28,12 @@ object Prefs {
     var libraryTab: Int
         get() = p.getInt("libraryTab", 0)
         set(v) { p.edit().putInt("libraryTab", v).apply() }
+    var songSort: String
+        get() = p.getString("songSort", "Title") ?: "Title"
+        set(v) { p.edit().putString("songSort", v).apply() }
+    var songSortAsc: Boolean
+        get() = p.getBoolean("songSortAsc", true)
+        set(v) { p.edit().putBoolean("songSortAsc", v).apply() }
     var albumSort: String
         get() = p.getString("albumSort", "Name") ?: "Name"
         set(v) { p.edit().putString("albumSort", v).apply() }

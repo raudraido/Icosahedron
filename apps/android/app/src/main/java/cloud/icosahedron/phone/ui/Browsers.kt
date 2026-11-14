@@ -88,7 +88,7 @@ private fun LetterIndex(letters: List<String>, onPick: (String) -> Unit) {
 }
 
 @Composable
-private fun MenuButton(label: String, content: @Composable (close: () -> Unit) -> Unit) {
+internal fun MenuButton(label: String, content: @Composable (close: () -> Unit) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         TextButton(onClick = { open = true }) { Text(label, color = Accent) }

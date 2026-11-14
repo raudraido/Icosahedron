@@ -239,14 +239,34 @@ final class SubsonicClient {
 
     /// Lyrics from the server (OpenSubsonic getLyricsBySongId); synced ones are preferred.
     func structuredLyrics(songId: String) async throws -> [LyricsLine]? {
-        let r = try await call("getLyricsBySongId", [item("id", songId)])
+        // enhanced=true: Navidrome 0.63+ then also sends the words' own times (cueLine) when the song has a karaoke lyrics file
+        let r = try await call("getLyricsBySongId", [item("id", songId), item("enhanced", "true")])
         let list = (r["lyricsList"] as? [String: Any]) ?? [:]
         let all = J.arr(list["structuredLyrics"])
-        guard let pick = all.first(where: { ($0["synced"] as? Bool) == true }) ?? all.first else { return nil }
+        // The main track: a server may also send a translation or a pronunciation as separate entries
+        guard let pick = all.first(where: { ($0["synced"] as? Bool) == true && (J.str($0, "kind") ?? "main") == "main" })
+                ?? all.first(where: { ($0["synced"] as? Bool) == true }) ?? all.first else { return nil }
         let synced = (pick["synced"] as? Bool) ?? false
-        let lines = J.arr(pick["line"]).map { d -> LyricsLine in
+        let offset = Double(J.int(pick, "offset") ?? 0) / 1000
+        // The words of each line: only the main voice (a duet's other voice and the backing vocals are left out)
+        let agents = J.arr(pick["agents"])
+        let main = agents.first(where: { J.str($0, "role") == "main" }).flatMap { J.str($0, "id") }
+        var wordsByLine: [Int: [LyricsWord]] = [:]
+        if synced {
+            for cl in J.arr(pick["cueLine"]) {
+                let agent = J.str(cl, "agentId")
+                if !agents.isEmpty, let main, let agent, agent != main { continue }
+                guard let i = J.int(cl, "index"), wordsByLine[i] == nil else { continue }
+                let words = J.arr(cl["cue"]).map { c in
+                    LyricsWord(text: J.str(c, "value") ?? "", start: Double(J.int(c, "start") ?? 0) / 1000 + offset,
+                               end: J.int(c, "end").map { Double($0) / 1000 + offset })
+                }
+                if !words.isEmpty { wordsByLine[i] = words }
+            }
+        }
+        let lines = J.arr(pick["line"]).enumerated().map { i, d -> LyricsLine in
             let start = J.int(d, "start")
-            return LyricsLine(time: synced ? start.map { Double($0) / 1000 } : nil, text: J.str(d, "value") ?? "")
+            return LyricsLine(time: synced ? start.map { Double($0) / 1000 + offset } : nil, text: J.str(d, "value") ?? "", words: wordsByLine[i])
         }
         return lines.isEmpty ? nil : lines
     }

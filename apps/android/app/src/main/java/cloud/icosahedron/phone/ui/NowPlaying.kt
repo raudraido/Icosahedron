@@ -55,6 +55,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cloud.icosahedron.phone.R
 import cloud.icosahedron.phone.data.Lyrics
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.ui.text.withStyle
 import cloud.icosahedron.phone.player.Playback
 
 /** The full player: cover, seek bar, controls; lyrics and the queue replace the cover. */
@@ -261,20 +263,62 @@ private fun LyricsPanel(t: cloud.icosahedron.phone.data.Track, big: Boolean) {
     val state = rememberLazyListState()
     // The line that is sung sits a third of the way down, with the next lines under it
     LaunchedEffect(now) { if (now >= 0) state.animateScrollToItem(now, -(state.layoutInfo.viewportSize.height / 3)) }
+    // A song with karaoke lyrics: the position is read every 100 ms (the 500 ms tick is too coarse for words), only while this
+    // panel is on the screen and the sung line has timed words
+    val words = list.getOrNull(now)?.words
+    val onScreen = rememberOnScreen()
+    var fine by remember(now) { mutableLongStateOf(Control.positionMs) }
+    LaunchedEffect(now, onScreen, words != null) {
+        if (words != null && onScreen) while (true) {
+            fine = if (Control.remote) Control.positionMs else Playback.player.currentPosition
+            kotlinx.coroutines.delay(100)
+        }
+    }
     LazyColumn(Modifier.fillMaxSize(), state = state, horizontalAlignment = Alignment.CenterHorizontally, contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 24.dp)) {
         itemsIndexed(list) { i, l ->
             val current = i == now
-            Text(
+            val size = if (big) (if (current) 34.sp else 25.sp) else (if (current) 27.sp else 20.sp)
+            val height = if (big) (if (current) 42.sp else 32.sp) else (if (current) 33.sp else 26.sp)
+            val mod = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = if (big) 11.dp else 8.dp).clickable(enabled = l.timeMs != null) { Control.seekTo(l.timeMs ?: 0) }
+            val w = l.words
+            if (current && w != null) {
+                // The words already sung are white, the one being sung is in the accent colour, the rest is dim
+                val pos = fine
+                Text(
+                    androidx.compose.ui.text.buildAnnotatedString {
+                        w.forEachIndexed { k, word ->
+                            val end = word.endMs ?: w.getOrNull(k + 1)?.startMs ?: Long.MAX_VALUE
+                            val c = when { pos >= end -> Color.White; pos >= word.startMs -> Accent; else -> Color(0x80FFFFFF) }
+                            withStyle(androidx.compose.ui.text.SpanStyle(color = c)) { append(word.text) }
+                        }
+                    },
+                    fontSize = size, lineHeight = height, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, textAlign = TextAlign.Center, modifier = mod,
+                )
+            } else Text(
                 l.text.ifBlank { "♪" },
-                fontSize = if (big) (if (current) 34.sp else 25.sp) else (if (current) 27.sp else 20.sp),
-                lineHeight = if (big) (if (current) 42.sp else 32.sp) else (if (current) 33.sp else 26.sp),
+                fontSize = size, lineHeight = height,
                 fontWeight = if (current) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal,
                 textAlign = TextAlign.Center,
                 color = if (current) Color.White else Color(0x80FFFFFF),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = if (big) 11.dp else 8.dp).clickable(enabled = l.timeMs != null) { Control.seekTo(l.timeMs ?: 0) },
+                modifier = mod,
             )
         }
     }
+}
+
+/** True while the app is on the screen (started): the things that tick for the eyes stop when it is not. */
+@Composable
+private fun rememberOnScreen(): Boolean {
+    val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    var on by remember { mutableStateOf(owner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) }
+    androidx.compose.runtime.DisposableEffect(owner) {
+        val o = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_START) on = true else if (e == androidx.lifecycle.Lifecycle.Event.ON_STOP) on = false
+        }
+        owner.lifecycle.addObserver(o)
+        onDispose { owner.lifecycle.removeObserver(o) }
+    }
+    return on
 }
 
 @Composable

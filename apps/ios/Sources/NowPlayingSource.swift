@@ -31,6 +31,11 @@ struct NowPlayingSource {
         isRemote ? sync.position(of: target, at: date) : player.position
     }
 
+    /// Like `position(at:)`, but read from the player at this moment (for the words of a karaoke line).
+    func livePosition(at date: Date = Date()) -> Double {
+        isRemote ? sync.position(of: target, at: date) : player.livePosition()
+    }
+
     var queueTotal: Double { queue.reduce(0) { $0 + Double($1.duration) } }
 
     func queueRemaining(at date: Date = Date()) -> Double {

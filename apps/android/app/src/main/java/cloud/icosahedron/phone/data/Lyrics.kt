@@ -9,8 +9,11 @@ import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
-/** One line of a song's lyrics; [timeMs] is when it starts, null for lyrics that are not timed. */
-data class LyricLine(val timeMs: Long?, val text: String)
+/** One word (or syllable) of a line with its own timing: the server's karaoke lyrics, when the song has them. */
+data class LyricWord(val text: String, val startMs: Long, val endMs: Long?)
+
+/** One line of a song's lyrics; [timeMs] is when it starts, null for lyrics that are not timed; [words] when the words are timed too. */
+data class LyricLine(val timeMs: Long?, val text: String, val words: List<LyricWord>? = null)
 
 /**
  * Lyrics: from the server first (OpenSubsonic `getLyricsBySongId`, Navidrome reads them from the files'

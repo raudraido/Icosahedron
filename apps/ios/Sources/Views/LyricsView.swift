@@ -42,9 +42,7 @@ struct LyricsView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
                         let active = synced ? i == current : true
-                        Text(line.text.isEmpty ? "♪" : line.text)
-                            .font(.title2.weight(.bold))
-                            .foregroundStyle(.white.opacity(active ? 1 : 0.38))
+                        lineText(line, active: active, source: s)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .contentShape(Rectangle())
                             .onTapGesture { if let t = line.time { s.seek(to: t) } }
@@ -60,6 +58,33 @@ struct LyricsView: View {
                 withAnimation(.easeInOut(duration: 0.45)) { proxy.scrollTo(new, anchor: .center) }
             }
         }
+    }
+
+    /// A line of text. The sung line of a song with karaoke lyrics is drawn word by word (its own clock, 10 times a second, only
+    /// for that one line); every other line is plain.
+    @ViewBuilder
+    private func lineText(_ line: LyricsLine, active: Bool, source s: NowPlayingSource) -> some View {
+        if active, synced, let words = line.words {
+            TimelineView(.periodic(from: .now, by: 0.1)) { ctx in
+                Text(Self.styled(words, at: s.livePosition(at: ctx.date))).font(.title2.weight(.bold))
+            }
+        } else {
+            Text(line.text.isEmpty ? "♪" : line.text)
+                .font(.title2.weight(.bold))
+                .foregroundStyle(.white.opacity(active ? 1 : 0.38))
+        }
+    }
+
+    /// The words already sung are white, the one being sung is in the accent colour, the rest is dim.
+    private static func styled(_ words: [LyricsWord], at position: Double) -> AttributedString {
+        var out = AttributedString()
+        for (k, w) in words.enumerated() {
+            let end = w.end ?? (k + 1 < words.count ? words[k + 1].start : .infinity)
+            var a = AttributedString(w.text)
+            a.foregroundColor = position >= end ? Color.white : (position >= w.start ? Theme.accent : Color.white.opacity(0.38))
+            out += a
+        }
+        return out
     }
 
     /// The last line that has started (a quarter second early, so it lights up as it begins).

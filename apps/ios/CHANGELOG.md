@@ -2,6 +2,10 @@
 
 A native SwiftUI app for iPhone and iPad (iOS 26.1 or later), built as an unsigned `.ipa` (sign it with SideStore, AltStore, Sideloadly or iloader: [docs/ios.md](../../docs/ios.md)). It has been part of the shared releases 0.15.3 to 0.15.9 (see the [main changelog](../../CHANGELOG.md)); from here it has its **own version, release and changelog**. What works with which server: [docs/compatibility.md](../../docs/compatibility.md).
 
+## Unreleased
+
+- **Songs is a real page now:** a search box, quick views (**All, Recently added, Most played, Never played, Favorites, Random**), **sort** (title, artist, album, year, date added, play count, length, BPM, random; choose the same one again to flip the direction) and **filters** (favorites, never played, decades, BPM ranges such as 170–180, genres) in the bar. The rows show the artist and the album, and at the right the value you sort by. **Play** and **Shuffle** work on what the filter shows, and the count is exact. The server does the work (Navidrome's own API), a page at a time, so a library of tens of thousands of songs needs nothing stored on the phone. If the server's own API cannot be reached, Songs stays the plain list.
+
 ## 0.2.11
 - **Now Playing is laid out like the Android player, and less crowded:**
   - Top: an arrow to close it (and "Playing on …" when another device plays), with AirPlay and the devices button at the right. The "1 of N" and time-left pills are gone.
@@ -13,7 +17,6 @@ A native SwiftUI app for iPhone and iPad (iOS 26.1 or later), built as an unsign
 ## 0.2.10
 - **The right cover, always:** when the song changed, a cover that was already loaded could stay on screen (the mini player, Now Playing) instead of the new song's cover, or the old one stayed until the new one had loaded. Fixed.
 
-## Unreleased
 
 - **Lighter on the battery:**
   - While a song plays, the app reports to the sync server every 10 s on screen and every 30 s in the background (it was every 3 s, which kept the mobile radio awake); every real change is still sent at once.

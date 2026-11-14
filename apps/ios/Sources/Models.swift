@@ -48,6 +48,8 @@ struct Track: Identifiable, Hashable, Codable {
     var playCount: Int?
     var created: String?
     var userRating: Int?
+    /// From the server's own song object (the file's tag), when it has one.
+    var bpm: Int?
 
     /// From a Subsonic `song` / `entry` object.
     init?(subsonic d: [String: Any]) {
@@ -76,6 +78,36 @@ struct Track: Identifiable, Hashable, Codable {
         playCount = J.int(d, "playCount")
         created = J.str(d, "created")
         userRating = J.int(d, "userRating")
+    }
+
+    /// From a song of Navidrome's own API (/api/song).
+    init?(native d: [String: Any]) {
+        guard let id = J.str(d, "id") else { return nil }
+        self.id = id
+        title = J.str(d, "title") ?? ""
+        artist = J.str(d, "artist") ?? ""
+        artistId = J.str(d, "artistId")
+        album = J.str(d, "album")
+        albumId = J.str(d, "albumId")
+        trackNumber = J.int(d, "trackNumber") ?? 0
+        discNumber = J.int(d, "discNumber") ?? 0
+        duration = Int((d["duration"] as? NSNumber)?.doubleValue ?? 0)
+        coverArt = id // getCoverArt takes a song's own id
+        starred = (d["starred"] as? Bool) ?? false
+        year = J.int(d, "year").flatMap { $0 > 0 ? $0 : nil }
+        genre = J.str(d, "genre")
+        bitrate = J.int(d, "bitRate")
+        format = J.str(d, "suffix")
+        directURL = nil
+        size = J.int(d, "size")
+        path = J.str(d, "path")
+        samplingRate = J.int(d, "sampleRate")
+        bitDepth = J.int(d, "bitDepth")
+        channels = J.int(d, "channels")
+        playCount = J.int(d, "playCount")
+        created = J.str(d, "createdAt")
+        userRating = nil
+        bpm = J.int(d, "bpm").flatMap { $0 > 0 ? $0 : nil }
     }
 
     /// From the sync protocol's track object (the web/desktop Track shape).

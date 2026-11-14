@@ -99,8 +99,8 @@ struct LibraryView: View {
     }
 }
 
-/// Every song in the library, loaded a page at a time.
-struct SongsScreen: View {
+/// Every song in the library, loaded a page at a time (no sort or filter: the fallback when the server's own API is not reachable).
+struct BasicSongsScreen: View {
     @Environment(AppModel.self) private var app
     @State private var tracks: [Track] = []
     @State private var loading = false

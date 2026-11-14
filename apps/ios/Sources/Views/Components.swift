@@ -171,8 +171,12 @@ struct TrackRow: View {
     let track: Track
     var number: Int?
     var showCover = false
+    /// Replaces the artist line, and the length at the right (the Songs page shows the value it is sorted by).
+    var subtitleOverride: String?
+    var trailing: String?
 
     private var subtitle: String {
+        if let subtitleOverride { return subtitleOverride }
         if showBPM, let b = app.bpm[track.id] { return track.artist + " · " + String(format: "%.0f BPM", b) }
         return track.artist
     }
@@ -199,7 +203,7 @@ struct TrackRow: View {
             if AudioCache.shared.isPinned(track.id) {
                 Image(systemName: "arrow.down.circle.fill").font(.caption).foregroundStyle(.secondary)
             }
-            Text(formatTime(Double(track.duration))).font(.caption).foregroundStyle(.secondary).monospacedDigit()
+            Text(trailing ?? formatTime(Double(track.duration))).font(.caption).foregroundStyle(.secondary).monospacedDigit()
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)

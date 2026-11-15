@@ -2,7 +2,7 @@
 
 A native app (Kotlin, Jetpack Compose for TV, Media3) for Google TV and Android TV: [docs/android-tv.md](../../docs/android-tv.md).
 
-## Unreleased
+## 0.2.12
 - **Screensaver colour boost** (Settings, Off / Low / High, Low by default): puts some saturation and contrast back into the logo and the covers, which the TV shows washed out in its HDR mode.
 
 ## 0.2.11

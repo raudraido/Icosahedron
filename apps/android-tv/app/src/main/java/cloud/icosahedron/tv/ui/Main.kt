@@ -26,7 +26,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -129,21 +128,6 @@ fun MainScreen() {
         if (saverWanted) {
             delay(ScreenSaverPrefs.minutes * 60_000L)
             saver = true
-        }
-    }
-    // While the screensaver is up the window asks for the HDR colour mode (with a tiny HDR video in it, see ScreenSaver.kt,
-    // the TV really switches to HDR: an OLED has its black pixels off there instead of lifted).
-    DisposableEffect(saver) {
-        val window = (context as? Activity)?.window
-        if (window != null && saver) {
-            runCatching {
-                window.colorMode = android.content.pm.ActivityInfo.COLOR_MODE_HDR
-            }
-        }
-        onDispose {
-            if (window != null) runCatching {
-                window.colorMode = android.content.pm.ActivityInfo.COLOR_MODE_DEFAULT
-            }
         }
     }
     fun go(s: Screen) { stack = stack + s }

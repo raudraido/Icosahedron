@@ -20,6 +20,7 @@ import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.CacheEvictor
 import androidx.media3.datasource.cache.CacheSpan
 import androidx.media3.datasource.cache.CacheWriter
+import androidx.media3.datasource.cache.ContentMetadata
 import androidx.media3.datasource.cache.NoOpCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import cloud.icosahedron.phone.data.Prefs
@@ -75,6 +76,7 @@ object Offline {
         keptCache = SimpleCache(File(appContext.filesDir, "offline"), NoOpCacheEvictor(), db)
         loadKept()
         loadCollections()
+        loadRegister()
     }
 
     // ── Keys: a kept song has one key whatever the quality; the others are per quality ──
@@ -104,6 +106,7 @@ object Offline {
         prefetchWriter?.cancel()
         prefetchJob?.cancel()
         if (t == null || url == null || !cachingAllowed() || isKept(t.id)) return
+        noteCached(t)
         val key = keyFor(t)
         prefetchJob = scope.launch {
             try {
@@ -112,6 +115,64 @@ object Offline {
                 w.cache()
             } catch (_: Exception) { } finally { prefetchWriter = null }
         }
+    }
+
+    // ── The list of what the cache holds. The cache itself only knows keys ("id|quality"), so the songs that were played or
+    //    fetched ahead are noted here (id, the track, when it was last used) to be able to list them with their names. ──
+    private val registerFile get() = File(appContext.filesDir, "cached.json")
+    private val registerLock = Any()
+    private val register = LinkedHashMap<String, Pair<Track, Long>>() // oldest use first
+
+    private fun loadRegister() {
+        try {
+            val a = JSONArray(registerFile.readText())
+            synchronized(registerLock) {
+                for (i in 0 until a.length()) {
+                    val o = a.getJSONObject(i)
+                    val t = Track.fromWire(o.getJSONObject("track")) ?: continue
+                    register[t.id] = t to o.optLong("used")
+                }
+            }
+        } catch (_: Exception) { }
+    }
+
+    private fun saveRegister() {
+        val snapshot = synchronized(registerLock) { register.values.toList() }
+        scope.launch {
+            try { registerFile.writeText(JSONArray(snapshot.map { (t, used) -> org.json.JSONObject().put("track", t.toWire()).put("used", used) }).toString()) } catch (_: Exception) { }
+        }
+    }
+
+    /** A song is being played or fetched ahead: it will be in the cache (when caching is allowed), so it can be listed. */
+    fun noteCached(t: Track) {
+        if (!::appContext.isInitialized || t.directUrl != null || isKept(t.id)) return
+        synchronized(registerLock) {
+            register.remove(t.id)
+            register[t.id] = t to System.currentTimeMillis()
+            while (register.size > 2000) register.remove(register.keys.first())
+        }
+        saveRegister()
+    }
+
+    /** The songs that are whole in the cache now, the most recently played first. What the cache has already let go is dropped from the list. */
+    fun cachedSongs(): List<Track> {
+        if (!::lru.isInitialized) return emptyList()
+        val whole = HashSet<String>()
+        try {
+            for (k in lru.keys.toList()) {
+                val id = k.substringBefore('|', "")
+                if (id.isEmpty() || k.startsWith("kept:")) continue
+                val len = ContentMetadata.getContentLength(lru.getContentMetadata(k))
+                if (len > 0 && lru.isCached(k, 0, len)) whole += id
+            }
+        } catch (_: Exception) { }
+        val out = synchronized(registerLock) {
+            val gone = register.keys.filter { it !in whole }
+            gone.forEach { register.remove(it) }
+            register.values.toList().reversed().map { it.first }.filter { !isKept(it.id) }
+        }
+        saveRegister()
+        return out
     }
 
     fun cacheBytes(): Long = if (::lru.isInitialized) lru.cacheSpace else 0

@@ -55,6 +55,7 @@ enum class LibSection(val title: String, val icon: Int) {
     Songs("Songs", R.drawable.ic_lib_songs),
     Favorites("Favorite Songs", R.drawable.ic_lib_favorites),
     Downloads("Downloads", R.drawable.ic_lib_downloads),
+    Cache("Cached Songs", R.drawable.ic_lib_cache),
     Directories("Directories", R.drawable.ic_lib_directories),
     Playlists("Playlists", R.drawable.ic_lib_playlists),
     Radios("Radios", R.drawable.ic_lib_radios),
@@ -313,4 +314,39 @@ internal fun NativeSongs(initialFilter: SongFilter = SongFilter.All, initialSort
             }
         }
     }
+}
+
+/**
+ * The songs the phone keeps by itself while you listen. They play without a connection for now, but they are temporary: the
+ * oldest go when the cache is full (the limit is in Settings), so Download what you want for good. Most recently played first.
+ */
+@Composable
+fun CachedSongs() {
+    val scope = rememberCoroutineScope()
+    var revision by remember { mutableStateOf(0) }
+    val songs by load(revision) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { cloud.icosahedron.phone.player.Offline.cachedSongs() } }
+    val list = songs ?: emptyList()
+    var confirm by remember { mutableStateOf(false) }
+    LazyColumn(Modifier.fillMaxSize()) {
+        item {
+            val size = cloud.icosahedron.phone.player.Offline.cacheBytes()
+            Text(if (songs == null) "Loading…" else "${list.size} songs · " + "%.0f MB".format(size / 1048576.0), fontSize = 13.sp, color = Dim, modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp))
+            Text("Removed automatically when the cache is full. Use ⋮ and Download on a song to keep it.", fontSize = 13.sp, color = Dim, modifier = Modifier.padding(16.dp))
+            if (list.isNotEmpty()) {
+                Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(onClick = { Control.playTracks(list, 0) }, modifier = Modifier.weight(1f)) { Text("Play") }
+                    androidx.compose.material3.OutlinedButton(onClick = { Control.playTracks(list.shuffled(), 0) }, modifier = Modifier.weight(1f)) { Text("Shuffle") }
+                }
+                androidx.compose.material3.TextButton(onClick = { confirm = true }, modifier = Modifier.padding(horizontal = 8.dp)) { Text("Clear the cache", color = Accent) }
+            } else if (songs != null) Text("No songs cached yet. Songs you play are kept here for a while.", color = Dim, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp))
+        }
+        itemsIndexed(list, key = { _, t -> t.id }) { i, t -> TrackRow(t) { Control.playTracks(list, i) } }
+    }
+    if (confirm) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { confirm = false },
+        title = { Text("Clear the cache?") },
+        text = { Text("The songs you downloaded stay.") },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { confirm = false; cloud.icosahedron.phone.player.Offline.clearCache(); scope.launch { delay(600); revision++ } }) { Text("Clear", color = Accent) } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = { confirm = false }) { Text("Cancel") } },
+    )
 }

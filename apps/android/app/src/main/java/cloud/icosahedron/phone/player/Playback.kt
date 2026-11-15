@@ -100,7 +100,7 @@ object Playback {
         })
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) { sync(); updateTicker(); onChanged?.invoke() }
-            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) { sync(); nowPlaying(); prefetchNext(); onChanged?.invoke() }
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) { sync(); nowPlaying(); if (player.playWhenReady) current?.let { Offline.noteCached(it) }; prefetchNext(); onChanged?.invoke() }
             override fun onPlaybackStateChanged(playbackState: Int) { sync(); onChanged?.invoke() }
             override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) { sync(); onChanged?.invoke() }
             override fun onRepeatModeChanged(repeatMode: Int) { sync(); onChanged?.invoke() }
@@ -120,6 +120,7 @@ object Playback {
     private fun updateTicker() {
         if (player.isPlaying) {
             if (tickJob?.isActive == true) return
+            current?.let { Offline.noteCached(it) } // a restored queue that is played now: the song goes into the cache
             prefetchNext()
             tickJob = scope.launch {
                 while (true) {

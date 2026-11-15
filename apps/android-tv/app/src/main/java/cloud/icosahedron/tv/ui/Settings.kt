@@ -65,12 +65,13 @@ fun SettingsScreen() {
             Text("Screensaver", color = Dim, modifier = Modifier.width(140.dp))
             ActionButton(if (ScreenSaverPrefs.enabled) "On" else "Off", onClick = { ScreenSaverPrefs.turn(!ScreenSaverPrefs.enabled) })
             if (ScreenSaverPrefs.enabled) {
+                ActionButton(ScreenSaverPrefs.style.label, onClick = { ScreenSaverPrefs.nextStyle() })
                 ActionButton("−", onClick = { ScreenSaverPrefs.after(ScreenSaverPrefs.minutes - 1) })
                 Text("${ScreenSaverPrefs.minutes} min", modifier = Modifier.width(70.dp))
                 ActionButton("+", onClick = { ScreenSaverPrefs.after(ScreenSaverPrefs.minutes + 1) })
             }
         }
-        Text("The small logo that moves around after no key press; not while the lyrics are open.", color = Dim, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+        Text("Click the style to change it. Starts after no key press; not while the lyrics are open.", color = Dim, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
         Spacer(Modifier.height(24.dp))
         ActionButton("Sign out", onClick = { app.signOut() })
     }

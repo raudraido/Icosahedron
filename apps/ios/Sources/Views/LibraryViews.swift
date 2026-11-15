@@ -8,6 +8,7 @@ enum LibrarySection: String, Hashable, CaseIterable {
     case songs = "Songs"
     case favorites = "Favorite Songs"
     case cached = "Downloads"
+    case cache = "Cached Songs"
     case directories = "Directories"
     case playlists = "Playlists"
     case radios = "Radios"
@@ -21,6 +22,7 @@ enum LibrarySection: String, Hashable, CaseIterable {
         case .songs: return "Songs"
         case .favorites: return "Favorite Songs"
         case .cached: return "Downloads"
+        case .cache: return "Cached Songs"
         case .directories: return "Directories"
         case .playlists: return "Playlists"
         case .radios: return "Radios"
@@ -36,6 +38,7 @@ enum LibrarySection: String, Hashable, CaseIterable {
         case .songs: return "music.note"
         case .favorites: return "heart.fill"
         case .cached: return "arrow.down.circle.fill"
+        case .cache: return "internaldrive"
         case .directories: return "folder.fill"
         case .playlists: return "music.note.list"
         case .radios: return "dot.radiowaves.left.and.right"
@@ -88,6 +91,8 @@ struct LibraryView: View {
         case .favorites:
             TrackListScreen(title: String(localized: "Favorite Songs")) { try await app.client?.starred() ?? [] }
         case .cached:
+            DownloadsScreen()
+        case .cache:
             CachedSongsScreen()
         case .directories:
             DirectoryScreen(entry: nil)
@@ -206,25 +211,19 @@ struct RadiosScreen: View {
     }
 }
 
-/// Songs on the phone: the automatic cache plus the ones kept offline. Works without a connection.
-struct CachedSongsScreen: View {
+/// What you downloaded on purpose (songs, albums, playlists): it stays on the phone until you remove it, and it works without a
+/// connection. The songs the phone keeps by itself while you listen are on the Cached Songs page.
+struct DownloadsScreen: View {
     @Environment(AppModel.self) private var app
-    @State private var onlyKept = false
 
     var body: some View {
         let _ = app.cacheRevision // refresh whenever the cache changes
-        let all = AudioCache.shared.entries()
-        let shown = onlyKept ? all.filter { $0.pinned } : all
+        let shown = AudioCache.shared.entries().filter { $0.pinned }
         let playable = shown.filter { $0.file != nil }.map { $0.track }
         let sizes = AudioCache.shared.sizes()
         List {
             Section {
-                Picker("", selection: $onlyKept) {
-                    Text("All").tag(false)
-                    Text("Downloaded").tag(true)
-                }
-                .pickerStyle(.segmented)
-                Text("\(playable.count) songs · cache \(bytes(sizes.auto)) · kept offline \(bytes(sizes.pinned))")
+                Text("\(playable.count) songs · kept offline \(bytes(sizes.pinned))")
                     .font(.footnote).foregroundStyle(.secondary)
                 if !playable.isEmpty {
                     HStack(spacing: 12) {
@@ -257,10 +256,10 @@ struct CachedSongsScreen: View {
             }
 
             ForEach(shown) { e in
-                row(e, playable: playable)
+                OfflineEntryRow(entry: e, playable: playable)
             }
             if shown.isEmpty {
-                Text(onlyKept ? "Nothing downloaded yet. Use \"Download\" in a track's, album's or playlist's menu." : "No songs cached yet.")
+                Text("Nothing downloaded yet. Use \"Download\" in a track's, album's or playlist's menu.")
                     .foregroundStyle(.secondary)
             }
         }
@@ -270,8 +269,17 @@ struct CachedSongsScreen: View {
         .task { if let c = app.client { await AudioCache.shared.fillMissingMetadata(client: c) } }
     }
 
-    @ViewBuilder
-    private func row(_ e: AudioCache.Entry, playable: [Track]) -> some View {
+    private func bytes(_ n: Int64) -> String { ByteCountFormatter.string(fromByteCount: n, countStyle: .file) }
+}
+
+/// A song of the phone's offline store, on the Downloads and the Cached Songs pages: tap to play, swipe to remove or to keep it.
+struct OfflineEntryRow: View {
+    @Environment(AppModel.self) private var app
+    let entry: AudioCache.Entry
+    let playable: [Track]
+
+    var body: some View {
+        let e = entry
         let ready = e.file != nil
         Button {
             if ready, let i = playable.firstIndex(where: { $0.id == e.id }) { app.play(playable, at: i) }
@@ -289,7 +297,7 @@ struct CachedSongsScreen: View {
         .buttonStyle(.plain)
         .disabled(!ready)
         .swipeActions(edge: .trailing) {
-            Button(role: .destructive) { remove(e) } label: { Label("Remove", systemImage: "trash") }
+            Button(role: .destructive) { AudioCache.shared.remove(e.id) } label: { Label("Remove", systemImage: "trash") }
             if e.pinned {
                 Button { app.removeOffline([e.id]) } label: { Label("Remove Download", systemImage: "pin.slash") }.tint(.orange)
             } else {
@@ -297,10 +305,53 @@ struct CachedSongsScreen: View {
             }
         }
     }
+}
 
-    private func remove(_ e: AudioCache.Entry) {
-        AudioCache.shared.remove(e.id)
+/// The songs the phone keeps by itself while you listen: they play without a connection for now, but they are temporary. The
+/// oldest go when the cache is full (the limit is in Settings), so download what you want for good. Most recently played first.
+struct CachedSongsScreen: View {
+    @Environment(AppModel.self) private var app
+    @State private var confirmClear = false
+
+    var body: some View {
+        let _ = app.cacheRevision // refresh whenever the cache changes
+        let shown = AudioCache.shared.entries().filter { !$0.pinned && $0.file != nil }.sorted { $0.lastUsed > $1.lastUsed }
+        let playable = shown.map { $0.track }
+        let sizes = AudioCache.shared.sizes()
+        List {
+            Section {
+                Text("\(shown.count) songs · \(ByteCountFormatter.string(fromByteCount: sizes.auto, countStyle: .file))")
+                    .font(.footnote).foregroundStyle(.secondary)
+                Text("Removed automatically when the cache is full. Swipe a song and choose Download to keep it.")
+                    .font(.footnote).foregroundStyle(.secondary)
+                if !playable.isEmpty {
+                    HStack(spacing: 12) {
+                        Button { app.play(playable, at: 0) } label: { Label("Play", systemImage: "play.fill").frame(maxWidth: .infinity) }
+                            .buttonStyle(.borderedProminent)
+                        Button { app.play(playable.shuffled(), at: 0) } label: { Label("Shuffle", systemImage: "shuffle").frame(maxWidth: .infinity) }
+                            .buttonStyle(.bordered)
+                    }
+                    Button(role: .destructive) { confirmClear = true } label: { Label("Clear Cache", systemImage: "trash").frame(maxWidth: .infinity) }
+                        .buttonStyle(.bordered)
+                }
+            }
+            .listRowSeparator(.hidden)
+
+            ForEach(shown) { e in
+                OfflineEntryRow(entry: e, playable: playable)
+            }
+            if shown.isEmpty {
+                Text("No songs cached yet. Songs you play are kept here for a while.").foregroundStyle(.secondary)
+            }
+        }
+        .listStyle(.plain)
+        .navigationTitle("Cached Songs")
+        .navigationBarTitleDisplayMode(.inline)
+        .confirmationDialog("Clear the cache?", isPresented: $confirmClear, titleVisibility: .visible) {
+            Button("Clear Cache", role: .destructive) { AudioCache.shared.clear() }
+        } message: {
+            Text("The songs you downloaded stay.")
+        }
+        .task { if let c = app.client { await AudioCache.shared.fillMissingMetadata(client: c) } }
     }
-
-    private func bytes(_ n: Int64) -> String { ByteCountFormatter.string(fromByteCount: n, countStyle: .file) }
 }

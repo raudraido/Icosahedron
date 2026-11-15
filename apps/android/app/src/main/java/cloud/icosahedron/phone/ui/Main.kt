@@ -340,6 +340,7 @@ private fun LibrarySectionScreen(s: LibSection, onBack: () -> Unit, push: (Route
             LibSection.Songs -> SongsScreen()
             LibSection.Favorites -> FavoriteSongs()
             LibSection.Downloads -> OfflineList(open = { k, i -> push(Route.OfflineR(k, i)) })
+            LibSection.Cache -> CachedSongs()
             LibSection.Playlists -> PlaylistsList(push)
             LibSection.Radios -> RadiosScreen()
             else -> {}

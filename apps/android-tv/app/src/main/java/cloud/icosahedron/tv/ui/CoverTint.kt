@@ -17,6 +17,11 @@ import coil.request.SuccessResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+/** The cover that an open page (an album) wants its background coloured from; the page sets it while it is open. */
+object PageTint {
+    var cover by mutableStateOf<String?>(null)
+}
+
 /**
  * A colour taken from the cover of the playing song, for the Now Playing background. It is darkened and
  * toned down so white text stays readable on it; null when there is no cover (or until it is read). The

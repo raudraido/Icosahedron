@@ -2,6 +2,12 @@
 
 A native app (Kotlin, Jetpack Compose for TV, Media3) for Google TV and Android TV: [docs/android-tv.md](../../docs/android-tv.md).
 
+## Unreleased
+
+- **Hold OK on any song** (in an album, a playlist, search, the queue, the artist's songs) to open its menu: **Play next**, **Add to queue**, **Go to album**, **Go to artist**, **Add to playlist** (choose the playlist) and **Favorite**.
+- **An album's songs show their covers too** (with the track number at the left), and **the album page has the coloured background of Now Playing,** taken from the album's own cover.
+- **More room for the queue on Now Playing:** the queue is wider (the song titles and the artists are no longer cut), and while the queue or the lyrics are open the cover and the title move to the left edge instead of sitting in the middle of a smaller space; the lyrics got a little more room too.
+
 ## 0.2.5
 - **Lists look better:** the song rows have no grey bar any more. The row with the focus gets a soft light background, grows a little and has an accent mark at its left; at the left of each row is the song's **cover** (the playing one has the dancing bars on it; an album's songs show their numbers instead, as the cover is the same), then the title with "artist · album" under it and the length. This is the same in the queue on Now Playing, in search, in the popular songs, in playlists and in the artist's songs.
 - **Album, playlist and artist-songs pages have two parts:** the cover, the name and the buttons stay at the left, only the songs scroll at the right.

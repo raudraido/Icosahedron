@@ -2,8 +2,7 @@
 
 A native app (Kotlin, Jetpack Compose for TV, Media3) for Google TV and Android TV: [docs/android-tv.md](../../docs/android-tv.md).
 
-## Unreleased
-
+## 0.2.4
 - **Sort and Filter on Albums, Artists and Playlists,** like on the phones: two buttons over the list open a list of choices (OK picks, Back closes). Albums: sort by name, album artist, date added, most played, recently played, random or release year; filter by favorites, decade or genre. Artists: sort by name, most albums or random; filter by favorites. Playlists: sort by name, most songs or fewest songs. The page remembers the last choice while the app runs.
 - **A real artist page,** like on the phones: the picture, the number of albums and songs, **Play**, **Shuffle**, **Play next** and **Add to queue** for *all* the artist's songs (the compilations and guest appearances too), the **biography** (press OK to open or close the whole text), the **popular songs**, rows of **Albums**, **Singles & EPs**, **Compilations** and **Appears on** (newest first), and the **similar artists** that are in your library. **All songs** opens every song of the artist in album order. The text, the popular songs and the similar artists come from what Navidrome is set up to use (Last.fm, Spotify) and are left out when it has none; the songs of the whole artist, the compilations and "Appears on" need the Icosahedron server (the TV has no password to give to Navidrome's own API), without it the artist's own albums are shown and Play uses their songs.
 

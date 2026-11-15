@@ -2,6 +2,9 @@
 
 A native app (Kotlin, Jetpack Compose for TV, Media3) for Google TV and Android TV: [docs/android-tv.md](../../docs/android-tv.md).
 
+## Unreleased
+- **Screensaver:** after the minutes you choose without a key press (1–10, in Settings, can be turned off) the screen goes black with the small logo that moves to another place every half minute, so nothing burns into an OLED screen. Five more styles to choose in Settings: **Clock**, **Playing cover**, **Cover mosaic** (random albums from your library), **Pulsing logo** (beats while music plays) and **Song text**; everything keeps moving. It does not start while the lyrics are open. The first key press only wakes the screen.
+
 ## 0.2.7
 - **A long queue no longer traps the remote:** on Now Playing, with the queue open, **Left** jumps to the play button from anywhere in the list (no more pressing Down through hundreds of songs to reach the controls). Coming back into the list (Up or Right from the controls) lands on the song that is playing, not on the first one. The queue's heading shows the number of songs and the hint.
 - **The song menu no longer runs the first item when you let go:** holding OK opens the menu, but letting the button go counted as a click on *Play next*. The release of the hold is now ignored.

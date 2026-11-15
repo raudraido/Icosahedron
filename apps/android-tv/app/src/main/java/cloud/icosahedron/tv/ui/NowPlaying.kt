@@ -36,6 +36,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.foundation.focusGroup
@@ -163,6 +164,10 @@ fun NowPlayingScreen(idle: Boolean) {
     val playFocus = remember { FocusRequester() } // where Left from a long list goes: the play button
     val chrome by animateFloatAsState(if (idle) 0f else 1f, tween(600), label = "chrome")
     LaunchedEffect(Unit) { runCatching { seekFocus.requestFocus() } }
+    DisposableEffect(panel) {
+        ScreenSaverPrefs.lyricsOpen = panel == SidePanel.Lyrics
+        onDispose { ScreenSaverPrefs.lyricsOpen = false }
+    }
     BackHandler(enabled = panel != SidePanel.None) { panel = SidePanel.None } // Back closes the panel before it leaves the screen
 
     // The picture drifts a few pixels over minutes, so that it never rests on the same pixels of an OLED screen.

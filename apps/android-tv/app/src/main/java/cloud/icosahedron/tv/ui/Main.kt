@@ -119,6 +119,17 @@ fun MainScreen() {
             idle = true
         }
     }
+    // The screensaver: after the set minutes without a key press (not while the lyrics are open); the first key press
+    // only wakes the screen.
+    var saver by remember { mutableStateOf(false) }
+    val saverWanted = ScreenSaverPrefs.enabled && !(screen == Screen.NowPlaying && ScreenSaverPrefs.lyricsOpen)
+    LaunchedEffect(keyCount, saverWanted, ScreenSaverPrefs.minutes) {
+        saver = false
+        if (saverWanted) {
+            delay(ScreenSaverPrefs.minutes * 60_000L)
+            saver = true
+        }
+    }
     fun go(s: Screen) { stack = stack + s }
     fun tab(s: Screen) { stack = listOf(s) }
 
@@ -152,12 +163,14 @@ fun MainScreen() {
         val tint = rememberCoverTint(if (onAlbum) PageTint.cover else Playback.current?.coverArt)
         val tintColor by animateColorAsState(tint ?: Bg, tween(800), label = "tint")
         val barAlpha by animateFloatAsState(if (screen == Screen.NowPlaying && idle) 0f else 1f, tween(600), label = "barAlpha")
+        Box {
         Column(
             Modifier.fillMaxSize()
                 .background(if (screen == Screen.NowPlaying || onAlbum) Brush.verticalGradient(listOf(tintColor, Bg)) else SolidColor(Bg))
                 .onPreviewKeyEvent { e ->
                     if (e.type == KeyEventType.KeyDown) {
                         keyCount++
+                        if (saver) { saver = false; swallowUp = true; return@onPreviewKeyEvent true }
                         if (idle && screen == Screen.NowPlaying) { swallowUp = true; return@onPreviewKeyEvent true }
                     }
                     if (e.type == KeyEventType.KeyUp && swallowUp) { swallowUp = false; return@onPreviewKeyEvent true }
@@ -220,6 +233,8 @@ fun MainScreen() {
                     is Screen.PlaylistDetail -> PlaylistDetailScreen(screen.id, screen.name)
                 }
             }
+        }
+        if (saver) ScreenSaver()
         }
     }
 }

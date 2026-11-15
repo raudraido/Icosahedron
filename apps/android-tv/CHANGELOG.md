@@ -2,7 +2,7 @@
 
 A native app (Kotlin, Jetpack Compose for TV, Media3) for Google TV and Android TV: [docs/android-tv.md](../../docs/android-tv.md).
 
-## Unreleased
+## 0.2.10
 - **The screensaver puts the TV into its HDR mode** with a tiny silent black HDR video in the corner (like YouTube does), so an OLED has the black pixels really off and only the picture shines.
 
 ## 0.2.9

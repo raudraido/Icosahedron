@@ -147,13 +147,14 @@ fun MainScreen() {
     }
 
     CompositionLocalProvider(LocalClient provides client, LocalNavigate provides { s: Screen -> go(s) }) {
-        // Now Playing takes its background colour from the cover of the playing song.
-        val tint = rememberCoverTint(Playback.current?.coverArt)
+        // Now Playing takes its background colour from the cover of the playing song, an album page from the album's own cover.
+        val onAlbum = screen is Screen.AlbumDetail
+        val tint = rememberCoverTint(if (onAlbum) PageTint.cover else Playback.current?.coverArt)
         val tintColor by animateColorAsState(tint ?: Bg, tween(800), label = "tint")
         val barAlpha by animateFloatAsState(if (screen == Screen.NowPlaying && idle) 0f else 1f, tween(600), label = "barAlpha")
         Column(
             Modifier.fillMaxSize()
-                .background(if (screen == Screen.NowPlaying) Brush.verticalGradient(listOf(tintColor, Bg)) else SolidColor(Bg))
+                .background(if (screen == Screen.NowPlaying || onAlbum) Brush.verticalGradient(listOf(tintColor, Bg)) else SolidColor(Bg))
                 .onPreviewKeyEvent { e ->
                     if (e.type == KeyEventType.KeyDown) {
                         keyCount++

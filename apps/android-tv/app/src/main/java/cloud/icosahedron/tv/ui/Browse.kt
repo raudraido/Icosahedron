@@ -35,6 +35,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.LaunchedEffect
@@ -226,6 +227,9 @@ fun AlbumDetailScreen(id: String, go: (Screen) -> Unit) {
         r.isFailure -> Message(r.exceptionOrNull()?.message ?: "Could not load")
         else -> {
             val (album, tracks) = r.getOrThrow()
+            // The background of the page is coloured from the album's cover, like Now Playing
+            LaunchedEffect(album?.coverArt) { PageTint.cover = album?.coverArt }
+            DisposableEffect(Unit) { onDispose { PageTint.cover = null } }
             TrackList(
                 title = album?.name ?: "", subtitle = listOfNotNull(album?.artist, album?.year?.toString()).joinToString(" · "),
                 meta = "${tracks.size} songs", coverId = album?.coverArt, tracks = tracks, numbered = true,

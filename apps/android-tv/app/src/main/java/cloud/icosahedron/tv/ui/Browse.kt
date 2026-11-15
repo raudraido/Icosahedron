@@ -91,80 +91,11 @@ fun HomeScreen(go: (Screen) -> Unit) {
 }
 
 @Composable
-fun AlbumsScreen(go: (Screen) -> Unit) {
-    val client = LocalClient.current
-    val result by load("albums") { client.albums("alphabeticalByName", 500) }
-    val r = result
-    when {
-        r == null -> Message("Loading…")
-        r.isFailure -> Message(r.exceptionOrNull()?.message ?: "Could not load")
-        else -> LazyVerticalGrid(
-            columns = GridCells.Adaptive(176.dp),
-            contentPadding = PaddingValues(horizontal = 48.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            items(r.getOrThrow(), key = { it.id }) { a -> AlbumCard(a) { go(Screen.AlbumDetail(a.id)) } }
-        }
-    }
-}
-
-@Composable
-fun ArtistsScreen(go: (Screen) -> Unit) {
-    val client = LocalClient.current
-    val result by load("artists") { client.artists() }
-    val r = result
-    when {
-        r == null -> Message("Loading…")
-        r.isFailure -> Message(r.exceptionOrNull()?.message ?: "Could not load")
-        else -> LazyVerticalGrid(
-            columns = GridCells.Adaptive(220.dp),
-            contentPadding = PaddingValues(horizontal = 48.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            items(r.getOrThrow(), key = { it.id }) { a -> ArtistCard(a) { go(Screen.ArtistDetail(a.id)) } }
-        }
-    }
-}
-
-@Composable
-private fun ArtistCard(artist: Artist, onClick: () -> Unit) {
+internal fun ArtistCard(artist: Artist, onClick: () -> Unit) {
     Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
             Text(artist.name, maxLines = 1, fontSize = 16.sp)
             Text("${artist.albumCount} albums", fontSize = 12.sp, color = dim())
-        }
-    }
-}
-
-@Composable
-fun PlaylistsScreen(go: (Screen) -> Unit) {
-    val client = LocalClient.current
-    val result by load("playlists") { client.playlists() }
-    val r = result
-    when {
-        r == null -> Message("Loading…")
-        r.isFailure -> Message(r.exceptionOrNull()?.message ?: "Could not load")
-        r.getOrThrow().isEmpty() -> Message("No playlists yet")
-        else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 12.dp)) {
-            items(r.getOrThrow().size) { i ->
-                val p = r.getOrThrow()[i]
-                androidx.tv.material3.Button(
-                    onClick = { go(Screen.PlaylistDetail(p.id, p.name)) },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 48.dp, vertical = 2.dp),
-                ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Cover(p.coverArt, 56.dp, px = 120)
-                        Column {
-                            Text(p.name, fontSize = 18.sp)
-                            Text("${p.songCount} songs", fontSize = 12.sp, color = dim())
-                        }
-                    }
-                }
-            }
         }
     }
 }

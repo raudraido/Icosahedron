@@ -2,6 +2,10 @@
 
 A native app (Kotlin, Jetpack Compose for TV, Media3) for Google TV and Android TV: [docs/android-tv.md](../../docs/android-tv.md).
 
+## Unreleased
+
+- **Sort and Filter on Albums, Artists and Playlists,** like on the phones: two buttons over the list open a list of choices (OK picks, Back closes). Albums: sort by name, album artist, date added, most played, recently played, random or release year; filter by favorites, decade or genre. Artists: sort by name, most albums or random; filter by favorites. Playlists: sort by name, most songs or fewest songs. The page remembers the last choice while the app runs.
+
 ## 0.2.3
 - **The tile on the Google TV home screen:** the logo was too big and cut off at the top and bottom, with no name. It is now the logo and the name "Icosahedron" side by side on the app's dark background, all of it in view.
 

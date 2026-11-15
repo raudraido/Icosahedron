@@ -2,6 +2,9 @@
 
 A native app (Kotlin, Jetpack Compose for TV, Media3) for Google TV and Android TV: [docs/android-tv.md](../../docs/android-tv.md).
 
+## Unreleased
+- **Screensaver: the HDR clip runs at 60 frames a second** (it was 24), so the TV does not change the refresh rate as well when the screensaver starts, which can cut the sound for a moment.
+
 ## 0.2.10
 - **The screensaver puts the TV into its HDR mode** with a tiny silent black HDR video in the corner (like YouTube does), so an OLED has the black pixels really off and only the picture shines.
 

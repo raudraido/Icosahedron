@@ -23,6 +23,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import cloud.icosahedron.tv.player.Playback
+import androidx.tv.material3.ClickableSurfaceDefaults
+import androidx.tv.material3.Surface
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -94,20 +100,69 @@ fun fmt(ms: Long): String {
     return "%d:%02d".format(s / 60, s % 60)
 }
 
-/** One track of a list: number, title and artist, length; the playing one in the accent colour. */
+/**
+ * One track of a list. No background at rest (a list is not a stack of grey bars); the one that has the focus gets a soft light
+ * background, a little growth and an accent mark at its left. At the left the track's cover (the playing one has the dancing bars on
+ * it), or its number when the cover is the same for every row (an album); the title, "artist · album" under it, the length at the right.
+ */
 @Composable
-fun TrackRow(track: Track, number: Int?, playing: Boolean, horizontalPadding: Dp = 48.dp, onClick: () -> Unit) {
-    Button(onClick = onClick, modifier = Modifier.fillMaxWidth().padding(horizontal = horizontalPadding, vertical = 2.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            // The playing track is marked with a note in the accent colour; the text keeps the button's colour.
-            Text(if (playing) "♪" else (number?.toString() ?: ""), color = if (playing) Accent else dim(), modifier = Modifier.width(36.dp))
-            Column(Modifier.weight(1f)) {
-                Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(track.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, color = dim())
+fun TrackRow(
+    track: Track, number: Int?, playing: Boolean, horizontalPadding: Dp = 48.dp,
+    showCover: Boolean = true, showAlbum: Boolean = showCover, onClick: () -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = horizontalPadding, vertical = 2.dp).onFocusChanged { focused = it.hasFocus },
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color.Transparent, contentColor = Color.White,
+            focusedContainerColor = Color(0x2EFFFFFF), focusedContentColor = Color.White,
+            pressedContainerColor = Color(0x45FFFFFF), pressedContentColor = Color.White,
+        ),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
+    ) {
+        Row(Modifier.padding(end = 14.dp).height(68.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(4.dp).height(36.dp).clip(RoundedCornerShape(2.dp)).background(if (focused) Accent else Color.Transparent))
+            Spacer(Modifier.width(10.dp))
+            if (showCover) {
+                Box(Modifier.size(56.dp), contentAlignment = Alignment.Center) {
+                    Cover(track.coverArt, 56.dp, px = 160)
+                    if (playing) Box(Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)).background(Color(0x99000000)), contentAlignment = Alignment.Center) {
+                        EqualizerBars(Playback.isPlaying, Accent, Modifier.size(24.dp))
+                    }
+                }
+            } else {
+                // The playing track is marked with a note in the accent colour
+                Text(if (playing) "♪" else (number?.toString() ?: ""), color = if (playing) Accent else dim(), modifier = Modifier.width(44.dp), fontSize = 18.sp)
             }
-            Text(fmt(track.duration * 1000L), color = dim())
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 18.sp, color = if (playing) Accent else Color.White)
+                val line = listOfNotNull(track.artist.takeIf { it.isNotBlank() }, track.album?.takeIf { showAlbum && it.isNotBlank() }).joinToString(" · ")
+                if (line.isNotEmpty()) Text(line, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 13.sp, color = Dim)
+            }
+            Spacer(Modifier.width(12.dp))
+            Text(fmt(track.duration * 1000L), color = Dim, fontSize = 14.sp)
         }
     }
+}
+
+/** An artist's picture, round; the first letter on a plain disc when the server has no picture for the artist. */
+@Composable
+fun ArtistPicture(artist: cloud.icosahedron.tv.data.Artist, size: Dp) {
+    val url = LocalClient.current.coverUrl(artist.coverArt, 360)
+    val letter: @Composable () -> Unit = {
+        Box(Modifier.size(size).clip(CircleShape).background(PanelHi), contentAlignment = Alignment.Center) {
+            Text((artist.name.trim().firstOrNull() ?: '?').uppercase(), fontSize = (size.value * 0.42f).sp, color = Dim)
+        }
+    }
+    if (url == null) { letter(); return }
+    SubcomposeAsyncImage(
+        model = url, contentDescription = null, contentScale = ContentScale.Crop,
+        modifier = Modifier.size(size).clip(CircleShape).background(PanelHi),
+        loading = { Box(Modifier.size(size).background(PanelHi)) }, error = { letter() },
+    )
 }
 
 @Composable

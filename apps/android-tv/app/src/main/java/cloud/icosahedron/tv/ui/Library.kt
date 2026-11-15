@@ -222,10 +222,10 @@ fun ArtistsScreen(go: (Screen) -> Unit) {
                 r.isFailure -> Message(r.exceptionOrNull()?.message ?: "Could not load")
                 list.isEmpty() -> Message(if (favoritesOnly) "No favorite artists" else "No artists")
                 else -> LazyVerticalGrid(
-                    columns = GridCells.Adaptive(220.dp),
+                    columns = GridCells.Adaptive(176.dp), // the same cells as the albums
                     contentPadding = PaddingValues(horizontal = 48.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     items(list, key = { it.id }) { a -> ArtistCard(a) { go(Screen.ArtistDetail(a.id)) } }

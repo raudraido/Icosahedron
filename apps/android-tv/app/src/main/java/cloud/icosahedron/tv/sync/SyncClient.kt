@@ -94,6 +94,9 @@ class SyncClient(private val session: Session, private val deviceId: String, pri
         main.postDelayed({ open() }, min(30_000L, 1000L shl min(retry, 5)))
     }
 
+    /** Gives this TV a new name: the sync server keeps it and tells every other device (the same call the other apps use). */
+    fun rename(to: String) { if (to.isNotBlank()) send(JSONObject().put("type", "rename").put("target", deviceId).put("name", to.trim())) }
+
     private fun send(o: JSONObject) { ws?.send(o.toString()) }
 
     private fun handle(m: JSONObject) {

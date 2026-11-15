@@ -2,6 +2,9 @@
 
 A native app (Kotlin, Jetpack Compose for TV, Media3) for Google TV and Android TV: [docs/android-tv.md](../../docs/android-tv.md).
 
+## Unreleased
+- **A darker screensaver:** while it is on, the app asks the TV for the lowest screen brightness and the HDR colour mode, to get the OLED pixels around the logo to really switch off.
+
 ## 0.2.8
 - **Screensaver:** after the minutes you choose without a key press (1–10, in Settings, can be turned off) the screen goes black with the small logo that moves to another place every half minute, so nothing burns into an OLED screen. Five more styles to choose in Settings: **Clock**, **Playing cover**, **Cover mosaic** (random albums from your library), **Pulsing logo** (beats while music plays) and **Song text**; everything keeps moving. It does not start while the lyrics are open. The first key press only wakes the screen.
 

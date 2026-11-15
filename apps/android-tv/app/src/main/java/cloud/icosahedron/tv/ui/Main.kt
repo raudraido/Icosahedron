@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -128,6 +129,23 @@ fun MainScreen() {
         if (saverWanted) {
             delay(ScreenSaverPrefs.minutes * 60_000L)
             saver = true
+        }
+    }
+    // While the screensaver is up, ask the TV for the darkest screen it can give: the lowest window brightness and the
+    // HDR colour mode (an OLED switches the pixels off in black there instead of lifting the SDR black a little).
+    DisposableEffect(saver) {
+        val window = (context as? Activity)?.window
+        if (window != null && saver) {
+            runCatching {
+                window.attributes = window.attributes.also { it.screenBrightness = 0f }
+                window.colorMode = android.content.pm.ActivityInfo.COLOR_MODE_HDR
+            }
+        }
+        onDispose {
+            if (window != null) runCatching {
+                window.attributes = window.attributes.also { it.screenBrightness = android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE }
+                window.colorMode = android.content.pm.ActivityInfo.COLOR_MODE_DEFAULT
+            }
         }
     }
     fun go(s: Screen) { stack = stack + s }

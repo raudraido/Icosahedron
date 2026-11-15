@@ -27,6 +27,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import cloud.icosahedron.tv.App
@@ -75,6 +77,12 @@ object ScreenSaverPrefs {
         private set
     fun nextStyle() { style = Style.entries[(style.ordinal + 1) % Style.entries.size]; prefs.edit().putString("saverStyle", style.name).apply() }
 
+    /** The TV shows SDR colours a little washed out in its HDR mode; this puts some saturation and contrast back (0 off, 1 low, 2 high). */
+    var boost by mutableIntStateOf(prefs.getInt("saverBoost", 1).coerceIn(0, 2))
+        private set
+    fun nextBoost() { boost = (boost + 1) % 3; prefs.edit().putInt("saverBoost", boost).apply() }
+    val boostLabel get() = arrayOf("Off", "Low", "High")[boost]
+
     var lyricsOpen by mutableStateOf(false)
 
     fun turn(on: Boolean) { enabled = on; prefs.edit().putBoolean("saverOn", on).apply() }
@@ -102,7 +110,7 @@ fun ScreenSaver() {
             }
             ScreenSaverPrefs.Style.Cover ->
                 if (playing == null) Mover(96.dp, 96.dp) { Logo() }
-                else Mover(340.dp, 340.dp) { Cover(playing.coverArt, 340.dp, px = 700, modifier = Modifier.alpha(0.5f)) }
+                else Mover(340.dp, 340.dp) { Cover(playing.coverArt, 340.dp, px = 700, modifier = Modifier.alpha(0.5f), colorFilter = boostFilter()) }
             ScreenSaverPrefs.Style.Song ->
                 if (playing == null) Mover(96.dp, 96.dp) { Logo() }
                 else Mover(520.dp, 90.dp) {
@@ -117,9 +125,17 @@ fun ScreenSaver() {
     }
 }
 
+private fun boostFilter(): ColorFilter? {
+    val (sat, con) = when (ScreenSaverPrefs.boost) { 1 -> 1.3f to 1.12f; 2 -> 1.6f to 1.25f; else -> return null }
+    val t = (0.5f - 0.5f * con) * 255f
+    val m = ColorMatrix().apply { setToSaturation(sat) }
+    m *= ColorMatrix(floatArrayOf(con, 0f, 0f, 0f, t, 0f, con, 0f, 0f, t, 0f, 0f, con, 0f, t, 0f, 0f, 0f, 1f, 0f))
+    return ColorFilter.colorMatrix(m)
+}
+
 @Composable
 private fun Logo(modifier: Modifier = Modifier.size(96.dp)) =
-    Image(painterResource(R.drawable.logo), contentDescription = null, modifier = modifier, alpha = 0.6f)
+    Image(painterResource(R.drawable.logo), contentDescription = null, modifier = modifier, alpha = 0.6f, colorFilter = boostFilter())
 
 /** Puts [content] (about [w] x [h]) somewhere on the screen and glides it to another place every half minute. */
 @Composable
@@ -153,10 +169,11 @@ private fun Mosaic() {
     val drift = rememberInfiniteTransition(label = "drift")
     val dx by drift.animateFloat(-30f, 30f, infiniteRepeatable(tween(60_000), RepeatMode.Reverse), label = "dx")
     val dy by drift.animateFloat(-20f, 20f, infiniteRepeatable(tween(45_000), RepeatMode.Reverse), label = "dy")
+    val filter = boostFilter()
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val tile = maxWidth / cols
         Column(Modifier.offset(dx.dp, dy.dp).alpha(0.3f)) {
-            repeat(rows) { r -> Row { repeat(cols) { c -> Cover(shown[r * cols + c], tile, px = 200) } } }
+            repeat(rows) { r -> Row { repeat(cols) { c -> Cover(shown[r * cols + c], tile, px = 200, colorFilter = filter) } } }
         }
     }
 }

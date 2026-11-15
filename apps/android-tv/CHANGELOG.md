@@ -2,8 +2,7 @@
 
 A native app (Kotlin, Jetpack Compose for TV, Media3) for Google TV and Android TV: [docs/android-tv.md](../../docs/android-tv.md).
 
-## Unreleased
-
+## 0.2.7
 - **A long queue no longer traps the remote:** on Now Playing, with the queue open, **Left** jumps to the play button from anywhere in the list (no more pressing Down through hundreds of songs to reach the controls). Coming back into the list (Up or Right from the controls) lands on the song that is playing, not on the first one. The queue's heading shows the number of songs and the hint.
 - **The song menu no longer runs the first item when you let go:** holding OK opens the menu, but letting the button go counted as a click on *Play next*. The release of the hold is now ignored.
 

@@ -2,8 +2,7 @@
 
 A native app (Kotlin, Jetpack Compose for TV, Media3) for Google TV and Android TV: [docs/android-tv.md](../../docs/android-tv.md).
 
-## Unreleased
-
+## 0.2.5
 - **Lists look better:** the song rows have no grey bar any more. The row with the focus gets a soft light background, grows a little and has an accent mark at its left; at the left of each row is the song's **cover** (the playing one has the dancing bars on it; an album's songs show their numbers instead, as the cover is the same), then the title with "artist · album" under it and the length. This is the same in the queue on Now Playing, in search, in the popular songs, in playlists and in the artist's songs.
 - **Album, playlist and artist-songs pages have two parts:** the cover, the name and the buttons stay at the left, only the songs scroll at the right.
 - **Artists are shown like albums:** the same four-column grid, each with the artist's **round picture** (the first letter when the server has none), the name and the number of albums.

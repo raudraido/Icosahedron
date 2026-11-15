@@ -2,7 +2,7 @@
 
 A native app (Kotlin, Jetpack Compose for TV, Media3) for Google TV and Android TV: [docs/android-tv.md](../../docs/android-tv.md).
 
-## Unreleased
+## 0.2.11
 - **Screensaver: the HDR clip runs at 60 frames a second** (it was 24), so the TV does not change the refresh rate as well when the screensaver starts, which can cut the sound for a moment. The window no longer asks for the HDR colour mode itself (the HDR clip is enough to switch the TV), which made the colours look washed out.
 
 ## 0.2.10

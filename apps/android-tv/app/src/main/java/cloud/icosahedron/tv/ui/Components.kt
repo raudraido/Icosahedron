@@ -58,13 +58,13 @@ fun <T> load(key: Any?, block: suspend () -> T): State<Result<T>?> =
     produceState<Result<T>?>(null, key) { value = runCatching { block() } }
 
 @Composable
-fun Cover(coverId: String?, size: Dp, modifier: Modifier = Modifier, px: Int = 400) {
+fun Cover(coverId: String?, size: Dp, modifier: Modifier = Modifier, px: Int = 400, round: Boolean = false) {
     val url = LocalClient.current.coverUrl(coverId, px)
     AsyncImage(
         model = url,
         contentDescription = null,
         contentScale = ContentScale.Crop,
-        modifier = modifier.size(size).clip(RoundedCornerShape(8.dp)).background(PanelHi),
+        modifier = modifier.size(size).clip(if (round) CircleShape else RoundedCornerShape(8.dp)).background(PanelHi),
     )
 }
 

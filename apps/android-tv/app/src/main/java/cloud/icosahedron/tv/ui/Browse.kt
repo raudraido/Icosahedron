@@ -32,6 +32,8 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +50,8 @@ import androidx.tv.material3.Card
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import cloud.icosahedron.tv.data.Album
+import cloud.icosahedron.tv.data.NativeApi
+import cloud.icosahedron.tv.data.ArtistInfo
 import cloud.icosahedron.tv.data.Artist
 import cloud.icosahedron.tv.data.Track
 import cloud.icosahedron.tv.player.Playback
@@ -314,20 +318,118 @@ fun ArtistDetailScreen(id: String, go: (Screen) -> Unit) {
     when {
         r == null -> Message("Loading…")
         r.isFailure -> Message(r.exceptionOrNull()?.message ?: "Could not load")
-        else -> {
-            val (artist, albums) = r.getOrThrow()
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(176.dp),
-                contentPadding = PaddingValues(horizontal = 48.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
-                    Text(artist?.name ?: "", fontSize = 30.sp, modifier = Modifier.padding(bottom = 8.dp))
+        else -> ArtistPage(id, r.getOrThrow().first, r.getOrThrow().second, go)
+    }
+}
+
+/**
+ * An artist: the picture, play / shuffle / the queue for all the songs (the compilations and guest appearances too), the
+ * biography, the popular songs, the albums, the singles and EPs, the compilations, where the artist only appears, and the similar
+ * artists that are in the library. The text, the popular songs and the similar artists come from what Navidrome is set up to use
+ * (Last.fm, Spotify) and are left out when it has none; the whole-artist songs and "Appears on" need the Icosahedron server (see
+ * NativeApi), without it the artist's own albums are shown.
+ */
+@Composable
+private fun ArtistPage(id: String, artist: Artist?, own: List<Album>, go: (Screen) -> Unit) {
+    val client = LocalClient.current
+    val scope = rememberCoroutineScope()
+    val name = artist?.name ?: ""
+    val info by produceState<ArtistInfo?>(null, id) { value = runCatching { client.artistInfo(id) }.getOrNull() }
+    val top by produceState(emptyList<Track>(), name) { if (name.isNotEmpty()) value = runCatching { client.topSongs(name, 5) }.getOrDefault(emptyList()) }
+    val native by produceState(false, id) { value = NativeApi.ensure(client) }
+    val others by produceState(emptyList<Album>(), native, id) {
+        if (native) value = runCatching { NativeApi.artistAlbums(client, id) }.getOrDefault(emptyList()).filter { it.second != id }.map { it.first }
+    }
+    var busy by remember { mutableStateOf(false) }
+    var bioOpen by remember { mutableStateOf(false) }
+
+    suspend fun allSongs(): List<Track> {
+        if (native) runCatching { NativeApi.allArtistSongs(client, id) }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { return it }
+        // Without the server's own API: the songs of the artist's own albums
+        return own.take(60).flatMap { runCatching { client.album(it.id).second }.getOrDefault(emptyList()) }
+    }
+    fun run(block: suspend (List<Track>) -> Unit) { if (!busy) { busy = true; scope.launch { val l = allSongs(); if (l.isNotEmpty()) block(l); busy = false } } }
+
+    val byYear = compareByDescending<Album> { it.year ?: 0 }.thenBy { it.name }
+    val albums = own.filter { !it.isSingleOrEp && !it.isCompilation }.sortedWith(byYear)
+    val singles = own.filter { it.isSingleOrEp && !it.isCompilation }.sortedWith(byYear)
+    val compilations = (own.filter { it.isCompilation } + others.filter { it.isCompilation }).distinctBy { it.id }.sortedWith(byYear)
+    val appears = others.filter { !it.isCompilation }.sortedWith(byYear)
+    val similar = info?.similar ?: emptyList()
+    val bio = info?.biography ?: ""
+
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
+        item {
+            Row(Modifier.padding(horizontal = 48.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
+                Cover(artist?.coverArt, 160.dp, round = true)
+                Column {
+                    Text(name, fontSize = 34.sp, maxLines = 2)
+                    Text(listOfNotNull("${maxOf(own.size, artist?.albumCount ?: 0)} albums", own.sumOf { it.songCount }.takeIf { it > 0 }?.let { "$it songs" }).joinToString(" · "), color = Dim)
                 }
-                items(albums, key = { it.id }) { a -> AlbumCard(a) { go(Screen.AlbumDetail(a.id)) } }
+            }
+            Row(Modifier.padding(horizontal = 48.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                ActionButton("Play", onClick = { run { Playback.playTracks(it, 0) } })
+                ActionButton("Shuffle", onClick = { run { Playback.playTracks(it.shuffled(), 0) } })
+                ActionButton("Play next", onClick = { run { l -> l.reversed().forEach { Playback.playNext(it) } } })
+                ActionButton("Add to queue", onClick = { run { Playback.addToQueue(it) } })
             }
         }
+        if (bio.isNotBlank()) item {
+            SectionTitle("About")
+            // OK opens and closes the whole text (a remote cannot scroll a paragraph)
+            Card(onClick = { bioOpen = !bioOpen }, modifier = Modifier.fillMaxWidth().padding(horizontal = 48.dp)) {
+                Text(bio, fontSize = 16.sp, maxLines = if (bioOpen) Int.MAX_VALUE else 4, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(14.dp))
+            }
+        }
+        if (top.isNotEmpty()) {
+            item { SectionTitle("Popular") }
+            itemsIndexed(top) { i, t -> TrackRow(t, i + 1, Playback.current?.id == t.id) { Playback.playTracks(top, i) } }
+        }
+        if (native) item {
+            Row(Modifier.padding(horizontal = 48.dp, vertical = 8.dp)) { ActionButton("All songs", onClick = { go(Screen.ArtistSongs(id, name)) }) }
+        }
+        item { AlbumRow("Albums", albums, go) }
+        item { AlbumRow("Singles & EPs", singles, go) }
+        item { AlbumRow("Compilations", compilations, go) }
+        item { AlbumRow("Appears on", appears, go) }
+        if (similar.isNotEmpty()) item {
+            SectionTitle("Similar artists")
+            LazyRow(contentPadding = PaddingValues(horizontal = 48.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                items(similar.size) { i ->
+                    val a = similar[i]
+                    Card(onClick = { go(Screen.ArtistDetail(a.id)) }, modifier = Modifier.width(140.dp)) {
+                        Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Cover(a.coverArt, 100.dp, round = true, px = 300)
+                            Text(a.name, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AlbumRow(title: String, albums: List<Album>, go: (Screen) -> Unit) {
+    if (albums.isEmpty()) return
+    SectionTitle(title)
+    LazyRow(contentPadding = PaddingValues(horizontal = 48.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        items(albums.size) { i -> AlbumCard(albums[i]) { go(Screen.AlbumDetail(albums[i].id)) } }
+    }
+}
+
+/** Every song of the artist in album order (through the server's own API), with Play and Shuffle. */
+@Composable
+fun ArtistSongsScreen(id: String, name: String) {
+    val client = LocalClient.current
+    val result by load(id) { NativeApi.allArtistSongs(client, id, 1500) }
+    val r = result
+    when {
+        r == null -> Message("Loading…")
+        r.isFailure -> Message(r.exceptionOrNull()?.message ?: "Could not load")
+        else -> TrackList(
+            header = { Text(name, fontSize = 30.sp, modifier = Modifier.padding(horizontal = 48.dp, vertical = 8.dp)) },
+            tracks = r.getOrThrow(), numbered = false,
+        )
     }
 }

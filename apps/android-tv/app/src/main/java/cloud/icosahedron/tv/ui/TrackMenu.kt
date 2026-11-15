@@ -24,6 +24,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -58,10 +63,23 @@ fun TrackMenu(track: Track, onDismiss: () -> Unit) {
     val playlists by produceState<List<Playlist>?>(null, page) { if (page == "playlists") value = runCatching { client.playlists() }.getOrNull() }
     val fav = TvFavorites.isFavorite(track)
     val focus = remember { FocusRequester() }
+    // The menu opens while OK is still held. The release of that long press must not count as a click on the first item (Play next):
+    // the OK events of the hold (its repeats and its release) are swallowed until it is let go.
+    val openedAt = remember { android.os.SystemClock.uptimeMillis() }
+    var released by remember { mutableStateOf(false) }
     fun toast(text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
 
     Dialog(onDismissRequest = { if (page == "main") onDismiss() else page = "main" }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Column(Modifier.width(480.dp).background(Panel, RoundedCornerShape(16.dp)).padding(20.dp)) {
+        Column(
+            Modifier.width(480.dp).background(Panel, RoundedCornerShape(16.dp)).padding(20.dp).onPreviewKeyEvent { e ->
+                val ok = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
+                when {
+                    !ok || released -> false
+                    e.type == KeyEventType.KeyUp -> { released = true; android.os.SystemClock.uptimeMillis() - openedAt < 3000 }
+                    else -> e.nativeKeyEvent.repeatCount > 0 // the repeats of the hold; a fresh press goes through
+                }
+            },
+        ) {
             Text(track.title, fontSize = 20.sp, maxLines = 1, modifier = Modifier.padding(bottom = 2.dp))
             Text(listOfNotNull(track.artist, track.album).joinToString(" · "), fontSize = 13.sp, color = Dim, maxLines = 1, modifier = Modifier.padding(bottom = 12.dp))
             if (page == "main") {

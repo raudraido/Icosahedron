@@ -2,7 +2,7 @@
 
 A native app (Kotlin, Jetpack Compose for TV, Media3) for Google TV and Android TV: [docs/android-tv.md](../../docs/android-tv.md).
 
-## Unreleased
+## 0.2.9
 - **A darker screensaver:** while it is on, the app asks the TV for the lowest screen brightness and the HDR colour mode, to get the OLED pixels around the logo to really switch off.
 
 ## 0.2.8

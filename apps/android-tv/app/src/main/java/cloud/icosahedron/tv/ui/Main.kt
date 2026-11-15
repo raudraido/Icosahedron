@@ -75,6 +75,7 @@ sealed interface Screen {
     data object Settings : Screen
     data class AlbumDetail(val id: String) : Screen
     data class ArtistDetail(val id: String) : Screen
+    data class ArtistSongs(val id: String, val name: String) : Screen
     data class PlaylistDetail(val id: String, val name: String) : Screen
 }
 
@@ -214,6 +215,7 @@ fun MainScreen() {
                     Screen.Settings -> SettingsScreen()
                     is Screen.AlbumDetail -> AlbumDetailScreen(screen.id, ::go)
                     is Screen.ArtistDetail -> ArtistDetailScreen(screen.id, ::go)
+                    is Screen.ArtistSongs -> ArtistSongsScreen(screen.id, screen.name)
                     is Screen.PlaylistDetail -> PlaylistDetailScreen(screen.id, screen.name)
                 }
             }

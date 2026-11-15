@@ -80,13 +80,20 @@ data class Album(
     val coverArt: String?,
     val year: Int?,
     val songCount: Int,
+    /** "album", "ep", "single", "compilation"…: the OpenSubsonic release types (empty when the server has none). */
+    val releaseTypes: List<String> = emptyList(),
+    val compilation: Boolean = false,
 ) {
+    val isSingleOrEp get() = releaseTypes.any { it.contains("single", true) || it.equals("ep", true) }
+    val isCompilation get() = compilation || releaseTypes.any { it.contains("compilation", true) }
+
     companion object {
         fun fromSubsonic(o: JSONObject): Album? {
             val id = o.str("id") ?: return null
+            val types = o.optJSONArray("releaseTypes")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList()
             return Album(
                 id, o.str("name") ?: o.str("title") ?: "", o.str("artist") ?: "", o.str("artistId"),
-                o.str("coverArt"), o.int("year"), o.int("songCount") ?: 0,
+                o.str("coverArt"), o.int("year"), o.int("songCount") ?: 0, types, o.optBoolean("isCompilation", false),
             )
         }
     }
@@ -109,3 +116,6 @@ data class Playlist(val id: String, val name: String, val songCount: Int, val co
         }
     }
 }
+
+/** What the server knows about an artist (Last.fm / Spotify through Navidrome): the text and the similar artists that are in the library. */
+data class ArtistInfo(val biography: String, val similar: List<Artist>)

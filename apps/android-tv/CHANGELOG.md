@@ -2,6 +2,10 @@
 
 A native app (Kotlin, Jetpack Compose for TV, Media3) for Google TV and Android TV: [docs/android-tv.md](../../docs/android-tv.md).
 
+## Unreleased
+
+- **A real artist page,** like on the phones: the picture, the number of albums and songs, **Play**, **Shuffle**, **Play next** and **Add to queue** for *all* the artist's songs (the compilations and guest appearances too), the **biography** (press OK to open or close the whole text), the **popular songs**, rows of **Albums**, **Singles & EPs**, **Compilations** and **Appears on** (newest first), and the **similar artists** that are in your library. **All songs** opens every song of the artist in album order. The text, the popular songs and the similar artists come from what Navidrome is set up to use (Last.fm, Spotify) and are left out when it has none; the songs of the whole artist, the compilations and "Appears on" need the Icosahedron server (the TV has no password to give to Navidrome's own API), without it the artist's own albums are shown and Play uses their songs.
+
 ## 0.2.3
 - **The tile on the Google TV home screen:** the logo was too big and cut off at the top and bottom, with no name. It is now the logo and the name "Icosahedron" side by side on the app's dark background, all of it in view.
 

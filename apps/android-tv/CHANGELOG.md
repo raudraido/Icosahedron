@@ -2,6 +2,10 @@
 
 A native app (Kotlin, Jetpack Compose for TV, Media3) for Google TV and Android TV: [docs/android-tv.md](../../docs/android-tv.md).
 
+## Unreleased
+
+- **A long queue no longer traps the remote:** on Now Playing, with the queue open, **Left** jumps to the play button from anywhere in the list (no more pressing Down through hundreds of songs to reach the controls). Coming back into the list (Up or Right from the controls) lands on the song that is playing, not on the first one. The queue's heading shows the number of songs and the hint.
+
 ## 0.2.6
 - **Hold OK on any song** (in an album, a playlist, search, the queue, the artist's songs) to open its menu: **Play next**, **Add to queue**, **Go to album**, **Go to artist**, **Add to playlist** (choose the playlist) and **Favorite**.
 - **An album's songs show their covers too** (with the track number at the left), and **the album page has the coloured background of Now Playing,** taken from the album's own cover.

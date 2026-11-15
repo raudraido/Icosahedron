@@ -36,6 +36,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.foundation.focusGroup
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -157,6 +160,7 @@ fun NowPlayingScreen(idle: Boolean) {
     }
     var panel by remember { mutableStateOf(SidePanel.None) }
     val seekFocus = remember { FocusRequester() }
+    val playFocus = remember { FocusRequester() } // where Left from a long list goes: the play button
     val chrome by animateFloatAsState(if (idle) 0f else 1f, tween(600), label = "chrome")
     LaunchedEffect(Unit) { runCatching { seekFocus.requestFocus() } }
     BackHandler(enabled = panel != SidePanel.None) { panel = SidePanel.None } // Back closes the panel before it leaves the screen
@@ -182,7 +186,7 @@ fun NowPlayingScreen(idle: Boolean) {
             }
             when (panel) {
                 SidePanel.None -> {}
-                SidePanel.Queue -> Box(Modifier.width(540.dp).fillMaxHeight().alpha(chrome)) { QueuePanel() }
+                SidePanel.Queue -> Box(Modifier.width(540.dp).fillMaxHeight().alpha(chrome)) { QueuePanel(onToControls = { runCatching { playFocus.requestFocus() } }) }
                 SidePanel.Lyrics -> Box(Modifier.width(470.dp).fillMaxHeight()) { LyricsPanel(t) }
             }
         }
@@ -199,7 +203,7 @@ fun NowPlayingScreen(idle: Boolean) {
             ) {
                 RoundButton(R.drawable.ic_shuffle, "Shuffle", on = Playback.shuffle) { Playback.shuffleTo(!Playback.shuffle) }
                 RoundButton(R.drawable.ic_prev, "Previous") { Playback.previous() }
-                RoundButton(if (Playback.isPlaying) R.drawable.ic_pause else R.drawable.ic_play, if (Playback.isPlaying) "Pause" else "Play", big = true) { Playback.toggle() }
+                RoundButton(if (Playback.isPlaying) R.drawable.ic_pause else R.drawable.ic_play, if (Playback.isPlaying) "Pause" else "Play", big = true, modifier = Modifier.focusRequester(playFocus)) { Playback.toggle() }
                 RoundButton(R.drawable.ic_next, "Next") { Playback.next() }
                 RoundButton(R.drawable.ic_repeat, "Repeat", on = Playback.repeatAll) { Playback.repeatTo(!Playback.repeatAll) }
                 Spacer(Modifier.width(28.dp))
@@ -211,9 +215,10 @@ fun NowPlayingScreen(idle: Boolean) {
 }
 
 @Composable
-private fun RoundButton(icon: Int, label: String, on: Boolean = false, big: Boolean = false, onClick: () -> Unit) {
+private fun RoundButton(icon: Int, label: String, on: Boolean = false, big: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Button(
         onClick = onClick,
+        modifier = modifier,
         shape = ButtonDefaults.shape(CircleShape),
         contentPadding = PaddingValues(if (big) 12.dp else 9.dp),
         colors = if (big) ButtonDefaults.colors(
@@ -228,15 +233,37 @@ private fun RoundButton(icon: Int, label: String, on: Boolean = false, big: Bool
     }
 }
 
+/**
+ * The queue. With hundreds of songs Down would take forever to reach the controls under the list, so **Left** jumps to the play
+ * button from anywhere in it; coming back into the list (Up or Right from the controls) lands on the song that is playing, not on
+ * the first one.
+ */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
-private fun QueuePanel() {
+private fun QueuePanel(onToControls: () -> Unit) {
     val state = rememberLazyListState()
+    val playingRow = remember { FocusRequester() }
     LaunchedEffect(Unit) { state.scrollToItem((Playback.index - 2).coerceAtLeast(0)) }
-    Column(Modifier.fillMaxSize()) {
-        Text("Queue", fontSize = 16.sp, modifier = Modifier.padding(start = 8.dp, bottom = 6.dp))
-        LazyColumn(Modifier.fillMaxSize(), state = state) {
+    Column(
+        Modifier.fillMaxSize().onPreviewKeyEvent { e ->
+            if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { onToControls(); true } else false
+        },
+    ) {
+        Row(Modifier.fillMaxWidth().padding(start = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Queue", fontSize = 16.sp, modifier = Modifier.weight(1f))
+            Text("${Playback.queue.size} songs · ◀ controls", fontSize = 12.sp, color = Dim, modifier = Modifier.padding(end = 8.dp))
+        }
+        LazyColumn(
+            Modifier.fillMaxSize()
+                .focusProperties { enter = { if (state.layoutInfo.visibleItemsInfo.any { it.index == Playback.index }) playingRow else FocusRequester.Default } }
+                .focusGroup(),
+            state = state,
+        ) {
             itemsIndexed(Playback.queue) { i, track ->
-                TrackRow(track, i + 1, i == Playback.index, horizontalPadding = 4.dp) { Playback.jump(i) }
+                TrackRow(
+                    track, i + 1, i == Playback.index, horizontalPadding = 4.dp,
+                    modifier = if (i == Playback.index) Modifier.focusRequester(playingRow) else Modifier,
+                ) { Playback.jump(i) }
             }
         }
     }

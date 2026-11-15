@@ -111,7 +111,7 @@ fun fmt(ms: Long): String {
 @Composable
 fun TrackRow(
     track: Track, number: Int?, playing: Boolean, horizontalPadding: Dp = 48.dp,
-    showCover: Boolean = true, showAlbum: Boolean = showCover, showNumber: Boolean = !showCover, onClick: () -> Unit,
+    showCover: Boolean = true, showAlbum: Boolean = showCover, showNumber: Boolean = !showCover, modifier: Modifier = Modifier, onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
@@ -120,7 +120,7 @@ fun TrackRow(
         onClick = onClick,
         // Holding OK opens the menu of the song (queue, go to the album or the artist, playlist, favorite)
         onLongClick = { menu = true },
-        modifier = Modifier.fillMaxWidth().padding(horizontal = horizontalPadding, vertical = 2.dp).onFocusChanged { focused = it.hasFocus },
+        modifier = modifier.fillMaxWidth().padding(horizontal = horizontalPadding, vertical = 2.dp).onFocusChanged { focused = it.hasFocus },
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Color.Transparent, contentColor = Color.White,

@@ -7,6 +7,12 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import android.media.MediaPlayer
+import android.view.SurfaceHolder
+import android.view.SurfaceView
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
@@ -107,6 +113,7 @@ fun ScreenSaver() {
                 }
             ScreenSaverPrefs.Style.Mosaic -> Mosaic()
         }
+        HdrKeeper(Modifier.align(Alignment.BottomEnd))
     }
 }
 
@@ -152,4 +159,37 @@ private fun Mosaic() {
             repeat(rows) { r -> Row { repeat(cols) { c -> Cover(shown[r * cols + c], tile, px = 200) } } }
         }
     }
+}
+
+/**
+ * A tiny silent black HDR10 video, looped. As long as an HDR picture is on the screen the TV stays in its HDR mode
+ * (like YouTube does with an HDR video), and there an OLED really switches the black pixels off; in the SDR mode it
+ * lifts the black a little. The square is black on black, in the corner, on top of everything.
+ */
+@Composable
+private fun HdrKeeper(modifier: Modifier) {
+    val context = LocalContext.current
+    AndroidView(
+        modifier = modifier.size(32.dp),
+        factory = {
+            val player = MediaPlayer()
+            SurfaceView(it).apply {
+                setZOrderOnTop(true)
+                holder.addCallback(object : SurfaceHolder.Callback {
+                    override fun surfaceCreated(h: SurfaceHolder) {
+                        runCatching {
+                            context.resources.openRawResourceFd(R.raw.hdr_black).use { fd -> player.setDataSource(fd.fileDescriptor, fd.startOffset, fd.length) }
+                            player.setDisplay(h)
+                            player.isLooping = true
+                            player.setVolume(0f, 0f)
+                            player.setOnPreparedListener { p -> p.start() }
+                            player.prepareAsync()
+                        }
+                    }
+                    override fun surfaceChanged(h: SurfaceHolder, f: Int, w: Int, hh: Int) {}
+                    override fun surfaceDestroyed(h: SurfaceHolder) { runCatching { player.release() } }
+                })
+            }
+        },
+    )
 }

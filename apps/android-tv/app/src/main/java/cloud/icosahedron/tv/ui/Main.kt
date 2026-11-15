@@ -131,19 +131,17 @@ fun MainScreen() {
             saver = true
         }
     }
-    // While the screensaver is up, ask the TV for the darkest screen it can give: the lowest window brightness and the
-    // HDR colour mode (an OLED switches the pixels off in black there instead of lifting the SDR black a little).
+    // While the screensaver is up the window asks for the HDR colour mode (with a tiny HDR video in it, see ScreenSaver.kt,
+    // the TV really switches to HDR: an OLED has its black pixels off there instead of lifted).
     DisposableEffect(saver) {
         val window = (context as? Activity)?.window
         if (window != null && saver) {
             runCatching {
-                window.attributes = window.attributes.also { it.screenBrightness = 0f }
                 window.colorMode = android.content.pm.ActivityInfo.COLOR_MODE_HDR
             }
         }
         onDispose {
             if (window != null) runCatching {
-                window.attributes = window.attributes.also { it.screenBrightness = android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE }
                 window.colorMode = android.content.pm.ActivityInfo.COLOR_MODE_DEFAULT
             }
         }

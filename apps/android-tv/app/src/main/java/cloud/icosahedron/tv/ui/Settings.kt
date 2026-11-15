@@ -71,6 +71,13 @@ fun SettingsScreen() {
                 ActionButton("+", onClick = { ScreenSaverPrefs.after(ScreenSaverPrefs.minutes + 1) })
             }
         }
+        if (ScreenSaverPrefs.enabled) {
+            Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Colour boost", color = Dim, modifier = Modifier.width(140.dp))
+                ActionButton(ScreenSaverPrefs.boostLabel, onClick = { ScreenSaverPrefs.nextBoost() })
+                Text("For the washed out colours of the TV's HDR mode.", color = Dim, fontSize = 13.sp)
+            }
+        }
         Text("Click the style to change it. Starts after no key press; not while the lyrics are open.", color = Dim, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
         Spacer(Modifier.height(24.dp))
         ActionButton("Sign out", onClick = { app.signOut() })

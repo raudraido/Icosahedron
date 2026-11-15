@@ -17,6 +17,9 @@ import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Icon
 import cloud.icosahedron.tv.R
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -95,10 +98,11 @@ fun HomeScreen(go: (Screen) -> Unit) {
 }
 
 @Composable
-internal fun ArtistCard(artist: Artist, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp)) {
-            Text(artist.name, maxLines = 1, fontSize = 16.sp)
+internal fun ArtistCard(artist: Artist, modifier: Modifier = Modifier.fillMaxWidth(), onClick: () -> Unit) {
+    Card(onClick = onClick, modifier = modifier) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            ArtistPicture(artist, 120.dp)
+            Text(artist.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 16.sp, modifier = Modifier.padding(top = 10.dp))
             Text("${artist.albumCount} albums", fontSize = 12.sp, color = dim())
         }
     }
@@ -158,7 +162,7 @@ fun SearchScreen(go: (Screen) -> Unit) {
             if (artists.isNotEmpty()) item {
                 SectionTitle("Artists")
                 LazyRow(contentPadding = PaddingValues(horizontal = 48.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(artists.size) { i -> ArtistCard(artists[i]) { go(Screen.ArtistDetail(artists[i].id)) } }
+                    items(artists.size) { i -> ArtistCard(artists[i], Modifier.width(176.dp)) { go(Screen.ArtistDetail(artists[i].id)) } }
                 }
             }
             if (albums.isNotEmpty()) item {
@@ -178,22 +182,35 @@ fun SearchScreen(go: (Screen) -> Unit) {
     }
 }
 
-/** Play / shuffle plus the track list; used by albums and playlists. */
+/**
+ * A page of songs in two parts: at the left, staying in place, what this is (the cover, the name, the buttons); at the right,
+ * the songs, which are the only thing that scrolls. [numbered]: the songs of one album show their numbers instead of the cover.
+ */
 @Composable
-private fun TrackList(header: @Composable () -> Unit, tracks: List<Track>, numbered: Boolean) {
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
-        item {
-            header()
-            Row(Modifier.padding(horizontal = 48.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                ActionButton("Play", onClick = { Playback.playTracks(tracks, 0) })
-                ActionButton("Shuffle", onClick = { Playback.playTracks(tracks.shuffled(), 0) })
-                ActionButton("Play next", onClick = { tracks.reversed().forEach { Playback.playNext(it) } })
-                ActionButton("Add to queue", onClick = { Playback.addToQueue(tracks) })
+private fun TrackList(title: String, subtitle: String?, meta: String?, coverId: String?, tracks: List<Track>, numbered: Boolean) {
+    Row(Modifier.fillMaxSize()) {
+        Column(
+            Modifier.width(380.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(start = 48.dp, end = 24.dp, top = 12.dp, bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (coverId != null) Cover(coverId, 200.dp)
+            Text(title, fontSize = 26.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+            subtitle?.let { Text(it, color = Dim) }
+            meta?.let { Text(it, color = Dim, fontSize = 13.sp) }
+            Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ActionButton("Play", onClick = { Playback.playTracks(tracks, 0) }, modifier = Modifier.weight(1f))
+                ActionButton("Shuffle", onClick = { Playback.playTracks(tracks.shuffled(), 0) }, modifier = Modifier.weight(1f))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ActionButton("Play next", onClick = { tracks.reversed().forEach { Playback.playNext(it) } }, modifier = Modifier.weight(1f))
+                ActionButton("Queue", onClick = { Playback.addToQueue(tracks) }, modifier = Modifier.weight(1f))
             }
         }
-        itemsIndexed(tracks) { i, t ->
-            TrackRow(t, if (numbered) (t.trackNumber.takeIf { it > 0 } ?: (i + 1)) else null, Playback.current?.id == t.id) {
-                Playback.playTracks(tracks, i)
+        LazyColumn(Modifier.weight(1f).fillMaxHeight(), contentPadding = PaddingValues(end = 40.dp, top = 8.dp, bottom = 24.dp)) {
+            itemsIndexed(tracks) { i, t ->
+                TrackRow(t, if (numbered) (t.trackNumber.takeIf { it > 0 } ?: (i + 1)) else null, Playback.current?.id == t.id, horizontalPadding = 0.dp, showCover = !numbered) {
+                    Playback.playTracks(tracks, i)
+                }
             }
         }
     }
@@ -210,17 +227,8 @@ fun AlbumDetailScreen(id: String, go: (Screen) -> Unit) {
         else -> {
             val (album, tracks) = r.getOrThrow()
             TrackList(
-                header = {
-                    Row(Modifier.padding(horizontal = 48.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                        Cover(album?.coverArt, 200.dp)
-                        Column(Modifier.padding(top = 8.dp)) {
-                            Text(album?.name ?: "", fontSize = 30.sp)
-                            Text(listOfNotNull(album?.artist, album?.year?.toString()).joinToString(" · "), color = Dim)
-                            Text("${tracks.size} songs", color = Dim)
-                        }
-                    }
-                },
-                tracks = tracks, numbered = true,
+                title = album?.name ?: "", subtitle = listOfNotNull(album?.artist, album?.year?.toString()).joinToString(" · "),
+                meta = "${tracks.size} songs", coverId = album?.coverArt, tracks = tracks, numbered = true,
             )
         }
     }
@@ -235,8 +243,8 @@ fun PlaylistDetailScreen(id: String, name: String) {
         r == null -> Message("Loading…")
         r.isFailure -> Message(r.exceptionOrNull()?.message ?: "Could not load")
         else -> TrackList(
-            header = { Text(name, fontSize = 30.sp, modifier = Modifier.padding(horizontal = 48.dp, vertical = 8.dp)) },
-            tracks = r.getOrThrow(), numbered = false,
+            title = name, subtitle = null, meta = "${r.getOrThrow().size} songs",
+            coverId = r.getOrThrow().firstOrNull()?.coverArt, tracks = r.getOrThrow(), numbered = false,
         )
     }
 }
@@ -359,8 +367,7 @@ fun ArtistSongsScreen(id: String, name: String) {
         r == null -> Message("Loading…")
         r.isFailure -> Message(r.exceptionOrNull()?.message ?: "Could not load")
         else -> TrackList(
-            header = { Text(name, fontSize = 30.sp, modifier = Modifier.padding(horizontal = 48.dp, vertical = 8.dp)) },
-            tracks = r.getOrThrow(), numbered = false,
+            title = name, subtitle = "All songs", meta = "${r.getOrThrow().size} songs", coverId = null, tracks = r.getOrThrow(), numbered = false,
         )
     }
 }

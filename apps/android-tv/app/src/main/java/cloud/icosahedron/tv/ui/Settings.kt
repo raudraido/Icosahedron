@@ -3,6 +3,14 @@
 package cloud.icosahedron.tv.ui
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -31,10 +39,28 @@ fun SettingsScreen() {
         Field("User", session.user)
         Field("This TV", app.sync?.name ?: "—")
         Field("Sync", when (app.sync?.status) { "online" -> "Connected"; "connecting" -> "Connecting…"; else -> "Not connected" })
-        Text(
-            "Rename this TV from the Sync Server settings of another Icosahedron app.",
-            color = Dim, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp, bottom = 24.dp),
-        )
+        // The name the other devices see for this TV (the sync server keeps it)
+        var editing by remember { mutableStateOf(false) }
+        var text by remember(app.sync?.name) { mutableStateOf(app.sync?.name ?: "") }
+        if (editing) {
+            Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                androidx.compose.material3.OutlinedTextField(
+                    value = text, onValueChange = { text = it }, singleLine = true, label = { Text("Name of this TV") },
+                    modifier = Modifier.width(420.dp),
+                    colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                        focusedBorderColor = Accent, unfocusedBorderColor = Dim, focusedLabelColor = Accent, unfocusedLabelColor = Dim, cursorColor = Accent,
+                    ),
+                )
+                ActionButton("Save", onClick = { app.sync?.rename(text); editing = false })
+                ActionButton("Cancel", onClick = { text = app.sync?.name ?: ""; editing = false })
+            }
+        } else if (app.sync?.status == "online") {
+            ActionButton("Rename this TV", onClick = { editing = true }, modifier = Modifier.padding(top = 8.dp))
+        } else {
+            Text("Connect to the sync server to rename this TV.", color = Dim, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+        }
+        Spacer(Modifier.height(24.dp))
         ActionButton("Sign out", onClick = { app.signOut() })
     }
 }

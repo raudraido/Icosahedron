@@ -168,20 +168,22 @@ fun NowPlayingScreen(idle: Boolean) {
 
     Column(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 8.dp)) {
         Row(Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            // With a panel open the cover and the title move to the left edge, to leave the room to the panel
+            val side = panel != SidePanel.None
+            Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = if (side) Alignment.Start else Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Cover(t.coverArt, if (panel == SidePanel.None) 240.dp else 190.dp, px = 700, modifier = Modifier.offset(dx.dp, dy.dp))
-                Column(Modifier.padding(top = 10.dp).alpha(chrome), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(t.title, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+                Column(Modifier.padding(top = 10.dp).alpha(chrome), horizontalAlignment = if (side) Alignment.Start else Alignment.CenterHorizontally) {
+                    Text(t.title, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, maxLines = if (side) 2 else 1, overflow = TextOverflow.Ellipsis, textAlign = if (side) TextAlign.Start else TextAlign.Center)
                     Text(
                         listOfNotNull(t.artist, t.album).joinToString(" · "),
-                        fontSize = 14.sp, color = Color.White.copy(alpha = 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                        fontSize = 14.sp, color = Color.White.copy(alpha = 0.75f), maxLines = if (side) 2 else 1, overflow = TextOverflow.Ellipsis, textAlign = if (side) TextAlign.Start else TextAlign.Center,
                     )
                 }
             }
             when (panel) {
                 SidePanel.None -> {}
-                SidePanel.Queue -> Box(Modifier.width(330.dp).fillMaxHeight().alpha(chrome)) { QueuePanel() }
-                SidePanel.Lyrics -> Box(Modifier.width(330.dp).fillMaxHeight()) { LyricsPanel(t) }
+                SidePanel.Queue -> Box(Modifier.width(540.dp).fillMaxHeight().alpha(chrome)) { QueuePanel() }
+                SidePanel.Lyrics -> Box(Modifier.width(470.dp).fillMaxHeight()) { LyricsPanel(t) }
             }
         }
         Column(Modifier.alpha(chrome)) {

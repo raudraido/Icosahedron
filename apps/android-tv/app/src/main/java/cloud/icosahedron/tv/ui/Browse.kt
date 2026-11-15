@@ -208,7 +208,7 @@ private fun TrackList(title: String, subtitle: String?, meta: String?, coverId: 
         }
         LazyColumn(Modifier.weight(1f).fillMaxHeight(), contentPadding = PaddingValues(end = 40.dp, top = 8.dp, bottom = 24.dp)) {
             itemsIndexed(tracks) { i, t ->
-                TrackRow(t, if (numbered) (t.trackNumber.takeIf { it > 0 } ?: (i + 1)) else null, Playback.current?.id == t.id, horizontalPadding = 0.dp, showCover = !numbered) {
+                TrackRow(t, if (numbered) (t.trackNumber.takeIf { it > 0 } ?: (i + 1)) else null, Playback.current?.id == t.id, horizontalPadding = 0.dp, showCover = true, showAlbum = !numbered, showNumber = numbered) {
                     Playback.playTracks(tracks, i)
                 }
             }

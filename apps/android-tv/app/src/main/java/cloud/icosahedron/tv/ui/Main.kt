@@ -146,7 +146,7 @@ fun MainScreen() {
         }
     }
 
-    CompositionLocalProvider(LocalClient provides client) {
+    CompositionLocalProvider(LocalClient provides client, LocalNavigate provides { s: Screen -> go(s) }) {
         // Now Playing takes its background colour from the cover of the playing song.
         val tint = rememberCoverTint(Playback.current?.coverArt)
         val tintColor by animateColorAsState(tint ?: Bg, tween(800), label = "tint")

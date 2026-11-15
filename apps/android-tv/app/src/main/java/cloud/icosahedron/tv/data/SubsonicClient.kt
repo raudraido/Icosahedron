@@ -132,6 +132,10 @@ class SubsonicClient(val baseUrl: String, val user: String, val salt: String, va
     suspend fun starred(): List<Track> =
         call("getStarred2").optJSONObject("starred2")?.objs("song")?.mapNotNull { Track.fromSubsonic(it) } ?: emptyList()
 
+    suspend fun setStarred(id: String, on: Boolean) { call(if (on) "star" else "unstar", "id" to id) }
+
+    suspend fun addToPlaylist(playlistId: String, songId: String) { call("updatePlaylist", "playlistId" to playlistId, "songIdToAdd" to songId) }
+
     suspend fun scrobble(id: String, submission: Boolean) {
         call("scrobble", "id" to id, "submission" to submission.toString())
     }

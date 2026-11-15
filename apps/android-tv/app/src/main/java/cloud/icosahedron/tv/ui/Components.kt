@@ -58,6 +58,9 @@ import java.net.URLEncoder
 
 val LocalClient = compositionLocalOf<SubsonicClient> { error("no client") }
 
+/** Goes to another screen (an album, an artist); set by the main screen, used by the song menu. */
+val LocalNavigate = compositionLocalOf<(Screen) -> Unit> { {} }
+
 /** Runs `block` when `key` changes; null while loading, then the result or the failure. */
 @Composable
 fun <T> load(key: Any?, block: suspend () -> T): State<Result<T>?> =
@@ -108,11 +111,15 @@ fun fmt(ms: Long): String {
 @Composable
 fun TrackRow(
     track: Track, number: Int?, playing: Boolean, horizontalPadding: Dp = 48.dp,
-    showCover: Boolean = true, showAlbum: Boolean = showCover, onClick: () -> Unit,
+    showCover: Boolean = true, showAlbum: Boolean = showCover, showNumber: Boolean = !showCover, onClick: () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
+    var menu by remember { mutableStateOf(false) }
+    if (menu) TrackMenu(track) { menu = false }
     Surface(
         onClick = onClick,
+        // Holding OK opens the menu of the song (queue, go to the album or the artist, playlist, favorite)
+        onLongClick = { menu = true },
         modifier = Modifier.fillMaxWidth().padding(horizontal = horizontalPadding, vertical = 2.dp).onFocusChanged { focused = it.hasFocus },
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
         colors = ClickableSurfaceDefaults.colors(
@@ -125,6 +132,7 @@ fun TrackRow(
         Row(Modifier.padding(end = 14.dp).height(68.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.width(4.dp).height(36.dp).clip(RoundedCornerShape(2.dp)).background(if (focused) Accent else Color.Transparent))
             Spacer(Modifier.width(10.dp))
+            if (showCover && showNumber) Text(number?.toString() ?: "", color = dim(), modifier = Modifier.width(32.dp), fontSize = 15.sp)
             if (showCover) {
                 Box(Modifier.size(56.dp), contentAlignment = Alignment.Center) {
                     Cover(track.coverArt, 56.dp, px = 160)

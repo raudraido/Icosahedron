@@ -104,22 +104,12 @@ class PlaybackService : MediaLibraryService() {
         if (size <= 0 || size == Int.MAX_VALUE) list else list.drop(page * size).take(size)
 
     private inner class Callback : MediaLibrarySession.Callback {
-        private var lastWind = 0L
-
-        // The fast-forward / rewind keys (held on a steering wheel or a headset: the key repeats) wind the song on or back
+        // The fast-forward / rewind keys (held on a steering wheel or a headset) wind the song like a CD player
         override fun onMediaButtonEvent(session: MediaSession, controllerInfo: MediaSession.ControllerInfo, intent: android.content.Intent): Boolean {
             val e = intent.getParcelableExtra<android.view.KeyEvent>(android.content.Intent.EXTRA_KEY_EVENT) ?: return false
-            if (e.action != android.view.KeyEvent.ACTION_DOWN) return false
             val dir = when (e.keyCode) { android.view.KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> 1; android.view.KeyEvent.KEYCODE_MEDIA_REWIND -> -1; else -> return false }
-            val p = Playback.player
-            if (p.mediaItemCount == 0) return false
-            // A held key repeats fast: a step every half second (5 s each, so 10 s of the song for every second held),
-            // the song keeps playing in between, so you hear it wind
-            val now = android.os.SystemClock.elapsedRealtime()
-            if (now - lastWind < 500) return true
-            lastWind = now
-            val dur = p.duration.takeIf { it > 0 } ?: Long.MAX_VALUE
-            Playback.seekTo((p.currentPosition + dir * 5_000L).coerceIn(0, (dur - 1000).coerceAtLeast(0)))
+            if (Playback.player.mediaItemCount == 0) return false
+            if (e.action == android.view.KeyEvent.ACTION_UP) Playback.windEnd() else Playback.windKey(dir, e.repeatCount > 0)
             return true
         }
 

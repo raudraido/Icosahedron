@@ -282,6 +282,53 @@ object Playback {
         appContext.getSharedPreferences("playback", Context.MODE_PRIVATE).edit().putFloat("speed", speed).putBoolean("keepPitch", keepPitch).apply()
     }
 
+    // ── Winding with the fast-forward / rewind key (a steering wheel, a headset), like on a CD player ──
+    private var windJob: kotlinx.coroutines.Job? = null
+    private var windDir = 0
+    private var lastWindKey = 0L
+    private var sawRepeat = false
+
+    /** The key is down (also each repeat of it): forward plays fast (4x, after two seconds 8x), back goes in small quick steps. */
+    fun windKey(dir: Int, repeat: Boolean) {
+        lastWindKey = android.os.SystemClock.elapsedRealtime()
+        if (repeat) sawRepeat = true
+        if (windJob?.isActive == true && windDir == dir) return
+        windEnd()
+        if (player.mediaItemCount == 0) return
+        windDir = dir
+        sawRepeat = repeat
+        val started = lastWindKey
+        windJob = scope.launch {
+            var fast = 0f
+            while (true) {
+                val now = android.os.SystemClock.elapsedRealtime()
+                // A stack that repeats the key stops repeating when it is let go; one that does not sends the key up (windEnd)
+                if ((sawRepeat && now - lastWindKey > 700) || now - started > 120_000) break
+                val dur = player.duration.takeIf { it > 0 } ?: Long.MAX_VALUE
+                val pos = player.currentPosition
+                if ((dir > 0 && pos >= dur - 1000) || (dir < 0 && pos <= 300)) break
+                if (dir > 0) {
+                    val want = if (now - started > 2000) 8f else 4f
+                    if (want != fast) { fast = want; player.playbackParameters = androidx.media3.common.PlaybackParameters(want, if (keepPitch) 1f else want) }
+                    delay(250)
+                } else {
+                    player.seekTo((pos - 1400).coerceAtLeast(0)) // small steps, the song plays between them
+                    delay(200)
+                }
+            }
+            windEnd()
+        }
+    }
+
+    fun windEnd() {
+        val job = windJob ?: return
+        windJob = null
+        job.cancel()
+        applySpeed()
+        sync()
+        onChanged?.invoke()
+    }
+
     private fun applySpeed() {
         player.playbackParameters = androidx.media3.common.PlaybackParameters(speed, if (keepPitch) 1f else speed)
     }

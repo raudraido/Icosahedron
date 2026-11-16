@@ -3,7 +3,7 @@
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
 ## Unreleased
-- **Holding fast-forward / rewind winds the song** (steering wheel, car, headset): 10 seconds a step, repeating while the key is held. The same 10 seconds for the notification's seek buttons.
+- **Holding fast-forward / rewind winds the song** (steering wheel, car, headset): 5 seconds every half second while the key is held (the song keeps playing, so you hear it wind). The same 10 seconds for the notification's seek buttons.
 
 ## 0.1.37
 - **Seeking works in a transcoded song too** (MP3 / AAC quality): the stream now tells its estimated length, so the progress bar no longer sends the song back to the start. (With the Direct quality it worked before.) A seek far ahead in a transcoded song takes a moment: the server cannot jump in it, so the player reads on up to the spot.

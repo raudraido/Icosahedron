@@ -654,17 +654,43 @@ final class PlayerModel {
     }
 
     @ObservationIgnored private var windTimer: Timer?
+    @ObservationIgnored private var winding = false
 
-    /// 10 seconds of the song for every second the button is held, 0.5 s per step.
+    /// Holding the wheel / headset button: like a CD player the song plays on fast, 4 times its speed and after two
+    /// seconds 8 times (smooth, the sound rises with it). Where the player cannot play fast (backwards on a stream) the
+    /// song is moved in small steps instead.
     private func windSong(from event: MPRemoteCommandEvent, direction: Double) {
         windTimer?.invalidate()
         windTimer = nil
-        guard let e = event as? MPSeekCommandEvent, e.type == .beginSeeking, current != nil else { return }
-        windTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            guard let self, self.current != nil else { return }
-            let to = self.livePosition() + direction * 5
-            if to >= self.duration - 1 || to <= 0 { self.windTimer?.invalidate(); self.windTimer = nil }
-            self.seek(to: min(max(to, 0), max(self.duration - 1, 0)))
+        guard let e = event as? MPSeekCommandEvent else { return }
+        if e.type == .endSeeking {
+            if winding { winding = false; player.rate = isPlaying ? Float(speed) : 0 }
+            return
+        }
+        guard current != nil, let item = player.currentItem else { return }
+        winding = true
+        let smooth = direction > 0 ? item.canPlayFastForward : item.canPlayReverse
+        if smooth {
+            let started = Date()
+            player.rate = Float(direction * 4)
+            windTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] t in
+                guard let self, self.winding else { t.invalidate(); return }
+                if Date().timeIntervalSince(started) > 2 { self.player.rate = Float(direction * 8) }
+                // At the end or at the start of the song: back to the normal playing
+                let pos = self.livePosition()
+                if (direction > 0 && pos >= self.duration - 1) || (direction < 0 && pos <= 0.5) {
+                    self.winding = false; t.invalidate()
+                    self.player.rate = self.isPlaying ? Float(self.speed) : 0
+                }
+            }
+        } else {
+            // Small, quick steps (0.2 s of the song's own playing, then 1.4 s on) sound smoother than big jumps
+            windTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] t in
+                guard let self, self.winding, self.current != nil else { t.invalidate(); return }
+                let to = self.livePosition() + direction * 1.4
+                if to >= self.duration - 1 || to <= 0 { self.winding = false; t.invalidate() }
+                self.seek(to: min(max(to, 0), max(self.duration - 1, 0)))
+            }
         }
     }
 

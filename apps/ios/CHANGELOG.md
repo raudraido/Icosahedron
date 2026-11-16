@@ -2,7 +2,7 @@
 
 A native SwiftUI app for iPhone and iPad (iOS 26.1 or later), built as an unsigned `.ipa` (sign it with SideStore, AltStore, Sideloadly or iloader: [docs/ios.md](../../docs/ios.md)). It has been part of the shared releases 0.15.3 to 0.15.9 (see the [main changelog](../../CHANGELOG.md)); from here it has its **own version, release and changelog**. What works with which server: [docs/compatibility.md](../../docs/compatibility.md).
 
-## Unreleased
+## 0.2.19
 - **Winding with the steering wheel / headset button is smooth, like on a CD player:** while the button is held the song plays on fast (4 times its speed, after two seconds 8 times) instead of jumping every half second. Backwards, where the player cannot play in reverse (a stream), it goes in small quick steps.
 
 ## 0.2.18

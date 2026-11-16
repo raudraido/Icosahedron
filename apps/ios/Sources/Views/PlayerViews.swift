@@ -292,6 +292,14 @@ struct NowPlayingView: View {
                     .frame(minWidth: 44, alignment: .trailing)
             }
             .font(.caption).foregroundStyle(.white.opacity(0.75)).monospacedDigit()
+            // The bar is redrawn twice a second; when that happens just as the finger lets go, SwiftUI can lose the
+            // "editing ended" call, and the bar would sit at the new place while nothing is sought. So a value that
+            // has not moved for a moment is sought anyway.
+            .task(id: scrub) {
+                guard let v = scrub else { return }
+                try? await Task.sleep(for: .milliseconds(600))
+                if !Task.isCancelled, scrub == v { s.seek(to: v); scrub = nil }
+            }
         }
     }
 

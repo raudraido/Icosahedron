@@ -3,6 +3,7 @@
 A native SwiftUI app for iPhone and iPad (iOS 26.1 or later), built as an unsigned `.ipa` (sign it with SideStore, AltStore, Sideloadly or iloader: [docs/ios.md](../../docs/ios.md)). It has been part of the shared releases 0.15.3 to 0.15.9 (see the [main changelog](../../CHANGELOG.md)); from here it has its **own version, release and changelog**. What works with which server: [docs/compatibility.md](../../docs/compatibility.md).
 
 ## Unreleased
+- **The progress bar seeks every time:** the bar is redrawn twice a second, and when that happened just as you let go, the "let go" was lost: the bar stayed at the new place while the sound played on. A place that stays still for a moment is now sought even then.
 - **Seeking on the progress bar is checked:** after you let go of the bar the player is asked where it really is; if the audio did not move (the bar showed the new place, the sound played on as before), the song is loaded again at that spot. A seek that never reports back no longer freezes the clock either.
 
 ## 0.2.16

@@ -73,6 +73,8 @@ object Playback {
                 true,
             )
             .setHandleAudioBecomingNoisy(true)
+            .setSeekForwardIncrementMs(10_000)
+            .setSeekBackIncrementMs(10_000)
             // Keeps the CPU and the Wi-Fi awake while a song plays: with the screen off or the app in the background the phone
             // may otherwise sleep and the stream stops after a while
             .setWakeMode(C.WAKE_MODE_NETWORK)

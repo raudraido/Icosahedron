@@ -639,9 +639,32 @@ final class PlayerModel {
             if let e = event as? MPChangePlaybackRateCommandEvent { self?.setSpeed(Double(e.playbackRate)) }
             return .success
         }
+        // Holding the next / previous button on the steering wheel (or the car's screen, a headset) winds the song on
+        // or back: the begin event starts a repeating seek, the end event stops it
+        c.seekForwardCommand.addTarget { [weak self] e in self?.windSong(from: e, direction: 1); return .success }
+        c.seekBackwardCommand.addTarget { [weak self] e in self?.windSong(from: e, direction: -1); return .success }
+        c.skipForwardCommand.preferredIntervals = [15]
+        c.skipBackwardCommand.preferredIntervals = [15]
+        c.skipForwardCommand.addTarget { [weak self] _ in self.map { $0.seek(to: min($0.livePosition() + 15, max($0.duration - 1, 0))) }; return .success }
+        c.skipBackwardCommand.addTarget { [weak self] _ in self.map { $0.seek(to: $0.livePosition() - 15) }; return .success }
         c.changePlaybackPositionCommand.addTarget { [weak self] event in
             if let e = event as? MPChangePlaybackPositionCommandEvent { self?.seek(to: e.positionTime) }
             return .success
+        }
+    }
+
+    @ObservationIgnored private var windTimer: Timer?
+
+    /// 10 seconds of the song for every second the button is held, 0.5 s per step.
+    private func windSong(from event: MPRemoteCommandEvent, direction: Double) {
+        windTimer?.invalidate()
+        windTimer = nil
+        guard let e = event as? MPSeekCommandEvent, e.type == .beginSeeking, current != nil else { return }
+        windTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            guard let self, self.current != nil else { return }
+            let to = self.livePosition() + direction * 5
+            if to >= self.duration - 1 || to <= 0 { self.windTimer?.invalidate(); self.windTimer = nil }
+            self.seek(to: min(max(to, 0), max(self.duration - 1, 0)))
         }
     }
 

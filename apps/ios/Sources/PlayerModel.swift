@@ -643,10 +643,9 @@ final class PlayerModel {
         // or back: the begin event starts a repeating seek, the end event stops it
         c.seekForwardCommand.addTarget { [weak self] e in self?.windSong(from: e, direction: 1); return .success }
         c.seekBackwardCommand.addTarget { [weak self] e in self?.windSong(from: e, direction: -1); return .success }
-        c.skipForwardCommand.preferredIntervals = [15]
-        c.skipBackwardCommand.preferredIntervals = [15]
-        c.skipForwardCommand.addTarget { [weak self] _ in self.map { $0.seek(to: min($0.livePosition() + 15, max($0.duration - 1, 0))) }; return .success }
-        c.skipBackwardCommand.addTarget { [weak self] _ in self.map { $0.seek(to: $0.livePosition() - 15) }; return .success }
+        // No 15 second skip buttons: when they are on, CarPlay and the lock screen show them in place of previous / next
+        c.skipForwardCommand.isEnabled = false
+        c.skipBackwardCommand.isEnabled = false
         c.changePlaybackPositionCommand.addTarget { [weak self] event in
             if let e = event as? MPChangePlaybackPositionCommandEvent { self?.seek(to: e.positionTime) }
             return .success

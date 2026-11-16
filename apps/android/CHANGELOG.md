@@ -2,7 +2,7 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
-## Unreleased
+## 0.1.37
 - **Seeking works in a transcoded song too** (MP3 / AAC quality): the stream now tells its estimated length, so the progress bar no longer sends the song back to the start. (With the Direct quality it worked before.) A seek far ahead in a transcoded song takes a moment: the server cannot jump in it, so the player reads on up to the spot.
 
 ## 0.1.36

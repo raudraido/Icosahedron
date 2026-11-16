@@ -39,6 +39,7 @@ final class PlayerModel {
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var itemObserver: AnyCancellable?
     @ObservationIgnored private var seeking = false
+    @ObservationIgnored private var seekGeneration = 0
     @ObservationIgnored private let cache = AudioCache.shared
     /// True when the current item plays from a cached local file (exact timing) rather than a stream.
     @ObservationIgnored private var playingLocal = false
@@ -217,14 +218,33 @@ final class PlayerModel {
         // The periodic clock keeps reporting the old time until the seek has finished; ignore it
         // meanwhile, otherwise the progress bar jumps back for a moment.
         seeking = true
+        seekGeneration += 1
+        let generation = seekGeneration
         // Exact only for a local file; on a stream an exact seek makes AVPlayer read far ahead to find the spot
         let tol = playingLocal ? CMTime.zero : CMTime(seconds: 1, preferredTimescale: 600)
-        player.seek(to: CMTime(seconds: t, preferredTimescale: 600), toleranceBefore: tol, toleranceAfter: tol) { [weak self] _ in
-            DispatchQueue.main.async { self?.seeking = false }
+        player.seek(to: CMTime(seconds: t, preferredTimescale: 600), toleranceBefore: tol, toleranceAfter: tol) { [weak self] finished in
+            DispatchQueue.main.async { self?.seekDone(generation: generation, target: t, finished: finished) }
+        }
+        // A seek that never reports back must not freeze the clock for ever
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
+            guard let self, self.seekGeneration == generation, self.seeking else { return }
+            self.seekDone(generation: generation, target: t, finished: true)
         }
         position = t
         updateNowPlaying()
         changed()
+    }
+
+    /// The seek is over: look at where the player really is. AVPlayer sometimes says "done" without having moved
+    /// (the audio then plays on as before while the bar shows the new place); then the song is loaded again at the spot.
+    private func seekDone(generation: Int, target: Double, finished: Bool) {
+        guard generation == seekGeneration else { return } // a newer seek is on its way
+        seeking = false
+        guard finished, current?.directURL == nil, player.currentItem != nil else { return }
+        let actual = player.currentTime().seconds
+        if actual.isFinite, abs(actual - target) > 3, target < max(duration - 2, 0) {
+            load(startPaused: !isPlaying, startAt: target, silent: true)
+        }
     }
 
     // MARK: Queue editing

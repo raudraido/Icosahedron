@@ -2,7 +2,7 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
-## Unreleased
+## 0.1.38
 - **Winding is smooth, like on a CD player:** while fast-forward is held (steering wheel, car, headset) the song plays on at 4 times its speed, after two seconds at 8 times, instead of jumping; rewind goes back in small quick steps (Android cannot play in reverse). The normal speed comes back when the key is let go.
 
 

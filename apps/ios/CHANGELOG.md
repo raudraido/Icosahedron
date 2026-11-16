@@ -2,7 +2,7 @@
 
 A native SwiftUI app for iPhone and iPad (iOS 26.1 or later), built as an unsigned `.ipa` (sign it with SideStore, AltStore, Sideloadly or iloader: [docs/ios.md](../../docs/ios.md)). It has been part of the shared releases 0.15.3 to 0.15.9 (see the [main changelog](../../CHANGELOG.md)); from here it has its **own version, release and changelog**. What works with which server: [docs/compatibility.md](../../docs/compatibility.md).
 
-## Unreleased
+## 0.2.18
 - **Holding the next / previous button winds the song** (steering wheel, car screen, headset over Bluetooth or USB; no CarPlay needed): the song moves 10 seconds for each second the button is held. The 15 second skip buttons work too.
 
 ## 0.2.17

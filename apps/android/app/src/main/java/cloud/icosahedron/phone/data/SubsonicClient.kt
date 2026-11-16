@@ -37,7 +37,9 @@ class SubsonicClient(val baseUrl: String, val user: String, val salt: String, va
         val q = Quality.current()
         if (q != "raw") {
             val (format, kbps) = q.split("-").let { it[0] to it[1] }
-            b.addQueryParameter("format", format).addQueryParameter("maxBitRate", kbps)
+            // With the estimated length the player knows how long the stream is and can seek in it (without it a seek in a
+            // transcoded song went back to the start)
+            b.addQueryParameter("format", format).addQueryParameter("maxBitRate", kbps).addQueryParameter("estimateContentLength", "true")
         }
         return b.build().toString()
     }

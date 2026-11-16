@@ -2,6 +2,9 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
+## Unreleased
+- **Seeking works in a transcoded song too** (MP3 / AAC quality): the stream now tells its estimated length, so the progress bar no longer sends the song back to the start. (With the Direct quality it worked before.) A seek far ahead in a transcoded song takes a moment: the server cannot jump in it, so the player reads on up to the spot.
+
 ## 0.1.36
 - **Downloads and Cached Songs are separate:** *Library → Downloads* shows only what you downloaded on purpose (it stays until you remove it), and the new *Library → Cached Songs* shows the songs the phone kept by itself while you listened (most recently played first, with the size, Play, Shuffle and Clear the cache). Those are temporary: the oldest go when the cache is full, so use ⋮ and Download on a song to keep it.
 

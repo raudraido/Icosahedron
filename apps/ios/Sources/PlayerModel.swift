@@ -654,6 +654,8 @@ final class PlayerModel {
 
     @ObservationIgnored private var windTimer: Timer?
     @ObservationIgnored private var winding = false
+    /// The speed told to the system (the car's seek bar moves by it) while the song is wound on: 4 or 8 instead of the normal one.
+    @ObservationIgnored private var windRate: Double?
 
     /// Holding the wheel / headset button: like a CD player the song plays on fast, 4 times its speed and after two
     /// seconds 8 times (smooth, the sound rises with it). Where the player cannot play fast (backwards on a stream) the
@@ -663,7 +665,7 @@ final class PlayerModel {
         windTimer = nil
         guard let e = event as? MPSeekCommandEvent else { return }
         if e.type == .endSeeking {
-            if winding { winding = false; player.rate = isPlaying ? Float(speed) : 0 }
+            if winding { winding = false; windRate = nil; player.rate = isPlaying ? Float(speed) : 0; updateNowPlaying() }
             return
         }
         guard current != nil, let item = player.currentItem else { return }
@@ -672,14 +674,21 @@ final class PlayerModel {
         if smooth {
             let started = Date()
             player.rate = Float(direction * 4)
+            windRate = direction * 4
+            updateNowPlaying()
             windTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] t in
                 guard let self, self.winding else { t.invalidate(); return }
-                if Date().timeIntervalSince(started) > 2 { self.player.rate = Float(direction * 8) }
+                if Date().timeIntervalSince(started) > 2, self.windRate != direction * 8 {
+                    self.player.rate = Float(direction * 8)
+                    self.windRate = direction * 8
+                    self.updateNowPlaying()
+                }
                 // At the end or at the start of the song: back to the normal playing
                 let pos = self.livePosition()
                 if (direction > 0 && pos >= self.duration - 1) || (direction < 0 && pos <= 0.5) {
-                    self.winding = false; t.invalidate()
+                    self.winding = false; t.invalidate(); self.windRate = nil
                     self.player.rate = self.isPlaying ? Float(self.speed) : 0
+                    self.updateNowPlaying()
                 }
             }
         } else {
@@ -700,8 +709,8 @@ final class PlayerModel {
             MPMediaItemPropertyArtist: t.artist,
             MPMediaItemPropertyAlbumTitle: t.album ?? "",
             MPMediaItemPropertyPlaybackDuration: duration,
-            MPNowPlayingInfoPropertyElapsedPlaybackTime: position,
-            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? speed : 0.0,
+            MPNowPlayingInfoPropertyElapsedPlaybackTime: windRate != nil ? livePosition() : position,
+            MPNowPlayingInfoPropertyPlaybackRate: windRate ?? (isPlaying ? speed : 0.0),
             MPNowPlayingInfoPropertyDefaultPlaybackRate: speed,
         ]
         // Keep the previous cover until the new one has loaded, rather than flashing an empty one at every track change.

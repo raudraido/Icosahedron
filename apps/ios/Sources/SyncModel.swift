@@ -165,6 +165,9 @@ final class SyncModel {
         comps.path = "/sync"
         guard let url = comps.url else { return }
         let t = URLSession.shared.webSocketTask(with: url)
+        // The welcome carries the queues of every player (up to a thousand songs each): over the default 1 MiB the socket
+        // failed to read it and closed, and the app said "Sync server not reachable" while the server saw it online
+        t.maximumMessageSize = 16 * 1024 * 1024
         task = t
         status = "connecting"
         t.resume()

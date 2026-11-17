@@ -2,6 +2,9 @@
 
 A native SwiftUI app for iPhone and iPad (iOS 26.1 or later), built as an unsigned `.ipa` (sign it with SideStore, AltStore, Sideloadly or iloader: [docs/ios.md](../../docs/ios.md)). It has been part of the shared releases 0.15.3 to 0.15.9 (see the [main changelog](../../CHANGELOG.md)); from here it has its **own version, release and changelog**. What works with which server: [docs/compatibility.md](../../docs/compatibility.md).
 
+## Unreleased
+- **Winding starts at 8 times the speed and after five seconds goes to 16 times** (it was 4 and, after two seconds, 8): holding the wheel / headset button gets through a long song faster.
+
 ## 0.2.21
 - **The car's seek bar follows the winding:** while the wheel / headset button is held, the system is told the real speed (4 or 8 times) and position, so the bar on the car's screen moves with the song instead of standing still.
 

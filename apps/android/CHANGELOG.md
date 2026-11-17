@@ -2,7 +2,7 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
-## Unreleased
+## 0.1.39
 - **Winding starts at 8 times the speed and after five seconds goes to 16 times** (it was 4 and, after two seconds, 8): holding the wheel / headset button gets through a long song faster.
 
 ## 0.1.38

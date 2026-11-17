@@ -657,8 +657,8 @@ final class PlayerModel {
     /// The speed told to the system (the car's seek bar moves by it) while the song is wound on: 4 or 8 instead of the normal one.
     @ObservationIgnored private var windRate: Double?
 
-    /// Holding the wheel / headset button: like a CD player the song plays on fast, 4 times its speed and after two
-    /// seconds 8 times (smooth, the sound rises with it). Where the player cannot play fast (backwards on a stream) the
+    /// Holding the wheel / headset button: like a CD player the song plays on fast, 8 times its speed and after five
+    /// seconds 16 times (smooth, the sound rises with it). Where the player cannot play fast (backwards on a stream) the
     /// song is moved in small steps instead.
     private func windSong(from event: MPRemoteCommandEvent, direction: Double) {
         windTimer?.invalidate()
@@ -673,14 +673,14 @@ final class PlayerModel {
         let smooth = direction > 0 ? item.canPlayFastForward : item.canPlayReverse
         if smooth {
             let started = Date()
-            player.rate = Float(direction * 4)
-            windRate = direction * 4
+            player.rate = Float(direction * 8)
+            windRate = direction * 8
             updateNowPlaying()
             windTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] t in
                 guard let self, self.winding else { t.invalidate(); return }
-                if Date().timeIntervalSince(started) > 2, self.windRate != direction * 8 {
-                    self.player.rate = Float(direction * 8)
-                    self.windRate = direction * 8
+                if Date().timeIntervalSince(started) > 5, self.windRate != direction * 16 {
+                    self.player.rate = Float(direction * 16)
+                    self.windRate = direction * 16
                     self.updateNowPlaying()
                 }
                 // At the end or at the start of the song: back to the normal playing

@@ -288,7 +288,7 @@ object Playback {
     private var lastWindKey = 0L
     private var sawRepeat = false
 
-    /** The key is down (also each repeat of it): forward plays fast (4x, after two seconds 8x), back goes in small quick steps. */
+    /** The key is down (also each repeat of it): forward plays fast (8x, after five seconds 16x), back goes in small quick steps. */
     fun windKey(dir: Int, repeat: Boolean) {
         lastWindKey = android.os.SystemClock.elapsedRealtime()
         if (repeat) sawRepeat = true
@@ -308,7 +308,7 @@ object Playback {
                 val pos = player.currentPosition
                 if ((dir > 0 && pos >= dur - 1000) || (dir < 0 && pos <= 300)) break
                 if (dir > 0) {
-                    val want = if (now - started > 2000) 8f else 4f
+                    val want = if (now - started > 5000) 16f else 8f
                     if (want != fast) { fast = want; player.playbackParameters = androidx.media3.common.PlaybackParameters(want, if (keepPitch) 1f else want) }
                     delay(250)
                 } else {

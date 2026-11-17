@@ -2,6 +2,9 @@
 
 A native SwiftUI app for iPhone and iPad (iOS 26.1 or later), built as an unsigned `.ipa` (sign it with SideStore, AltStore, Sideloadly or iloader: [docs/ios.md](../../docs/ios.md)). It has been part of the shared releases 0.15.3 to 0.15.9 (see the [main changelog](../../CHANGELOG.md)); from here it has its **own version, release and changelog**. What works with which server: [docs/compatibility.md](../../docs/compatibility.md).
 
+## Unreleased
+- **"Sync server not reachable" with a long queue:** the sync server's greeting carries the queues of your players, and with a few hundred songs it passed the 1 MiB the phone accepts for one message: the connection was closed at once while the server saw the phone online. The phone now accepts up to 16 MiB.
+
 ## 0.2.22
 - **Winding starts at 8 times the speed and after five seconds goes to 16 times** (it was 4 and, after two seconds, 8): holding the wheel / headset button gets through a long song faster.
 

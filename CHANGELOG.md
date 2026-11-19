@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+- **Cached songs:** Downloads has a second view, **Cached songs**, next to **Downloaded**. It lists the songs the app kept from playing them (last used first), with how much of the limit they use, and works with the server away. Play, Shuffle and Clear cache are on top; right-click a song to *Download* it (keep it for good) or *Remove from cache*. Songs cached before this update appear once the server has named them.
+- **Themes and the theme builder are one page:** *Customize this theme…* under the theme cards opens the builder, and a theme saved there joins the cards at once. The separate Theme Builder tab is gone.
+
 ## 0.19.1
 - **Played songs are kept for the next time:** a song you play is also saved on the computer, so it starts at once the next time and plays when the server is away. **Settings → Downloads → Cache** shows how much is kept, sets the limit (off, 512 MB to 10 GB, 1 GB by default) and clears it; over the limit the song played longest ago goes first. Downloaded songs are never touched by the cache, and a cached song you download is kept for good without downloading it again.
 

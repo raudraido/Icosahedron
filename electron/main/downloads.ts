@@ -264,17 +264,35 @@ async function evict(): Promise<void> {
 }
 
 /** Keeps a played song for the next time (in the background; the song itself streams as usual). */
-export async function cacheSong(id: string, urlFor: () => string): Promise<void> {
+export async function cacheSong(id: string, urlFor: () => string, lookup?: (id: string) => Promise<DownloadedTrack>): Promise<void> {
   const data = await load();
   if ((data.cacheLimitMb ?? DEFAULT_CACHE_MB) <= 0) return;
   if (data.tracks[id] || caching.has(id) || current === id || queue.some((q) => q.track.id === id)) return;
   caching.add(id);
   try {
-    await fetchOne({ id }, urlFor(), true);
+    // The song's details go with the file, so the Cached Songs list can show it with no server.
+    const track = await lookup?.(id).catch(() => null);
+    await fetchOne(track ?? { id }, urlFor(), true);
     await evict();
   } catch { /* offline or refused: nothing to keep */ } finally {
     caching.delete(id);
   }
+}
+
+/**
+ * The songs the cache holds, last used first. Songs cached before their details were kept (an older app) get
+ * them now if the server answers; the ones it cannot name are left out of the list until it can.
+ */
+export async function cachedTracks(lookup: (id: string) => Promise<DownloadedTrack>): Promise<DownloadedTrack[]> {
+  const data = await load();
+  const entries = Object.values(data.tracks).filter((e) => e.cache).sort((a, b) => b.at - a.at);
+  let changed = false;
+  for (const e of entries) {
+    if (e.track.title !== undefined) continue;
+    try { e.track = await lookup(e.track.id); changed = true; } catch { /* offline: next time */ }
+  }
+  if (changed) await save();
+  return entries.filter((e) => e.track.title !== undefined).map((e) => e.track);
 }
 
 export async function setCacheLimit(mb: number): Promise<void> {

@@ -7,3 +7,5 @@ release
 .git
 native/audio-engine/target
 apps/server/data
+native/bpm-core/target
+native/bpm-cli/target

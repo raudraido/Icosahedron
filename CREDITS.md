@@ -20,16 +20,16 @@ authoritative text.
 
 ## QM-DSP
 
-BPM detection (`native/audio-engine/src/bpm.rs`, `vendor/bpm_bridge.cpp`)
+BPM detection (`native/bpm-core/src/lib.rs`, `native/bpm-core/vendor/bpm_bridge.cpp`)
 runs on **QM-DSP**, developed by the Centre for Digital Music, Queen Mary
 University of London. Specifically `dsp/onsets/DetectionFunction` and
 `dsp/tempotracking/TempoTrackV2`, which produce the raw beat-onset
 positions the rest of the pipeline snaps to a stable BPM value.
 
 Licensed GPL-2.0-or-later. Only the files this project actually uses are
-vendored in (`native/audio-engine/vendor/qm-dsp/`, see `build.rs` for the
+vendored in (`native/bpm-core/vendor/qm-dsp/`, see `native/bpm-core/build.rs` for the
 exact list) — each retains its original copyright header unmodified. See
-`native/audio-engine/vendor/README.md`.
+`native/bpm-core/vendor/README.md`.
 
 Bundles **kissfft** (`vendor/qm-dsp/ext/kissfft/`), BSD-3-Clause.
 
@@ -41,7 +41,7 @@ Mixxx Development Team, GPL-2.0-or-later) — specifically the constant-tempo
 region detection and BPM-snapping logic. This project didn't copy Mixxx's
 code directly; it ports the algorithm as this project's own PyQt/QML
 predecessor had already adapted it, reimplemented again in Rust in
-`bpm.rs`'s `retrieve_const_regions`/`make_const_bpm_ex`/`bpm_round`.
+`bpm-core/src/lib.rs`'s `retrieve_const_regions`/`make_const_bpm_ex`/`bpm_round`.
 
 ## airplay2-rs
 

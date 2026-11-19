@@ -1056,8 +1056,8 @@ dependencies = [
  "airplay-audio",
  "airplay-client",
  "airplay-core",
- "cc",
  "futures-util",
+ "icosahedron_bpm_core",
  "libc",
  "napi",
  "napi-build",
@@ -1067,6 +1067,13 @@ dependencies = [
  "symphonia",
  "thread-priority",
  "tokio",
+]
+
+[[package]]
+name = "icosahedron_bpm_core"
+version = "0.1.0"
+dependencies = [
+ "cc",
 ]
 
 [[package]]

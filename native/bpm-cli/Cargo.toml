@@ -1,0 +1,19 @@
+[package]
+name = "icosahedron_bpm_cli"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+description = "Prints the BPM of an audio file as JSON, with the same detection the desktop app uses (used by the Icosahedron HUB's library analysis)"
+publish = false
+
+[[bin]]
+name = "icosahedron-bpm"
+path = "src/main.rs"
+
+[dependencies]
+icosahedron_bpm_core = { path = "../bpm-core" }
+symphonia = { version = "0.5", default-features = false, features = ["flac", "mp3", "pcm", "aac", "alac", "isomp4", "vorbis", "ogg", "wav"] }
+
+[profile.release]
+opt-level = 3
+strip = true

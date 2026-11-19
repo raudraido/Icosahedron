@@ -18,6 +18,8 @@ out
 # postinstall; the compiled binary and generated JS/TS glue don't belong in
 # version control, same as `out/` for the main electron-vite build.
 native/audio-engine/target
+native/bpm-core/target
+native/bpm-cli/target
 native/*.node
 native/**/*.node
 native/audio-engine/index.js

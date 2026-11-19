@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+- **Download in the queue:** right-click a song in the queue panel to *Download* it or *Remove Download*.
+- **You can see what is downloaded:** a small mark beside a song's title in the song lists and the queue: the accent arrow when it is kept on this computer, a turning ring while it downloads, a faint arrow while it waits its turn.
+- **The cover picture:** the small picture at the bottom left no longer has an expand button. Moving the mouse over it zooms it a little (it keeps its size) to show it can be clicked, a click anywhere on it opens the big picture, and a click anywhere on the big picture closes it.
+
 ## 0.20.0
 - **Cached songs:** Downloads has a second view, **Cached songs**, next to **Downloaded**. It lists the songs the app kept from playing them (last used first), with how much of the limit they use, and works with the server away. Play, Shuffle and Clear cache are on top; right-click a song to *Download* it (keep it for good) or *Remove from cache*. Songs cached before this update appear once the server has named them.
 - **Themes and the theme builder are one page:** *Customize this theme…* under the theme cards opens the builder, and a theme saved there joins the cards at once. The separate Theme Builder tab is gone.

@@ -644,7 +644,7 @@ export function LeftPanel() {
   const track   = queue[idx] ?? null;
   const expanded = useStore((s) => s.sidebarArtExpanded);
   const toggleSidebarArt = useStore((s) => s.toggleSidebarArt);
-  const [closeHov, setCloseHov] = useState(false);
+  const [artHov, setArtHov] = useState(false);
   const [logoHovered, setLogoHovered] = useState(false);
   const [searchHandoff, setSearchHandoff] = useState("");
   const [panelWidth, setPanelWidth] = useState(() => loadJSON(LS_LEFT_PANEL_WIDTH, LEFT_PANEL_DEFAULT_WIDTH));
@@ -844,7 +844,7 @@ export function LeftPanel() {
         <div style={{ padding: expanded ? 0 : 8, flexShrink: 0, height: expanded ? 0 : undefined }}>
           {expanded && (
             <div
-              onClick={() => { setCloseHov(false); toggleSidebarArt(); }}
+              onClick={() => { setArtHov(false); toggleSidebarArt(); }}
               style={{
                 position: "absolute", inset: 0,
                 backdropFilter: "blur(2px)", WebkitBackdropFilter: "blur(2px)",
@@ -853,7 +853,13 @@ export function LeftPanel() {
               }}
             />
           )}
+          {/* Hovering zooms the picture a little (the box keeps its size); a click anywhere on it closes it,
+              like a click on the scrim around it. */}
           <div
+            onMouseEnter={() => setArtHov(true)}
+            onMouseLeave={() => setArtHov(false)}
+            onClick={() => { setArtHov(false); toggleSidebarArt(); }}
+            title={expanded ? "Close the big picture" : undefined}
             style={{
               position: expanded ? "absolute" : "relative",
               left: expanded ? 8 : undefined,
@@ -863,35 +869,19 @@ export function LeftPanel() {
               height: expanded ? artSize : 0,
               overflow: "hidden", borderRadius: 5, background: "#121212",
               boxShadow: expanded ? "0 8px 24px rgba(0,0,0,0.5)" : "none",
+              cursor: expanded ? "pointer" : "default",
               transition: "height 250ms cubic-bezier(0.65, 0, 0.35, 1)",
             }}
           >
-            {track?.cover_id ? (
-              <CoverArt coverId={track.cover_id} size={artSize} className="w-full h-full" />
-            ) : (
-              <div className="flex items-center justify-center w-full h-full" style={{ fontSize: Math.max(20, artSize * 0.3), color: "#333333" }}>
-                💿
-              </div>
-            )}
-
-            {expanded && (
-              <button
-                onClick={(e) => { e.stopPropagation(); setCloseHov(false); toggleSidebarArt(); }}
-                onMouseEnter={() => setCloseHov(true)}
-                onMouseLeave={() => setCloseHov(false)}
-                title="Collapse"
-                style={{
-                  position: "absolute", top: 4, right: 4, width: 24, height: 24, borderRadius: 12,
-                  display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-                  border: `2px solid color-mix(in srgb, var(--accent) ${closeHov ? 100 : 30}%, transparent)`,
-                  background: `color-mix(in srgb, var(--accent) ${closeHov ? 40 : 10}%, transparent)`,
-                  opacity: closeHov ? 1 : 0,
-                  transition: "opacity 180ms",
-                }}
-              >
-                <Icon src="img/expand.png" size={16} style={{ background: closeHov ? "#ffffff" : "#515151" }} />
-              </button>
-            )}
+            <div style={{ width: "100%", height: "100%", transform: expanded && artHov ? "scale(1.05)" : "scale(1)", transition: "transform 200ms ease-out" }}>
+              {track?.cover_id ? (
+                <CoverArt coverId={track.cover_id} size={artSize} className="w-full h-full" />
+              ) : (
+                <div className="flex items-center justify-center w-full h-full" style={{ fontSize: Math.max(20, artSize * 0.3), color: "#333333" }}>
+                  💿
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

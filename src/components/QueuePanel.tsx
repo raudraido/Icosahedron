@@ -8,6 +8,8 @@ import { api, Track, fmtDuration } from "../lib/api";
 import { PlayingBars } from "./PlayingBars";
 import { SpinnerRing } from "./SpinnerRing";
 import { Icon } from "./Icon";
+import { DownloadMark } from "./DownloadMark";
+import { useDownloads } from "../lib/downloads";
 import { ArtistTokens } from "./ArtistTokens";
 import { ContextMenu, MenuEntry } from "./ContextMenu";
 import { PromptDialog } from "./PromptDialog";
@@ -220,9 +222,12 @@ function QueueRow({ track: t, index: i, isCurrent, isPast, playing, dragging, on
           as everywhere else), alwaysAccent when this row is the current track
           (all tokens go accent-colored while playing, not just on hover). */}
       <div className="flex-1 min-w-0 px-2" style={{ opacity: isPast ? 0.4 : 1 }}>
-        <p className="truncate" style={{ fontSize: "var(--fs-primary)", color: isCurrent ? "var(--accent)" : "var(--text-primary)", fontWeight: isCurrent ? "var(--fw-emphasis)" : "var(--fw-primary)" }}>
-          {t.title}
-        </p>
+        <div className="flex items-center min-w-0" style={{ gap: 6 }}>
+          <p className="truncate" style={{ fontSize: "var(--fs-primary)", color: isCurrent ? "var(--accent)" : "var(--text-primary)", fontWeight: isCurrent ? "var(--fw-emphasis)" : "var(--fw-primary)" }}>
+            {t.title}
+          </p>
+          <DownloadMark id={t.id} />
+        </div>
         <ArtistTokens name={t.artist} artistId={t.artist_id} fontSize="var(--fs-secondary)" alwaysAccent={isCurrent} />
       </div>
 
@@ -355,6 +360,18 @@ export function QueuePanel() {
     qc.invalidateQueries({ queryKey: ["playlists"] });
   }
 
+  // Download / Remove Download (desktop only), like the song lists
+  function downloadItem(track: Track): MenuEntry[] {
+    const dl = useDownloads.getState();
+    if (!dl.supported) return [];
+    const kept = dl.has(track.id);
+    return [{
+      label: kept ? "Remove Download" : "Download",
+      icon: "img/download.png",
+      onClick: () => { void (kept ? dl.removeTracks([track.id]) : dl.download([track])); },
+    }];
+  }
+
   function buildQueueMenu(track: Track): MenuEntry[] {
     return [
       { label: "Play Now", icon: "img/sub_play.png", onClick: () => playTrack(track, queue) },
@@ -381,6 +398,7 @@ export function QueuePanel() {
         onClick: () => toggleFavoriteFromMenu(track),
       },
       { label: "Share", icon: "img/share.png", onClick: () => openShareDialog({ id: track.id, type: "song", name: track.title }) },
+      ...downloadItem(track),
       { label: "Remove from Queue", icon: "img/remove.png", onClick: () => removeFromQueue(track.id) },
     ];
   }

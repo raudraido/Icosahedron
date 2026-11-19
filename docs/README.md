@@ -8,6 +8,7 @@
 | Run the sync server (web engine + web app) | [deploy-server.md](deploy-server.md) |
 | Sign in to a server on the internet safely | [secure-sign-in.md](secure-sign-in.md) |
 | Sign in on a TV without typing | [quick-connect.md](quick-connect.md) |
+| Turn a tablet or a spare screen into a player I control from my phone | [jukebox.md](jukebox.md) |
 | Set up sync between my devices | [sync-settings.md](sync-settings.md), [connect.md](connect.md) |
 
 ## The apps

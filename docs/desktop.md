@@ -20,6 +20,7 @@ Electron + React (the UI in `src/`) with a native Rust audio engine (`native/aud
 ## What it does
 
 - Gapless playback with a native Rust engine, a 10-band equalizer and **playback speed** 0.5×–2× (pitch follows the speed on the desktop; the web app keeps the pitch).
+- **Device control and jukebox:** choose another device with the devices button and control it, or queue music on it with *Add to Device Queue*. *Settings → Sync Server → Jukebox* shows the address, a QR code and the steps for turning a spare screen into a player ([jukebox.md](jukebox.md)).
 - **Casting** to Chromecast, AirPlay 2 and DLNA devices (Windows and Linux).
 - **BPM** analysis (with a correction for drum & bass, which otherwise reads half speed), kept in the shared BPM store.
 - **One click plays** a song, tick boxes select several; synced lyrics; Last.fm.

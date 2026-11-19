@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useStore } from "../store";
-import { useSync } from "../lib/sync";
+import { useSync, syncActions } from "../lib/sync";
+import { JUKEBOX_DOCS } from "../lib/jukebox";
 import { CoverArt } from "./CoverArt";
 
 // Jukebox player: open the app with ?player=1 on a screen that only plays
@@ -11,6 +12,33 @@ import { CoverArt } from "./CoverArt";
 // the first thing it asks for is one tap; after that remote "play" works.
 export const isPlayerMode = () => new URLSearchParams(location.search).has("player");
 
+/** This screen's name in the other devices' lists: click it to change it (the engine remembers it). */
+function ScreenName() {
+  const name = useSync((s) => s.name) ?? "Jukebox";
+  const deviceId = useSync((s) => s.deviceId);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(name);
+  if (!editing) {
+    return (
+      <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+        This screen is called <b style={{ color: "var(--text-primary)" }}>{name}</b>{" "}
+        <button onClick={() => { setDraft(name); setEditing(true); }} style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", fontSize: 13, padding: 0 }}>Rename</button>
+      </div>
+    );
+  }
+  const save = () => { const n = draft.trim(); if (n) syncActions.rename(deviceId, n); setEditing(false); };
+  return (
+    <form className="flex items-center" style={{ gap: 8 }} onSubmit={(e) => { e.preventDefault(); save(); }}>
+      <input
+        autoFocus value={draft} maxLength={64} onChange={(e) => setDraft(e.target.value)} aria-label="Name of this screen"
+        style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--card-bg)", color: "var(--text-primary)", fontSize: 14, width: 200 }}
+      />
+      <button type="submit" style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid var(--border)", background: "transparent", color: "var(--text-primary)", cursor: "pointer", fontSize: 13 }}>Save</button>
+      <button type="button" onClick={() => setEditing(false)} style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", fontSize: 13 }}>Cancel</button>
+    </form>
+  );
+}
+
 export function PlayerOnly() {
   const [armed, setArmed] = useState(false);
   const track = useStore((s) => s.queue[s.currentIndex]);
@@ -20,6 +48,7 @@ export function PlayerOnly() {
   const upNext = queue.slice(index + 1, index + 6);
   const queueLength = queue.length;
   const status = useSync((s) => s.status);
+  const name = useSync((s) => s.name) ?? "Jukebox";
 
   return (
     <div className="flex h-screen flex-col items-center justify-center text-center" style={{ background: "var(--main-bg)", color: "var(--text-primary)", gap: 16, padding: 24 }}>
@@ -31,7 +60,14 @@ export function PlayerOnly() {
           <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>{playing ? "Playing" : "Paused"}</div>
         </>
       ) : (
-        <div style={{ fontSize: 20, color: "var(--text-secondary)" }}>Jukebox ready. Send music here from another device.</div>
+        <div className="flex flex-col items-center" style={{ gap: 10, maxWidth: 460 }}>
+          <div style={{ fontSize: 28, fontWeight: 600 }}>Jukebox ready</div>
+          <div style={{ fontSize: 16, color: "var(--text-secondary)", lineHeight: 1.6 }}>
+            This screen plays what you send to it. On another device where you are signed in, choose <b style={{ color: "var(--text-primary)" }}>{name}</b> in the
+            devices list, or right-click a song and choose <b style={{ color: "var(--text-primary)" }}>Add to Device Queue</b>.
+          </div>
+          <a href={JUKEBOX_DOCS} target="_blank" rel="noreferrer" style={{ color: "var(--accent)", fontSize: 13 }}>How it works</a>
+        </div>
       )}
       {upNext.length > 0 && (
         <div style={{ width: "min(90vw, 480px)", textAlign: "left" }}>
@@ -43,6 +79,7 @@ export function PlayerOnly() {
           ))}
         </div>
       )}
+      <ScreenName />
       <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
         {status === "online" ? "Connected" : status === "connecting" ? "Connecting…" : "Sync offline"}
       </div>

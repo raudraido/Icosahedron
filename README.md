@@ -71,6 +71,7 @@ Every product has its own version, its own release and its own changelog. Pick y
 ## What it can do
 
 - **Play everywhere, keep it in step:** one queue and position follow you; the *Devices* list shows every device of your account with what it plays; *Send* and *Play here* move playback, and any device can control another.
+- **Jukebox:** turn a tablet, a spare computer or a browser on a TV into a player (open `/?player=1` of your server), name it, and send it music from any other device. The address, a QR code and the steps are in *Settings → Sync Server → Jukebox* ([docs/jukebox.md](docs/jukebox.md)).
 - **Secure sign-in for a server on the internet:** a new device has to be approved by a device that is already signed in, so a password alone gets nobody in ([docs/secure-sign-in.md](docs/secure-sign-in.md)).
 - **Gapless playback** (desktop, iOS, Android), 10-band equalizer, **playback speed** 0.5×–2× with the pitch kept, lyrics (timed, from the server or LRCLIB), **BPM**, favorites, ratings, playlists, share links.
 - **Offline:** an audio cache and *Download* for songs, albums and playlists (iOS, Android); *Download* on the desktop too, and the desktop app opens without the server when it has downloads. The web app has no offline music.
@@ -108,6 +109,7 @@ Open `http://<host>:8080`, sign in with your Navidrome account. Details, environ
 
 Start at the [documentation index](docs/README.md). The most useful pages:
 
+- Turning a screen into a player you control from your other devices: [jukebox](docs/jukebox.md)
 - How the parts fit together: [architecture](docs/architecture.md) · the sync wire protocol: [sync-protocol](docs/sync-protocol.md)
 - Running the server: [deploy-server](docs/deploy-server.md) · signing in safely from the internet: [secure-sign-in](docs/secure-sign-in.md)
 - Releases, beta tags and versions: [releasing](docs/releasing.md) · [compatibility](docs/compatibility.md)

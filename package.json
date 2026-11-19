@@ -23,6 +23,7 @@
     "icosahedron-audio-engine": "file:./native/audio-engine",
     "lucide-react": "^1.23.0",
     "md5": "^2.3.0",
+    "qrcode-generator": "2.0.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-virtualized-auto-sizer": "^2.0.3",

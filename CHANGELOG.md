@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- **Mix Builder** (the tab was a placeholder): quick starts (**Play 500 random** with every song the same chance, **Lucky mix** from your most played artists, Workout / Focus / Party / Throwback / Fresh finds / *Because I played …*), a **Start with** box for artists, songs, genres and decades, dials for years, genres, favourites, not played yet and familiar or new, and a live mix where you keep, swap, remove or drag songs. Play it, add it to the queue or save it as a playlist (named for you). *Start a Mix from this* in the song menu. The last state is remembered. Songs are not picked by BPM yet.
 - The sync server is called **Icosahedron HUB** everywhere (it was "the web engine"): the address field in the devices popover and in *Settings → Sync Server*.
 
 ## 0.20.2

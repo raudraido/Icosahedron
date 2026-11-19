@@ -8,7 +8,7 @@ Needs HTTPS. In Chrome / Edge use the install icon in the address bar; in Safari
 
 ## What works
 
-Playback, library browsing, playlists, favorites, lyrics, Last.fm (through the engine), the device list and remote control, shared preferences, BPM (from the engine's store), media keys and Media Session (notification / lock-screen controls), and an **equalizer** (WebAudio, same 10 bands as the desktop).
+Playback, library browsing, the **Mix Builder** tab (a ready proposal from a quick start or an artist, genre or decade, to play or save as a playlist: [desktop.md](desktop.md)), playlists, favorites, lyrics, Last.fm (through the engine), the device list and remote control, shared preferences, BPM (from the engine's store), media keys and Media Session (notification / lock-screen controls), and an **equalizer** (WebAudio, same 10 bands as the desktop).
 
 ## Playing and selecting songs
 

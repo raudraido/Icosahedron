@@ -316,8 +316,10 @@ export const api = {
   startScan: () => invoke<void>("start_scan"),
   getScanStatus: () => invoke<ScanStatus>("get_scan_status"),
   getTrackInfo: (id: string) => invoke<TrackFullInfo>("get_track_info", { id }),
-  getRandomSongs: (count: number) =>
-    invoke<Track[]>("get_random_songs", { count }),
+  /** At most 500 per call (a Subsonic limit); `opts` narrows the draw by genre and year on the server. */
+  getRandomSongs: (count: number, opts?: { genre?: string; fromYear?: number; toYear?: number }) =>
+    invoke<Track[]>("get_random_songs", { count, ...opts }),
+  getGenres: () => invoke<{ name: string; songCount: number }[]>("get_genres"),
 
   getPlaylists: () => invoke<Playlist[]>("get_playlists"),
   getPlaylistTracks: (id: string) =>

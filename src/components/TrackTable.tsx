@@ -452,6 +452,7 @@ export function TrackTable({
   const addTrackToQueue = useStore((s) => s.addTrackToQueue);
   const appendToQueue = useStore((s) => s.appendToQueue);
   const startRadio = useStore((s) => s.startRadio);
+  const startMixFrom = useStore((s) => s.startMixFrom);
   const currentId = useStore((s) => s.queue[s.currentIndex]?.id);
   const playing = useStore((s) => s.playing);
   const qc = useQueryClient();
@@ -1194,6 +1195,7 @@ export function TrackTable({
       ...jukeboxMenu(track),
       { label: "Go to Artist", icon: "img/sub_artist.png", disabled: !track.artist_id, onClick: () => track.artist_id && navigateTo({ tab: "artists", artistId: track.artist_id }) },
       { label: "Start Radio", icon: "img/radio.png", onClick: () => startRadio(track) },
+      { label: "Start a Mix from this", icon: "img/mix.png", disabled: !track.artist, onClick: () => startMixFrom({ kind: "artist", value: track.artist, id: track.artist_id ?? undefined }) },
       {
         label: "Add to Playlist", icon: "img/playlist.png",
         submenu: [

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.21.2
 - **Tracks: sorting by BPM follows the BPM you see.** The BPM column shows the detected BPM (the HUB's shared store), but the list was sorted by the BPM tag in the file, which most files do not have, so the order looked random. It now sorts by the detected values; songs without a BPM are left out of the list while it is sorted by BPM (with a search or a column filter on they come last). Play and Shuffle on a BPM-sorted list use the first 1,000 songs.
 - **Mix Builder uses BPM:** once the BPM is known for most of the library (60%, from the Icosahedron HUB's analysis or the desktop's own detection) the dials get a **BPM** range with a histogram of your library, and **Flow** lets you draw how the BPM of the mix should rise and fall (presets *Warm-up → peak*, *Steady*, *Cool-down*); the mix is then built song by song along the curve. Each song shows its BPM, the tray shows the average BPM and a BPM line, and Workout / Party / Focus get BPM ranges (Workout also a warm-up, peak, cool-down curve). Below 60% the dials card says how much of the library has a BPM, and where to analyse it.
 

@@ -19,7 +19,7 @@ const settings = fileSettings(process.env.DATA_DIR ?? "/data");
 const qcFlag = String(process.env.QUICK_CONNECT ?? "").trim().toLowerCase();
 const qcEnv = ["1", "true", "yes"].includes(qcFlag) ? true : ["0", "false", "no"].includes(qcFlag) ? false : null;
 const dataDir = process.env.DATA_DIR ?? "/data";
-const bpmStore = createBpmStore(dataDir);
+const bpmStore = createBpmStore(dataDir, { minConfidence: Number(settings.get("bpmMinConfidence")) || 0, onMinConfidence: (v) => settings.set("bpmMinConfidence", v) });
 const app = createApp({
   bpmStore,
   bpmAnalyzer: createBpmAnalyzer({ navidromeUrl, bpmStore, dir: dataDir }),

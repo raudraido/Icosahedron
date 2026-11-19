@@ -17,6 +17,7 @@ The apps and the server are versioned separately, so a version number says nothi
 | Navidrome plugins page (through the engine's proxy), playback speed (web app) | 2 | Server 0.18.0, Desktop 0.18.0 (needs server 0.17 or newer) |
 | The Android phone app: sign-in with approval, remote control, Android Auto | 2 | Android phone 0.1.0 (0.1.1 and later add the rest) |
 | Analysing the whole library's BPM on the HUB (`/bpm/analyze`, Settings → Sync Server → BPM analysis; administrators only, hidden on an older server) | 2 | Server and Desktop releases after 0.19.0 / 0.20.2 (the Settings section needs a server that has it) |
+| Confidence for measured BPM, the prefilter (skipped songs), the minimum confidence setting, the report and the re-check (`/bpm/analyze/report`, `/bpm/analyze/min-confidence`; Settings → Sync Server → BPM analysis; hidden or shortened on an older server) | 2 | Server and Desktop releases after 0.20.2 / 0.21.2 |
 | Last.fm handed from the desktop to the server (`PUT /lastfm/connection`), profile picture (`/avatar`) | 2 | Server 0.16.2, Desktop 0.16.2 (Last.fm), iOS 0.1.2 (picture) |
 
 **Now (2026-11-13):** Desktop 0.19.0 · Server 0.18.0 · iOS 0.2.6 · Android phone 0.1.22 · Android TV 0.2.0. The Android phone app counts only its last number up (0.1.0, 0.1.1, …).

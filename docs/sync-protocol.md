@@ -127,14 +127,17 @@ All need the `Authorization` header unless noted.
 | `/device/*` | Secure sign-in: asking to be let in, approving, trusted devices, recovery. See [secure-sign-in.md](secure-sign-in.md#api) |
 | `/rest/*`, `/api/*`, `/auth/*` | Same-origin proxy to Navidrome (Range requests supported). Navidrome does its own authentication; with secure sign-in on the engine checks the device instead and `/auth/*` is closed |
 | `/share/*` | Same-origin proxy to Navidrome's public share pages (no auth) |
-| `GET /bpm` | `{ "<trackId>": bpm, … }` — all known BPM values |
+| `GET /bpm` | `{ "<trackId>": bpm, … }` — all known BPM values (not the ones an administrator hid as unreliable, see below). Stored entries are `{bpm, manual, confidence?}`; only the analysis writes `confidence`, and clients never see it |
 | `GET /bpm/<id>` | `{ "bpm": n }` or 404 |
 | `PUT /bpm/<id>` | Body `{bpm, manual?}`; 20 ≤ bpm ≤ 400. A `manual` value is not overwritten by a detected one (422) |
 | `POST /bpm` | Bulk upload `{ "<id>": bpm, … }` of detected values → `{stored: n}` |
-| `POST /bpm/analyze` | Administrators only. Starts the library analysis ([sync-settings.md](sync-settings.md#bpm-analysis)). Body `{workers?: 1-8 (default 4), retryFailed?: bool}` → 202 and the status; 409 if one runs; 503 `analyser_missing`; 403 for others |
-| `GET /bpm/analyze` | Administrators only. `{state: idle\|running\|stopping, phase, analysed, failed, skipped, total, remaining, etaSeconds, startedAt, finishedAt, workers, lastError, withBpm, libraryTotal, failedTotal}` |
+| `POST /bpm/analyze` | Administrators only. Starts the library analysis ([sync-settings.md](sync-settings.md#bpm-analysis)). Body `{workers?: 1-8 (default 4), retryFailed?: bool, recheck?: bool, includeSkipped?: bool}` (`recheck`: also measure again detected values that have no confidence yet, the only case where a stored value is replaced; `includeSkipped`: also songs the prefilter leaves out) → 202 and the status; 409 if one runs; 503 `analyser_missing`; 403 for others |
+| `GET /bpm/analyze` | Administrators only. `{state: idle\|running\|stopping, phase, analysed, failed, skipped, total, remaining, etaSeconds, startedAt, finishedAt, workers, lastError, withBpm, libraryTotal, failedTotal, prefiltered, rechecked, withConfidence, unscored, unreliable, minConfidence, skippedTotal}`. `withBpm` counts the values players see (unreliable ones excluded). The last six are missing on a HUB from before confidence |
 | `DELETE /bpm/analyze` | Administrators only. Stops the job → `{stopped}` |
 | `GET /bpm/analyze/failed` | Administrators only. `[{id, reason, at}]`, the songs that are not tried again unless `retryFailed` |
+| `GET /bpm/analyze/skipped` | Administrators only. `[{id, reason, at, genre?}]`: songs left out before download (shorter than 60 s, or a genre without a beat); not tried again unless `includeSkipped` |
+| `GET /bpm/analyze/report?limit=50` | Administrators only. `{counts: {stored, manual, withConfidence, withoutConfidence, skipped, failed, belowThreshold}, minConfidence, histogram: [10 counts, 0-0.1 ... 0.9-1], lowest: [{id, bpm, confidence, title?, artist?, album?, genre?}]}`. `limit` 1-500; the lowest-confidence detected songs, for review |
+| `PUT /bpm/analyze/min-confidence` | Administrators only. Body `{minConfidence: 0..1}` (kept in `settings.json`). Detected values with a lower confidence stay stored but are left out of `GET /bpm`, `GET /bpm/<id>` (404) and the counts; manual values and values without a confidence always show. 0 hides nothing |
 | `GET /lastfm/config` | `{configured, apiKey}` |
 | `GET/DELETE /lastfm/connection` | The user's Last.fm connection (`{username, historyEnabled, scrobbleEnabled}` or `null`) / disconnect |
 | `POST /lastfm/token` | Start connecting: `{token, authUrl}` — open `authUrl` in a browser |

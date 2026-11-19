@@ -13,12 +13,12 @@ const DNB_NAMES = [
 const NOT_DNB_NAMES = ["hip hop", "hiphop", "rap", "trap", "reggae", "reggaeton", "dancehall", "boom bap"];
 
 /** Splits a genre tag that holds several genres ("Rap • Hip-Hop", "A; B", "A / B") into lower-case words. */
-function genreParts(genre) {
+export function genreParts(genre) {
   return genre.split(/[•;/,|\n]+/).map((x) =>
     ` ${x.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").replace(/\bn\b/g, "and").replace(/\s+/g, " ").trim()} `);
 }
 
-const hasName = (parts, names) => parts.some((g) => names.some((n) => g.includes(` ${n} `) || g.includes(` ${n}s `)));
+export const hasName = (parts, names) => parts.some((g) => names.some((n) => g.includes(` ${n} `) || g.includes(` ${n}s `)));
 
 /** "Drum & Bass", "Drum'n'Bass", "DnB", "Liquid Funk; Drum and Bass" and so on, with no hip-hop-like genre next to it. */
 export function isDrumAndBass(genre) {

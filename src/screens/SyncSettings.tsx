@@ -8,7 +8,7 @@ import { Section, ToggleRow } from "./SettingsParts";
 import { SecureSignInSection } from "./SecureSignIn";
 import { QrCode } from "../components/QrCode";
 import { jukeboxUrl, JUKEBOX_DOCS } from "../lib/jukebox";
-import { bpmAnalysisStatus, startBpmAnalysis, stopBpmAnalysis, formatEta, type BpmAnalysisStatus, type BpmAnalysisStart } from "../lib/bpmAnalysis";
+import { bpmAnalysisStatus, startBpmAnalysis, stopBpmAnalysis, setBpmMinConfidence, formatEta, type BpmAnalysisStatus, type BpmAnalysisStart } from "../lib/bpmAnalysis";
 
 // Settings > Sync Server: the connection, this player's name, the players the
 // engine knows, what this player keeps in sync and what the engine stores.
@@ -183,6 +183,9 @@ function BpmAnalysisSection() {
   const [st, setSt] = useState<BpmAnalysisStatus | null>(null);
   const [workers, setWorkers] = useState(4);
   const [msg, setMsg] = useState<string | null>(null);
+  const [includeSkipped, setIncludeSkipped] = useState(false);
+  const [armedRecheck, setArmedRecheck] = useState(false);
+  const [minPct, setMinPct] = useState<number | null>(null); // the slider while it is dragged
   const active = st?.state === "running" || st?.state === "stopping";
   useEffect(() => { void bpmAnalysisStatus().then(setSt); }, []);
   useEffect(() => {
@@ -192,9 +195,9 @@ function BpmAnalysisSection() {
   }, [active]);
   if (!st) return null; // not an administrator, or an older HUB
   const fmt = (n: number) => n.toLocaleString();
-  const start = async (retryFailed: boolean) => {
+  const start = async (o: { retryFailed?: boolean; recheck?: boolean } = {}) => {
     setMsg(null);
-    const r = await startBpmAnalysis(workers, retryFailed);
+    const r = await startBpmAnalysis({ workers, includeSkipped, ...o });
     if (r !== "ok") setMsg(START_ERRORS[r] ?? "Something went wrong.");
     const n = await bpmAnalysisStatus();
     if (n) setSt(n);
@@ -207,6 +210,27 @@ function BpmAnalysisSection() {
         {" "}The Icosahedron HUB can measure the rest in the background, with the same detection the desktop app uses, so every player shows it.
         Songs that already have a BPM, measured or set by hand, are never measured again or changed.
       </div>
+      {st.minConfidence !== undefined && (
+        <>
+          <div style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
+            {fmt(st.withConfidence ?? 0)} with a confidence, {fmt(st.unscored ?? 0)} without (measured earlier), {fmt(st.unreliable ?? 0)} unreliable (below {Math.round(st.minConfidence * 100)}%), {fmt(st.skippedTotal ?? 0)} skipped.
+          </div>
+          <div className="flex items-center" style={{ gap: 8, flexWrap: "wrap" }}>
+            <label htmlFor="bpm-minconf" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>Hide measured BPM below</label>
+            <input
+              id="bpm-minconf" type="range" min={0} max={100} step={1} value={minPct ?? Math.round(st.minConfidence * 100)}
+              onChange={(e) => setMinPct(Number(e.target.value))}
+              onPointerUp={async () => { if (minPct === null) return; const v = await setBpmMinConfidence(minPct / 100); setMinPct(null); const n = await bpmAnalysisStatus(); if (n) setSt(n); else if (v === null) setMsg("Could not save."); }}
+              onKeyUp={async () => { if (minPct === null) return; await setBpmMinConfidence(minPct / 100); setMinPct(null); const n = await bpmAnalysisStatus(); if (n) setSt(n); }}
+              style={{ width: 160 }}
+            />
+            <span style={{ fontSize: "var(--fs-small)", minWidth: 36 }}>{minPct ?? Math.round(st.minConfidence * 100)}%</span>
+          </div>
+          <div style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
+            Each measured BPM has a confidence: how steadily and clearly a beat runs through the song. Intros and ambient tracks score low, and their BPM is a guess. Values below this line stay stored but are left out of BPM sorting, the Mix Builder and Flow. 0% hides nothing. BPM you set by hand is always shown.
+          </div>
+        </>
+      )}
       {!active ? (
         <>
           <div className="flex items-center" style={{ gap: 8, flexWrap: "wrap" }}>
@@ -214,9 +238,26 @@ function BpmAnalysisSection() {
             <select id="bpm-workers" value={workers} onChange={(e) => setWorkers(Number(e.target.value))} style={input}>
               {[1, 2, 4, 6, 8].map((n) => <option key={n} value={n}>{n}{n === 4 ? " (default)" : ""}</option>)}
             </select>
-            <button style={button} onClick={() => void start(false)}>Start analysis</button>
-            {st.failedTotal > 0 && <button style={button} onClick={() => void start(true)}>Try the {fmt(st.failedTotal)} failed again</button>}
+            <button style={button} onClick={() => void start()}>Start analysis</button>
+            {st.failedTotal > 0 && <button style={button} onClick={() => void start({ retryFailed: true })}>Try the {fmt(st.failedTotal)} failed again</button>}
           </div>
+          {(st.skippedTotal ?? 0) > 0 && (
+            <label className="flex items-center" style={{ gap: 6, color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
+              <input type="checkbox" checked={includeSkipped} onChange={(e) => setIncludeSkipped(e.target.checked)} />
+              Include the {fmt(st.skippedTotal ?? 0)} skipped songs (shorter than a minute, or ambient, drone, soundtrack and similar)
+            </label>
+          )}
+          {(st.unscored ?? 0) > 0 && (
+            <div className="flex items-center" style={{ gap: 8, flexWrap: "wrap" }}>
+              <button
+                style={{ ...button, ...(armedRecheck ? { color: "var(--error)", borderColor: "var(--error)" } : {}) }}
+                onClick={() => { if (armedRecheck) { setArmedRecheck(false); void start({ recheck: true }); } else { setArmedRecheck(true); setTimeout(() => setArmedRecheck(false), 6000); } }}
+              >{armedRecheck ? "Really? Click again" : `Re-check ${fmt(st.unscored ?? 0)} songs analysed before confidence existed`}</button>
+              <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
+                Takes as long as the first analysis and replaces those BPM values (hand-set ones are never touched).
+              </span>
+            </div>
+          )}
           {st.finishedAt && st.startedAt && (
             <div style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
               Last run {ago(st.finishedAt)}: {fmt(st.analysed)} measured, {fmt(st.failed)} failed{st.skipped ? `, ${fmt(st.skipped)} got a value meanwhile` : ""}.

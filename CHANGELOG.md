@@ -2,6 +2,7 @@
 
 ## Unreleased
 - **Several jukeboxes at once:** the jukebox page shared the browser's one device id, so a second jukebox (or the web app in another tab) pushed the first one out. A jukebox now has an id of its own, and `/?player=Kitchen`, `/?player=Garage` are two jukeboxes, even in one browser. *Settings → Sync Server → Jukebox* builds the address and the QR code from a name.
+- **Settings → Sync Server → BPM analysis (administrators):** shows how many measured BPM values have a confidence, are unreliable or were skipped, a **minimum confidence** slider that hides unsure measurements (intros, ambient) from BPM sorting, the Mix Builder and Flow without re-analysing, an **Include skipped** switch and a **Re-check** button for songs measured before confidence existed. Needs the matching Icosahedron HUB; the desktop's own detection is unchanged.
 
 ## 0.21.2
 - **Tracks: sorting by BPM follows the BPM you see.** The BPM column shows the detected BPM (the HUB's shared store), but the list was sorted by the BPM tag in the file, which most files do not have, so the order looked random. It now sorts by the detected values; songs without a BPM are left out of the list while it is sorted by BPM (with a search or a column filter on they come last). Play and Shuffle on a BPM-sorted list use the first 1,000 songs.

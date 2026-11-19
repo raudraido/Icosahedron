@@ -2,6 +2,7 @@
 
 ## Unreleased
 - **Several jukeboxes at once:** the jukebox page shared the browser's one device id, so a second jukebox (or the web app in another tab) pushed the first one out. A jukebox now has an id of its own, and `/?player=Kitchen`, `/?player=Garage` are two jukeboxes, even in one browser. *Settings → Sync Server → Jukebox* builds the address and the QR code from a name.
+## 0.21.3
 - **Settings → Sync Server → BPM analysis (administrators):** shows how many measured BPM values have a confidence, are unreliable or were skipped, a **minimum confidence** slider that hides unsure measurements (intros, ambient) from BPM sorting, the Mix Builder and Flow without re-analysing, an **Include skipped** switch and a **Re-check** button for songs measured before confidence existed. Needs the matching Icosahedron HUB; the desktop's own detection is unchanged.
 
 ## 0.21.2

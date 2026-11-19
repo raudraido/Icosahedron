@@ -6,6 +6,7 @@ import { WebSocketServer } from "ws";
 import { Hub } from "./hub.mjs";
 import { verifySubsonic, isNavidromeAdmin, verifyPassword, navidromeTrustsEngine } from "./auth.mjs";
 import { isProxied, proxyToNavidrome } from "./proxy.mjs";
+import { wantsSubsonicError, subsonicErrorResponse } from "./subsonic-error.mjs";
 import { createBpmStore } from "./bpm.mjs";
 import { createLastFm } from "./lastfm.mjs";
 import { createTour } from "./tour.mjs";
@@ -384,7 +385,17 @@ export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmSt
       if (url.pathname.startsWith("/auth/")) { res.writeHead(403).end(); return; } // the password login is not for the internet
       const cred = credFromRequest(req, url);
       resolveCred(cred, clientAddress(req)).then((r) => {
-        if (!r) { res.writeHead(401).end(); return; }
+        if (!r) {
+          if (wantsSubsonicError(url.pathname)) {
+            // the credentials may have come in the Authorization header; the format and callback are in the URL
+            const params = new URLSearchParams(url.searchParams);
+            const hdr = /^Subsonic\s+(.+)$/.exec(req.headers.authorization ?? "");
+            if (hdr) for (const [k, v] of new URLSearchParams(hdr[1])) if (!params.has(k)) params.set(k, v);
+            const a = subsonicErrorResponse(params);
+            res.writeHead(a.status, a.headers).end(a.body);
+          } else res.writeHead(401).end();
+          return;
+        }
         proxyToNavidrome(navidromeUrl, req, res, { user: r.u });
       }).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); });
       return;

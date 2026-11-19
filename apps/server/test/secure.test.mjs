@@ -82,9 +82,12 @@ test("on: only a trusted device gets through; Navidrome sees the trusted header 
   const { call, seen, close } = await boot();
   const on = await switchOn(call);
   // the old Navidrome token and a plain password are not enough any more
-  assert.equal((await call("GET", "/rest/ping?u=root&t=good&s=abc")).status, 401);
-  assert.equal((await call("GET", "/rest/ping?u=root&p=whatever")).status, 401);
-  assert.equal((await call("GET", "/rest/ping", { headers: { "remote-user": "root" } })).status, 401);
+  // turned away the way Navidrome does it: 200 and a Subsonic error (40 wrong, 42 old way, 10 nothing to check)
+  const err = async (path, opts) => { const r = await call("GET", path, opts); assert.equal(r.status, 200); return r.json["subsonic-response"]; };
+  const wrong = await err("/rest/ping?u=root&t=good&s=abc&f=json");
+  assert.equal(wrong.status, "failed"); assert.equal(wrong.error.code, 40); assert.equal(wrong.type, "navidrome");
+  assert.equal((await err("/rest/ping?u=root&p=whatever&f=json")).error.code, 42);
+  assert.equal((await err("/rest/ping?f=json", { headers: { "remote-user": "root" } })).error.code, 10);
   assert.equal(seen.length, 0);
   // the device: any salt works, the credentials are removed, the account is named in the trusted header
   const q = new URLSearchParams({ ...credOf(on.secret, "root"), v: "1.16.1", id: "5" });
@@ -176,7 +179,10 @@ test("removing a device ends its access at once; app passwords work like devices
   const appCred = credOf(app.secret, "root");
   assert.equal((await call("GET", "/rest/ping", { headers: asDevice(appCred) })).status, 200);
   assert.equal((await call("DELETE", `/device/${app.id}`, { headers: me })).status, 204);
-  assert.equal((await call("GET", "/rest/ping", { headers: asDevice(appCred) })).status, 401);
+  const gone = await call("GET", "/rest/ping?f=json", { headers: asDevice(appCred) }); // turned away as Navidrome would: "wrong password"
+  assert.equal(gone.status, 200);
+  assert.equal(gone.json["subsonic-response"].error.code, 40);
+  assert.equal((await call("GET", "/rest/stream?id=1", { headers: asDevice(appCred) })).status, 401);
   assert.equal((await call("DELETE", "/device/nope", { headers: me })).status, 404);
   close();
 });
@@ -250,4 +256,31 @@ test("devices are kept on disk and a device can be told from another by its secr
   assert.equal(b.resolve({ ...made.cred, t: "0".repeat(32) }), null);
   assert.equal(b.resolve({ u: "alice", t: md5("nope" + "zz"), s: "zz" }), null);
   rmSync(dir, { recursive: true });
+});
+
+test("on: a call that is turned away gets the Subsonic answer a client expects (probe, XML, .view, header, media)", async () => {
+  const { call, seen, close } = await boot();
+  await switchOn(call);
+  // a probe with no credentials at all, as JellyBox sends it: it must see a Subsonic server
+  const probe = await call("GET", "/rest/ping.view?v=1.16.1&c=JellyBox&f=json");
+  assert.equal(probe.status, 200);
+  assert.equal(probe.json["subsonic-response"].type, "navidrome");
+  assert.equal(probe.json["subsonic-response"].error.code, 10);
+  assert.equal(probe.json["subsonic-response"].serverVersion, undefined); // the Navidrome version is not given away
+  // XML is the default of the Subsonic API
+  const xml = await call("GET", "/rest/ping?u=root&t=bad&s=abc");
+  assert.equal(xml.status, 200);
+  assert.match(xml.text, /<subsonic-response [^>]*status="failed"[^>]*><error code="40" message="Wrong username or password">/);
+  // jsonp only with a harmless callback name
+  assert.match((await call("GET", "/rest/ping?f=jsonp&callback=cb1")).text, /^cb1\(\{"subsonic-response"/);
+  assert.doesNotMatch((await call("GET", "/rest/ping?f=jsonp&callback=alert(1)//")).text, /^alert/);
+  // credentials in the Authorization header count as well
+  const hdr = await call("GET", "/rest/ping?f=json", { headers: { authorization: "Subsonic u=root&t=bad&s=abc" } });
+  assert.equal(hdr.json["subsonic-response"].error.code, 40);
+  // media keeps the plain 401 (a 200 with a JSON body could be taken for audio), and so do the other paths
+  assert.equal((await call("GET", "/rest/stream?id=1&u=root&t=bad&s=abc")).status, 401);
+  assert.equal((await call("GET", "/rest/getCoverArt.view?id=1")).status, 401);
+  assert.equal((await call("GET", "/api/user")).status, 401);
+  assert.equal(seen.length, 0); // nothing of this reached Navidrome
+  close();
 });

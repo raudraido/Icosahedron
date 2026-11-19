@@ -33,6 +33,8 @@ Secrets are kept in `data/devices.json` (mode 600, like `lastfm.json`): Subsonic
 
 Third-party Subsonic apps (Symfonium, DSub …) cannot ask for approval: **Settings → Devices → App password** creates a device secret for them from a trusted device.
 
+An app password works the way a Subsonic token does: the app sends `u`, `t=md5(secret + salt)` and `s`. Apps that send the password itself (`p=`) or sign in through Navidrome's own `/auth/login` cannot use it. A call the engine turns away is answered the way Navidrome answers, HTTP 200 with a Subsonic error in the body (10 nothing to check, 40 wrong or removed device, 42 `p=` or an API key: use a token), so that apps can tell a Subsonic server and a wrong password from a network failure. Music and cover art keep a plain 401.
+
 ### Signing in from a new device
 
 1. The new device sends user name and password to `POST /device/request`. The engine checks the password with Navidrome (rate limited) and opens a **request**: number (two digits), device name and kind, address, time. It lives **5 minutes**, in memory.

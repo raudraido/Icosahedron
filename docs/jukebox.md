@@ -11,6 +11,10 @@ Turn any screen into a player that you control from your other devices: a tablet
 
 The screen shows the cover, the title, the next songs and whether it is connected. It plays what you send and nothing else.
 
+## Several jukeboxes at once
+
+Every jukebox has its own address: put a name after `player=`, for example `https://<your server>/?player=Kitchen` and `https://<your server>/?player=Garage`. Two names are two jukeboxes, and they can even run in the same browser. **Settings → Sync Server → Jukebox** builds the address (and the QR code) from the name you type there, and the screen starts out with that name. The plain `/?player=1` is one more jukebox of its own, and it no longer takes over the web app you have open in the same browser. Opening the same address in two tabs gives one jukebox: the newer tab takes over.
+
 ## Name it
 
 A new jukebox is called **Jukebox**. Click **Rename** under the cover on the screen (or rename it in **Settings → Sync Server → Registered players** from any other device) to call it *Kitchen*, *Garage* or *Living room TV*. The server remembers the name, so it stays after the page is reloaded, and you can tell several jukeboxes apart in the devices list.

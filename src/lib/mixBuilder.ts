@@ -92,6 +92,10 @@ export interface MixSettings {
   size: number;
   /** "Play random": every song the same chance, taste plays no part. */
   pure: boolean;
+  /** Leave out audiobooks and spoken word (see isSpoken). Applies to every start, also "Play random". */
+  skipSpoken?: boolean;
+  /** Genres that never come up, in any start (also "Play random"). */
+  skipGenres?: string[];
   /** A label for the way it started ("lucky", "Because I played X"), used for the name. */
   title?: string;
 }
@@ -150,7 +154,7 @@ export function poolKey(s: MixSettings, genreFilter = true): string {
   return JSON.stringify([
     s.pure, s.pure ? s.size : 0,
     s.seeds.map((x) => [x.kind, x.value.toLowerCase(), x.kind === "artist" ? x.id ?? "" : ""]),
-    s.years, s.favOnly, genreFilter,
+    s.years, s.favOnly, genreFilter, s.skipSpoken ?? false, (s.skipGenres ?? []).map((x) => x.toLowerCase()).sort(),
   ]);
 }
 
@@ -171,8 +175,39 @@ export interface MixItem {
   locked: boolean;
 }
 
+// ── Leave out ────────────────────────────────────────────────────────────────────────────────────────
+/** Audiobooks and spoken word: the rule is (1) a genre whose name says so (audiobook, spoken word, podcast,
+ *  hörspiel, raamat = Estonian "book") or (2) a very long track (over 20 minutes). */
+export const SPOKEN_GENRE_RE = /audio\s?book|spoken|podcast|h(ö|oe|o)rspiel|raamat|speech/i;
+export const SPOKEN_MIN_SECS = 20 * 60;
+
+export function isSpoken(t: Track): boolean {
+  return SPOKEN_GENRE_RE.test(t.genre ?? "") || (t.duration_secs ?? 0) > SPOKEN_MIN_SECS;
+}
+
+/** A song's genres: Navidrome joins several into one string ("Techno; House"). */
+export function genreParts(g: string | null | undefined): string[] {
+  return (g ?? "").split(/[;/,]/).map((x) => x.trim().toLowerCase()).filter(Boolean);
+}
+
+/** Left out by the "Leave out" panel (spoken word, skipped genres). Applies to every start. */
+export function isLeftOut(t: Track, s: Pick<MixSettings, "skipSpoken" | "skipGenres">): boolean {
+  if (s.skipSpoken && isSpoken(t)) return true;
+  if (s.skipGenres?.length) {
+    const skip = new Set(s.skipGenres.map((x) => x.toLowerCase()));
+    if (genreParts(t.genre).some((p) => skip.has(p)) || skip.has((t.genre ?? "").toLowerCase())) return true;
+  }
+  return false;
+}
+
+export function toggleSkipGenre(list: string[], name: string): string[] {
+  const has = list.some((x) => x.toLowerCase() === name.toLowerCase());
+  return has ? list.filter((x) => x.toLowerCase() !== name.toLowerCase()) : [...list, name];
+}
+
 /** Does the song fit the filters (years, genre seeds, favourites, not played yet)? */
 export function passes(t: Track, s: MixSettings): boolean {
+  if (isLeftOut(t, s)) return false;
   if (s.pure) return true;
   if (s.years) {
     if (t.year === null || t.year === undefined || t.year < s.years[0] || t.year > s.years[1]) return false;

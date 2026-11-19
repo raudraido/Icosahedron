@@ -4,7 +4,7 @@
 // everything goes through `api`.
 
 import { api, type Track } from "./api";
-import { artistSeeds, genreSeeds, POOL_CAP, type MixSettings, type PoolItem } from "./mixBuilder";
+import { artistSeeds, genreSeeds, isLeftOut, POOL_CAP, type MixSettings, type PoolItem } from "./mixBuilder";
 
 export interface PoolResult {
   items: PoolItem[];
@@ -56,7 +56,9 @@ export async function loadPool(s: MixSettings, stale: Stale): Promise<PoolResult
 
   // "Play random": the whole library, every song the same chance, no filters and no taste.
   if (s.pure) {
-    addAll(map, await randomSongs(s.size, undefined, stale));
+    // Left-out songs are dropped after the draw, so draw a little more to still end with `size`.
+    const drawn = await randomSongs(Math.ceil(s.size * 1.15) + 20, undefined, stale);
+    addAll(map, drawn.filter((t) => !isLeftOut(t, s)).slice(0, s.size));
     return { items: [...map.values()], capped: false };
   }
 

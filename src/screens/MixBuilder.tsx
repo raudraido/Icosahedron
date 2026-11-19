@@ -8,7 +8,7 @@ import { loadPool } from "../lib/mixPool";
 import {
   addSeed, autoName, bpmCoverage, BPM_MIN_COVERAGE, buildMix, countMatches, defaultSettings, fmtLength,
   genreSeeds, hiddenCount, isStarted, localSuggestions, MAX_VISIBLE_ROWS, poolKey, presetSettings, reasonLine,
-  removeSeed, setYears, SIZES, snapSize, swapCandidate, toggleGenre, topArtists, totalSeconds, YEAR_MIN,
+  removeSeed, setYears, SIZES, snapSize, swapCandidate, toggleGenre, toggleSkipGenre, topArtists, totalSeconds, YEAR_MIN,
   type MixItem, type MixSeed, type MixSettings, type PoolItem, type PresetId, type SeedSuggestion,
 } from "../lib/mixBuilder";
 
@@ -18,6 +18,13 @@ import {
 // The logic is in lib/mixBuilder.ts (pure, tested), the candidates are loaded by lib/mixPool.ts.
 
 const LS_KEY = "mix_builder_v1";
+const LS_LEAVE_OUT = "mix_builder_leave_out"; // kept apart from the dials: Clear and the quick starts do not reset it
+
+interface LeaveOut { skipSpoken: boolean; skipGenres: string[] }
+function loadLeaveOut(): LeaveOut {
+  const l = loadJSON<LeaveOut>(LS_LEAVE_OUT, { skipSpoken: true, skipGenres: [] });
+  return { skipSpoken: l.skipSpoken !== false, skipGenres: Array.isArray(l.skipGenres) ? l.skipGenres.filter((g) => typeof g === "string") : [] };
+}
 const SAVE_BATCH = 200; // songs per "add to playlist" call, so a 1000-song mix is never one huge request
 
 interface Saved { settings: MixSettings; kept: MixItem[] }
@@ -180,7 +187,12 @@ export function MixBuilder() {
 
   const started = isStarted(settings);
   const patch = (p: Partial<MixSettings>) => setSettings((s) => ({ ...s, ...p, pure: p.pure ?? false }));
-  const dSettings = useDebounced(settings, 250);
+  const [leaveOut, setLeaveOut] = useState<LeaveOut>(loadLeaveOut);
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  useEffect(() => { saveJSON(LS_LEAVE_OUT, leaveOut); }, [leaveOut]);
+  // What every start and every pool respects: the dials plus what is left out.
+  const full = useMemo<MixSettings>(() => ({ ...settings, ...leaveOut }), [settings, leaveOut]);
+  const dSettings = useDebounced(full, 250);
 
   // What the server is asked for: the library's genres (with counts) and the pool for the current seeds/dials.
   const genresQ = useQuery({ queryKey: ["mixGenres"], queryFn: () => api.getGenres(), staleTime: 10 * 60_000 });
@@ -198,7 +210,7 @@ export function MixBuilder() {
     staleTime: 5 * 60_000,
   });
   const pool: PoolItem[] = poolQ.data?.items ?? [];
-  const stale = poolQ.isPlaceholderData || (started && dSettings !== settings);
+  const stale = poolQ.isPlaceholderData || (started && dSettings !== full);
 
   // Builds the mix whenever the pool, the dials or Re-roll change: kept songs stay, the rest is picked again.
   const mixRef = useRef(mix);
@@ -372,7 +384,13 @@ export function MixBuilder() {
               Size
               {SIZES.map((n) => <Chip key={n} on={settings.size === n} onClick={() => setSize(n)}>{n}</Chip>)}
             </span>
+            <button
+              onClick={() => setLeaveOpen((v) => !v)} aria-expanded={leaveOpen}
+              style={{ marginLeft: "auto", background: "transparent", border: 0, cursor: "pointer", color: "var(--text-primary)", opacity: 0.85, fontSize: "var(--fs-small)", textDecoration: "underline", textUnderlineOffset: 3 }}
+            >Leave out…{leaveOut.skipSpoken || leaveOut.skipGenres.length ? ` (${(leaveOut.skipSpoken ? 1 : 0) + leaveOut.skipGenres.length})` : ""}</button>
           </div>
+
+          {leaveOpen && <LeaveOutPanel value={leaveOut} genres={genres} onChange={setLeaveOut} />}
 
           <StartWith settings={settings} genres={genres} onAdd={(seed) => setSettings((s) => addSeed(s, seed))} onRemove={(i) => setSettings((s) => removeSeed(s, i))} />
 
@@ -479,6 +497,40 @@ export function MixBuilder() {
               <Pill onClick={() => setSaveOpen(false)}>Cancel</Pill>
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** "Leave out": spoken word and skipped genres, for every start (also Play 500 random). */
+function LeaveOutPanel({ value, genres, onChange }: { value: LeaveOut; genres: { name: string; songCount: number }[]; onChange: (v: LeaveOut) => void }) {
+  const [q, setQ] = useState("");
+  const skipped = value.skipGenres;
+  const has = (g: string) => skipped.some((x) => x.toLowerCase() === g.toLowerCase());
+  const sorted = useMemo(() => [...genres].sort((a, b) => b.songCount - a.songCount), [genres]);
+  const needle = q.trim().toLowerCase();
+  const found = (needle ? sorted.filter((g) => g.name.toLowerCase().includes(needle)) : sorted.slice(0, 12)).filter((g) => !has(g.name)).slice(0, 12);
+  return (
+    <div style={{ background: "var(--card-bg)", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 14px", display: "grid", gap: 10 }}>
+      <b style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}>Leave out</b>
+      <label className="flex items-center" style={{ gap: 8, color: "var(--text-primary)", fontSize: "var(--fs-secondary)", cursor: "pointer" }}>
+        <input type="checkbox" checked={value.skipSpoken} onChange={(e) => onChange({ ...value, skipSpoken: e.target.checked })} style={{ accentColor: "var(--accent)" }} />
+        Audiobooks and spoken word
+        <span style={{ opacity: 0.65, fontSize: "var(--fs-small)" }}>(a genre named audiobook, spoken word, podcast, hörspiel or raamat, or a track over 20 minutes)</span>
+      </label>
+      <div style={{ display: "grid", gap: 6 }}>
+        <span style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)" }}>Genres to skip</span>
+        <div className="flex flex-wrap items-center" style={{ gap: 6 }}>
+          {skipped.map((g) => <Chip key={g} on onClick={() => onChange({ ...value, skipGenres: toggleSkipGenre(skipped, g) })} title="Allow this genre again">{g} ×</Chip>)}
+          {!skipped.length && <span style={{ color: "var(--text-secondary)", opacity: 0.7, fontSize: "var(--fs-small)" }}>None. Songs of a skipped genre never come up, in any start.</span>}
+        </div>
+        <input
+          value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a genre to skip…" aria-label="Find a genre to skip"
+          style={{ maxWidth: 280, background: "var(--main-bg)", border: "1px solid var(--border)", borderRadius: 10, padding: "6px 10px", color: "var(--text-secondary)", fontSize: "var(--fs-secondary)" }}
+        />
+        <div className="flex flex-wrap" style={{ gap: 6 }}>
+          {found.map((g) => <Chip key={g.name} onClick={() => onChange({ ...value, skipGenres: toggleSkipGenre(skipped, g.name) })}>{g.name} <span style={{ opacity: 0.65 }}>{num(g.songCount)}</span></Chip>)}
         </div>
       </div>
     </div>

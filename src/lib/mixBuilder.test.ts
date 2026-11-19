@@ -3,7 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  addSeed, artistCap, autoName, bpmCoverage, buildMix, countMatches, defaultSettings, fmtLength, hiddenCount,
+  addSeed, isLeftOut, isSpoken, toggleSkipGenre, artistCap, autoName, bpmCoverage, buildMix, countMatches, defaultSettings, fmtLength, hiddenCount,
   localSuggestions, matchGenres, mulberry32, parseDecade, passes, poolKey, presetSettings, reasonLine, removeSeed,
   setYears, snapSize, swapCandidate, toggleGenre, topArtists, type MixItem, type PoolItem,
 } from "./mixBuilder";
@@ -208,4 +208,24 @@ test("topArtists: one per artist, in order", () => {
 
 test("BPM is off in version 1", () => {
   assert.equal(bpmCoverage(), 0);
+});
+
+test("leave out: spoken word by genre name or length, skipped genres, also in random", () => {
+  assert.equal(isSpoken(track({ genre: "Audiobook" })), true);
+  assert.equal(isSpoken(track({ genre: "Spoken Word" })), true);
+  assert.equal(isSpoken(track({ genre: "Hörspiel" })), true);
+  assert.equal(isSpoken(track({ genre: "Raamat" })), true);
+  assert.equal(isSpoken(track({ genre: "Techno", duration_secs: 1500 })), true);
+  assert.equal(isSpoken(track({ genre: "Techno", duration_secs: 900 })), false);
+  const s = { ...defaultSettings(), skipSpoken: true, skipGenres: ["Rock"] };
+  assert.equal(isLeftOut(track({ genre: "Rock" }), s), true);
+  assert.equal(isLeftOut(track({ genre: "Pop; rock" }), s), true);
+  assert.equal(isLeftOut(track({ genre: "Hard Rock" }), s), false);
+  assert.equal(isLeftOut(track({ genre: "Audiobook" }), { ...s, skipSpoken: false }), false);
+  const items = pool(300, (i) => ({ genre: i % 3 === 0 ? "Rock" : i % 3 === 1 ? "Audiobook" : "Pop" }));
+  const { mix } = buildMix(items, { ...s, pure: true, size: 50 }, [], mulberry32(10));
+  assert.ok(mix.length === 50 && mix.every((m) => m.track.genre === "Pop"));
+  assert.notEqual(poolKey(defaultSettings()), poolKey(s));
+  assert.deepEqual(toggleSkipGenre(["Rock"], "rock"), []);
+  assert.deepEqual(toggleSkipGenre([], "Jazz"), ["Jazz"]);
 });

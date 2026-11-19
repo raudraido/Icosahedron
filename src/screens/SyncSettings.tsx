@@ -74,7 +74,8 @@ function PlayerRow({ d, me }: { d: RegistryDevice; me: boolean }) {
 
 /** How to turn a screen into a jukebox: the address to open (with a copy button and a QR code) and the three steps. */
 function JukeboxSection({ base }: { base: string }) {
-  const url = jukeboxUrl(base);
+  const [screenName, setScreenName] = useState("");
+  const url = jukeboxUrl(base, screenName);
   const [copied, setCopied] = useState(false);
   async function copy() {
     try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* the address can still be selected by hand */ }
@@ -86,13 +87,17 @@ function JukeboxSection({ base }: { base: string }) {
         Turn any screen (a tablet, a spare computer, a browser on a TV) into a player that you control from your other devices.
       </div>
       <ol style={{ ...hint, paddingLeft: 18, margin: 0 }}>
-        <li>Open this address on the screen that should play.</li>
+        <li>Open this address on the screen that should play. Give each screen its own name for its own address: you can run several jukeboxes at once.</li>
         <li>Sign in with your account (a new screen is approved from one of your signed-in devices), then tap once so the browser allows sound.</li>
         <li>On another device choose it in the devices list (it is called <b>Jukebox</b> until you rename it on its screen), or right-click a song → <b>Add to Device Queue</b>.</li>
       </ol>
       <div className="flex items-center" style={{ gap: 14, flexWrap: "wrap" }}>
         <QrCode text={url} size={132} />
         <div className="flex flex-col" style={{ gap: 8, flex: 1, minWidth: 220 }}>
+          <input
+            value={screenName} maxLength={64} onChange={(e) => setScreenName(e.target.value)} placeholder="Name of the screen (optional), e.g. Kitchen"
+            style={{ ...input, width: "100%" }} aria-label="Name of the jukebox screen"
+          />
           <input readOnly value={url} onFocus={(e) => e.currentTarget.select()} style={{ ...input, width: "100%" }} aria-label="Jukebox address" />
           <div className="flex items-center" style={{ gap: 10 }}>
             <button style={button} onClick={copy}>{copied ? "Copied" : "Copy address"}</button>

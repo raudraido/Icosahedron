@@ -8,6 +8,7 @@
 import { addApproval, removeApproval, refreshApprovals } from "./approvals";
 import { create } from "zustand";
 import { platform } from "../platform";
+import { pageIdentity } from "./jukebox";
 import { getSyncUrl, saveEngineUrl } from "../platform/syncUrl";
 import { api, type Track } from "./api";
 import { useStore } from "../store";
@@ -39,17 +40,23 @@ interface SyncStore {
 const LS_ID = "ico.deviceId";
 
 
+// A jukebox page (?player=…) has an id of its own, see pageIdentity: it must not take over the browser's web app
+// or another jukebox of the same browser.
+const identity = () => pageIdentity(location.search, LS_ID);
+
 function loadDeviceId(): string {
   try {
-    let id = localStorage.getItem(LS_ID);
-    if (!id) { id = crypto.randomUUID(); localStorage.setItem(LS_ID, id); }
+    const key = identity().storageKey;
+    let id = localStorage.getItem(key);
+    if (!id) { id = crypto.randomUUID(); localStorage.setItem(key, id); }
     return id;
   } catch { return "dev-" + Math.random().toString(36).slice(2); }
 }
 
 function deviceName(): string {
   if (platform.kind === "electron") return "Desktop";
-  if (new URLSearchParams(location.search).has("player")) return "Jukebox"; // see components/PlayerOnly.tsx
+  const who = identity();
+  if (who.isJukebox) return who.jukeboxName ?? "Jukebox"; // see components/PlayerOnly.tsx; the name in the address is its first name
   const ua = navigator.userAgent;
   const browser = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "Browser";
   const os = /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iOS" : /Mac/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows" : /Linux/.test(ua) ? "Linux" : "";

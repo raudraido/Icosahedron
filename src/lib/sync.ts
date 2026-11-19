@@ -1,4 +1,4 @@
-// Sync client for the web engine (apps/server): publishes this device's
+// Sync client for the Icosahedron Server (apps/server): publishes this device's
 // playback to the user's other devices and lets them be controlled remotely.
 //
 // Model: only the device that is playing publishes (otherwise an idle device

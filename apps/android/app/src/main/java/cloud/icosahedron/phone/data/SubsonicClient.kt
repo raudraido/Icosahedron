@@ -14,7 +14,7 @@ import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 /**
- * Subsonic / OpenSubsonic API (Navidrome), reached either through the web engine's proxy or
+ * Subsonic / OpenSubsonic API (Navidrome), reached either through the Icosahedron Server's proxy or
  * directly. Authenticates with a salted token; only the salt and the token are ever stored, never
  * the password.
  */

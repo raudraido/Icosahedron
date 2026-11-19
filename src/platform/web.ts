@@ -1,5 +1,5 @@
 // Browser/PWA host. Replaces what Electron's main process does: the Subsonic
-// client runs here (talking to Navidrome through the web engine's same-origin
+// client runs here (talking to Navidrome through the Icosahedron Server's same-origin
 // proxy), audio is an <audio> element, profiles live in localStorage. Features
 // that need a native host (cast, EQ, BPM, Last.fm, update) answer with inert
 // defaults so the shared UI still works.
@@ -31,7 +31,7 @@ function readData(): StoredData {
 function writeData(d: StoredData) { localStorage.setItem(LS_SERVERS, JSON.stringify(d)); }
 const publicProfile = ({ password: _p, ...rest }: StoredProfile) => rest;
 
-// The web engine proxies Navidrome on its own origin, so every profile talks
+// The Icosahedron Server proxies Navidrome on its own origin, so every profile talks
 // to location.origin regardless of what URL was typed into the form.
 const ORIGIN = () => location.origin;
 
@@ -362,7 +362,7 @@ export function createWebPlatform(): Platform {
     set_bpm_override: inert(undefined),
     get_bpm_cache_all: inert({}),
 
-    // Last.fm runs in the web engine (secret + session key stay server-side)
+    // Last.fm runs in the Icosahedron Server (secret + session key stay server-side)
     lastfm_connect_start: async () => {
       const { token, authUrl } = await lf("POST", "/lastfm/token");
       window.open(authUrl, "_blank", "noopener");

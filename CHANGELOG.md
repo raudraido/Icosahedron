@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+- The sync server is called **Icosahedron Server** everywhere (it was "the web engine"): the address field in the devices popover and in *Settings → Sync Server*.
+
 ## 0.20.2
 - **Jukebox is easy to find and to start (desktop and web app):** *Settings → Sync Server → Jukebox* shows the address of the player page (`/?player=1` of your server) with a **Copy address** button, a **QR code** and the three steps. A guide: [docs/jukebox.md](docs/jukebox.md).
 

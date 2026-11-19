@@ -1,5 +1,8 @@
 # iOS app changelog
 
+## Unreleased
+- The sync server is called **Icosahedron Server** (it was "the web engine"), also in the "Not available" note in Settings.
+
 A native SwiftUI app for iPhone and iPad (iOS 26.1 or later), built as an unsigned `.ipa` (sign it with SideStore, AltStore, Sideloadly or iloader: [docs/ios.md](../../docs/ios.md)). It has been part of the shared releases 0.15.3 to 0.15.9 (see the [main changelog](../../CHANGELOG.md)); from here it has its **own version, release and changelog**. What works with which server: [docs/compatibility.md](../../docs/compatibility.md).
 
 ## 0.2.23

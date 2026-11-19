@@ -1,4 +1,4 @@
-// Desktop only: use the web engine's Last.fm connection when there is one, so a
+// Desktop only: use the Icosahedron Server's Last.fm connection when there is one, so a
 // single connection (made once, key and secret held by the engine) serves every
 // player. The desktop keeps working on its own Last.fm session when no engine is
 // set, the engine is unreachable or has no Last.fm configured, and an existing

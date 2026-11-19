@@ -4,7 +4,7 @@ import { platform } from "../platform";
 import { getEngineBase, saveEngineUrl } from "../platform/syncUrl";
 import { probeEngine, requestSignIn, pollSignIn, signInWithCode, type Granted } from "../lib/secureSignIn";
 
-// In the browser the server is the site itself (the web engine proxies
+// In the browser the server is the site itself (the Icosahedron Server proxies
 // Navidrome), so there is no URL to ask for and staying signed in is the
 // normal expectation rather than an opt-in.
 const IS_WEB = platform.kind === "web";

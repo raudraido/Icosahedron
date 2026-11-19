@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.20.1
 - **Download in the queue:** right-click a song in the queue panel to *Download* it or *Remove Download*.
 - **You can see what is downloaded:** a small mark beside a song's title in the song lists and the queue: the accent arrow when it is kept on this computer, a turning ring while it downloads, a faint arrow while it waits its turn.
 - **The cover picture:** the small picture at the bottom left no longer has an expand button. Moving the mouse over it zooms it a little (it keeps its size) to show it can be clicked, a click anywhere on it opens the big picture, and a click anywhere on the big picture closes it.

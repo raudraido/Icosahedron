@@ -325,15 +325,23 @@ export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmSt
     if (!cred) { res.writeHead(401).end(); return; }
     const id = decodeURIComponent(url.pathname.slice("/bpm".length).replace(/^\//, ""));
     const json = (code, body) => { res.writeHead(code, { "content-type": "application/json" }); res.end(JSON.stringify(body)); };
-    if (id === "analyze" || id === "analyze/failed") { // analysing the whole library: an administrator starts, watches and stops it
+    if (id === "analyze" || id.startsWith("analyze/")) { // analysing the whole library: an administrator starts, watches and stops it
       if (!(await isAdminCred(cred))) return json(403, { error: "Only an administrator can analyse the library" });
       // secure sign-in: Navidrome is asked as this account through the trusted header; otherwise with the administrator's own token, kept in memory for the job
       const jobCred = secureSwitch.on ? { u: cred.u, remoteUser: true } : { u: cred.u, t: cred.t, s: cred.s };
       if (id === "analyze/failed" && req.method === "GET") return json(200, bpmAnalyzer.failed());
+      if (id === "analyze/skipped" && req.method === "GET") return json(200, bpmAnalyzer.skipped());
+      if (id === "analyze/report" && req.method === "GET") return json(200, await bpmAnalyzer.report(jobCred, url.searchParams.get("limit")));
+      if (id === "analyze/min-confidence" && req.method === "PUT") { // below this a measured value is left out of what players read; 0 hides nothing
+        let b; try { b = await readJson(req); } catch (e) { res.writeHead(e.code ?? 400).end(); return; }
+        if (!bpmStore.setMinConfidence(b?.minConfidence)) return json(422, { error: "minConfidence must be a number from 0 to 1" });
+        return json(200, { minConfidence: bpmStore.minConfidence });
+      }
+      if (id.startsWith("analyze/") && !["analyze/failed", "analyze/skipped", "analyze/report", "analyze/min-confidence"].includes(id)) return json(404, {});
       if (id === "analyze" && req.method === "GET") return json(200, await bpmAnalyzer.status(jobCred));
       if (id === "analyze" && req.method === "POST") {
         let b; try { b = await readJson(req); } catch (e) { res.writeHead(e.code ?? 400).end(); return; }
-        const r = await bpmAnalyzer.start({ cred: jobCred, workers: b?.workers, retryFailed: b?.retryFailed === true });
+        const r = await bpmAnalyzer.start({ cred: jobCred, workers: b?.workers, retryFailed: b?.retryFailed === true, recheck: b?.recheck === true, includeSkipped: b?.includeSkipped === true });
         if (!r.ok) return json(r.code === "already_running" ? 409 : 503, { error: r.code });
         return json(202, await bpmAnalyzer.status(jobCred));
       }

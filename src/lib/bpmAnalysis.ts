@@ -25,6 +25,27 @@ export interface BpmAnalysisStatus {
   libraryTotal: number | null;
   /** Songs that failed (now or in an earlier job) and are not tried again unless asked. */
   failedTotal: number;
+  // Added with confidence (a HUB from before has none of these).
+  /** Detected values with a confidence / without one (measured before confidence existed) / left out of what players read. */
+  withConfidence?: number;
+  unscored?: number;
+  unreliable?: number;
+  /** Minimum confidence, 0..1: a measured value below it is not shown to players. 0 hides nothing. */
+  minConfidence?: number;
+  /** Songs left out before download (too short, or a genre without a beat) and not retried unless asked. */
+  skippedTotal?: number;
+  prefiltered?: number;
+  rechecked?: number;
+}
+
+export interface BpmAnalysisOptions {
+  workers: number;
+  /** Try the songs that failed before again. */
+  retryFailed?: boolean;
+  /** Measure again the values that have no confidence yet (the only case where a stored value is replaced). */
+  recheck?: boolean;
+  /** Also measure the songs the prefilter leaves out. */
+  includeSkipped?: boolean;
 }
 
 export type BpmAnalysisStart = "ok" | "running" | "analyser_missing" | "refused" | "offline" | "error";
@@ -36,14 +57,21 @@ export async function bpmAnalysisStatus(): Promise<BpmAnalysisStatus | null> {
   try { return (await r.json()) as BpmAnalysisStatus; } catch { return null; }
 }
 
-export async function startBpmAnalysis(workers: number, retryFailed = false): Promise<BpmAnalysisStart> {
-  const r = await engine("/bpm/analyze", { method: "POST", body: JSON.stringify({ workers, retryFailed }) });
+export async function startBpmAnalysis(o: BpmAnalysisOptions): Promise<BpmAnalysisStart> {
+  const r = await engine("/bpm/analyze", { method: "POST", body: JSON.stringify(o) });
   if (!r) return "offline";
   if (r.ok) return "ok";
   if (r.status === 409) return "running";
   if (r.status === 403 || r.status === 404) return "refused";
   if (r.status === 503) return "analyser_missing";
   return "error";
+}
+
+/** Sets the minimum confidence (administrators only). Returns the value now in force, or null when refused. */
+export async function setBpmMinConfidence(minConfidence: number): Promise<number | null> {
+  const r = await engine("/bpm/analyze/min-confidence", { method: "PUT", body: JSON.stringify({ minConfidence }) });
+  if (!r?.ok) return null;
+  try { return ((await r.json()) as { minConfidence: number }).minConfidence; } catch { return null; }
 }
 
 export async function stopBpmAnalysis(): Promise<void> {

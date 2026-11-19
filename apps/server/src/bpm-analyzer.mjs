@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { resolveDnbBpm } from "./bpm-octave.mjs";
+import { skipReason, skipGenresFromEnv } from "./bpm-prefilter.mjs";
 
 // Library-wide BPM analysis, run by an administrator from Settings -> Sync Server.
 //
@@ -28,25 +29,30 @@ const ANALYSE_TIMEOUT_MS = 3 * 60 * 1000;
 const MAX_FILE_BYTES = 2 * 1024 ** 3;
 const MAX_CONSECUTIVE_TRANSIENT = 25; // Navidrome gone: stop instead of walking through the whole library
 
-export function createFailedStore(dir) {
+/** A persisted list of songs with a reason: the failed songs (bpm-failed.json) and the skipped ones (bpm-skipped.json). */
+export function createFailedStore(dir, name = "bpm-failed.json") {
   let map = {};
-  const file = dir ? join(dir, "bpm-failed.json") : null;
+  let timer;
+  const file = dir ? join(dir, name) : null;
   if (file) {
     mkdirSync(dir, { recursive: true });
     try { map = JSON.parse(readFileSync(file, "utf8")); } catch { /* first run */ }
   }
   const flush = () => {
+    clearTimeout(timer);
     if (!file) return;
     writeFileSync(file + ".tmp", JSON.stringify(map));
     renameSync(file + ".tmp", file);
   };
+  const later = () => { clearTimeout(timer); timer = setTimeout(flush, 500); timer.unref?.(); }; // thousands of songs may be added in a row
   return {
     has: (id) => map[id] !== undefined,
     size: () => Object.keys(map).length,
     list: () => Object.entries(map).map(([id, v]) => ({ id, ...v })),
-    add(id, entry) { map[id] = entry; flush(); },
-    remove(id) { if (map[id] !== undefined) { delete map[id]; flush(); } },
+    add(id, entry) { map[id] = entry; later(); },
+    remove(id) { if (map[id] !== undefined) { delete map[id]; later(); } },
     clear() { map = {}; flush(); },
+    flush,
   };
 }
 
@@ -62,7 +68,7 @@ class Stopped extends Error {}
  * @param {string} [o.tmpRoot]    where songs are fetched to, deleted right after
  * @param {number} [o.niceness]   priority of the analyser program (higher is nicer), default 10
  */
-export function createBpmAnalyzer({ navidromeUrl, bpmStore, cli = process.env.BPM_CLI || "icosahedron-bpm", dir, tmpRoot = tmpdir(), niceness = 10, fetchImpl = fetch, failed = createFailedStore(dir) }) {
+export function createBpmAnalyzer({ navidromeUrl, bpmStore, cli = process.env.BPM_CLI || "icosahedron-bpm", dir, tmpRoot = tmpdir(), niceness = 10, fetchImpl = fetch, failed = createFailedStore(dir), skipped = createFailedStore(dir, "bpm-skipped.json"), skipGenres = skipGenresFromEnv() }) {
   let job = null; // the running job, or the last one (kept for its numbers)
   let libraryTotal = null;
   let scanCache = { at: 0, count: null };
@@ -88,7 +94,7 @@ export function createBpmAnalyzer({ navidromeUrl, bpmStore, cli = process.env.BP
   }
 
   const genreOf = (s) => (Array.isArray(s.genres) && s.genres.length ? s.genres.map((g) => g.name).join(" • ") : s.genre) ?? "";
-  const toSong = (s) => ({ id: String(s.id), genre: genreOf(s), suffix: /^[a-z0-9]{1,5}$/i.test(s.suffix ?? "") ? s.suffix.toLowerCase() : "bin", size: Number(s.size) || 0 });
+  const toSong = (s) => ({ id: String(s.id), genre: genreOf(s), suffix: /^[a-z0-9]{1,5}$/i.test(s.suffix ?? "") ? s.suffix.toLowerCase() : "bin", size: Number(s.size) || 0, duration: Number(s.duration) || 0 });
 
   /** Every song of the library: search3 with an empty query lists all of them, page by page. */
   async function* listSongs(auth, signal) {
@@ -153,26 +159,34 @@ export function createBpmAnalyzer({ navidromeUrl, bpmStore, cli = process.env.BP
       child.on("error", (e) => finish(reject, e.code === "ENOENT" ? new Transient("the analyser program is missing") : new Transient(`cannot start the analyser (${e.code})`)));
       child.on("close", (code) => {
         let j = null; try { j = JSON.parse(out.trim().split("\n").pop() ?? ""); } catch { /* not JSON */ }
-        if (code === 0 && typeof j?.bpm === "number") return finish(resolve, j.bpm);
+        if (code === 0 && typeof j?.bpm === "number") return finish(resolve, { bpm: j.bpm, confidence: typeof j.confidence === "number" ? j.confidence : undefined, duration: typeof j.duration_secs === "number" ? j.duration_secs : undefined });
         finish(reject, new Error(typeof j?.error === "string" ? j.error : `the analyser failed (exit ${code})`));
       });
     });
   }
 
   async function processSong(auth, song, j) {
-    // 1st check: right before any work. A song with a value costs nothing and is never fetched.
-    if (bpmStore.has(song.id)) { j.skipped++; return; }
+    // 1st check: right before any work. A song with a value costs nothing and is never fetched. The only
+    // songs that have a value and are still worked on are the re-check ones, and only while the value is
+    // still the detected, confidence-less one that was queued.
+    if (song.recheck) {
+      const cur = bpmStore.entry(song.id);
+      if (!cur || cur.manual || cur.confidence !== undefined || cur.bpm !== song.expect) { j.skipped++; return; }
+    } else if (bpmStore.has(song.id)) { j.skipped++; return; }
     const file = join(j.tmp, `${j.nextFile++}.${song.suffix}`);
     try {
       await fetchSong(auth, song, file, j.abort.signal);
-      const raw = await runCli(file, j.abort.signal);
-      const bpm = resolveDnbBpm(raw, song.genre);
-      // 2nd check: the value is written only if the song still has none (the store checks and writes in one step).
-      if (bpmStore.setIfAbsent(song.id, bpm)) j.analysed++;
+      const r = await runCli(file, j.abort.signal);
+      const bpm = resolveDnbBpm(r.bpm, song.genre);
+      // 2nd check: the value is written only if the song still has none (the store checks and writes in one
+      // step); a re-check song only if its value is still the one that was queued.
+      const written = song.recheck ? bpmStore.replaceUnscored(song.id, song.expect, bpm, r.confidence) : bpmStore.setIfAbsent(song.id, bpm, r.confidence);
+      if (written) { j.analysed++; if (song.recheck) j.rechecked++; }
       else if (bpmStore.has(song.id)) j.skipped++; // somebody else's value appeared meanwhile: theirs stays
       else throw new Error(`the result ${bpm} is outside the usual range`);
       j.transientRun = 0;
       failed.remove(song.id);
+      skipped.remove(song.id);
     } catch (e) {
       if (e instanceof Stopped) throw e;
       if (e instanceof Transient) {
@@ -188,14 +202,24 @@ export function createBpmAnalyzer({ navidromeUrl, bpmStore, cli = process.env.BP
     }
   }
 
-  async function run(j, auth, retryFailed) {
+  async function run(j, auth, { retryFailed, recheck, includeSkipped }) {
     try {
       const todo = [];
       let seen = 0;
       if (retryFailed) failed.clear();
       for await (const s of listSongs(auth, j.abort.signal)) {
         seen++;
-        if (bpmStore.has(s.id) || failed.has(s.id)) continue;
+        const have = bpmStore.entry(s.id);
+        if (have) { // a value exists: never measured again, except a detected value without confidence when the administrator asked for a re-check
+          if (recheck && !have.manual && have.confidence === undefined && !failed.has(s.id)) todo.push({ ...s, recheck: true, expect: have.bpm });
+          continue;
+        }
+        if (failed.has(s.id)) continue;
+        if (!includeSkipped) {
+          if (skipped.has(s.id)) continue;
+          const reason = skipReason(s, skipGenres); // before any download
+          if (reason) { skipped.add(s.id, { reason, at: Date.now(), genre: s.genre || undefined }); j.prefiltered++; continue; }
+        }
         todo.push(s);
       }
       libraryTotal = seen;
@@ -210,6 +234,7 @@ export function createBpmAnalyzer({ navidromeUrl, bpmStore, cli = process.env.BP
       if (!(e instanceof Stopped)) j.lastError = e.message ?? String(e);
     } finally {
       try { rmSync(j.tmp, { recursive: true, force: true }); } catch { /* ignore */ }
+      failed.flush(); skipped.flush();
       j.state = "idle"; j.phase = null; j.finishedAt = Date.now();
       j.auth = null; // the credentials go with the job
     }
@@ -217,16 +242,16 @@ export function createBpmAnalyzer({ navidromeUrl, bpmStore, cli = process.env.BP
 
   return {
     /** @returns {Promise<{ok:true}|{ok:false,code:string}>} */
-    async start({ cred, workers = 4, retryFailed = false }) {
+    async start({ cred, workers = 4, retryFailed = false, recheck = false, includeSkipped = false }) {
       if (job && job.state !== "idle") return { ok: false, code: "already_running" };
       const w = Math.max(1, Math.min(MAX_WORKERS, Math.floor(Number(workers)) || 4));
       mkdirSync(tmpRoot, { recursive: true });
       const probe = await new Promise((r) => { const c = spawn(cli, [], { stdio: "ignore" }); c.on("error", (e) => r(e.code)); c.on("close", () => r(null)); });
       if (probe === "ENOENT") return { ok: false, code: "analyser_missing" };
       const auth = authFor(cred);
-      job = { state: "running", phase: "listing", workers: w, total: 0, analysed: 0, failed: 0, skipped: 0, errors: 0, transientRun: 0, nextFile: 0, startedAt: Date.now(), finishedAt: null, lastError: null, abort: new AbortController(), tmp: mkdtempSync(join(tmpRoot, "bpm-")), auth };
+      job = { state: "running", phase: "listing", workers: w, total: 0, analysed: 0, failed: 0, skipped: 0, prefiltered: 0, rechecked: 0, recheck, includeSkipped, errors: 0, transientRun: 0, nextFile: 0, startedAt: Date.now(), finishedAt: null, lastError: null, abort: new AbortController(), tmp: mkdtempSync(join(tmpRoot, "bpm-")), auth };
       const j = job;
-      void run(j, auth, retryFailed);
+      void run(j, auth, { retryFailed, recheck, includeSkipped });
       return { ok: true };
     },
     stop() {
@@ -258,11 +283,55 @@ export function createBpmAnalyzer({ navidromeUrl, bpmStore, cli = process.env.BP
         finishedAt: j?.finishedAt ?? null,
         workers: j?.workers ?? 0,
         lastError: j?.lastError ?? null,
+        prefiltered: j?.prefiltered ?? 0,
+        rechecked: j?.rechecked ?? 0,
         withBpm: bpmStore.size(),
+        ...(({ withConfidence, unscored, unreliable }) => ({ withConfidence, unscored, unreliable }))(bpmStore.stats()),
+        minConfidence: bpmStore.minConfidence,
+        skippedTotal: skipped.size(),
         libraryTotal: total,
         failedTotal: failed.size(),
       };
     },
     failed: () => failed.list(),
+    skipped: () => skipped.list(),
+    /**
+     * For an administrator to review: counts, a histogram of the confidence (10 bins, 0-0.1 ... 0.9-1) and the
+     * `limit` detected songs with the lowest confidence, with title, artist and genre when Navidrome answers.
+     */
+    async report(cred, limit = 50) {
+      const n = Math.max(1, Math.min(500, Math.floor(Number(limit)) || 50));
+      const st = bpmStore.stats();
+      const entries = bpmStore.entries();
+      const histogram = Array(10).fill(0);
+      const scored = [];
+      for (const [id, e] of entries) {
+        if (e.manual || typeof e.confidence !== "number") continue;
+        histogram[Math.min(9, Math.floor(e.confidence * 10))]++;
+        scored.push({ id, bpm: e.bpm, confidence: e.confidence });
+      }
+      scored.sort((a, b) => a.confidence - b.confidence);
+      const lowest = scored.slice(0, n);
+      if (cred) {
+        const auth = authFor(cred);
+        let next = 0;
+        const worker = async () => {
+          while (next < lowest.length) {
+            const row = lowest[next++];
+            try {
+              const s = (await subsonicJson(auth, "getSong", { id: row.id })).song;
+              if (s) Object.assign(row, { title: s.title, artist: s.artist, album: s.album, genre: s.genre, duration: s.duration });
+            } catch { /* the song may be gone, or Navidrome busy: the row keeps its id */ }
+          }
+        };
+        await Promise.all(Array.from({ length: 6 }, worker));
+      }
+      return {
+        counts: { stored: st.total, manual: st.manual, withConfidence: st.withConfidence, withoutConfidence: st.unscored, skipped: skipped.size(), failed: failed.size(), belowThreshold: st.unreliable },
+        minConfidence: bpmStore.minConfidence,
+        histogram,
+        lowest,
+      };
+    },
   };
 }

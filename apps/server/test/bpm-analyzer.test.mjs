@@ -7,8 +7,7 @@ import { join } from "node:path";
 import { createApp } from "../src/server.mjs";
 import { createBpmStore } from "../src/bpm.mjs";
 import { createBpmAnalyzer, createFailedStore } from "../src/bpm-analyzer.mjs";
-import { isDrumAndBass, resolveDnbBpm } from "../src/bpm-octave.mjs";
-import { memoryStore } from "../src/store.mjs";
+import { isDrumAndBass, resolveDnbBpm } from "../src/bpm-octave.mjs";import { memoryStore } from "../src/store.mjs";
 
 const ADMIN = { authorization: "Subsonic u=root&t=good&s=x" };
 const USER = { authorization: "Subsonic u=bob&t=good&s=x" };
@@ -27,7 +26,8 @@ const slow = /slow=(\\d+)/.exec(text);
 setTimeout(() => {
   const m = /bpm=([\\d.]+)/.exec(text);
   if (/fail/.test(text) || !m) { console.log(JSON.stringify({ error: "no clear tempo" })); process.exit(1); }
-  console.log(JSON.stringify({ bpm: Number(m[1]) }));
+  const c = /conf=([\\d.]+)/.exec(text);
+  console.log(JSON.stringify({ bpm: Number(m[1]), ...(c ? { confidence: Number(c[1]), duration_secs: 200 } : {}) }));
 }, slow ? Number(slow[1]) : 0);
 `);
   chmodSync(p, 0o755);
@@ -44,7 +44,11 @@ async function fakeNavidrome(songs) {
     seen.headers.push(req.headers); seen.params.push(Object.fromEntries(u.searchParams));
     if (u.pathname === "/rest/search3") {
       const off = Number(u.searchParams.get("songOffset")), n = Number(u.searchParams.get("songCount"));
-      return send({ searchResult3: { song: songs.slice(off, off + n).map((s) => ({ id: s.id, genre: s.genre, suffix: "flac", size: 10 })) } });
+      return send({ searchResult3: { song: songs.slice(off, off + n).map((s) => ({ id: s.id, genre: s.genre, suffix: "flac", size: 10, duration: s.duration })) } });
+    }
+    if (u.pathname === "/rest/getSong") {
+      const s = songs.find((x) => x.id === u.searchParams.get("id"));
+      return s ? send({ song: { id: s.id, title: `Title ${s.id}`, artist: "Artist", genre: s.genre } }) : send({});
     }
     if (u.pathname === "/rest/getScanStatus") return send({ scanStatus: { scanning: false, count: songs.length } });
     if (u.pathname === "/rest/download") {
@@ -79,7 +83,7 @@ async function boot(songs, { bpmStore = createBpmStore(), cliOverride } = {}) {
   return { base, call, status, finish, cliRuns, nav, bpmStore, dir, close: () => { app.close(); nav.close(); } };
 }
 
-const song = (id, text, genre = "Pop") => ({ id, text, genre });
+const song = (id, text, genre = "Pop", duration = 200) => ({ id, text, genre, duration });
 
 test("only an administrator can start, watch and stop the analysis", async () => {
   const t = await boot([song("a", "bpm=100")]);
@@ -198,7 +202,9 @@ test("failed songs are not retried unless asked", async () => {
 
 test("the failed list survives a restart", () => {
   const dir = mkdtempSync(join(tmpdir(), "bpmf-"));
-  createFailedStore(dir).add("x", { reason: "no clear tempo", at: 1 });
+  const f = createFailedStore(dir);
+  f.add("x", { reason: "no clear tempo", at: 1 });
+  f.flush();
   assert.equal(createFailedStore(dir).has("x"), true);
   assert.ok(existsSync(join(dir, "bpm-failed.json")));
 });

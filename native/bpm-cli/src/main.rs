@@ -1,4 +1,6 @@
-//! `icosahedron-bpm <file>` prints `{"bpm": 128.0}` and exits 0, or `{"error": "..."}` and exits 1.
+//! `icosahedron-bpm <file>` prints `{"bpm": 128.0, "confidence": 0.93, "duration_secs": 241.3}` and exits 0, or
+//! `{"error": "..."}` and exits 1. `confidence` is 0..1 (see `icosahedron_bpm_core::detect_bpm_detailed`),
+//! `duration_secs` the length of the decoded audio.
 //! The file is decoded with Symphonia and measured by `icosahedron_bpm_core`, the same detection the
 //! desktop app runs, so every player sees the same numbers. The song's genre is not known here;
 //! the HUB applies the drum & bass correction afterwards.
@@ -23,7 +25,7 @@ fn decode_mono(path: &Path) -> Result<(Vec<f32>, u32), String> {
     let mss = MediaSourceStream::new(Box::new(file), Default::default());
     let probed = symphonia::default::get_probe()
         .format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default())
-        .map_err(|e| format!("unknown audio format: {e}"))?;
+        .map_err(|e| format!("unknown audio format: {e}{}", wav_format_hint(path, &e.to_string())))?;
     let mut format = probed.format;
     let track = format
         .tracks()
@@ -82,6 +84,21 @@ fn decode_mono(path: &Path) -> Result<(Vec<f32>, u32), String> {
     Ok((mono, rate))
 }
 
+/// Symphonia reads PCM, float, A-law, mu-law and ADPCM in WAV files. For any other format tag its error
+/// does not say which one it met, so name it: 0x0055 is MP3 data in a WAV wrapper, 0x0161 is WMA, and so on.
+fn wav_format_hint(path: &Path, err: &str) -> String {
+    if !err.contains("unsupported wave format") {
+        return String::new();
+    }
+    let mut head = vec![0u8; 4096];
+    let n = File::open(path).and_then(|mut f| std::io::Read::read(&mut f, &mut head)).unwrap_or(0);
+    head.truncate(n);
+    match head.windows(4).position(|w| w == b"fmt ").and_then(|i| head.get(i + 8..i + 10)) {
+        Some(t) => format!(" (WAV format tag 0x{:04x})", u16::from_le_bytes([t[0], t[1]])),
+        None => String::new(),
+    }
+}
+
 fn json_escape(s: &str) -> String {
     let mut o = String::new();
     for c in s.chars() {
@@ -102,11 +119,16 @@ fn main() {
         std::process::exit(2);
     }
     let result = decode_mono(Path::new(&args[1])).and_then(|(mono, rate)| {
-        icosahedron_bpm_core::detect_bpm(&mono, 1, rate)
+        let duration = mono.len() as f64 / rate as f64;
+        icosahedron_bpm_core::detect_bpm_detailed(&mono, 1, rate)
+            .map(|r| (r, duration))
             .ok_or_else(|| "no clear tempo (track too short or quiet, or no beat)".to_string())
     });
     match result {
-        Ok(bpm) => println!("{{\"bpm\": {:?}}}", bpm),
+        Ok((r, duration)) => println!(
+            "{{\"bpm\": {:?}, \"confidence\": {:.3}, \"duration_secs\": {:.1}}}",
+            r.bpm, r.confidence, duration
+        ),
         Err(e) => {
             println!("{{\"error\": \"{}\"}}", json_escape(&e));
             std::process::exit(1);

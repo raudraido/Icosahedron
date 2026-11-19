@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.21.3
 - **Settings → Sync Server → BPM analysis (administrators):** shows how many measured BPM values have a confidence, are unreliable or were skipped, a **minimum confidence** slider that hides unsure measurements (intros, ambient) from BPM sorting, the Mix Builder and Flow without re-analysing, an **Include skipped** switch and a **Re-check** button for songs measured before confidence existed. Needs the matching Icosahedron HUB; the desktop's own detection is unchanged.
 
 ## 0.21.2

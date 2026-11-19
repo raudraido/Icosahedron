@@ -207,6 +207,16 @@ html.is-scrolling ::-webkit-scrollbar-thumb {
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
+/* Firefox has no ::-webkit-scrollbar, so it showed the system's scrollbars. Its own properties give the same look:
+   thin, invisible until something scrolls (the same is-scrolling class), the .scroll-clean ones gone.
+   Only inside this @supports: Chromium (121 and later) ignores the ::-webkit-scrollbar rules above as soon as
+   scrollbar-width or scrollbar-color is set on an element. */
+@supports (-moz-appearance: none) {
+  * { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+  html.is-scrolling * { scrollbar-color: color-mix(in srgb, var(--accent) 40%, transparent) transparent; }
+  .scroll-clean { scrollbar-width: none; }
+}
+
 /* Range inputs */
 input[type="range"] { accent-color: var(--accent); }
 

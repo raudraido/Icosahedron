@@ -10,6 +10,7 @@
     "dev": "electron-vite dev",
     "build": "tsc --noEmit && electron-vite build",
     "preview": "electron-vite preview",
+    "test:src": "esbuild src/lib/mixBuilder.test.ts --bundle --platform=node --format=esm --outfile=out/test/mixBuilder.test.mjs --log-level=warning && node --test out/test/",
     "build:web": "tsc --noEmit && vite build --config vite.web.config.ts",
     "dist": "npm run build && node scripts/gen-appstream.mjs && electron-builder --publish=never",
     "build:native": "cd native/audio-engine && napi build --platform --release",

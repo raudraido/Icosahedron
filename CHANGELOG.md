@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- **Mix Builder** (the tab was a placeholder): quick starts (**Play 500 random** with every song the same chance, **Lucky mix** from your most played artists, Workout / Focus / Party / Throwback / Fresh finds / *Because I played …*), a **Start with** box for artists, songs, genres and decades, dials for years, genres, favourites, not played yet and familiar or new, and a live mix where you keep, swap, remove or drag songs. Play it, add it to the queue or save it as a playlist (named for you). *Start a Mix from this* in the song menu. **Leave out…** skips audiobooks and spoken word and the genres you choose, in every start. The last state is remembered. Songs are not picked by BPM yet.
 - The sync server is called **Icosahedron HUB** everywhere (it was "the web engine"): the address field in the devices popover and in *Settings → Sync Server*.
 - **Settings → Sync Server → BPM analysis (server administrators):** shows how many songs have a BPM, and starts, follows (progress and time left) and stops the Icosahedron HUB measuring the BPM of the whole library in the background. Songs that already have a BPM are never measured again or changed. Needs a server with the analysis (hidden otherwise). The detection code moved into the shared crate `native/bpm-core`; the desktop's own detection behaves as before.
 

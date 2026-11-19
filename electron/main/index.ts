@@ -385,7 +385,8 @@ function registerIpcHandlers(): void {
   ipcMain.handle("get_album", (_e, { id }) => requireClient().getAlbum(id));
   ipcMain.handle("get_compilations", () => requireClient().getCompilations());
 
-  ipcMain.handle("get_random_songs", (_e, { count }) => requireClient().getRandomSongs(count));
+  ipcMain.handle("get_random_songs", (_e, { count, genre, fromYear, toYear }) => requireClient().getRandomSongs(count, { genre, fromYear, toYear }));
+  ipcMain.handle("get_genres", () => requireClient().getGenres());
   ipcMain.handle("get_tracks", (_e, { size, offset }) => requireClient().getTracks(size, offset));
   ipcMain.handle("get_tracks_native_page", (_e, { sortBy, order, start, end, query, filters }) =>
     requireClient().getTracksNativePage(sortBy, order, start, end, query, filters));

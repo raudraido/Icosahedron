@@ -624,9 +624,23 @@ export class SubsonicClient {
     };
   }
 
-  async getRandomSongs(count: number): Promise<Track[]> {
-    const root = await this.get("getRandomSongs", { size: String(count) });
+  /** Random songs, each with the same chance. The server answers at most 500 per call (callers that want more
+   *  call again and drop the repeats); `genre` and the year range narrow the draw on the server. */
+  async getRandomSongs(count: number, opts?: { genre?: string; fromYear?: number; toYear?: number }): Promise<Track[]> {
+    const params: Record<string, string> = { size: String(Math.max(1, Math.min(500, Math.floor(count)))) };
+    if (opts?.genre) params.genre = opts.genre;
+    if (opts?.fromYear) params.fromYear = String(opts.fromYear);
+    if (opts?.toYear) params.toYear = String(opts.toYear);
+    const root = await this.get("getRandomSongs", params);
     return asArray(root.randomSongs?.song).map((s) => this.parseTrack(s));
+  }
+
+  /** Every genre with how many songs it has (the Mix Builder's genre chips). */
+  async getGenres(): Promise<{ name: string; songCount: number }[]> {
+    const root = await this.get("getGenres");
+    return asArray(root.genres?.genre)
+      .map((g) => ({ name: String(g?.value ?? ""), songCount: Number(g?.songCount) || 0 }))
+      .filter((g) => g.name);
   }
 
   async scrobble(trackId: string, submission: boolean): Promise<void> {

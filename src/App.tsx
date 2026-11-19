@@ -14,6 +14,7 @@ import { Downloads } from "./screens/Downloads";
 import { platform } from "./platform";
 import { useDownloads } from "./lib/downloads";
 import { Placeholder } from "./screens/Placeholder";
+import { MixBuilder } from "./screens/MixBuilder";
 import { NowPlaying } from "./screens/NowPlaying";
 import { Home } from "./screens/Home";
 import { Settings } from "./screens/Settings";
@@ -32,7 +33,7 @@ import { UpdateBanner } from "./components/UpdateBanner";
 import { ApprovalPrompt } from "./components/ApprovalPrompt";
 
 // Full old-app nav order (window.py's addTab sequence) — Home, Now Playing,
-// Mix Builder, and Visualizer aren't built out yet, so they render Placeholder
+// and Visualizer weren't built out yet, so they render Placeholder
 // for now rather than being left out of the nav bar entirely.
 const NAV: { id: Tab; label: string; icon: string }[] = [
   { id: "home",       label: "Home",        icon: "img/home.png" },
@@ -435,7 +436,7 @@ function DesktopApp() {
             <div className="absolute inset-0 flex flex-col tab-pane" style={{ display: activeTab === "playlists"  ? "flex" : "none" }}>{mounted.has("playlists")  && <Playlists />}</div>
             <div className="absolute inset-0 flex flex-col tab-pane" style={{ display: activeTab === "starred"    ? "flex" : "none" }}>{mounted.has("starred")    && <Starred />}</div>
             <div className="absolute inset-0 flex flex-col tab-pane" style={{ display: activeTab === "downloads"  ? "flex" : "none" }}>{mounted.has("downloads")  && <Downloads />}</div>
-            <div className="absolute inset-0 flex flex-col tab-pane" style={{ display: activeTab === "mixBuilder" ? "flex" : "none" }}>{mounted.has("mixBuilder") && <Placeholder label="Mix Builder" />}</div>
+            <div className="absolute inset-0 flex flex-col tab-pane" style={{ display: activeTab === "mixBuilder" ? "flex" : "none" }}>{mounted.has("mixBuilder") && <MixBuilder />}</div>
             <div className="absolute inset-0 flex flex-col tab-pane" style={{ display: activeTab === "visualizer" ? "flex" : "none" }}>{mounted.has("visualizer") && <Placeholder label="Visualizer" />}</div>
             <div className="absolute inset-0 flex flex-col tab-pane" style={{ display: activeTab === "settings"   ? "flex" : "none" }}>{mounted.has("settings")   && <Settings />}</div>
           </div>

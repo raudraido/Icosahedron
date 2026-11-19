@@ -183,6 +183,11 @@ interface AppStore {
   queuePanelTab: QueueTab;
   setQueuePanelTab: (tab: QueueTab) => void;
 
+  // "Start a Mix from this" (track menu): the Mix Builder tab picks the request up once (by its `n`) and
+  // starts from that artist or genre. A counter, not a flag, so asking for the same artist twice still counts.
+  mixRequest: { n: number; kind: "artist" | "genre"; value: string; id?: string } | null;
+  startMixFrom: (seed: { kind: "artist" | "genre"; value: string; id?: string }) => void;
+
   // Spotlight search overlay (components/SpotlightSearch.tsx) — ports the
   // old app's SpotlightSearch/show_search: summoned by Ctrl+F or by typing
   // any plain printable character while nothing else has focus (see
@@ -783,6 +788,12 @@ export const useStore = create<AppStore>((set, get) => ({
 
   queuePanelTab: "queue",
   setQueuePanelTab: (tab) => set({ queuePanelTab: tab }),
+
+  mixRequest: null,
+  startMixFrom: (seed) => {
+    set((s) => ({ mixRequest: { n: (s.mixRequest?.n ?? 0) + 1, ...seed } }));
+    get().navigateTo({ tab: "mixBuilder" });
+  },
 
   spotlightOpen: false,
   spotlightInitial: "",

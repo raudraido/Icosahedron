@@ -220,6 +220,8 @@ export interface DownloadsState {
   bytes: number;
   pending: number;
   current: string | null;
+  /** Songs waiting for their turn (the one being downloaded is `current`). */
+  queuedIds: string[];
   cacheBytes: number;
   cacheSongs: number;
   cacheLimitMb: number;
@@ -236,6 +238,7 @@ export async function state(): Promise<DownloadsState> {
     bytes: entries.reduce((n, e) => n + e.size, 0),
     pending: queue.length + (current ? 1 : 0),
     current,
+    queuedIds: queue.map((q) => q.track.id),
     cacheBytes: cached.reduce((n, e) => n + e.size, 0),
     cacheSongs: cached.length,
     cacheLimitMb: data.cacheLimitMb ?? DEFAULT_CACHE_MB,

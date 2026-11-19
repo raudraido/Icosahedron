@@ -314,7 +314,7 @@ export function createWebPlatform(): Platform {
     users_update: (a) => need().updateUser(a.id, a.patch, a.current),
     users_delete: (a) => need().deleteUser(a.id),
     // Downloads are a desktop feature (a browser keeps no music for later): nothing is ever downloaded here
-    downloads_state: async () => ({ ids: [], collections: [], bytes: 0, pending: 0, current: null, cacheBytes: 0, cacheSongs: 0, cacheLimitMb: 0 }),
+    downloads_state: async () => ({ ids: [], collections: [], bytes: 0, pending: 0, current: null, queuedIds: [], cacheBytes: 0, cacheSongs: 0, cacheLimitMb: 0 }),
     downloads_tracks: async () => [],
     downloads_local_url: async () => null,
     downloads_add: async () => undefined,

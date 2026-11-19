@@ -50,6 +50,8 @@ export interface DownloadsState {
   bytes: number;
   pending: number;
   current: string | null;
+  /** Songs waiting for their turn (the one being downloaded is `current`). */
+  queuedIds: string[];
   /** Songs kept only because they were played (a cache, removed oldest first over the limit). */
   cacheBytes: number;
   cacheSongs: number;

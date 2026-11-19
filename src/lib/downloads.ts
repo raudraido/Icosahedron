@@ -13,6 +13,9 @@ interface DownloadsStore {
   collections: DownloadCollection[];
   bytes: number;
   pending: number;
+  /** The song being downloaded, and the ones waiting (for the marks beside titles). */
+  current: string | null;
+  queued: Set<string>;
   refresh: () => Promise<void>;
   has: (id: string) => boolean;
   hasCollection: (kind: string, id: string) => boolean;
@@ -30,12 +33,14 @@ export const useDownloads = create<DownloadsStore>((set, get) => ({
   collections: [],
   bytes: 0,
   pending: 0,
+  current: null,
+  queued: new Set(),
 
   refresh: async () => {
     if (!get().supported) return;
     try {
       const s = await api.downloadsState();
-      set({ ids: new Set(s.ids), collections: s.collections, bytes: s.bytes, pending: s.pending });
+      set({ ids: new Set(s.ids), collections: s.collections, bytes: s.bytes, pending: s.pending, current: s.current, queued: new Set(s.queuedIds ?? []) });
       if (timer) { clearTimeout(timer); timer = null; }
       if (s.pending > 0) timer = setTimeout(() => { timer = null; void get().refresh(); }, 1500);
     } catch { /* no downloads module (a web build, an old main process): nothing to show */ }

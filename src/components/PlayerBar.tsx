@@ -131,7 +131,6 @@ export function PlayerBar() {
   // Casting to speakers and TVs is done by the desktop app (it finds the devices on the network); a browser cannot.
   const noCast = platform.kind !== "electron";
   const [artHov, setArtHov] = useState(false);
-  const [expandBtnHov, setExpandBtnHov] = useState(false);
 
   const qc = useQueryClient();
   const { data: playlists = [] } = useQuery({ queryKey: ["playlists"], queryFn: api.getPlaylists });
@@ -325,40 +324,26 @@ export function PlayerBar() {
       <div className="flex items-center shrink-0 gap-3" style={{ width: "max(160px, 19%)", overflow: "visible" }}>
         {/* Art thumbnail — shrinks to width 0 in lockstep with the left panel's art
             section expanding (both driven by the same sidebarArtExpanded toggle),
-            matching footer_bar.qml's artWrap (250ms InOutCubic on width). Expand
-            button reveals on hovering the whole thumbnail (or the button itself),
-            matching artHoverArea.containsMouse || expandClick.containsMouse. */}
+            matching footer_bar.qml's artWrap (250ms InOutCubic on width). Hovering
+            the thumbnail zooms the picture a little (the box keeps its size) to show
+            that it can be clicked; a click anywhere on it opens the big picture. */}
         <div
           onMouseEnter={() => setArtHov(true)}
           onMouseLeave={() => setArtHov(false)}
+          onClick={() => { setArtHov(false); toggleSidebarArt(); }}
           onTransitionEnd={recomputeTitleWidth}
           onContextMenu={(e) => { if (track) { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }); } }}
+          title="Show the big picture"
           style={{
             position: "relative", height: 84,
             width: sidebarArtExpanded ? 0 : 84,
-            overflow: "hidden", borderRadius: 4, flexShrink: 0,
+            overflow: "hidden", borderRadius: 4, flexShrink: 0, cursor: "pointer",
             transition: "width 250ms cubic-bezier(0.65, 0, 0.35, 1)",
           }}
         >
-          <CoverArt coverId={track?.cover_id ?? null} size={84} className="w-[84px] h-[84px] rounded shrink-0" />
-          {!sidebarArtExpanded && (
-            <button
-              onClick={() => { setExpandBtnHov(false); setArtHov(false); toggleSidebarArt(); }}
-              onMouseEnter={() => setExpandBtnHov(true)}
-              onMouseLeave={() => setExpandBtnHov(false)}
-              title="Expand"
-              style={{
-                position: "absolute", top: 2, right: 2, width: 24, height: 24, borderRadius: 12,
-                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-                border: `2px solid color-mix(in srgb, var(--accent) ${expandBtnHov ? 100 : 30}%, transparent)`,
-                background: `color-mix(in srgb, var(--accent) ${expandBtnHov ? 40 : 10}%, transparent)`,
-                opacity: artHov || expandBtnHov ? 1 : 0,
-                transition: "opacity 180ms",
-              }}
-            >
-              <Icon src="img/expand.png" size={16} style={{ background: expandBtnHov ? "#ffffff" : "#515151" }} />
-            </button>
-          )}
+          <div style={{ width: 84, height: 84, transform: artHov ? "scale(1.08)" : "scale(1)", transition: "transform 200ms ease-out" }}>
+            <CoverArt coverId={track?.cover_id ?? null} size={84} className="w-[84px] h-[84px] rounded shrink-0" />
+          </div>
         </div>
         <div className="min-w-0 flex flex-col justify-center gap-0.5" style={{ overflow: "visible" }}>
           <p

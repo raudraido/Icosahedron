@@ -5,6 +5,7 @@ import { api, Track } from "../lib/api";
 import { fmtDuration } from "../lib/api";
 import { useStore } from "../store";
 import { useDownloads } from "../lib/downloads";
+import { DownloadMark } from "./DownloadMark";
 import { CoverArt } from "./CoverArt";
 import { Icon } from "./Icon";
 import { IconBtn } from "./IconBtn";
@@ -1287,13 +1288,21 @@ export function TrackTable({
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate" style={{ color: isPlaying ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)" }}>{t.title}</p>
+              <div className="flex items-center min-w-0" style={{ gap: 6 }}>
+                <p className="truncate" style={{ color: isPlaying ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)" }}>{t.title}</p>
+                <DownloadMark id={t.id} />
+              </div>
               <ArtistTokens name={t.artist} artistId={t.artist_id} fontSize="var(--fs-secondary)" />
             </div>
           </div>
         );
       case "title":
-        return <span className="truncate" style={{ color: isPlaying ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)" }}>{t.title}</span>;
+        return (
+          <span className="flex items-center min-w-0" style={{ gap: 6 }}>
+            <span className="truncate" style={{ color: isPlaying ? "var(--accent)" : "var(--text-primary)", fontSize: "var(--fs-primary)", fontWeight: "var(--fw-emphasis)" }}>{t.title}</span>
+            <DownloadMark id={t.id} />
+          </span>
+        );
       case "artist":
         return <ArtistTokens name={t.artist} artistId={t.artist_id} />;
       case "album":

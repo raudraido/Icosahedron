@@ -322,6 +322,7 @@ export function createWebPlatform(): Platform {
     downloads_remove_collection: async () => undefined,
     downloads_remove_all: async () => undefined,
     downloads_cache_song: async () => undefined,
+    downloads_cached_tracks: async () => [],
     downloads_cache_limit: async () => undefined,
     downloads_clear_cache: async () => undefined,
     plugins_list: () => need().listPlugins(),

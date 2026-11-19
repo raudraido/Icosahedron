@@ -398,6 +398,7 @@ export const api = {
   downloadsRemoveTrack: (songId: string) => invoke<void>("downloads_remove_track", { songId }),
   downloadsRemoveCollection: (kind: string, id: string) => invoke<void>("downloads_remove_collection", { kind, id }),
   downloadsRemoveAll: () => invoke<void>("downloads_remove_all"),
+  downloadsCachedTracks: () => invoke<Track[]>("downloads_cached_tracks"),
   downloadsCacheLimit: (mb: number) => invoke<void>("downloads_cache_limit", { mb }),
   downloadsClearCache: () => invoke<void>("downloads_clear_cache"),
 

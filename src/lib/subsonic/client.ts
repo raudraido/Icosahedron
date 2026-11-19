@@ -762,6 +762,13 @@ export class SubsonicClient {
     }
   }
 
+  /** One song as the app knows it (the Cached Songs list asks for the songs it kept without their details). */
+  async getTrack(songId: string): Promise<Track> {
+    const root = await this.get("getSong", { id: songId });
+    if (!root.song) throw new Error("no such song");
+    return this.parseTrack(root.song);
+  }
+
   // --- Parsers ---
 
   private parseTrack(s: any): Track {

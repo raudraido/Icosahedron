@@ -21,13 +21,10 @@ import { useAvatar, removeMyAvatar } from "../lib/avatar";
 // New view (no old-app equivalent — Sonar's SettingsWindow is a single
 // two-column dialog with no tabs) opened via the footer bar's gear icon
 // rather than the sidebar's own tab list, hence "settings" isn't in
-// App.tsx's NAV array. Five sub-tabs: System / Themes / Servers / Users /
-// Theme Builder — the latter three are scaffolding for future multi-server/
-// multi-account support and a custom theme editor (see the "what happens on
-// account switch" discussion this was born from); only System and Themes
-// have real functionality today.
+// App.tsx's NAV array. Sub-tabs run down the left (System, Downloads, Playback, …,
+// Themes — which also holds the theme builder —, Servers, Users, Hotkeys).
 
-type SettingsTab = "system" | "downloads" | "playback" | "integrations" | "sync" | "appearance" | "themes" | "servers" | "users" | "plugins" | "themeBuilder" | "hotkeys";
+type SettingsTab = "system" | "downloads" | "playback" | "integrations" | "sync" | "appearance" | "themes" | "servers" | "users" | "plugins" | "hotkeys";
 
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: "system",       label: "System" },
@@ -40,7 +37,6 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "servers",      label: "Servers" },
   { id: "users",        label: "Users" },
   { id: "plugins",      label: "Navidrome plugins" },
-  { id: "themeBuilder", label: "Theme Builder" },
   { id: "hotkeys",      label: "Hotkeys" },
 ];
 
@@ -988,6 +984,10 @@ function ServersTab() {
 
 function ThemesTab() {
   const [current, setCurrent] = useState<AppTheme>(loadSavedTheme);
+  // The builder sits under the presets. It starts closed (it applies its draft live while open); choosing a
+  // preset while it is open starts it again from that preset (the key).
+  const [building, setBuilding] = useState(false);
+  const [builderKey, setBuilderKey] = useState(0);
   // Settings.tsx only renders this component while its sub-tab is active, so
   // remounting (which re-runs this initializer) is what picks up any preset
   // just saved from the Theme Builder tab — deletions update this same state
@@ -998,6 +998,13 @@ function ThemesTab() {
     setCurrent(t);
     saveTheme(t);
     applyTheme(t);
+    setBuilderKey((k) => k + 1);
+  }
+
+  // A preset saved in the builder joins the cards at once
+  function handleBuilderSaved(t: AppTheme) {
+    setCurrent(t);
+    setThemes(allThemes());
   }
 
   // Only ever offered for user-saved presets — isBuiltInThemeName gates the
@@ -1011,7 +1018,7 @@ function ThemesTab() {
   }
 
   return (
-    <div className="flex flex-col" style={{ gap: 16, maxWidth: 480 }}>
+    <div className="flex flex-col" style={{ gap: 24, maxWidth: 520 }}>
       <Section title="Theme">
         <div className="flex flex-wrap" style={{ gap: 12 }}>
           {themes.map((t) => {
@@ -1063,6 +1070,19 @@ function ThemesTab() {
             );
           })}
         </div>
+      </Section>
+
+      <Section title="Theme builder">
+        <div style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)", lineHeight: 1.5 }}>
+          Change the colors, fonts and sizes of the app and see the result at once. Save it over a theme of your own, or as a new one that joins the cards above.
+        </div>
+        <button
+          onClick={() => setBuilding((b) => !b)}
+          style={{ alignSelf: "flex-start", background: "transparent", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: 4, padding: "7px 16px", cursor: "pointer", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)" }}
+        >
+          {building ? "Close the builder" : "Customize this theme…"}
+        </button>
+        {building && <ThemeBuilderTab key={builderKey} onSaved={handleBuilderSaved} />}
       </Section>
     </div>
   );
@@ -1573,7 +1593,7 @@ function WeightDial({ value, onChange }: { value: number; onChange: (v: number) 
   );
 }
 
-function ThemeBuilderTab() {
+function ThemeBuilderTab({ onSaved }: { onSaved?: (t: AppTheme) => void }) {
   const [draft, setDraft] = useState<AppTheme>(loadSavedTheme);
   const [savePromptOpen, setSavePromptOpen] = useState(false);
   const baselineRef = useRef<AppTheme>(draft);
@@ -1604,10 +1624,11 @@ function ThemeBuilderTab() {
     setDraft(named);
     baselineRef.current = named;
     setSavePromptOpen(false);
+    onSaved?.(named);
   }
 
   return (
-    <div className="flex flex-col" style={{ gap: 24, maxWidth: 520 }}>
+    <div className="flex flex-col" style={{ gap: 24, maxWidth: 520, paddingTop: 8 }}>
       <Section title="Accent">
         <BuilderRow label="Accent Color">
           <ColorDial value={draft.accent} onChange={(v) => set("accent", v)} />
@@ -1884,7 +1905,6 @@ export function Settings() {
             {tab === "servers" && <ServersTab />}
             {tab === "users" && <UsersTab />}
             {tab === "plugins" && <PluginsTab />}
-            {tab === "themeBuilder" && <ThemeBuilderTab />}
             {tab === "hotkeys" && <HotkeysTab />}
           </div>
           <ScrollThumb scrollRef={scrollRef} />

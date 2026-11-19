@@ -2,7 +2,7 @@
 
 The server is the **sync engine and the web app it serves** (one Docker image, `ghcr.io/raudraido/icosahedron-server`). Versions before 0.16.0 shared one number with the other apps (0.15.3 to 0.15.9); the full text of those releases is in the [main changelog](../../CHANGELOG.md). What each version needs and gives: [docs/compatibility.md](../../docs/compatibility.md).
 
-## Unreleased
+## 0.20.0
 - **Mix Builder in the web app** (same as the desktop): build a mix from a quick start, an artist, a genre or a decade, keep and swap songs, play it or save it as a playlist. The engine itself is unchanged.
 - **Analyse the BPM of the whole library (administrators):** the HUB measures every song that has no BPM, in the background, with the same detection the desktop app uses (the shared Rust crate `native/bpm-core`, run as `icosahedron-bpm` inside the image). It needs no music mount: each song is fetched from Navidrome, measured and the copy deleted. `POST /bpm/analyze` `{workers?, retryFailed?}`, `GET /bpm/analyze` (progress, estimate, coverage), `DELETE /bpm/analyze`, `GET /bpm/analyze/failed`; administrators only. A song that already has a BPM (manual or measured) is never measured or changed, not even by a value that arrives while the job runs. Songs that fail are remembered in `bpm-failed.json` and not retried unless asked. Drum & bass tempo is corrected from the genre like on the desktop. The Docker image now has a Rust build stage for the analyser (linux/amd64 and linux/arm64). How it works and what it costs: [docs/sync-settings.md](../../docs/sync-settings.md#bpm-analysis).
 

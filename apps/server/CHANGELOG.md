@@ -2,7 +2,7 @@
 
 The server is the **sync engine and the web app it serves** (one Docker image, `ghcr.io/raudraido/icosahedron-server`). Versions before 0.16.0 shared one number with the other apps (0.15.3 to 0.15.9); the full text of those releases is in the [main changelog](../../CHANGELOG.md). What each version needs and gives: [docs/compatibility.md](../../docs/compatibility.md).
 
-## Unreleased
+## 0.20.2
 - **Web app, Tracks: sorting by BPM follows the BPM you see.** The BPM column shows the detected BPM (the HUB's shared store), but the list was sorted by the BPM tag in the file, which most files do not have, so the order looked random. It now sorts by the detected values; songs without a BPM are left out of the list while it is sorted by BPM (with a search or a column filter on they come last). Play and Shuffle on a BPM-sorted list use the first 1,000 songs.
 - **Mix Builder in the web app uses BPM** (same as the desktop): a BPM range with a histogram, **Flow** (a BPM curve for the mix), the BPM of each song, and BPM ranges for Workout / Party / Focus, once the HUB's BPM analysis has reached 60% of the library. The HUB itself is unchanged.
 

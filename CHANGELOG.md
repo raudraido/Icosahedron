@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+- **Jukebox is easy to find and to start (desktop and web app):** *Settings → Sync Server → Jukebox* shows the address of the player page (`/?player=1` of your server) with a **Copy address** button, a **QR code** and the three steps. A guide: [docs/jukebox.md](docs/jukebox.md).
+
 ## 0.20.1
 - **Download in the queue:** right-click a song in the queue panel to *Download* it or *Remove Download*.
 - **You can see what is downloaded:** a small mark beside a song's title in the song lists and the queue: the accent arrow when it is kept on this computer, a turning ring while it downloads, a faint arrow while it waits its turn.

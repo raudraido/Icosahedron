@@ -53,9 +53,9 @@ The Docker image does this for you; see `apps/server/Dockerfile`.
 
 ## Jukebox
 
-Any signed-in device with the sync engine can act as a jukebox:
+The full guide (the address, QR code, naming, controlling it) is [jukebox.md](jukebox.md). In short, any signed-in device with the sync engine can act as a jukebox:
 
-- **Player:** open `https://<your engine>/?player=1` on a screen that only plays (tablet, kiosk browser, spare PC). It registers as "Jukebox" and shows the current track. Tap once when it opens so the browser lets it play audio.
+- **Player:** open `https://<your engine>/?player=1` on a screen that only plays (tablet, kiosk browser, spare PC). It registers as "Jukebox" (rename it on the screen) and shows the current track. Tap once when it opens so the browser lets it play audio.
 - **Controller:** on the desktop or web app, right-click a track → **Add to Device Queue** → pick the device and *Play Next* or *Add to Queue*. In the devices popover, **Show queue** lists the playing device's queue with play and remove buttons.
 
 The commands behind this are documented in [sync-protocol.md](sync-protocol.md#commands).

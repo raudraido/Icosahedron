@@ -27,6 +27,10 @@ The engine is optional. Without it, each client talks to Navidrome directly and 
 
 **Naming:** *Icosahedron HUB* is the project; the players (and the Docker image `icosahedron-server`) keep the name *Icosahedron*.
 
+## Device control and the jukebox
+
+Every app registers with the engine as a *device* and can send commands to another device of the same account (play, pause, seek, volume, and queue edits: `enqueue`, `jump`, `remove`, `move`, `shuffle`, `repeat`); the target applies them and publishes its own state, so everybody sees what it plays. A device built only to be controlled is a **jukebox**: the web app opened with `?player=1` shows the cover and the next songs and nothing else. How to start one: [jukebox.md](jukebox.md); the messages: [sync-protocol.md](sync-protocol.md).
+
 ## Accounts and authentication
 
 There is no account system of its own: **your Navidrome account is your account.**

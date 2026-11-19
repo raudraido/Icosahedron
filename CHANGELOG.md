@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.21.1
 - **"Settings changed on another device" no longer comes back after every reload:** the desktop app and the web app have different tabs (Downloads is desktop only), and the web app dropped Downloads from the shared tab order while the desktop put it back, so each undid the other for ever. The tab order now keeps the tabs a platform does not have where they are, and saving a synced preference with the value it already has no longer counts as a change.
 
 ## 0.21.0

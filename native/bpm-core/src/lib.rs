@@ -271,3 +271,21 @@ fn make_const_bpm(regions: &[ConstRegion], sample_rate: f64) -> f32 {
     let mx = (60.0 * sample_rate / bl_min) as f32;
     bpm_round(mn, center, mx)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rounds_to_clean_values() {
+        assert_eq!(bpm_round(127.6, 128.02, 128.4), 128.0);
+        // no whole number fits, a third does
+        assert!((bpm_round(100.1, 100.4, 100.45) - 100.0 - 1.0 / 3.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn too_short_or_silent_input_has_no_tempo() {
+        assert_eq!(detect_bpm(&[], 2, 44100), None);
+        assert_eq!(detect_bpm(&vec![0.0; 44100], 1, 44100), None);
+    }
+}

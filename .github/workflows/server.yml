@@ -9,7 +9,7 @@ name: Server
 on:
   push:
     branches: [master]
-    paths: ["apps/server/**", "src/**", "vite.web.config.ts", ".github/workflows/server.yml"]
+    paths: ["apps/server/**", "src/**", "native/bpm-core/**", "native/bpm-cli/**", "vite.web.config.ts", ".github/workflows/server.yml"]
     tags: ["server-v*"]
   pull_request:
     paths: ["apps/server/**", ".github/workflows/server.yml"]

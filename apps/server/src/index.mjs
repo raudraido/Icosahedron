@@ -4,6 +4,7 @@ import { createInvites } from "./invites.mjs";
 import { fileStore } from "./store.mjs";
 import { createAvatarStore } from "./avatar.mjs";
 import { createBpmStore } from "./bpm.mjs";
+import { createBpmAnalyzer } from "./bpm-analyzer.mjs";
 import { createLastFm, DEFAULT_API_KEY, DEFAULT_API_SECRET } from "./lastfm.mjs";
 import { createQuickConnect } from "./quickconnect.mjs";
 import { fileSettings } from "./settings.mjs";
@@ -18,7 +19,10 @@ const settings = fileSettings(process.env.DATA_DIR ?? "/data");
 const qcFlag = String(process.env.QUICK_CONNECT ?? "").trim().toLowerCase();
 const qcEnv = ["1", "true", "yes"].includes(qcFlag) ? true : ["0", "false", "no"].includes(qcFlag) ? false : null;
 const dataDir = process.env.DATA_DIR ?? "/data";
+const bpmStore = createBpmStore(dataDir);
 const app = createApp({
+  bpmStore,
+  bpmAnalyzer: createBpmAnalyzer({ navidromeUrl, bpmStore, dir: dataDir }),
   navidromeUrl,
   secureSwitch: createSecureSwitch({ enabled: settings.get("secureSignIn") === true, onChange: (on) => settings.set("secureSignIn", on) }),
   devices: createDevices({ dir: dataDir }),
@@ -26,7 +30,6 @@ const app = createApp({
   webRoot: existsSync(webDir) ? webDir : undefined,
   store: fileStore(process.env.DATA_DIR ?? "/data"),
   avatars: createAvatarStore(process.env.DATA_DIR ?? "/data"),
-  bpmStore: createBpmStore(process.env.DATA_DIR ?? "/data"),
   quickConnect: createQuickConnect({
     // QUICK_CONNECT in the environment decides and locks the switch; without it an administrator switches it in Settings.
     enabled: qcEnv !== null ? qcEnv : settings.get("quickConnect") === true,

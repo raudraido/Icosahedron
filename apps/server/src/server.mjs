@@ -8,6 +8,7 @@ import { verifySubsonic, isNavidromeAdmin, verifyPassword, navidromeTrustsEngine
 import { isProxied, proxyToNavidrome } from "./proxy.mjs";
 import { wantsSubsonicError, subsonicErrorResponse } from "./subsonic-error.mjs";
 import { createBpmStore } from "./bpm.mjs";
+import { createBpmAnalyzer } from "./bpm-analyzer.mjs";
 import { createLastFm } from "./lastfm.mjs";
 import { createTour } from "./tour.mjs";
 import { createQuickConnect } from "./quickconnect.mjs";
@@ -36,7 +37,7 @@ export function createSecureSwitch({ enabled = false, onChange } = {}) {
   return { get on() { return on; }, set(v) { on = !!v; onChange?.(on); } };
 }
 
-export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmStore(), lastfm = createLastFm({}), verify = verifySubsonic, isAdmin = isNavidromeAdmin, quickConnect = createQuickConnect(), avatars = createAvatarStore(), tour = createTour(), secureSwitch = createSecureSwitch(), devices = createDevices({}), approvals = createApprovals(), invites = createInvites({}), checkPassword = verifyPassword, checkTrusted = navidromeTrustsEngine }) {
+export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmStore(), bpmAnalyzer = createBpmAnalyzer({ navidromeUrl, bpmStore }), lastfm = createLastFm({}), verify = verifySubsonic, isAdmin = isNavidromeAdmin, quickConnect = createQuickConnect(), avatars = createAvatarStore(), tour = createTour(), secureSwitch = createSecureSwitch(), devices = createDevices({}), approvals = createApprovals(), invites = createInvites({}), checkPassword = verifyPassword, checkTrusted = navidromeTrustsEngine }) {
   const hub = new Hub(store);
   const authCache = new Map(); // "u|t|s" -> expiry; tokens stay valid, so re-verifying each call is wasted
 
@@ -320,9 +321,25 @@ export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmSt
   const limiter = createLimiter();
 
   async function handleBpm(req, res, url) {
-    if (!(await authed(req))) { res.writeHead(401).end(); return; }
+    const cred = await authedCred(req);
+    if (!cred) { res.writeHead(401).end(); return; }
     const id = decodeURIComponent(url.pathname.slice("/bpm".length).replace(/^\//, ""));
     const json = (code, body) => { res.writeHead(code, { "content-type": "application/json" }); res.end(JSON.stringify(body)); };
+    if (id === "analyze" || id === "analyze/failed") { // analysing the whole library: an administrator starts, watches and stops it
+      if (!(await isAdminCred(cred))) return json(403, { error: "Only an administrator can analyse the library" });
+      // secure sign-in: Navidrome is asked as this account through the trusted header; otherwise with the administrator's own token, kept in memory for the job
+      const jobCred = secureSwitch.on ? { u: cred.u, remoteUser: true } : { u: cred.u, t: cred.t, s: cred.s };
+      if (id === "analyze/failed" && req.method === "GET") return json(200, bpmAnalyzer.failed());
+      if (id === "analyze" && req.method === "GET") return json(200, await bpmAnalyzer.status(jobCred));
+      if (id === "analyze" && req.method === "POST") {
+        let b; try { b = await readJson(req); } catch (e) { res.writeHead(e.code ?? 400).end(); return; }
+        const r = await bpmAnalyzer.start({ cred: jobCred, workers: b?.workers, retryFailed: b?.retryFailed === true });
+        if (!r.ok) return json(r.code === "already_running" ? 409 : 503, { error: r.code });
+        return json(202, await bpmAnalyzer.status(jobCred));
+      }
+      if (id === "analyze" && req.method === "DELETE") return json(200, { stopped: bpmAnalyzer.stop() });
+      res.writeHead(405).end(); return;
+    }
     if (req.method === "GET" && !id) return json(200, bpmStore.all());
     if (req.method === "GET") { const b = bpmStore.get(id); return b === undefined ? json(404, {}) : json(200, { bpm: b }); }
     if (req.method === "PUT" && id) {
@@ -467,6 +484,6 @@ export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmSt
 
   return {
     http, hub,
-    close: () => { bpmStore.flush(); for (const c of wss.clients) c.terminate(); wss.close(); http.close(); http.closeAllConnections?.(); },
+    close: () => { bpmAnalyzer.stop?.(); bpmStore.flush(); for (const c of wss.clients) c.terminate(); wss.close(); http.close(); http.closeAllConnections?.(); },
   };
 }

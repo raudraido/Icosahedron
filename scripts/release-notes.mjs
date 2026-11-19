@@ -5,13 +5,18 @@ import { readFileSync } from "node:fs";
 
 const [file, version] = process.argv.slice(2);
 if (!file || !version) {
-  console.error("usage: node scripts/release-notes.mjs <changelog.md> <version>");
+  console.error("usage: node scripts/release-notes.mjs <changelog.md> <version | X.Y.Z-beta.N>");
   process.exit(1);
 }
 const lines = readFileSync(file, "utf8").split("\n");
-const start = lines.findIndex((l) => l.trim() === `## ${version}`);
+// A beta (X.Y.Z-beta.N) is cut before the changelog is numbered: its text is the "## X.Y.Z" section if
+// there is one, otherwise "## Unreleased".
+const base = version.replace(/-beta\.\d+$/, "");
+const isBeta = base !== version;
+let start = lines.findIndex((l) => l.trim() === `## ${base}`);
+if (start < 0 && isBeta) start = lines.findIndex((l) => l.trim() === "## Unreleased");
 if (start < 0) {
-  console.error(`no "## ${version}" section in ${file}`);
+  console.error(`no "## ${base}"${isBeta ? ' or "## Unreleased"' : ""} section in ${file}`);
   process.exit(1);
 }
 let end = lines.findIndex((l, i) => i > start && /^## /.test(l));

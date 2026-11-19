@@ -1,0 +1,20 @@
+name: Idea or feature request
+description: Something that would make Icosahedron better
+labels: [enhancement]
+body:
+  - type: dropdown
+    id: product
+    attributes:
+      label: Which product?
+      options: [All of them, Desktop app, Web app, Server (web engine), iOS app, Android phone app, Android TV app]
+    validations: { required: true }
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The need first; the solution can come after.
+    validations: { required: true }
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like to happen?

@@ -1,0 +1,14 @@
+# Groups the notes GitHub can generate for a release. The release text itself comes from each product's
+# changelog (scripts/release-notes.mjs); this only matters for "Generate release notes" by hand.
+changelog:
+  exclude:
+    labels: [skip-changelog]
+  categories:
+    - title: New
+      labels: [enhancement]
+    - title: Fixes
+      labels: [bug]
+    - title: Documentation
+      labels: [documentation]
+    - title: Other changes
+      labels: ["*"]

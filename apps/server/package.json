@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.19.0",
   "license": "GPL-3.0-or-later",
-  "description": "Icosahedron Server: serves the Icosahedron web UI and syncs every player (queue, position, remote control).",
+  "description": "Icosahedron HUB: serves the Icosahedron web UI and syncs every player (queue, position, remote control).",
   "type": "module",
   "main": "src/index.mjs",
   "scripts": {

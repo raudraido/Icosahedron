@@ -16,7 +16,7 @@ final class AppModel {
     let net = NetworkMonitor()
     let lastfm = LastFmModel()
     let avatar = AvatarModel()
-    /// BPM by track id, from the Icosahedron Server's store (it only stores; the desktop app detects).
+    /// BPM by track id, from the Icosahedron HUB's store (it only stores; the desktop app detects).
     var bpm: [String: Double] = [:]
     /// Favorite / rating changes made in the app, so every list and menu shows them at once.
     var starredOverrides: [String: Bool] = [:]

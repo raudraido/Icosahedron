@@ -27,7 +27,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.min
 
 /**
- * Link to the Icosahedron Server's sync hub (docs/sync-protocol.md). This TV is one more player of the
+ * Link to the Icosahedron HUB's sync hub (docs/sync-protocol.md). This TV is one more player of the
  * account: it shows up in the other apps' device lists, takes their commands and publishes its own
  * state. Players are independent, so it never pauses anyone else.
  */

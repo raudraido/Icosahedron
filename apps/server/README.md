@@ -1,4 +1,4 @@
-# Icosahedron Server
+# Icosahedron HUB
 
 The optional server that keeps your devices in sync, proxies Navidrome, stores BPM and handles Last.fm, and serves the web app.
 

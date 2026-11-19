@@ -336,7 +336,7 @@ struct LastFmSection: View {
         let fm = app.lastfm
         switch fm.state {
         case .unknown:
-            Text("Not available (needs Icosahedron Server)").foregroundStyle(.secondary)
+            Text("Not available (needs Icosahedron HUB)").foregroundStyle(.secondary)
         case .notConfigured:
             Text("The sync server has no Last.fm API key yet. Update it to 0.16.2 or newer, or set LASTFM_API_KEY and LASTFM_API_SECRET on it.").font(.footnote).foregroundStyle(.secondary)
         case .disconnected:

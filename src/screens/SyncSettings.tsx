@@ -191,7 +191,7 @@ export function SyncServerTab() {
         ) : !syncUrl ? (
           <form className="flex flex-col" style={{ gap: 8 }} onSubmit={(e) => { e.preventDefault(); if (urlDraft.trim()) setSyncUrl(urlDraft.trim()); }}>
             <div style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
-              Address of your Icosahedron Server, for example https://music.example.com. It keeps your players in step.
+              Address of your Icosahedron HUB, for example https://music.example.com. It keeps your players in step.
             </div>
             <div className="flex" style={{ gap: 8 }}>
               <input value={urlDraft} onChange={(e) => setUrlDraft(e.target.value)} placeholder="https://…" style={{ ...input, flex: 1 }} aria-label="Sync server address" />

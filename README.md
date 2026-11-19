@@ -2,7 +2,7 @@
   <img src="build/icon.png" alt="Icosahedron" width="112">
 </p>
 
-<h1 align="center">Icosahedron HUB</h1>
+<h1 align="center">Icosahedron</h1>
 
 <p align="center">
   <b>Your Navidrome / Subsonic music, on every device, in step.</b><br>
@@ -18,7 +18,7 @@
 
 ---
 
-**Icosahedron HUB** is the project as a whole: a family of players for your own [Navidrome](https://www.navidrome.org/) / Subsonic server and a small sync server (**Icosahedron Server**). The players are called **Icosahedron**. Start a song on one device and continue on another, or control one device from another.
+**Icosahedron** is a family of players for your own [Navidrome](https://www.navidrome.org/) / Subsonic server: a desktop app, a web app, an iPhone app, an Android app and a TV app. **Icosahedron HUB** is the small server in the middle that ties them together. Start a song on one device and continue on another, or control one device from another.
 
 ```
   Desktop        Web app       iOS app      Android phone     Android TV
@@ -28,14 +28,14 @@
      └──────────────┴───────┬─────┴──────────────┴────────────────┘
                             ▼
                  ┌─────────────────────┐      optional: adds sync and remote control,
-                 │ Icosahedron Server  │      secure sign-in, the web app, shared BPM,
+                 │   Icosahedron HUB   │      secure sign-in, the web app, shared BPM,
                  │   (Docker, Node)    │      Last.fm and the plugin page
                  └──────────┬──────────┘
                             ▼
                     Navidrome / Subsonic
 ```
 
-**You do not need the Icosahedron Server to use the apps.** They talk to Navidrome directly. It adds sync between devices, the web app, secure sign-in, a shared BPM store and Last.fm scrobbling across all your devices.
+**You do not need the Icosahedron HUB to use the apps.** They talk to Navidrome directly. It adds sync between devices, the web app, secure sign-in, a shared BPM store and Last.fm scrobbling across all your devices.
 
 ## Screenshots
 
@@ -61,7 +61,7 @@ Every product has its own version, its own release and its own changelog. Pick y
 | Product | For | Get it | Install guide | Changelog |
 |---|---|---|---|---|
 | **Desktop app** | Linux (AppImage, `.deb`), Windows | [Releases](https://github.com/raudraido/Icosahedron/releases?q=%22Desktop+app%22) | [desktop.md](docs/desktop.md) | [CHANGELOG.md](CHANGELOG.md) |
-| **Icosahedron Server** (sync server and web app) | Docker (amd64, arm64) | `ghcr.io/raudraido/icosahedron-server` | [deploy-server.md](docs/deploy-server.md) | [apps/server](apps/server/CHANGELOG.md) |
+| **Icosahedron HUB** (sync server and web app) | Docker (amd64, arm64) | `ghcr.io/raudraido/icosahedron-server` | [deploy-server.md](docs/deploy-server.md) | [apps/server](apps/server/CHANGELOG.md) |
 | **iOS app** | iPhone, iPad | unsigned `.ipa` in [Releases](https://github.com/raudraido/Icosahedron/releases?q=%22iOS+app%22), signed with SideStore / AltStore | [ios.md](docs/ios.md) | [apps/ios](apps/ios/CHANGELOG.md) |
 | **Android phone app** | phones, tablets, Android Auto | `.apk` in [Releases](https://github.com/raudraido/Icosahedron/releases?q=%22Android+phone%22) | [android.md](docs/android.md) | [apps/android](apps/android/CHANGELOG.md) |
 | **Android TV app** | Google TV, Android TV | `.apk` in [Releases](https://github.com/raudraido/Icosahedron/releases?q=%22Android+TV%22) | [android-tv.md](docs/android-tv.md) | [apps/android-tv](apps/android-tv/CHANGELOG.md) |
@@ -81,7 +81,7 @@ Every product has its own version, its own release and its own changelog. Pick y
 
 ## Quick start
 
-**Run the Icosahedron Server** (Docker):
+**Run the Icosahedron HUB** (Docker):
 
 ```yaml
 # docker-compose.yml

@@ -13,7 +13,7 @@
        │ + sync (WebSocket) + sync        │ + sync         │ + sync          │ + sync
        ▼                 ▼                ▼                ▼                 ▼
    ┌─────────────────────────────────────────────────────────────────────────┐
-   │ Icosahedron Server (apps/server, Node 22, Docker)                       │
+   │ Icosahedron HUB (apps/server, Node 22, Docker)                          │
    │  /sync    WebSocket hub                  /device/*  secure sign-in      │
    │  /rest /api /auth   Navidrome proxy      /share/*   public share pages  │
    │  /bpm  BPM store    /lastfm/*  Last.fm   /avatar /tour /quickconnect/*  │
@@ -25,7 +25,7 @@
 
 The engine is optional. Without it, each client talks to Navidrome directly and nothing is shared between devices.
 
-**Naming:** *Icosahedron HUB* is the project as a whole. The players keep the name *Icosahedron* (desktop app, iOS app, …). The sync server and the web app it serves are **Icosahedron Server** (Docker image `icosahedron-server`, tag `server-v…`); "the engine" in the technical pages means the same thing.
+**Naming:** *Icosahedron* is the family of players (desktop app, web app, iOS app, Android phone app, Android TV app). **Icosahedron HUB** is the server in the middle that ties them together: the sync hub, the Navidrome proxy and the web app it serves (Docker image `icosahedron-server`, tag `server-v…`). "The engine" on the technical pages means the HUB.
 
 ## Device control and the jukebox
 

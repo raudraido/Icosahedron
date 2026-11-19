@@ -12,4 +12,4 @@ Only the **latest stable release** of each product gets fixes. Update the server
 
 ## Where security matters most
 
-The Icosahedron Server can be the only thing you put on the internet in front of Navidrome. Its sign-in design (device secrets, approval from an already trusted device, recovery codes) is described in [docs/secure-sign-in.md](docs/secure-sign-in.md); reports about it are especially welcome.
+The Icosahedron HUB can be the only thing you put on the internet in front of Navidrome. Its sign-in design (device secrets, approval from an already trusted device, recovery codes) is described in [docs/secure-sign-in.md](docs/secure-sign-in.md); reports about it are especially welcome.

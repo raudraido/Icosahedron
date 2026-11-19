@@ -1,4 +1,4 @@
-// Authenticated fetch against the Icosahedron Server (apps/server): BPM store, Last.fm.
+// Authenticated fetch against the Icosahedron HUB (apps/server): BPM store, Last.fm.
 // Auth is a Subsonic token the engine replays against Navidrome; one is reused
 // for a while since a token stays valid for its salt.
 import { getEngineBase } from "./syncUrl";

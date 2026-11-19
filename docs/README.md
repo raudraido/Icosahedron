@@ -5,7 +5,7 @@
 | I want to… | Read |
 |---|---|
 | Understand what the parts are and how they fit | [architecture.md](architecture.md) |
-| Run the sync server (Icosahedron Server + web app) | [deploy-server.md](deploy-server.md) |
+| Run the sync server (Icosahedron HUB + web app) | [deploy-server.md](deploy-server.md) |
 | Sign in to a server on the internet safely | [secure-sign-in.md](secure-sign-in.md) |
 | Sign in on a TV without typing | [quick-connect.md](quick-connect.md) |
 | Turn a tablet or a spare screen into a player I control from my phone | [jukebox.md](jukebox.md) |

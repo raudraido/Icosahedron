@@ -2,7 +2,7 @@
 
 A native SwiftUI app for iPhone and iPad, designed for the phone rather than ported from the web UI. Requires **iOS 26.1 or later**.
 
-It talks to Navidrome directly, or through the [Icosahedron Server](deploy-server.md). Enter the address of either on the sign-in screen. Through the Icosahedron Server you additionally get sync between devices, Last.fm, BPM and shared settings; with plain Navidrome those parts quietly stay off.
+It talks to Navidrome directly, or through the [Icosahedron HUB](deploy-server.md). Enter the address of either on the sign-in screen. Through the Icosahedron HUB you additionally get sync between devices, Last.fm, BPM and shared settings; with plain Navidrome those parts quietly stay off.
 
 ## Install
 

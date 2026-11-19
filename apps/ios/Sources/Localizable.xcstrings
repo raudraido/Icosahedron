@@ -601,12 +601,12 @@
         }
       }
     },
-    "Not available (needs Icosahedron Server)": {
+    "Not available (needs Icosahedron HUB)": {
       "localizations": {
         "et": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pole saadaval (vajab Icosahedron Serverit)"
+            "value": "Pole saadaval (vajab Icosahedron HUB-i)"
           }
         }
       }

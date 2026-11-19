@@ -1,4 +1,4 @@
-// Keeps BPM in the Icosahedron Server so every player sees the same values. The
+// Keeps BPM in the Icosahedron HUB so every player sees the same values. The
 // engine only stores; detection stays on players that can do it (the desktop
 // app's native analyzer). A player that can't detect (browser) just reads.
 import type { Platform } from "./index";

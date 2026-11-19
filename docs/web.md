@@ -1,6 +1,6 @@
 # Web app
 
-The desktop UI in a browser, served by the Icosahedron Server ([deploy-server.md](deploy-server.md)) at its root. Sign in with your Navidrome account; the server address is the site itself, and the login is kept on the device.
+The desktop UI in a browser, served by the Icosahedron HUB ([deploy-server.md](deploy-server.md)) at its root. Sign in with your Navidrome account; the server address is the site itself, and the login is kept on the device.
 
 ## Install as an app (PWA)
 

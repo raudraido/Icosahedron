@@ -10,7 +10,7 @@ src/                   React UI (desktop and web app)
   lib/subsonic/        Subsonic client (shared)
 electron/              Electron main + preload
 native/audio-engine/   Rust audio engine (desktop)
-apps/server/           web engine (Node, Docker)
+apps/server/           Icosahedron HUB (Node, Docker)
 apps/ios/              iOS app (SwiftUI, XcodeGen)
 .github/workflows/     build.yml (desktop), ios.yml, server.yml
 scripts/               bump-version.mjs (per product), release-notes.mjs, AppStream generation
@@ -36,7 +36,7 @@ npm run build:web   # the web app, output in dist-web/
 ```
 
 ```bash
-cd apps/server && npm install && npm test    # web engine tests
+cd apps/server && npm install && npm test    # Icosahedron HUB tests
 ```
 
 The iOS app is built by CI on a macOS runner (no Mac needed): [docs/ios.md](docs/ios.md#building). The Android apps build with Android Studio or Gradle (JDK 17, Android SDK 35): [docs/android.md](docs/android.md). More: [docs/contributing.md](docs/contributing.md).

@@ -2,7 +2,7 @@ import Foundation
 import Observation
 import UIKit
 
-/// Last.fm through the web engine: it holds the API secret and the account's session key, and
+/// Last.fm through the Icosahedron HUB: it holds the API secret and the account's session key, and
 /// signs the requests, so the phone only says "connect", "scrobble this".
 @MainActor @Observable
 final class LastFmModel {

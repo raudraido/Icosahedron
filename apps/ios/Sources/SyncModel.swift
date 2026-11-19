@@ -3,7 +3,7 @@ import Observation
 import UIKit
 import UserNotifications
 
-/// Link to the Icosahedron web engine's sync hub (`/sync`): shows the user's other
+/// Link to the Icosahedron Icosahedron HUB's sync hub (`/sync`): shows the user's other
 /// devices, publishes what this phone plays, and takes remote-control commands.
 /// Same JSON protocol as the web and desktop apps (see apps/server/src/hub.mjs).
 @Observable

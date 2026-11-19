@@ -6,7 +6,7 @@ body:
     id: product
     attributes:
       label: Which product?
-      options: [All of them, Desktop app, Web app, Server (web engine), iOS app, Android phone app, Android TV app]
+      options: [All of them, Desktop app, Web app, Icosahedron HUB, iOS app, Android phone app, Android TV app]
     validations: { required: true }
   - type: textarea
     id: problem

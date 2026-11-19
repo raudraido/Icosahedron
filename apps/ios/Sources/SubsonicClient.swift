@@ -15,7 +15,7 @@ enum SubsonicError: LocalizedError {
     }
 }
 
-/// Subsonic/OpenSubsonic API (Navidrome). Requests go to the web engine's
+/// Subsonic/OpenSubsonic API (Navidrome). Requests go to the Icosahedron HUB's
 /// same-origin proxy or straight to a Navidrome server.
 final class SubsonicClient {
     let baseURL: URL
@@ -299,7 +299,7 @@ final class SubsonicClient {
         return (v?.isEmpty == false) ? v : nil
     }
 
-    /// BPM stored by the web engine (it only stores; the desktop app detects). nil when unknown
+    /// BPM stored by the Icosahedron HUB (it only stores; the desktop app detects). nil when unknown
     /// or when the server is a plain Navidrome without the engine.
     func bpm(for id: String) async -> Double? {
         guard let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
@@ -348,7 +348,7 @@ final class SubsonicClient {
 
     // MARK: Web engine (Last.fm lives there)
 
-    /// Authenticated request to the web engine (apps/server) on the same host.
+    /// Authenticated request to the Icosahedron HUB (apps/server) on the same host.
     func engine(_ method: String, _ path: String, json: [String: Any]? = nil) async throws -> (status: Int, data: Data) {
         guard let url = URL(string: baseURL.absoluteString + path) else { throw SubsonicError.badResponse }
         var comps = URLComponents()

@@ -1,6 +1,6 @@
 # iOS app
 
-A native SwiftUI app (iOS 26.1+, iPhone and iPad) for your Navidrome library, optionally synced through the web engine.
+A native SwiftUI app (iOS 26.1+, iPhone and iPad) for your Navidrome library, optionally synced through the Icosahedron HUB.
 
 - Install, features, limits, building: [docs/ios.md](../../docs/ios.md)
 - Sync and engine API: [docs/sync-protocol.md](../../docs/sync-protocol.md)

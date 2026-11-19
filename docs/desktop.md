@@ -53,7 +53,7 @@ npm run dist         # + electron-builder → dist/
 
 ## Sync with your other devices
 
-Optional; nothing changes until you set it up. You need a running web engine ([deploy-server.md](deploy-server.md)).
+Optional; nothing changes until you set it up. You need a running Icosahedron HUB ([deploy-server.md](deploy-server.md)).
 
 1. Press the **devices** button next to the cast button.
 2. Enter the engine's address, for example `https://music.example.com`.

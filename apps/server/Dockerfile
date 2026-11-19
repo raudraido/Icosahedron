@@ -1,4 +1,4 @@
-# Web engine: web UI + sync hub + Navidrome proxy in one container.
+# Icosahedron HUB: web UI + sync hub + Navidrome proxy in one container.
 # Build context is the repository root:
 #   docker build -f apps/server/Dockerfile -t icosahedron .
 

@@ -1,4 +1,4 @@
-# Deploying the web engine
+# Deploying Icosahedron HUB
 
 The engine is a single small container (Node 22). It serves the web app, keeps your devices in sync, proxies Navidrome, and stores BPM and Last.fm sessions. It is optional: see [architecture.md](architecture.md).
 

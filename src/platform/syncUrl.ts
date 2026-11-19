@@ -1,8 +1,8 @@
-// Where the web engine (apps/server) lives. In the browser build it is the page's
+// Where the Icosahedron HUB (apps/server) lives. In the browser build it is the page's
 // own origin; the desktop app has it configured by the user (DevicePicker).
 const LS_URL = "ico.syncUrl";
 
-/** http(s) base URL of the web engine, no trailing slash — or null when none is set. */
+/** http(s) base URL of the Icosahedron HUB, no trailing slash — or null when none is set. */
 export function getEngineBase(): string | null {
   if (typeof window === "undefined") return null;
   if (!window.electronAPI) return location.origin;

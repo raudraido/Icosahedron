@@ -601,12 +601,12 @@
         }
       }
     },
-    "Not available (needs the web engine)": {
+    "Not available (needs Icosahedron HUB)": {
       "localizations": {
         "et": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pole saadaval (vajab veebimootorit)"
+            "value": "Pole saadaval (vajab Icosahedron HUB-i)"
           }
         }
       }

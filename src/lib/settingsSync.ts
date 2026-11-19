@@ -1,4 +1,4 @@
-// Syncs user preferences between devices through the web engine's hub.
+// Syncs user preferences between devices through the Icosahedron HUB's hub.
 //
 // Only device-independent preferences travel (theme, EQ, Last.fm/lyrics/BPM
 // toggles, what the left panel shows, orderings and sort choices). Layout

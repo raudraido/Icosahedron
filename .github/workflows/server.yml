@@ -1,6 +1,6 @@
 name: Server
 
-# Tests the web engine and publishes its Docker image to GHCR:
+# Tests the Icosahedron HUB and publishes its Docker image to GHCR:
 #   server-vX.Y.Z-beta.N tag -> the image as X.Y.Z-beta.N and :beta (a pre-release; never :latest)
 #   server-v* tag -> ghcr.io/<owner>/icosahedron-server:X.Y.Z, :X.Y and :latest, plus a release with the changelog text
 #                    (the tag must match the version in apps/server/package.json)

@@ -1,6 +1,6 @@
 # Jukebox
 
-Turn any screen into a player that you control from your other devices: a tablet on the kitchen wall, a spare computer, a browser on a TV, a phone in a dock. The screen only plays; you pick the music on a device you are holding. It needs the [web engine](deploy-server.md), because the devices find each other through it.
+Turn any screen into a player that you control from your other devices: a tablet on the kitchen wall, a spare computer, a browser on a TV, a phone in a dock. The screen only plays; you pick the music on a device you are holding. It needs the [Icosahedron HUB](deploy-server.md), because the devices find each other through it.
 
 ## Start a jukebox in three steps
 

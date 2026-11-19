@@ -27,7 +27,8 @@ int32_t qmdsp_detect_beat_frames(
     int64_t num_samples,
     double sample_rate,
     double* out_beat_frames,
-    int32_t max_beats
+    int32_t max_beats,
+    double* out_clarity
 ) {
     if (!samples || num_samples <= 0 || sample_rate <= 0 || !out_beat_frames || max_beats <= 0) {
         return -1;
@@ -94,6 +95,25 @@ int32_t qmdsp_detect_beat_frames(
     std::vector<double> rawBeats;
     tt.calculateBeats(df_vals, beatPeriod, rawBeats);
     if (rawBeats.size() < 2) return -1;
+
+    // Clarity: how far the onset detection function rises at the beats above its overall level
+    // (mean of the peak within +-1 frame of each beat / mean of all frames; 1 = no more than
+    // anywhere else, large = beats sit on clear onsets). The caller maps it to 0..1.
+    if (out_clarity) {
+        double total = 0.0;
+        for (double v : df_vals) total += v;
+        const double meanAll = total / (double)df_vals.size();
+        double beatSum = 0.0;
+        for (double b : rawBeats) {
+            long c = (long)b;
+            double peak = 0.0;
+            for (long k = c - 1; k <= c + 1; k++)
+                if (k >= 0 && k < (long)df_vals.size()) peak = std::max(peak, df_vals[(size_t)k]);
+            beatSum += peak;
+        }
+        const double meanBeat = beatSum / (double)rawBeats.size();
+        *out_clarity = meanAll > 1e-12 ? meanBeat / meanAll : 1.0;
+    }
 
     int32_t count = 0;
     for (double b : rawBeats) {

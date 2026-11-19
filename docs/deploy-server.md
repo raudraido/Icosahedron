@@ -30,7 +30,7 @@ Images are published for `linux/amd64` and `linux/arm64`. `latest` is the newest
 
 ## BPM analysis (optional)
 
-The image contains `icosahedron-bpm`, the same BPM detection as the desktop app. An administrator starts the analysis of the whole library in **Settings → Sync Server → BPM analysis**. It needs **no extra mount and no change to your compose file**: the HUB downloads each song from Navidrome, measures it and deletes the copy. It uses the CPU cores you allow (4 songs at a time by default, low priority) for a few hours on a big library (about 2.7 h for 36,000 songs on 4 cores), plus a little temporary disk space (one song per worker, in the container's `/tmp`). `BPM_CLI` sets another path to the program (normally unset). More: [sync-settings.md](sync-settings.md#bpm-analysis).
+The image contains `icosahedron-bpm`, the same BPM detection as the desktop app. An administrator starts the analysis of the whole library in **Settings → Sync Server → BPM analysis**. It needs **no extra mount and no change to your compose file**: the HUB downloads each song from Navidrome, measures it and deletes the copy. It uses the CPU cores you allow (4 songs at a time by default, low priority) for a few hours on a big library (about 2.7 h for 36,000 songs on 4 cores), plus a little temporary disk space (one song per worker, in the container's `/tmp`). `BPM_CLI` sets another path to the program (normally unset); `BPM_SKIP_GENRES` (comma separated) replaces the genres the analysis skips (default: ambient, drone, soundtrack, score, intro, spoken word, audiobook, podcast, field recording, sound effects). More: [sync-settings.md](sync-settings.md#bpm-analysis).
 
 ## Data
 
@@ -40,6 +40,7 @@ Everything is in `DATA_DIR`:
 |---|---|
 | `<hash>.json` | One per user: play queue, position, active device, shared settings |
 | `bpm.json` | BPM values (shared by all users) |
+| `bpm-skipped.json` | Songs the library BPM analysis left out before downloading (too short, or an ambient-like genre), with the reason |
 | `bpm-failed.json` | Songs the library BPM analysis could not measure, with the reason (so they are not tried again) |
 | `lastfm.json` | Last.fm session keys, mode `600` — **protect this volume** |
 | `avatar-<hash>.bin` | A user's profile picture (set in the apps, up to 512 kB). Every signed-in user can look at anyone's (`GET /avatar/<user name>`), only the owner changes it |

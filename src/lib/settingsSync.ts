@@ -82,13 +82,19 @@ function patchStorage() {
   if (patched) return;
   patched = true;
   const set = Storage.prototype.setItem, remove = Storage.prototype.removeItem;
+  // A write that leaves the value as it was is not a change: the UI saves some of these keys again when it
+  // starts, and publishing that made every other device offer a reload.
   Storage.prototype.setItem = function (k: string, v: string) {
+    const watched = this === localStorage && KEYSET.has(k) && keyEnabled(k);
+    const before = watched ? this.getItem(k) : null;
     set.call(this, k, v);
-    if (this === localStorage && KEYSET.has(k) && keyEnabled(k)) schedulePublish();
+    if (watched && before !== String(v)) schedulePublish();
   };
   Storage.prototype.removeItem = function (k: string) {
+    const watched = this === localStorage && KEYSET.has(k) && keyEnabled(k);
+    const had = watched && this.getItem(k) !== null;
     remove.call(this, k);
-    if (this === localStorage && KEYSET.has(k) && keyEnabled(k)) schedulePublish();
+    if (watched && had) schedulePublish();
   };
 }
 

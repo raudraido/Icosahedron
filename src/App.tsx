@@ -13,6 +13,7 @@ import { Starred } from "./screens/Starred";
 import { Downloads } from "./screens/Downloads";
 import { platform } from "./platform";
 import { useDownloads } from "./lib/downloads";
+import { mergeNavOrder } from "./lib/navOrder";
 import { Placeholder } from "./screens/Placeholder";
 import { MixBuilder } from "./screens/MixBuilder";
 import { NowPlaying } from "./screens/NowPlaying";
@@ -212,7 +213,13 @@ function DesktopApp() {
 
   const [navOrder, setNavOrder] = useState<Tab[]>(loadNavOrder);
   const [dragTab, setDragTab] = useState<Tab | null>(null);
-  useEffect(() => { saveJSON(LS_NAV_ORDER, navOrder); }, [navOrder]);
+  // Keep the ids of tabs this platform does not have (Downloads exists only on the desktop) where they were, and
+  // write nothing when the order did not change: the order is synced, and a web app that dropped Downloads and a
+  // desktop app that put it back undid each other for ever.
+  useEffect(() => {
+    const merged = mergeNavOrder(loadJSON<unknown>(LS_NAV_ORDER, null), navOrder);
+    if (JSON.stringify(merged) !== JSON.stringify(loadJSON<unknown>(LS_NAV_ORDER, null))) saveJSON(LS_NAV_ORDER, merged);
+  }, [navOrder]);
 
   // Icon-only compact mode — matches the old app's _update_tab_mode: switches
   // when the tab bar's full-label width no longer fits the header, using the

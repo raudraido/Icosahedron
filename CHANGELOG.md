@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+- **"Settings changed on another device" no longer comes back after every reload:** the desktop app and the web app have different tabs (Downloads is desktop only), and the web app dropped Downloads from the shared tab order while the desktop put it back, so each undid the other for ever. The tab order now keeps the tabs a platform does not have where they are, and saving a synced preference with the value it already has no longer counts as a change.
+
 ## 0.21.0
 - **Mix Builder** (the tab was a placeholder): quick starts (**Play 500 random** with every song the same chance, **Lucky mix** from your most played artists, Workout / Focus / Party / Throwback / Fresh finds / *Because I played …*), a **Start with** box for artists, songs, genres and decades, dials for years, genres, favourites, not played yet and familiar or new, and a live mix where you keep, swap, remove or drag songs. Play it, add it to the queue or save it as a playlist (named for you). *Start a Mix from this* in the song menu. **Leave out…** skips audiobooks and spoken word and the genres you choose, in every start. The last state is remembered. Songs are not picked by BPM yet.
 - The sync server is called **Icosahedron HUB** everywhere (it was "the web engine"): the address field in the devices popover and in *Settings → Sync Server*.

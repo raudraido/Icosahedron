@@ -131,6 +131,10 @@ All need the `Authorization` header unless noted.
 | `GET /bpm/<id>` | `{ "bpm": n }` or 404 |
 | `PUT /bpm/<id>` | Body `{bpm, manual?}`; 20 ≤ bpm ≤ 400. A `manual` value is not overwritten by a detected one (422) |
 | `POST /bpm` | Bulk upload `{ "<id>": bpm, … }` of detected values → `{stored: n}` |
+| `POST /bpm/analyze` | Administrators only. Starts the library analysis ([sync-settings.md](sync-settings.md#bpm-analysis)). Body `{workers?: 1-8 (default 4), retryFailed?: bool}` → 202 and the status; 409 if one runs; 503 `analyser_missing`; 403 for others |
+| `GET /bpm/analyze` | Administrators only. `{state: idle\|running\|stopping, phase, analysed, failed, skipped, total, remaining, etaSeconds, startedAt, finishedAt, workers, lastError, withBpm, libraryTotal, failedTotal}` |
+| `DELETE /bpm/analyze` | Administrators only. Stops the job → `{stopped}` |
+| `GET /bpm/analyze/failed` | Administrators only. `[{id, reason, at}]`, the songs that are not tried again unless `retryFailed` |
 | `GET /lastfm/config` | `{configured, apiKey}` |
 | `GET/DELETE /lastfm/connection` | The user's Last.fm connection (`{username, historyEnabled, scrobbleEnabled}` or `null`) / disconnect |
 | `POST /lastfm/token` | Start connecting: `{token, authUrl}` — open `authUrl` in a browser |

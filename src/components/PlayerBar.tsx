@@ -154,7 +154,7 @@ export function PlayerBar() {
     return () => { cancelled = true; };
   }, [remote, track?.id]);
 
-  // On-device BPM detection (native QM-DSP, native/audio-engine/src/bpm.rs) —
+  // On-device BPM detection (native QM-DSP, native/bpm-core/src/lib.rs) —
   // ported from the old app's BPMWorker/bpm_cache.json. Results live in the
   // global store's bpmCache (keyed by track id), not local state, so once a
   // track's been detected here, TrackTable/TrackInfoDialog show the same

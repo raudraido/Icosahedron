@@ -1,0 +1,10 @@
+[package]
+name = "icosahedron_bpm_core"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+description = "BPM detection shared by the desktop audio engine and the Icosahedron HUB analyser (QM-DSP beat tracker + Mixxx-style post-processing)"
+publish = false
+
+[build-dependencies]
+cc = "1"

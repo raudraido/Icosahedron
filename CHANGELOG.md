@@ -2,6 +2,7 @@
 
 ## Unreleased
 - The sync server is called **Icosahedron HUB** everywhere (it was "the web engine"): the address field in the devices popover and in *Settings → Sync Server*.
+- **Settings → Sync Server → BPM analysis (server administrators):** shows how many songs have a BPM, and starts, follows (progress and time left) and stops the Icosahedron HUB measuring the BPM of the whole library in the background. Songs that already have a BPM are never measured again or changed. Needs a server with the analysis (hidden otherwise). The detection code moved into the shared crate `native/bpm-core`; the desktop's own detection behaves as before.
 
 ## 0.20.2
 - **Jukebox is easy to find and to start (desktop and web app):** *Settings → Sync Server → Jukebox* shows the address of the player page (`/?player=1` of your server) with a **Copy address** button, a **QR code** and the three steps. A guide: [docs/jukebox.md](docs/jukebox.md).

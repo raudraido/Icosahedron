@@ -1,4 +1,4 @@
-//! Downloads a track in full and runs BPM detection over it (bpm.rs). Unlike
+//! Downloads a track in full and runs BPM detection over it (the icosahedron_bpm_core crate). Unlike
 //! playback (commands.rs/play_input.rs), this needs no ranged-HTTP streaming,
 //! seeking, or gapless trim — just the whole decoded signal once — so it's a
 //! plain, self-contained download+decode path rather than reusing the
@@ -27,7 +27,7 @@ pub(crate) async fn analyze_bpm(state: &AudioEngine, url: String) -> Result<f64,
     let sample_rate = decoder.sample_rate().get();
     let samples: Vec<f32> = decoder.collect();
 
-    crate::bpm::detect_bpm(&samples, channels, sample_rate)
+    icosahedron_bpm_core::detect_bpm(&samples, channels, sample_rate)
         .map(|bpm| bpm as f64)
         .ok_or_else(|| "BPM detection failed (track too short/quiet, or no clear tempo)".to_string())
 }

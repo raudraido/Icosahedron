@@ -8,6 +8,7 @@ import { Section, ToggleRow } from "./SettingsParts";
 import { SecureSignInSection } from "./SecureSignIn";
 import { QrCode } from "../components/QrCode";
 import { jukeboxUrl, JUKEBOX_DOCS } from "../lib/jukebox";
+import { bpmAnalysisStatus, startBpmAnalysis, stopBpmAnalysis, formatEta, type BpmAnalysisStatus, type BpmAnalysisStart } from "../lib/bpmAnalysis";
 
 // Settings > Sync Server: the connection, this player's name, the players the
 // engine knows, what this player keeps in sync and what the engine stores.
@@ -164,6 +165,87 @@ function QuickConnectSection() {
   );
 }
 
+const START_ERRORS: Partial<Record<BpmAnalysisStart, string>> = {
+  running: "An analysis is already running.",
+  analyser_missing: "This Icosahedron HUB has no analyser program (it is part of the HUB's Docker image from the version that added this section).",
+  refused: "Only a server administrator can do this.",
+  offline: "The Icosahedron HUB is not reachable.",
+  error: "Something went wrong.",
+};
+
+/** Measures the BPM of every song that has none, on the Icosahedron HUB (docs/sync-settings.md). Administrators only. */
+function BpmAnalysisSection() {
+  const [st, setSt] = useState<BpmAnalysisStatus | null>(null);
+  const [workers, setWorkers] = useState(4);
+  const [msg, setMsg] = useState<string | null>(null);
+  const active = st?.state === "running" || st?.state === "stopping";
+  useEffect(() => { void bpmAnalysisStatus().then(setSt); }, []);
+  useEffect(() => {
+    if (!active) return;
+    const t = setInterval(() => { void bpmAnalysisStatus().then((n) => n && setSt(n)); }, 2000);
+    return () => clearInterval(t);
+  }, [active]);
+  if (!st) return null; // not an administrator, or an older HUB
+  const fmt = (n: number) => n.toLocaleString();
+  const start = async (retryFailed: boolean) => {
+    setMsg(null);
+    const r = await startBpmAnalysis(workers, retryFailed);
+    if (r !== "ok") setMsg(START_ERRORS[r] ?? "Something went wrong.");
+    const n = await bpmAnalysisStatus();
+    if (n) setSt(n);
+  };
+  const done = st.analysed + st.failed + st.skipped;
+  return (
+    <Section title="BPM analysis">
+      <div style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
+        {st.libraryTotal ? `${fmt(st.withBpm)} of ${fmt(st.libraryTotal)} songs have a BPM.` : `${fmt(st.withBpm)} songs have a BPM.`}
+        {" "}The Icosahedron HUB can measure the rest in the background, with the same detection the desktop app uses, so every player shows it.
+        Songs that already have a BPM, measured or set by hand, are never measured again or changed.
+      </div>
+      {!active ? (
+        <>
+          <div className="flex items-center" style={{ gap: 8, flexWrap: "wrap" }}>
+            <label style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }} htmlFor="bpm-workers">Songs at a time</label>
+            <select id="bpm-workers" value={workers} onChange={(e) => setWorkers(Number(e.target.value))} style={input}>
+              {[1, 2, 4, 6, 8].map((n) => <option key={n} value={n}>{n}{n === 4 ? " (default)" : ""}</option>)}
+            </select>
+            <button style={button} onClick={() => void start(false)}>Start analysis</button>
+            {st.failedTotal > 0 && <button style={button} onClick={() => void start(true)}>Try the {fmt(st.failedTotal)} failed again</button>}
+          </div>
+          {st.finishedAt && st.startedAt && (
+            <div style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
+              Last run {ago(st.finishedAt)}: {fmt(st.analysed)} measured, {fmt(st.failed)} failed{st.skipped ? `, ${fmt(st.skipped)} got a value meanwhile` : ""}.
+              {st.lastError ? ` ${st.lastError}` : ""}
+            </div>
+          )}
+          {st.failedTotal > 0 && (
+            <div style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
+              {fmt(st.failedTotal)} songs could not be measured (no clear tempo, or a file that cannot be read). They are not tried again unless you ask.
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <div style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)" }}>
+            {st.state === "stopping" ? "Stopping…" : st.phase === "listing" ? "Reading the library…" : `${fmt(Math.min(done, st.total))} of ${fmt(st.total)} songs done`}
+            {st.state === "running" && st.etaSeconds !== null ? `, ${formatEta(st.etaSeconds)} left` : ""}
+          </div>
+          {st.total > 0 && (
+            <div style={{ height: 6, borderRadius: 3, background: "var(--border)", overflow: "hidden" }}>
+              <div style={{ width: `${Math.min(100, (done / st.total) * 100)}%`, height: "100%", background: "var(--accent)" }} />
+            </div>
+          )}
+          <div style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
+            {fmt(st.analysed)} measured{st.failed ? `, ${fmt(st.failed)} failed` : ""}. Running with {st.workers} at a time, at low priority.
+          </div>
+          <div><button style={button} disabled={st.state === "stopping"} onClick={async () => { await stopBpmAnalysis(); const n = await bpmAnalysisStatus(); if (n) setSt(n); }}>Stop</button></div>
+        </>
+      )}
+      {msg && <div style={{ fontSize: "var(--fs-small)", color: "var(--error)" }}>{msg}</div>}
+    </Section>
+  );
+}
+
 function ClearButton({ label, onConfirm }: { label: string; onConfirm: () => void }) {
   const [armed, setArmed] = useState(false);
   return (
@@ -257,6 +339,8 @@ export function SyncServerTab() {
               />
             )}
           </Section>
+
+          <BpmAnalysisSection />
 
           <QuickConnectSection />
 

@@ -2,9 +2,9 @@ import { mkdirSync, readFileSync, writeFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
 
 // Shared BPM store. BPM is a property of the track, not of the user, so one
-// map serves every account on this Navidrome. The server never detects BPM —
-// players that can (desktop, native analyzer) upload what they measure, and
-// every other player just reads it.
+// map serves every account on this Navidrome. The store itself never detects BPM —
+// players that can (desktop, native analyzer) upload what they measure, the
+// library analysis (bpm-analyzer.mjs) fills the gaps, and every other player just reads it.
 //   entry: {bpm:number, manual:boolean}   manual = user-corrected, wins over detected
 export function createBpmStore(dir) {
   let map = {};
@@ -22,6 +22,18 @@ export function createBpmStore(dir) {
   const valid = (v) => typeof v === "number" && Number.isFinite(v) && v >= 20 && v <= 400;
   return {
     get: (id) => map[id]?.bpm,
+    /** Whether the track has a value (detected or manual). */
+    has: (id) => map[id] !== undefined,
+    size: () => Object.keys(map).length,
+    /**
+     * Stores a detected value only if the track still has none. The library analysis writes through
+     * this, so a value that another player uploaded while the job ran is never replaced.
+     * @returns {boolean} whether it was stored
+     */
+    setIfAbsent(id, bpm) {
+      if (map[id] !== undefined) return false;
+      return this.set(id, bpm, false);
+    },
     all: () => Object.fromEntries(Object.entries(map).map(([k, v]) => [k, v.bpm])),
     /** @returns {boolean} whether the value was stored */
     set(id, bpm, manual) {

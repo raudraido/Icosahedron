@@ -18,6 +18,8 @@ futures-util = "0.3"
 rodio = { version = "0.22", default-features = false, features = ["playback", "symphonia-all"] }
 symphonia = { version = "0.5", default-features = false, features = ["flac", "mp3", "pcm", "aac", "alac", "isomp4", "vorbis", "ogg", "wav"] }
 thread-priority = "1"
+# BPM detection (QM-DSP and its post-processing), shared with the Icosahedron HUB analyser.
+icosahedron_bpm_core = { path = "../bpm-core" }
 # AirPlay 2 sender (https://github.com/lmcgartland/airplay2-rs, GPL-3.0-or-later).
 # Pinned to a commit of our fork (branch `icosahedron`): upstream master plus the
 # changes proposed upstream that this player needs — stream restarts on one
@@ -35,4 +37,3 @@ libc = "0.2"
 
 [build-dependencies]
 napi-build = "2"
-cc = "1"

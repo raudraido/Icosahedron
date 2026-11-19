@@ -18,9 +18,25 @@ WORKDIR /app
 COPY apps/server/package.json apps/server/package-lock.json ./
 RUN npm ci --omit=dev
 
+# The BPM analyser (native/bpm-cli): the same QM-DSP detection the desktop app uses, as a small
+# command line program the HUB runs on songs it fetches from Navidrome. Built for the image's own
+# architecture (musl, like the final alpine image), so under QEMU for linux/arm64. Only the two
+# crates it needs are copied, so a change elsewhere in the repository does not rebuild it.
+FROM rust:1-alpine AS bpm
+RUN apk add --no-cache build-base
+WORKDIR /src
+COPY native/bpm-core native/bpm-core
+COPY native/bpm-cli native/bpm-cli
+WORKDIR /src/native/bpm-cli
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/src/native/bpm-cli/target \
+    cargo build --release --locked \
+ && cp target/release/icosahedron-bpm /icosahedron-bpm
+
 FROM node:22-alpine
 WORKDIR /app
 ENV NODE_ENV=production PORT=8080 DATA_DIR=/data WEB_ROOT=/app/web
+COPY --from=bpm /icosahedron-bpm /usr/local/bin/icosahedron-bpm
 COPY --from=deps /app/node_modules ./node_modules
 COPY apps/server/package.json ./
 COPY apps/server/src ./src

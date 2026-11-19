@@ -505,10 +505,12 @@ export class SubsonicClient {
    *  multi-value again without confirming the server actually supports it. */
   async getTracksNativePage(
     sortBy: string, order: "ASC" | "DESC", start: number, end: number, query?: string,
-    filters?: { artistIds?: string[]; albumIds?: string[]; genreIds?: string[]; year?: string; starred?: boolean },
+    filters?: { artistIds?: string[]; albumIds?: string[]; genreIds?: string[]; year?: string; starred?: boolean; ids?: string[] },
   ): Promise<{ tracks: Track[]; total: number }> {
     await this.authenticateNative();
     const params = new URLSearchParams({ _start: String(start), _end: String(end), _sort: sortBy, _order: order });
+    // `id` repeated = songs with exactly these ids (the Mix Builder loads the songs of a BPM range this way).
+    if (filters?.ids) for (const id of filters.ids) params.append("id", id);
     // Despite the param name, Navidrome resolves `title` as a combined
     // search across title/artist/album server-side (not a literal
     // title-only column match) — same behavior Feishin relies on for its

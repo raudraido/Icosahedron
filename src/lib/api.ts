@@ -146,6 +146,8 @@ export interface TrackFilters {
   genreIds?: string[];
   year?: string;
   starred?: boolean;
+  /** Only songs with these ids (Navidrome's `id` list filter). */
+  ids?: string[];
 }
 
 export interface LyricsSearchResult {

@@ -5,11 +5,14 @@ import { useStore } from "../store";
 import { CoverArt } from "../components/CoverArt";
 import { loadJSON, saveJSON } from "../components/TrackTable";
 import { loadPool } from "../lib/mixPool";
+import { bpmAnalysisStatus } from "../lib/bpmAnalysis";
 import {
-  addSeed, autoName, bpmCoverage, BPM_MIN_COVERAGE, buildMix, countMatches, defaultSettings, fmtLength,
-  genreSeeds, hiddenCount, isStarted, localSuggestions, MAX_VISIBLE_ROWS, poolKey, presetSettings, reasonLine,
-  removeSeed, setYears, SIZES, snapSize, swapCandidate, toggleGenre, toggleSkipGenre, topArtists, totalSeconds, YEAR_MIN,
-  type MixItem, type MixSeed, type MixSettings, type PoolItem, type PresetId, type SeedSuggestion,
+  addSeed, autoName, binInRange, bpmActive, bpmAvailable, bpmAxis, bpmCoverage, BPM_MAX, BPM_MIN, bpmFraction, bpmHistogram, bpmOf,
+  buildFlowMix, buildMix, countMatches, coveragePercent, defaultSettings, FLOW_PRESETS, fmtLength,
+  genreSeeds, hiddenCount, isStarted, joinBpm, localSuggestions, MAX_VISIBLE_ROWS, mixBpmStats, normalizeBpmRange, poolKey,
+  presetSettings, reasonLine, removeSeed, sanitizeCurve, setBpmRange, setYears, SIZES, snapSize, swapCandidate, targetBpm,
+  toggleGenre, toggleSkipGenre, topArtists, totalSeconds, YEAR_MIN,
+  type FlowPresetId, type MixItem, type MixSeed, type MixSettings, type PoolItem, type PresetId, type SeedSuggestion,
 } from "../lib/mixBuilder";
 
 // Mix Builder: say what you want, work on a ready proposal, keep or swap what you like.
@@ -25,6 +28,10 @@ function loadLeaveOut(): LeaveOut {
   const l = loadJSON<LeaveOut>(LS_LEAVE_OUT, { skipSpoken: true, skipGenres: [] });
   return { skipSpoken: l.skipSpoken !== false, skipGenres: Array.isArray(l.skipGenres) ? l.skipGenres.filter((g) => typeof g === "string") : [] };
 }
+/** Dev override: `localStorage.mix_builder_force_bpm = "1"` shows the BPM dial and Flow whatever the coverage is. */
+function forceBpm(): boolean {
+  try { return localStorage.getItem("mix_builder_force_bpm") === "1"; } catch { return false; }
+}
 const SAVE_BATCH = 200; // songs per "add to playlist" call, so a 1000-song mix is never one huge request
 
 interface Saved { settings: MixSettings; kept: MixItem[] }
@@ -38,6 +45,9 @@ function loadSaved(): Saved {
     seeds: Array.isArray(raw.seeds) ? raw.seeds : [],
     years: Array.isArray(raw.years) && raw.years.length === 2 ? [Number(raw.years[0]), Number(raw.years[1])] : null,
     size: snapSize(Number(raw.size ?? def.size)),
+    bpm: normalizeBpmRange(Array.isArray(raw.bpm) ? raw.bpm : null),
+    flow: raw.flow === true,
+    curve: sanitizeCurve(raw.curve),
   };
   const kept = Array.isArray(s.kept) ? s.kept.filter((m) => m?.track?.id && m.locked) : [];
   return { settings, kept };
@@ -191,8 +201,32 @@ export function MixBuilder() {
   const [leaveOpen, setLeaveOpen] = useState(false);
   useEffect(() => { saveJSON(LS_LEAVE_OUT, leaveOut); }, [leaveOut]);
   // What every start and every pool respects: the dials plus what is left out.
-  const full = useMemo<MixSettings>(() => ({ ...settings, ...leaveOut }), [settings, leaveOut]);
+  // BPM: the whole library's id -> BPM map (the HUB's shared store, or this computer's cache without a HUB), the
+  // library's song count, and from those the coverage that decides whether the BPM dial and Flow show.
+  const bpmQ = useQuery({ queryKey: ["mixBpmMap"], queryFn: () => api.getBpmCacheAll(), staleTime: 2 * 60_000 });
+  const totalQ = useQuery({
+    queryKey: ["mixLibraryTotal"], staleTime: 30 * 60_000,
+    queryFn: async () => {
+      const n = await api.getTracksNativePage("title", "ASC", 0, 1).then((r) => r.total).catch(() => 0);
+      if (n > 0) return n;
+      return (await api.getScanStatus().catch(() => null))?.count || null;
+    },
+  });
+  const bpmMap = bpmQ.data;
+  const bpmCount = useMemo(() => { let n = 0; if (bpmMap) for (const k in bpmMap) if (bpmMap[k] > 0) n++; return n; }, [bpmMap]);
+  const coverage = bpmCoverage(bpmCount, totalQ.data);
+  const force = useMemo(forceBpm, []);
+  const bpmReady = bpmQ.isFetched && totalQ.isFetched; // answered or failed: either way we know what there is
+  const showBpm = bpmReady && bpmAvailable(coverage, force);
+  // What every start and every pool respects: the dials plus what is left out. Without BPM the BPM dial and Flow are off.
+  const full = useMemo<MixSettings>(
+    () => ({ ...settings, ...leaveOut, ...(bpmReady && !showBpm ? { bpm: null, flow: false } : {}) }),
+    [settings, leaveOut, bpmReady, showBpm],
+  );
   const dSettings = useDebounced(full, 250);
+  const usesBpm = (bpmActive(dSettings) || !!dSettings.flow) && !dSettings.pure;
+  // A saved BPM range or Flow waits for the BPM data (a moment) instead of building a mix without it.
+  const waitsForBpm = usesBpm && !bpmReady;
 
   // What the server is asked for: the library's genres (with counts) and the pool for the current seeds/dials.
   const genresQ = useQuery({ queryKey: ["mixGenres"], queryFn: () => api.getGenres(), staleTime: 10 * 60_000 });
@@ -203,26 +237,35 @@ export function MixBuilder() {
     queryFn: async () => topArtists(await api.getAlbumList("recent", 10, 0).catch(() => []), 1)[0] ?? null,
   });
   const poolQ = useQuery({
-    queryKey: ["mixPool", poolKey(dSettings), dSettings.pure ? nonce : 0],
-    queryFn: ({ signal }) => loadPool(dSettings, () => signal.aborted),
-    enabled: isStarted(dSettings),
+    // A BPM range loads the songs of that range, so the key has the range (poolKey) and roughly how much BPM data
+    // there is (the analysis keeps adding to it).
+    queryKey: ["mixPool", poolKey(dSettings), dSettings.pure ? nonce : 0, bpmActive(dSettings) ? Math.floor(bpmCount / 1000) : 0],
+    queryFn: ({ signal }) => loadPool(dSettings, () => signal.aborted, bpmMap),
+    enabled: isStarted(dSettings) && !waitsForBpm,
     placeholderData: keepPreviousData,
     staleTime: 5 * 60_000,
   });
-  const pool: PoolItem[] = poolQ.data?.items ?? [];
+  // The candidates with their BPM (only when the BPM matters: the mix is not reshuffled when the map arrives late).
+  const pool: PoolItem[] = useMemo(() => {
+    const items = poolQ.data?.items ?? [];
+    return usesBpm ? joinBpm(items, bpmMap) : items;
+  }, [poolQ.data, bpmMap, usesBpm]);
   const stale = poolQ.isPlaceholderData || (started && dSettings !== full);
 
   // Builds the mix whenever the pool, the dials or Re-roll change: kept songs stay, the rest is picked again.
   const mixRef = useRef(mix);
   mixRef.current = mix;
   useEffect(() => {
-    if (!isStarted(dSettings) || !poolQ.data || poolQ.isPlaceholderData) return;
-    const kept = mixRef.current.filter((m) => m.locked);
-    const { mix: next } = buildMix(poolQ.data.items, dSettings, kept);
+    if (!isStarted(dSettings) || !poolQ.data || poolQ.isPlaceholderData || waitsForBpm) return;
+    const current = usesBpm ? joinBpm(mixRef.current, bpmMap) : mixRef.current;
+    // Flow: the kept songs keep the slot they are in. Otherwise they go on top.
+    const { mix: next } = dSettings.flow && !dSettings.pure
+      ? buildFlowMix(pool, dSettings, current)
+      : buildMix(pool, dSettings, current.filter((m) => m.locked));
     setMix(next);
     if (autoPlay.current && next.length) { autoPlay.current = false; playAll(next); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [poolQ.data, poolQ.isPlaceholderData, dSettings, nonce]);
+  }, [pool, poolQ.isPlaceholderData, dSettings, nonce, waitsForBpm]);
 
   const matches = useMemo(() => (stale ? 0 : countMatches(pool, dSettings)), [pool, dSettings, stale]);
   const capped = !!poolQ.data?.capped;
@@ -308,7 +351,7 @@ export function MixBuilder() {
       } finally { setBusy(null); }
       return;
     }
-    setSettings(presetSettings(kind, genres));
+    setSettings(presetSettings(kind, genres, undefined, showBpm));
   }
 
   // ── the list ──
@@ -323,7 +366,10 @@ export function MixBuilder() {
       say(`More like ${t.artist}: added as a seed`);
       return;
     }
-    const next = swapCandidate(pool, dSettings, mix);
+    // With Flow the new song should have about the BPM of the one it replaces (or the curve's BPM there).
+    const flowOn = !!dSettings.flow && !dSettings.pure;
+    const around = flowOn ? bpmOf(joinBpm([m], bpmMap)[0].track) ?? targetBpm(dSettings, mix.length > 1 ? i / (mix.length - 1) : 0) : undefined;
+    const next = swapCandidate(pool, dSettings, mix, Math.random, around);
     if (!next) { say("No other song fits right now."); return; }
     setMix((l) => l.map((x, j) => (j === i ? next : x)));
   }
@@ -332,8 +378,12 @@ export function MixBuilder() {
     dragFrom.current = null;
     setDragOver(null);
     if (from === null || from === to) return;
-    setMix((l) => { const c = [...l]; const [it] = c.splice(from, 1); c.splice(to, 0, it); return c; });
+    // With Flow a song that was dragged is kept, so it stays where it was put when the mix is built again.
+    const pin = !!settings.flow && showBpm;
+    setMix((l) => { const c = [...l]; const [it] = c.splice(from, 1); c.splice(to, 0, pin ? { ...it, locked: true } : it); return c; });
   }
+  function setFlow(on: boolean) { setSettings((s) => ({ ...s, flow: on, curve: sanitizeCurve(s.curve), pure: false })); }
+  function setCurve(curve: number[]) { setSettings((s) => ({ ...s, curve, pure: false })); }
 
   const thisYear = new Date().getFullYear();
   const years = settings.years ?? [YEAR_MIN, thisYear];
@@ -344,15 +394,25 @@ export function MixBuilder() {
     const extra = sorted.filter((g) => picked.has(g.name.toLowerCase()) && !top.includes(g));
     return [...top, ...extra];
   }, [genres, settings, allGenres]);
-  const showBpm = bpmCoverage() >= BPM_MIN_COVERAGE; // BPM EXTENSION POINT: the BPM dial and Flow come in when this is true
-
-  const visible = mix.slice(0, MAX_VISIBLE_ROWS);
-  const loading = started && (poolQ.isFetching || stale);
+  const flowOn = showBpm && !!settings.flow && !settings.pure;
+  const bpmRange = bpmActive(settings) ? settings.bpm! : null;
+  const histogram = useMemo(() => bpmHistogram(bpmMap ? Object.values(bpmMap) : []), [bpmMap]);
+  // The mix with the BPM of each song (the kept songs from an earlier visit have none until now).
+  const shown = useMemo(() => (showBpm ? joinBpm(mix, bpmMap) : mix), [mix, bpmMap, showBpm]);
+  const stats = useMemo(() => mixBpmStats(shown), [shown]);
+  const axis = bpmAxis(full);
+  const visible = shown.slice(0, MAX_VISIBLE_ROWS);
+  const loading = (started && (poolQ.isFetching || stale)) || waitsForBpm;
+  // Is it an administrator of a HUB that has the analysis? Only then the "analyse" hint makes sense.
+  const adminQ = useQuery({ queryKey: ["mixBpmAdmin"], queryFn: () => bpmAnalysisStatus(), enabled: bpmReady && !showBpm, staleTime: 5 * 60_000 });
+  const navigateTo = useStore((s) => s.navigateTo);
 
   return (
     <div className="flex flex-col h-full" style={{ minHeight: 0 }}>
       <style>{`
         .mb-row { display: grid; grid-template-columns: 26px 44px minmax(0,1fr) 54px auto; gap: 12px; align-items: center; padding: 6px 8px; border-radius: 10px; border: 1px solid transparent; }
+        .mb-row.withbpm { grid-template-columns: 26px 44px minmax(0,1fr) 62px 54px auto; }
+        @media (max-width: 640px) { .mb-row.withbpm { grid-template-columns: 26px 44px minmax(0,1fr) 62px auto; } .mb-row.withbpm .mb-dur { display: none; } }
         .mb-row:hover { background: var(--hover-bg); }
         .mb-row.kept { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
         .mb-row.over { border-color: var(--accent); }
@@ -406,7 +466,28 @@ export function MixBuilder() {
               <Dial title="Years" value={settings.years ? `${years[0]}–${years[1]}` : "any"}>
                 <RangeSlider min={YEAR_MIN} max={thisYear} value={years} label="Years" onChange={(v) => setSettings((s) => setYears({ ...s, pure: false }, v[0] <= YEAR_MIN && v[1] >= thisYear ? null : v))} />
               </Dial>
-              {showBpm && null /* BPM EXTENSION POINT: the BPM dial (histogram + range) goes here, see bpmCoverage() */}
+              {showBpm && (
+                <Dial title="BPM" value={bpmRange ? `${bpmRange[0]}–${bpmRange[1]}` : "any"}>
+                  <div className="flex items-end" style={{ gap: 2, height: 54 }} aria-hidden="true">
+                    {histogram.map((n, i) => (
+                      <span
+                        key={i} title={`${BPM_MIN + i * 4}–${BPM_MIN + i * 4 + 3} BPM: ${num(n)}`}
+                        style={{ flex: 1, minHeight: 2, height: `${Math.max(4, (n / Math.max(1, ...histogram)) * 100)}%`, borderRadius: "2px 2px 0 0", background: binInRange(i, bpmRange) ? "var(--accent)" : "var(--border)", opacity: binInRange(i, bpmRange) ? 0.85 : 1 }}
+                      />
+                    ))}
+                  </div>
+                  <RangeSlider min={BPM_MIN} max={BPM_MAX} value={bpmRange ?? [BPM_MIN, BPM_MAX]} label="BPM" onChange={(v) => setSettings((s) => setBpmRange(s, v))} />
+                  {bpmRange && <div style={{ color: "var(--text-secondary)", opacity: 0.8, fontSize: "var(--fs-small)" }}>Songs without a BPM are left out while the range is narrower than {BPM_MIN}–{BPM_MAX}.</div>}
+                </Dial>
+              )}
+              {bpmReady && !showBpm && totalQ.data && (bpmCount > 0 || !!adminQ.data) && (
+                <div style={{ color: "var(--text-primary)", opacity: 0.7, fontSize: "var(--fs-small)" }}>
+                  BPM is known for {coveragePercent(coverage)}% of your library.
+                  {adminQ.data && (
+                    <> Analyse it in <button onClick={() => navigateTo({ tab: "settings", settingsTab: "sync" })} style={{ background: "transparent", border: 0, padding: 0, cursor: "pointer", color: "var(--accent)", font: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }}>Settings → Sync Server</button>.</>
+                  )}
+                </div>
+              )}
               <Dial title="Genres">
                 <div className="flex flex-wrap" style={{ gap: 6 }}>
                   {shownGenres.map((g) => (
@@ -430,10 +511,22 @@ export function MixBuilder() {
             <main style={{ background: "var(--card-bg)", border: "1px solid var(--border)", borderRadius: 14, padding: 14, display: "grid", gap: 10, minWidth: 0 }}>
               <div className="flex items-center flex-wrap" style={{ gap: 10 }}>
                 <span style={{ flex: 1, fontSize: "var(--fs-small)", fontWeight: "var(--fw-emphasis)", letterSpacing: ".08em", textTransform: "uppercase", color: "var(--text-primary)", opacity: 0.7 }}>Your mix</span>
-                {showBpm && null /* BPM EXTENSION POINT: the Flow button (a BPM curve for the mix) goes here */}
+                {showBpm && <Chip on={flowOn} onClick={() => setFlow(!settings.flow)} title="Shape the mix by BPM: draw how the energy should rise and fall">Flow</Chip>}
                 <Pill onClick={() => { setNonce((n) => n + 1); say("Re-rolled the songs you did not keep"); }} disabled={!started}>Re-roll unlocked</Pill>
                 <Pill onClick={clearAll} disabled={!started && !mix.length}>Clear</Pill>
               </div>
+
+              {flowOn && (
+                <FlowEditor
+                  curve={sanitizeCurve(settings.curve)} axis={axis} onCommit={setCurve}
+                  actual={shown.map((m) => bpmFraction(full, bpmOf(m.track)))}
+                />
+              )}
+              {flowOn && started && !loading && mix.length > 0 && mix.length < settings.size && (
+                <div style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
+                  Only {num(mix.length)} songs with a BPM fit. Widen the BPM range or the other dials for a longer mix.
+                </div>
+              )}
 
               {!started && (
                 <div style={{ color: "var(--text-secondary)", textAlign: "center", padding: "40px 10px", fontSize: "var(--fs-secondary)" }}>
@@ -454,7 +547,7 @@ export function MixBuilder() {
               <div style={{ display: "grid", gap: 2, opacity: loading && mix.length ? 0.6 : 1 }}>
                 {visible.map((m, i) => (
                   <MixRow
-                    key={m.track.id} item={m} index={i} over={dragOver === i}
+                    key={m.track.id} item={m} index={i} over={dragOver === i} showBpm={showBpm}
                     onAct={(w) => act(i, w)}
                     onDragStart={() => { dragFrom.current = i; }}
                     onDragOver={() => setDragOver(i)}
@@ -478,7 +571,8 @@ export function MixBuilder() {
         <div style={{ maxWidth: 1240, margin: "0 auto", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 16 }}>
           <Stat value={num(mix.length)} label="songs" />
           <Stat value={fmtLength(totalSeconds(mix))} label="length" />
-          {/* BPM EXTENSION POINT: average BPM goes here once showBpm */}
+          {showBpm && stats.avg !== null && <Stat value={String(Math.round(stats.avg))} label="avg BPM" />}
+          {showBpm && stats.series.length > 1 && <BpmSpark series={stats.series} axis={axis} />}
           <div style={{ marginLeft: "auto", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             {toast && <span role="status" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-secondary)", maxWidth: 360 }}>{toast}</span>}
             <Pill onClick={queueAll} disabled={!mix.length}>Add to queue</Pill>
@@ -546,15 +640,101 @@ function Stat({ value, label }: { value: string; label: string }) {
   );
 }
 
-function MixRow({ item, index, over, onAct, onDragStart, onDragOver, onDragLeave, onDrop }: {
-  item: MixItem; index: number; over: boolean;
+/** Flow's curve editor: five points to drag (up = faster), presets, and a dashed line with the mix's real BPM. */
+const FLOW_W = 400, FLOW_H = 110, FLOW_PAD = 10;
+function FlowEditor({ curve, axis, actual, onCommit }: {
+  curve: number[]; axis: [number, number]; actual: (number | null)[]; onCommit: (c: number[]) => void;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const [draft, setDraft] = useState<number[] | null>(null);
+  const c = draft ?? curve;
+  const y = (v: number) => FLOW_H - FLOW_PAD - v * (FLOW_H - 2 * FLOW_PAD);
+  const x = (i: number, n: number) => (n > 1 ? (i / (n - 1)) * FLOW_W : 0);
+  const line = c.map((v, i) => `${x(i, c.length).toFixed(1)},${y(v).toFixed(1)}`);
+  const real = actual.flatMap((f, i) => (f === null ? [] : [`${x(i, actual.length).toFixed(1)},${y(f).toFixed(1)}`]));
+  const same = (a: number[], b: number[]) => a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) < 0.005);
+
+  function down(i: number) {
+    return (e: React.PointerEvent<HTMLDivElement>) => {
+      const el = e.currentTarget;
+      el.setPointerCapture(e.pointerId);
+      let latest = c;
+      const move = (ev: PointerEvent) => {
+        const r = box.current!.getBoundingClientRect();
+        const yy = ((ev.clientY - r.top) / r.height) * FLOW_H;
+        const v = Math.max(0, Math.min(1, (FLOW_H - FLOW_PAD - yy) / (FLOW_H - 2 * FLOW_PAD)));
+        latest = latest.map((o, j) => (j === i ? v : o));
+        setDraft(latest);
+      };
+      const up = () => {
+        el.removeEventListener("pointermove", move); el.removeEventListener("pointerup", up); el.removeEventListener("pointercancel", up);
+        setDraft(null);
+        onCommit(latest); // the mix is built again once, when the point is let go
+      };
+      el.addEventListener("pointermove", move); el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
+    };
+  }
+  function key(i: number) {
+    return (e: React.KeyboardEvent) => {
+      const d = e.key === "ArrowUp" || e.key === "ArrowRight" ? 0.05 : e.key === "ArrowDown" || e.key === "ArrowLeft" ? -0.05 : 0;
+      if (!d) return;
+      e.preventDefault();
+      onCommit(curve.map((o, j) => (j === i ? Math.max(0, Math.min(1, o + d)) : o)));
+    };
+  }
+  const bpmAt = (v: number) => Math.round(axis[0] + v * (axis[1] - axis[0]));
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "10px 12px", display: "grid", gap: 8, background: "var(--main-bg)" }}>
+      <div className="flex flex-wrap items-center" style={{ gap: 6, color: "var(--text-primary)", fontSize: "var(--fs-small)" }}>
+        <span style={{ marginRight: 4 }}>Draw the energy of the mix: drag the points. The dashed line is the mix as it came out.</span>
+        {(Object.keys(FLOW_PRESETS) as FlowPresetId[]).map((id) => (
+          <Chip key={id} on={same(curve, FLOW_PRESETS[id].curve)} onClick={() => onCommit([...FLOW_PRESETS[id].curve])}>{FLOW_PRESETS[id].label}</Chip>
+        ))}
+      </div>
+      <div style={{ padding: `0 ${FLOW_PAD}px` }}>
+        <div ref={box} style={{ position: "relative", height: FLOW_H, touchAction: "none" }}>
+          <svg viewBox={`0 0 ${FLOW_W} ${FLOW_H}`} preserveAspectRatio="none" role="img" aria-label="BPM curve of the mix" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible" }}>
+            <path d={`M${line.join(" L")} L${FLOW_W},${FLOW_H} L0,${FLOW_H} Z`} fill="color-mix(in srgb, var(--accent) 14%, transparent)" />
+            <path d={`M${line.join(" L")}`} fill="none" stroke="var(--accent)" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+            {real.length > 1 && <polyline points={real.join(" ")} fill="none" stroke="var(--text-primary)" strokeOpacity={0.7} strokeWidth={1.2} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />}
+          </svg>
+          <span style={{ position: "absolute", left: 2, top: 0, fontSize: 10, color: "var(--text-primary)", opacity: 0.7, pointerEvents: "none" }}>{axis[1]} BPM</span>
+          <span style={{ position: "absolute", left: 2, bottom: 0, fontSize: 10, color: "var(--text-primary)", opacity: 0.7, pointerEvents: "none" }}>{axis[0]}</span>
+          {c.map((v, i) => (
+            <div
+              key={i} role="slider" tabIndex={0} aria-label={`Flow point ${i + 1} of ${c.length}`} aria-orientation="vertical"
+              aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(v * 100)} aria-valuetext={`${bpmAt(v)} BPM`}
+              onPointerDown={down(i)} onKeyDown={key(i)} title={`${bpmAt(v)} BPM`}
+              style={{ position: "absolute", left: `${(x(i, c.length) / FLOW_W) * 100}%`, top: `${(y(v) / FLOW_H) * 100}%`, width: 16, height: 16, marginLeft: -8, marginTop: -8, borderRadius: "50%", background: "var(--card-bg)", border: "2px solid var(--accent)", cursor: "ns-resize", touchAction: "none" }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The BPM of the mix, song after song, in the tray. */
+function BpmSpark({ series, axis }: { series: number[]; axis: [number, number] }) {
+  const W = 150, H = 34;
+  const span = Math.max(1, axis[1] - axis[0]);
+  const pts = series.map((b, i) => `${((i / (series.length - 1)) * W).toFixed(1)},${(H - 4 - Math.max(0, Math.min(1, (b - axis[0]) / span)) * (H - 8)).toFixed(1)}`);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="BPM across the mix" style={{ width: 150, height: 34 }}>
+      <polyline points={pts.join(" ")} fill="none" stroke="var(--accent)" strokeWidth={1.6} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
+function MixRow({ item, index, over, showBpm, onAct, onDragStart, onDragOver, onDragLeave, onDrop }: {
+  item: MixItem; index: number; over: boolean; showBpm: boolean;
   onAct: (w: "keep" | "swap" | "more" | "drop") => void;
   onDragStart: () => void; onDragOver: () => void; onDragLeave: () => void; onDrop: () => void;
 }) {
   const t: Track = item.track;
   return (
     <div
-      className={`mb-row${item.locked ? " kept" : ""}${over ? " over" : ""}`}
+      className={`mb-row${item.locked ? " kept" : ""}${over ? " over" : ""}${showBpm ? " withbpm" : ""}`}
       draggable
       onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(index)); onDragStart(); }}
       onDragOver={(e) => { e.preventDefault(); onDragOver(); }}
@@ -568,7 +748,12 @@ function MixRow({ item, index, over, onAct, onDragStart, onDragOver, onDragLeave
         <div style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.artist}</div>
         <div style={{ color: "var(--text-primary)", opacity: 0.7, fontSize: "var(--fs-small)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{reasonLine(item)}</div>
       </div>
-      <span style={{ color: "var(--text-primary)", opacity: 0.8, textAlign: "right", fontSize: "var(--fs-secondary)", fontVariantNumeric: "tabular-nums" }}>{fmtLength(t.duration_secs)}</span>
+      {showBpm && (
+        <span title="BPM" style={{ color: "var(--text-secondary)", textAlign: "right", fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)", fontVariantNumeric: "tabular-nums" }}>
+          {bpmOf(t) !== null ? Math.round(bpmOf(t)!) : "–"}<small style={{ color: "var(--text-primary)", opacity: 0.7, fontWeight: "var(--fw-secondary)", marginLeft: 3 }}>BPM</small>
+        </span>
+      )}
+      <span className="mb-dur" style={{ color: "var(--text-primary)", opacity: 0.8, textAlign: "right", fontSize: "var(--fs-secondary)", fontVariantNumeric: "tabular-nums" }}>{fmtLength(t.duration_secs)}</span>
       <div className="mb-acts">
         <button onClick={() => onAct("keep")} aria-pressed={item.locked} title={item.locked ? "Kept: stays when you re-roll" : "Keep this song when I re-roll"} aria-label="Keep" style={{ color: item.locked ? "var(--accent)" : undefined }}>{item.locked ? "♥" : "♡"}</button>
         <button onClick={() => onAct("swap")} title="Swap for another song" aria-label="Swap">↻</button>

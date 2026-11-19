@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, Track, TrackFilters } from "../lib/api";
+import { idsByBpm, sortTracksByBpm, orderLike, chunk } from "../lib/bpmSort";
 import { TrackTable, SortState, DEFAULT_SORT, loadJSON, saveJSON, LS_SORT } from "../components/TrackTable";
 import { SearchScopeOption } from "../components/SearchBox";
 import { IconBtn } from "../components/IconBtn";
@@ -239,13 +240,35 @@ export function Tracks() {
   // is identical to "All"), so it shouldn't trigger the fetch-all fallback
   // by itself — only once the user actually types something does the mode
   // switch and the real fetch happen.
-  const clientSideMode = multiYear || (searchScope !== "all" && debouncedQuery.trim() !== "");
+  // BPM: Navidrome sorts by the file's BPM tag, but the app shows (and the user means) the detected BPM held in
+  // bpmCache. So a BPM sort is done here, from the detected values:
+  //  - nothing narrowing the list: the ids are ordered from bpmCache and only the page's songs are loaded (by id);
+  //    only songs that have a BPM are listed then;
+  //  - a search or a column filter is on: the matches are fetched (the client-side mode below) and sorted here.
+  const bpmCache = useStore((s) => s.bpmCache);
+  const bpmSortOn = sortCol.col === "bpm" && Object.keys(bpmCache).length > 0;
+  const narrowed = debouncedQuery.trim() !== "" || !!serverFilters || multiYear;
+  const bpmIdMode = bpmSortOn && !narrowed;
+  const bpmClientMode = bpmSortOn && narrowed;
+  const clientSideMode = multiYear || (searchScope !== "all" && debouncedQuery.trim() !== "") || bpmClientMode;
 
   const { data, isLoading: pageLoading } = useQuery({
     queryKey: ["tracks-native", sortField, order, page, debouncedQuery, filterKey],
     queryFn: () => api.getTracksNativePage(sortField, order, (page - 1) * PAGE_SIZE, page * PAGE_SIZE, debouncedQuery || undefined, serverFilters),
     placeholderData: (prev) => prev,
-    enabled: !clientSideMode,
+    enabled: !clientSideMode && !bpmIdMode,
+  });
+
+  // The songs with these ids, in this order (a page of the BPM order; 100 ids per request keeps the address short).
+  const loadByIds = (ids: string[]) =>
+    Promise.all(chunk(ids, 100).map((part) => api.getTracksNativePage("title", "ASC", 0, part.length, undefined, { ids: part })))
+      .then((pages) => orderLike(pages.flatMap((p) => p.tracks), ids));
+  const bpmIds = useMemo(() => (bpmIdMode ? idsByBpm(bpmCache, sortCol.dir) : []), [bpmIdMode, bpmCache, sortCol.dir]);
+  const { data: bpmPage, isLoading: bpmLoading } = useQuery({
+    queryKey: ["tracks-bpm-page", sortCol.dir, page, bpmIds.length],
+    queryFn: () => loadByIds(bpmIds.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)),
+    placeholderData: (prev) => prev,
+    enabled: bpmIdMode,
   });
 
   // Fallback path: one large fetch (no server-side pagination — `_end` set
@@ -260,7 +283,7 @@ export function Tracks() {
     enabled: clientSideMode,
   });
 
-  const isLoading = clientSideMode ? clientSideLoading : pageLoading;
+  const isLoading = bpmIdMode ? bpmLoading : clientSideMode ? clientSideLoading : pageLoading;
 
   const yearSelectedSet = useMemo(() => new Set(yearValuesSelected), [yearValuesSelected]);
   const clientSideFiltered = useMemo(() => {
@@ -272,11 +295,11 @@ export function Tracks() {
       const field = SCOPE_FIELD[searchScope];
       filtered = filtered.filter((t) => (t[field] ?? "").toLowerCase().includes(q));
     }
-    return filtered;
-  }, [clientSideMode, clientSideData, multiYear, yearSelectedSet, searchScope, debouncedQuery]);
+    return bpmClientMode ? sortTracksByBpm(filtered, sortCol.dir, bpmCache) : filtered;
+  }, [clientSideMode, clientSideData, multiYear, yearSelectedSet, searchScope, debouncedQuery, bpmClientMode, sortCol.dir, bpmCache]);
 
-  const tracks = clientSideMode ? clientSideFiltered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : (data?.tracks ?? []);
-  const total = clientSideMode ? clientSideFiltered.length : (data?.total ?? 0);
+  const tracks = bpmIdMode ? (bpmPage ?? []) : clientSideMode ? clientSideFiltered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : (data?.tracks ?? []);
+  const total = bpmIdMode ? bpmIds.length : clientSideMode ? clientSideFiltered.length : (data?.total ?? 0);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   function handleSortChange(next: SortState) {
@@ -314,6 +337,7 @@ export function Tracks() {
   // matching set, so no extra fetch is needed.
   async function fetchAllFiltered(): Promise<Track[]> {
     if (clientSideMode) return clientSideFiltered;
+    if (bpmIdMode) return loadByIds(bpmIds.slice(0, 1000)); // sorted by BPM: the first 1,000 (the whole library would be hundreds of requests)
     if (total === 0) return [];
     const result = await api.getTracksNativePage(sortField, order, 0, total, debouncedQuery || undefined, serverFilters);
     return result.tracks;

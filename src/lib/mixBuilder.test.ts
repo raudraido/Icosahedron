@@ -3,6 +3,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  bpmAvailable, bpmActive, bpmHistogram, binInRange, bpmRangeLabel, buildFlowMix, coveragePercent, curveAt, idsInBpmRange, inBpmRange,
+  joinBpm, mixBpmStats, normalizeBpmRange, sanitizeCurve, setBpmRange, targetBpm, isStarted, BPM_MIN_COVERAGE, FLOW_PRESETS,
   addSeed, isLeftOut, isSpoken, toggleSkipGenre, artistCap, autoName, bpmCoverage, buildMix, countMatches, defaultSettings, fmtLength, hiddenCount,
   localSuggestions, matchGenres, mulberry32, parseDecade, passes, poolKey, presetSettings, reasonLine, removeSeed,
   setYears, snapSize, swapCandidate, toggleGenre, topArtists, type MixItem, type PoolItem,
@@ -206,8 +208,194 @@ test("topArtists: one per artist, in order", () => {
   assert.deepEqual(topArtists(albums, 3), [{ name: "A", id: "1" }, { name: "C", id: "3" }]);
 });
 
-test("BPM is off in version 1", () => {
-  assert.equal(bpmCoverage(), 0);
+test("BPM coverage: share of the library, gated at BPM_MIN_COVERAGE, overridable", () => {
+  assert.equal(bpmCoverage(0, 36062), 0);
+  assert.equal(bpmCoverage(10, null), 0);
+  assert.equal(bpmCoverage(10, 0), 0);
+  assert.ok(Math.abs(bpmCoverage(4400, 36062) - 0.122) < 0.001);
+  assert.equal(bpmCoverage(50000, 36062), 1); // the store can hold songs that left the library
+  assert.equal(bpmAvailable(0.12), false);
+  assert.equal(bpmAvailable(BPM_MIN_COVERAGE), true);
+  assert.equal(bpmAvailable(0.59), false);
+  assert.equal(bpmAvailable(0.59, false, 0.5), true);
+  assert.equal(bpmAvailable(0.01, true), true);
+  assert.equal(coveragePercent(0.122), 12);
+  assert.equal(coveragePercent(0.0004), 1);
+  assert.equal(coveragePercent(0.998), 99);
+  assert.equal(coveragePercent(1), 100);
+});
+
+test("BPM range: the whole dial is no filter, the ends are open, songs without BPM drop out only when narrowed", () => {
+  assert.equal(normalizeBpmRange([60, 200]), null);
+  assert.equal(normalizeBpmRange([20, 300]), null);
+  assert.deepEqual(normalizeBpmRange([125.4, 135]), [125, 135]);
+  assert.deepEqual(normalizeBpmRange([140, 120]), [140, 140]);
+  assert.equal(bpmActive({ bpm: null }), false);
+  assert.equal(bpmActive({ bpm: [60, 200] }), false);
+  assert.equal(bpmActive({ bpm: [60, 199] }), true);
+  assert.equal(inBpmRange(230, [150, 200]), true); // 200 = "200 and faster"
+  assert.equal(inBpmRange(50, [60, 100]), true); // 60 = "60 and slower"
+  assert.equal(inBpmRange(101, [60, 100]), false);
+  const s = defaultSettings();
+  const none = track({ bpm: null }), at = track({ bpm: 128 }), off = track({ bpm: 90 });
+  assert.equal(passes(none, s), true); // full range: kept
+  assert.equal(passes(none, setBpmRange(s, [60, 200])), true);
+  const narrow = setBpmRange(s, [125, 135]);
+  assert.equal(passes(none, narrow), false);
+  assert.equal(passes(off, narrow), false);
+  assert.equal(passes(at, narrow), true);
+  assert.equal(isStarted(narrow), true);
+  assert.equal(countMatches([none, at, off].map((t) => ({ track: t })), narrow), 1);
+  assert.notEqual(poolKey(s), poolKey(narrow));
+  assert.equal(poolKey(s), poolKey(setBpmRange(s, [60, 200])));
+  assert.equal(bpmRangeLabel([125, 135]), "125–135 BPM");
+  assert.equal(bpmRangeLabel([60, 112]), "up to 112 BPM");
+  assert.equal(bpmRangeLabel([150, 200]), "150+ BPM");
+  assert.ok(autoName(narrow, NOW).includes("125–135 BPM"));
+});
+
+test("idsInBpmRange picks the ids whose BPM fits, ends open", () => {
+  const map = { a: 124.9, b: 125, c: 135, d: 135.1, e: 40, f: 230 };
+  assert.deepEqual(idsInBpmRange(map, [125, 135]).sort(), ["b", "c"]);
+  assert.deepEqual(idsInBpmRange(map, [60, 100]), ["e"]);
+  assert.deepEqual(idsInBpmRange(map, [180, 200]), ["f"]);
+});
+
+test("BPM histogram: 4-BPM bins from 60 to 200, edges collect the rest", () => {
+  const h = bpmHistogram([60, 63.9, 64, 128, 199.9, 200, 250, 30, 0, NaN]);
+  assert.equal(h.length, 35);
+  assert.equal(h[0], 3); // 60, 63.9 and 30
+  assert.equal(h[1], 1); // 64
+  assert.equal(h[17], 1); // 128 = (128-60)/4
+  assert.equal(h[34], 3); // 199.9, 200, 250
+  assert.equal(h.reduce((a, b) => a + b, 0), 8); // 0 and NaN are not BPM
+  assert.equal(binInRange(17, null), true);
+  assert.equal(binInRange(17, [125, 135]), true); // bin 128-131
+  assert.equal(binInRange(10, [125, 135]), false);
+  assert.equal(binInRange(0, [60, 100]), true);
+  assert.equal(binInRange(34, [150, 200]), true);
+});
+
+test("joinBpm puts the map's BPM on the tracks and leaves the rest alone", () => {
+  const items = [{ track: track({ id: "x", bpm: null }) }, { track: track({ id: "y", bpm: 100 }) }, { track: track({ id: "z", bpm: 90 }) }];
+  const out = joinBpm(items, { x: 120, y: 105 });
+  assert.equal(out[0].track.bpm, 120);
+  assert.equal(out[1].track.bpm, 105); // the HUB's value (manual or measured) wins over the tag
+  assert.equal(out[2], items[2]);
+  assert.equal(items[0].track.bpm, null); // not mutated
+  assert.equal(joinBpm(items, undefined), items);
+});
+
+test("flow curve: points, straight lines between them, target BPM from the dial's range", () => {
+  assert.equal(curveAt([0, 1], 0.5), 0.5);
+  assert.equal(curveAt([0.2, 0.5, 0.9], 0), 0.2);
+  assert.equal(curveAt([0.2, 0.5, 0.9], 1), 0.9);
+  assert.ok(Math.abs(curveAt([0.2, 0.5, 0.9], 0.25) - 0.35) < 1e-9);
+  assert.equal(targetBpm({ bpm: [100, 140], curve: [0, 1] }, 0), 100);
+  assert.equal(targetBpm({ bpm: [100, 140], curve: [0, 1] }, 1), 140);
+  assert.equal(targetBpm({ bpm: null, curve: [0.5, 0.5] }, 0.3), 130); // whole dial 60..200
+  assert.deepEqual(sanitizeCurve([1, 2]), FLOW_PRESETS.arc.curve);
+  assert.deepEqual(sanitizeCurve([-1, 0.5, 2, 0.1, 0.2]), [0, 0.5, 1, 0.1, 0.2]);
+  assert.deepEqual(sanitizeCurve("x"), FLOW_PRESETS.arc.curve);
+});
+
+const bpmPool = (count: number) => pool(count, (i) => ({ bpm: 70 + (i % 120), artist: `Band ${i}`, artist_id: `b${i}` }));
+
+test("buildFlowMix: each slot gets the song nearest the curve, rising curve gives rising BPM", () => {
+  const s = { ...defaultSettings(), size: 20, flow: true, bpm: [80, 180] as [number, number], curve: [0, 0.5, 1] };
+  const { mix } = buildFlowMix(bpmPool(240), s, [], mulberry32(1));
+  assert.equal(mix.length, 20);
+  for (let i = 0; i < 20; i++) {
+    const target = targetBpm(s, i / 19);
+    assert.ok(Math.abs(mix[i].track.bpm! - target) <= 6, `slot ${i}: ${mix[i].track.bpm} vs ${target}`);
+  }
+  assert.ok(mix[19].track.bpm! > mix[0].track.bpm! + 60);
+  assert.equal(new Set(mix.map((m) => m.track.id)).size, 20);
+});
+
+test("buildFlowMix: songs without BPM or out of the range never come up, at most 2 per artist", () => {
+  const items: PoolItem[] = [
+    ...pool(40, () => ({ bpm: null })),
+    ...pool(40, (i) => ({ bpm: 200 - i })), // 161..200: outside the range
+    ...Array.from({ length: 12 }, (_, i) => ({ track: track({ bpm: 128 + (i % 3), artist: "Same", artist_id: "same" }) })),
+    ...pool(30, (i) => ({ bpm: 126 + (i % 8), artist: `Other ${i}`, artist_id: `o${i}` })),
+  ];
+  const s = { ...defaultSettings(), size: 20, flow: true, bpm: [125, 135] as [number, number], curve: [0.5, 0.5, 0.5, 0.5, 0.5] };
+  const { mix, matches } = buildFlowMix(items, s, [], mulberry32(2));
+  assert.equal(matches, 42);
+  assert.equal(mix.length, 20);
+  assert.ok(mix.every((m) => m.track.bpm! >= 125 && m.track.bpm! <= 135));
+  assert.ok(mix.filter((m) => m.track.artist === "Same").length <= 2);
+});
+
+test("buildFlowMix: kept songs keep their slot; re-rolling again follows the curve", () => {
+  const s = { ...defaultSettings(), size: 12, flow: true, bpm: [80, 180] as [number, number], curve: [0.1, 0.9] };
+  const items = bpmPool(240);
+  const first = buildFlowMix(items, s, [], mulberry32(3)).mix;
+  const current = first.map((m, i) => (i === 4 || i === 9 ? { ...m, locked: true } : m));
+  const again = buildFlowMix(items, s, current, mulberry32(99)).mix;
+  assert.equal(again.length, 12);
+  assert.equal(again[4].track.id, first[4].track.id);
+  assert.equal(again[9].track.id, first[9].track.id);
+  assert.equal(again[4].locked && again[9].locked, true);
+  assert.equal(again.filter((m) => m.track.id === first[4].track.id).length, 1);
+  for (let i = 0; i < 12; i++) {
+    if (i === 4 || i === 9) continue;
+    assert.ok(Math.abs(again[i].track.bpm! - targetBpm(s, i / 11)) <= 8, `slot ${i}`);
+  }
+});
+
+test("buildFlowMix: a small pool gives a shorter mix, an artist cap that cannot be met is relaxed", () => {
+  const s = { ...defaultSettings(), size: 10, flow: true, curve: [0.5, 0.5] };
+  const few = buildFlowMix(pool(4, (i) => ({ bpm: 100 + i, artist: `A${i}` })), s, [], mulberry32(4)).mix;
+  assert.equal(few.length, 4);
+  const oneArtist = buildFlowMix(pool(10, (i) => ({ bpm: 100 + i, artist: "Solo" })), s, [], mulberry32(4)).mix;
+  assert.equal(oneArtist.length, 10);
+});
+
+test("buildFlowMix: the score breaks ties between equally near songs", () => {
+  const near = { track: track({ bpm: 120, artist: "Fav", artist_id: "fav" }), by: "Fav" };
+  const other = { track: track({ bpm: 120, artist: "Other", artist_id: "other" }) };
+  const s = { ...defaultSettings(), size: 1, flow: true, bpm: [100, 140] as [number, number], curve: [0.5, 0.5], seeds: [{ kind: "artist" as const, value: "Fav" }] };
+  assert.equal(buildFlowMix([other, near], s, [], mulberry32(7)).mix[0].track.artist, "Fav");
+});
+
+test("swapCandidate with Flow prefers a similar BPM; without Flow it ignores BPM", () => {
+  const items: PoolItem[] = [
+    { track: track({ id: "far", bpm: 180 }) }, { track: track({ id: "near", bpm: 126 }) }, { track: track({ id: "no", bpm: null }) },
+  ];
+  const mix: MixItem[] = [{ track: track({ id: "cur", bpm: 125 }), why: [], locked: false }];
+  const flow = { ...defaultSettings(), flow: true, discover: 50 };
+  const picks = Array.from({ length: 20 }, (_, k) => swapCandidate(items, flow, mix, mulberry32(k), 125)!.track.id);
+  assert.ok(picks.every((id) => id === "near"));
+  const plain = new Set(Array.from({ length: 40 }, (_, k) => swapCandidate(items, { ...defaultSettings(), discover: 50 }, mix, mulberry32(k), 125)!.track.id));
+  assert.ok(plain.size > 1);
+});
+
+test("mix BPM stats and the reason line", () => {
+  const mix = [{ track: track({ bpm: 100 }) }, { track: track({ bpm: null }) }, { track: track({ bpm: 120 }) }];
+  assert.deepEqual(mixBpmStats(mix), { avg: 110, series: [100, 120] });
+  assert.deepEqual(mixBpmStats([{ track: track({ bpm: null }) }]), { avg: null, series: [] });
+  assert.equal(reasonLine({ track: track({ genre: "Techno", year: 2021, bpm: 127.6 }), why: ["like X"], locked: false }), "like X · Techno · 128 BPM · 2021 · not played yet");
+});
+
+test("presets use BPM ranges only when BPM is available", () => {
+  const genres = [{ name: "Hip-Hop", songCount: 50 }, { name: "Techno", songCount: 70 }, { name: "Ambient", songCount: 20 }];
+  const plain = presetSettings("workout", genres, 2026);
+  assert.equal(plain.bpm ?? null, null);
+  assert.equal(!!plain.flow, false);
+  const w = presetSettings("workout", genres, 2026, true);
+  assert.deepEqual(w.bpm, [125, 160]);
+  assert.equal(w.flow, true);
+  assert.equal(w.curve!.length, 5);
+  assert.deepEqual(w.seeds.map((x) => x.value), ["Techno", "Hip-Hop"]);
+  assert.deepEqual(presetSettings("party", genres, 2026, true).bpm, [112, 130]);
+  const f = presetSettings("focus", genres, 2026, true);
+  assert.deepEqual(f.bpm, [60, 112]);
+  assert.equal(!!f.flow, false);
+  assert.equal(presetSettings("focus", genres, 2026).bpm ?? null, null);
+  assert.equal(presetSettings("throwback", genres, 2026, true).bpm ?? null, null);
+  assert.equal(presetSettings("fresh", genres, 2026, true).flow ?? false, false);
 });
 
 test("leave out: spoken word by genre name or length, skipped genres, also in random", () => {

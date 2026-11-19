@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+- **Mix Builder uses BPM:** once the BPM is known for most of the library (60%, from the Icosahedron HUB's analysis or the desktop's own detection) the dials get a **BPM** range with a histogram of your library, and **Flow** lets you draw how the BPM of the mix should rise and fall (presets *Warm-up → peak*, *Steady*, *Cool-down*); the mix is then built song by song along the curve. Each song shows its BPM, the tray shows the average BPM and a BPM line, and Workout / Party / Focus get BPM ranges (Workout also a warm-up, peak, cool-down curve). Below 60% the dials card says how much of the library has a BPM, and where to analyse it.
+
 ## 0.21.1
 - **"Settings changed on another device" no longer comes back after every reload:** the desktop app and the web app have different tabs (Downloads is desktop only), and the web app dropped Downloads from the shared tab order while the desktop put it back, so each undid the other for ever. The tab order now keeps the tabs a platform does not have where they are, and saving a synced preference with the value it already has no longer counts as a change.
 

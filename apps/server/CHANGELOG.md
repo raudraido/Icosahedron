@@ -2,6 +2,9 @@
 
 The server is the **sync engine and the web app it serves** (one Docker image, `ghcr.io/raudraido/icosahedron-server`). Versions before 0.16.0 shared one number with the other apps (0.15.3 to 0.15.9); the full text of those releases is in the [main changelog](../../CHANGELOG.md). What each version needs and gives: [docs/compatibility.md](../../docs/compatibility.md).
 
+## Unreleased
+- **Mix Builder in the web app uses BPM** (same as the desktop): a BPM range with a histogram, **Flow** (a BPM curve for the mix), the BPM of each song, and BPM ranges for Workout / Party / Focus, once the HUB's BPM analysis has reached 60% of the library. The HUB itself is unchanged.
+
 ## 0.20.1
 - **Web app, Firefox:** the system's scrollbars showed in Firefox; they are now thin and appear only while scrolling, like in Chrome.
 - **Web app: "Settings changed on another device" no longer comes back after every reload** (the web app and the desktop app kept undoing each other's tab order because Downloads exists only on the desktop). Saving a synced preference with the value it already has is no longer a change.

@@ -4,7 +4,10 @@
 // everything goes through `api`.
 
 import { api, type Track } from "./api";
-import { artistSeeds, genreSeeds, isLeftOut, POOL_CAP, type MixSettings, type PoolItem } from "./mixBuilder";
+import {
+  artistSeeds, bpmActive, genreSeeds, idsInBpmRange, isLeftOut, joinBpm, normalizeBpmRange, passes, POOL_CAP, shuffle,
+  type MixSettings, type PoolItem,
+} from "./mixBuilder";
 
 export interface PoolResult {
   items: PoolItem[];
@@ -51,7 +54,41 @@ async function artistId(name: string, id?: string): Promise<string | null> {
   return r?.artists[0]?.id ?? null;
 }
 
-export async function loadPool(s: MixSettings, stale: Stale): Promise<PoolResult> {
+/** Songs per `id` list request (about 2.5 KB of query string) and how many run at once. */
+export const BPM_ID_BATCH = 100;
+const BPM_PARALLEL = 6;
+/** The most ids looked at per search: 6,000 = 60 requests. A range with more songs than that is sampled at random. */
+export const BPM_MAX_EXAMINED = 6000;
+
+/**
+ * The songs of a BPM range. The random draws of the other pools cannot be narrowed by BPM, so a narrow range
+ * would leave a handful of songs; instead the BPM map says which ids are in the range, and exactly those songs
+ * are loaded (Navidrome's `id` filter, in batches), then cut down by the other filters (years, genres, left out).
+ * The ids are shuffled first, so a range with more songs than the budget gives a random sample of it.
+ */
+export async function songsInBpmRange(
+  s: MixSettings, map: Record<string, number>, stale: Stale, want = POOL_CAP,
+): Promise<Track[]> {
+  const range = normalizeBpmRange(s.bpm);
+  if (!range) return [];
+  const ids = shuffle(idsInBpmRange(map, range)).slice(0, BPM_MAX_EXAMINED);
+  const batches: string[][] = [];
+  for (let i = 0; i < ids.length; i += BPM_ID_BATCH) batches.push(ids.slice(i, i + BPM_ID_BATCH));
+  const out: Track[] = [];
+  for (let i = 0; i < batches.length && out.length < want && !stale(); i += BPM_PARALLEL) {
+    const got = await Promise.all(
+      batches.slice(i, i + BPM_PARALLEL).map((b) => api.getTracksNativePage("title", "ASC", 0, b.length, undefined, { ids: b }).then((r) => r.tracks).catch(() => [] as Track[])),
+    );
+    for (const tracks of got) {
+      // Join first: the filter reads the BPM, and Navidrome's own copy of it is usually empty.
+      for (const it of joinBpm(tracks.map((track) => ({ track })), map)) if (passes(it.track, s)) out.push(it.track);
+    }
+  }
+  return out.slice(0, want);
+}
+
+/** `bpmMap`: id -> BPM of the whole library. With a narrow BPM range the background songs come from it. */
+export async function loadPool(s: MixSettings, stale: Stale, bpmMap?: Record<string, number>): Promise<PoolResult> {
   const map = new Map<string, PoolItem>();
 
   // "Play random": the whole library, every song the same chance, no filters and no taste.
@@ -89,6 +126,8 @@ export async function loadPool(s: MixSettings, stale: Stale): Promise<PoolResult
   // mix can be filled and a dial change has something to work on. Favourites come from the starred list.
   if (s.favOnly) {
     tasks.push(api.getStarred().then((r) => addAll(map, r.tracks)).catch(() => {}));
+  } else if (bpmActive(s) && bpmMap) {
+    tasks.push(songsInBpmRange(s, bpmMap, stale, artists.length ? 1000 : POOL_CAP).then((t) => addAll(map, t)));
   } else {
     const target = artists.length ? 1000 : POOL_CAP;
     if (genres.length) {

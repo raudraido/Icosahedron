@@ -28,15 +28,153 @@ export function hiddenCount(total: number, visible = MAX_VISIBLE_ROWS): number {
   return Math.max(0, total - visible);
 }
 
-// ── BPM (not in version 1) ───────────────────────────────────────────────────────────────────────────
-/** Share of the library that has a BPM (0..1). Version 1 knows nothing about it and says 0.
- *  The server-side BPM analysis will fill this in (from the sync server's BPM store); once it is high enough
- *  (BPM_MIN_COVERAGE) the screen shows the BPM dial and Flow (a BPM curve for the mix), plugged in where
- *  MixBuilder.tsx marks "BPM EXTENSION POINT". Until then the UI says nothing about BPM. */
-export function bpmCoverage(): number {
-  return 0;
-}
+// ── BPM ──────────────────────────────────────────────────────────────────────────────────────────────
+// The BPM of a song comes from the Icosahedron HUB's shared BPM store (or the desktop's local cache without a
+// HUB); the screen joins it onto the candidates (Track.bpm), so everything here just reads `track.bpm`.
+export const BPM_MIN = 60;
+export const BPM_MAX = 200;
+/** Width of a histogram bin in BPM. */
+export const BPM_BIN = 4;
+/** The BPM dial and Flow appear once this share of the library has a BPM (or the dev override is on, see
+ *  the screen: localStorage `mix_builder_force_bpm=1`). Change it here. */
 export const BPM_MIN_COVERAGE = 0.6;
+
+/** Share of the library that has a BPM (0..1): songs with a BPM / songs in the library. 0 when the total is unknown. */
+export function bpmCoverage(withBpm: number, libraryTotal: number | null | undefined): number {
+  if (!libraryTotal || libraryTotal <= 0 || !Number.isFinite(withBpm) || withBpm <= 0) return 0;
+  return Math.min(1, withBpm / libraryTotal);
+}
+
+/** Does the screen offer the BPM dial and Flow? */
+export function bpmAvailable(coverage: number, force = false, min = BPM_MIN_COVERAGE): boolean {
+  return force || coverage >= min;
+}
+
+/** The share as a whole percent, never "0%" or "100%" unless it is exactly so. */
+export function coveragePercent(coverage: number): number {
+  const p = coverage * 100;
+  if (p > 0 && p < 1) return 1;
+  if (p < 100 && p > 99) return 99;
+  return Math.round(p);
+}
+
+/** A usable BPM of a song, or null. */
+export function bpmOf(t: Pick<Track, "bpm">): number | null {
+  const b = t.bpm;
+  return typeof b === "number" && Number.isFinite(b) && b > 0 ? b : null;
+}
+
+/** "125–135 BPM", "up to 112 BPM", "140+ BPM". */
+export function bpmRangeLabel(r: readonly [number, number]): string {
+  return `${r[0] <= BPM_MIN ? `up to ${r[1]}` : r[1] >= BPM_MAX ? `${r[0]}+` : `${r[0]}–${r[1]}`} BPM`;
+}
+
+/** The dial's range as a pair, or null when it is the whole range (no filter). */
+export function normalizeBpmRange(v: readonly number[] | null | undefined): [number, number] | null {
+  if (!v || v.length !== 2 || !Number.isFinite(v[0]) || !Number.isFinite(v[1])) return null;
+  const lo = Math.max(BPM_MIN, Math.min(BPM_MAX, Math.round(v[0])));
+  const hi = Math.max(lo, Math.min(BPM_MAX, Math.round(v[1])));
+  return lo <= BPM_MIN && hi >= BPM_MAX ? null : [lo, hi];
+}
+
+/** True while the BPM range is narrower than the whole dial (then songs without a BPM are out). */
+export function bpmActive(s: { bpm?: readonly number[] | null }): boolean {
+  return normalizeBpmRange(s.bpm) !== null;
+}
+
+/** The ends of the dial are open: 60 means "60 and slower", 200 means "200 and faster". */
+export function inBpmRange(bpm: number, range: readonly [number, number]): boolean {
+  return (range[0] <= BPM_MIN || bpm >= range[0]) && (range[1] >= BPM_MAX || bpm <= range[1]);
+}
+
+/** Ids of the songs whose BPM is in the range (to load exactly those songs from the server). */
+export function idsInBpmRange(map: Record<string, number>, range: readonly [number, number]): string[] {
+  const out: string[] = [];
+  for (const id in map) { const b = map[id]; if (b > 0 && inBpmRange(b, range)) out.push(id); }
+  return out;
+}
+
+/** The histogram of the library's BPM in 4-BPM bins from BPM_MIN to BPM_MAX (slower and faster songs count in
+ *  the first and last bin). */
+export function bpmHistogram(values: Iterable<number>): number[] {
+  const bins = new Array<number>(Math.ceil((BPM_MAX - BPM_MIN) / BPM_BIN)).fill(0);
+  for (const v of values) {
+    if (!(v > 0)) continue;
+    bins[Math.min(bins.length - 1, Math.max(0, Math.floor((v - BPM_MIN) / BPM_BIN)))]++;
+  }
+  return bins;
+}
+
+/** Does bin `i` overlap the range (to colour the histogram)? No range = every bin. */
+export function binInRange(i: number, range: readonly [number, number] | null): boolean {
+  if (!range) return true;
+  const lo = BPM_MIN + i * BPM_BIN;
+  const first = range[0] <= BPM_MIN, last = range[1] >= BPM_MAX;
+  return (first || lo + BPM_BIN > range[0]) && (last || lo <= range[1]);
+}
+
+/** Puts the BPM from the map onto the tracks (the map wins: it holds manual values and the HUB's analysis). */
+export function joinBpm<T extends { track: Track }>(items: T[], map: Record<string, number> | undefined): T[] {
+  if (!map) return items;
+  return items.map((it) => {
+    const b = map[it.track.id];
+    return b > 0 && b !== it.track.bpm ? { ...it, track: { ...it.track, bpm: b } } : it;
+  });
+}
+
+// ── Flow: a BPM curve for the mix ────────────────────────────────────────────────────────────────────
+export const FLOW_POINTS = 5;
+export type FlowPresetId = "arc" | "steady" | "down";
+/** Curve points are 0..1 of the dial's BPM range (0 = the slow end, 1 = the fast end), left to right = start to end of the mix. */
+export const FLOW_PRESETS: Record<FlowPresetId, { label: string; curve: number[] }> = {
+  arc: { label: "Warm-up → peak", curve: [0.2, 0.5, 0.95, 0.7, 0.3] },
+  steady: { label: "Steady", curve: [0.55, 0.55, 0.55, 0.55, 0.55] },
+  down: { label: "Cool-down", curve: [0.9, 0.75, 0.55, 0.35, 0.15] },
+};
+export const DEFAULT_CURVE: number[] = FLOW_PRESETS.arc.curve;
+/** The Workout quick start's curve: warm-up, peak, cool-down. */
+export const WORKOUT_CURVE = [0.2, 0.5, 0.9, 0.8, 0.4];
+
+/** A saved curve that is not FLOW_POINTS numbers falls back to the default; values are clamped to 0..1. */
+export function sanitizeCurve(c: unknown): number[] {
+  if (!Array.isArray(c) || c.length !== FLOW_POINTS || c.some((v) => typeof v !== "number" || !Number.isFinite(v))) return [...DEFAULT_CURVE];
+  return c.map((v: number) => Math.max(0, Math.min(1, v)));
+}
+
+/** The curve's height (0..1) at p (0 = first song, 1 = last), straight lines between the points. */
+export function curveAt(curve: number[], p: number): number {
+  if (curve.length === 0) return 0.5;
+  if (curve.length === 1) return curve[0];
+  const x = Math.max(0, Math.min(1, p)) * (curve.length - 1);
+  const i = Math.min(curve.length - 2, Math.floor(x));
+  const f = x - i;
+  return curve[i] * (1 - f) + curve[i + 1] * f;
+}
+
+/** The dial's range as the curve's vertical axis (the whole range when the dial is not narrowed). */
+export function bpmAxis(s: { bpm?: readonly number[] | null }): [number, number] {
+  return normalizeBpmRange(s.bpm) ?? [BPM_MIN, BPM_MAX];
+}
+
+/** The BPM the mix should have at position p (0..1). */
+export function targetBpm(s: { bpm?: readonly number[] | null; curve?: number[] }, p: number): number {
+  const [lo, hi] = bpmAxis(s);
+  return lo + curveAt(s.curve ?? DEFAULT_CURVE, p) * (hi - lo);
+}
+
+/** Where a BPM sits on the curve's vertical axis (0..1, clamped), or null without a BPM. */
+export function bpmFraction(s: { bpm?: readonly number[] | null }, bpm: number | null): number | null {
+  if (bpm === null) return null;
+  const [lo, hi] = bpmAxis(s);
+  return hi > lo ? Math.max(0, Math.min(1, (bpm - lo) / (hi - lo))) : 0.5;
+}
+
+/** Average BPM and the BPM in order of the songs that have one (for the tray). */
+export function mixBpmStats(mix: { track: Track }[]): { avg: number | null; series: number[] } {
+  const series: number[] = [];
+  for (const m of mix) { const b = bpmOf(m.track); if (b !== null) series.push(b); }
+  return { avg: series.length ? series.reduce((a, b) => a + b, 0) / series.length : null, series };
+}
 
 // ── Seeds ────────────────────────────────────────────────────────────────────────────────────────────
 // A seed is what the user starts with. A song becomes its artist; a genre is also a filter (the mix stays
@@ -96,6 +234,12 @@ export interface MixSettings {
   skipSpoken?: boolean;
   /** Genres that never come up, in any start (also "Play random"). */
   skipGenres?: string[];
+  /** BPM range from the dial (60..200, the ends open); null = any BPM, and songs without a BPM stay in. */
+  bpm?: [number, number] | null;
+  /** Flow: build the mix slot by slot to follow `curve`. Needs BPM. */
+  flow?: boolean;
+  /** Flow's curve: FLOW_POINTS values 0..1 of the BPM range. */
+  curve?: number[];
   /** A label for the way it started ("lucky", "Because I played X"), used for the name. */
   title?: string;
 }
@@ -106,7 +250,7 @@ export function defaultSettings(): MixSettings {
 
 /** True once the user has asked for anything (a quick start, a seed or a dial). Until then the screen waits. */
 export function isStarted(s: MixSettings): boolean {
-  return s.pure || s.seeds.length > 0 || s.years !== null || s.favOnly || s.unplayedOnly || s.title !== undefined;
+  return s.pure || s.seeds.length > 0 || s.years !== null || s.favOnly || s.unplayedOnly || bpmActive(s) || s.title !== undefined;
 }
 
 export function sameSeed(a: MixSeed, b: MixSeed): boolean {
@@ -140,6 +284,11 @@ export function setYears(s: MixSettings, years: [number, number] | null): MixSet
   return { ...s, years, seeds: s.seeds.filter((x) => x.kind !== "decade") };
 }
 
+/** Moving the BPM dial: the whole range means no filter. */
+export function setBpmRange(s: MixSettings, range: [number, number] | null): MixSettings {
+  return { ...s, bpm: normalizeBpmRange(range), pure: false };
+}
+
 export function toggleGenre(s: MixSettings, name: string): MixSettings {
   const i = s.seeds.findIndex((x) => x.kind === "genre" && x.value.toLowerCase() === name.toLowerCase());
   return i >= 0 ? removeSeed(s, i) : addSeed(s, { kind: "genre", value: name });
@@ -154,7 +303,7 @@ export function poolKey(s: MixSettings, genreFilter = true): string {
   return JSON.stringify([
     s.pure, s.pure ? s.size : 0,
     s.seeds.map((x) => [x.kind, x.value.toLowerCase(), x.kind === "artist" ? x.id ?? "" : ""]),
-    s.years, s.favOnly, genreFilter, s.skipSpoken ?? false, (s.skipGenres ?? []).map((x) => x.toLowerCase()).sort(),
+    s.years, s.favOnly, genreFilter, normalizeBpmRange(s.bpm), s.skipSpoken ?? false, (s.skipGenres ?? []).map((x) => x.toLowerCase()).sort(),
   ]);
 }
 
@@ -217,6 +366,11 @@ export function passes(t: Track, s: MixSettings): boolean {
     const g = (t.genre ?? "").toLowerCase();
     // Navidrome joins several genres into one string ("Techno; House"): any of them may match.
     if (!genres.some((x) => g.split(/[;/,]/).some((part) => part.trim() === x.value.toLowerCase()) || g === x.value.toLowerCase())) return false;
+  }
+  const range = normalizeBpmRange(s.bpm);
+  if (range) {
+    const b = bpmOf(t);
+    if (b === null || !inBpmRange(b, range)) return false; // no BPM: out while the range is narrower than the dial
   }
   if (s.favOnly && !t.starred) return false;
   if (s.unplayedOnly && t.play_count > 0) return false;
@@ -306,14 +460,87 @@ export function buildMix(
   return { mix: [...locked.map((m) => ({ ...m, locked: true })), ...fresh], matches };
 }
 
-/** The next best song for a swap: passes the filters, not in the mix already. */
-export function swapCandidate(pool: PoolItem[], s: MixSettings, mix: MixItem[], rand: Rand = Math.random): MixItem | null {
+/** How many BPM one point of score is worth when Flow picks a song for a slot (a seed hit is ~3 points). */
+export const FLOW_SCORE_BPM = 1.2;
+/** Flow's swap: how many BPM of distance cost one point of score. */
+const SWAP_BPM_PER_POINT = 6;
+
+/**
+ * Flow: builds the mix slot by slot. For each position the song whose BPM is nearest the curve's target there
+ * wins; the score (seed hits, chance, taste) only breaks ties and nudges (FLOW_SCORE_BPM BPM per point).
+ * `current` is the mix as it stands: its kept (locked) songs stay in the slot they have, the rest is picked
+ * again. Songs without a BPM never come up. At most `artistCap` songs per artist, relaxed only when the
+ * candidates run out. The mix can end up shorter than `size` when too few songs have a BPM.
+ */
+export function buildFlowMix(
+  pool: PoolItem[], s: MixSettings, current: MixItem[] = [], rand: Rand = Math.random,
+): { mix: MixItem[]; matches: number } {
+  const size = Math.max(0, s.size);
+  const slots: (MixItem | null)[] = new Array(size).fill(null);
+  const kept = current.filter((m) => m.locked);
+  const overflow: MixItem[] = [];
+  current.forEach((m, i) => {
+    if (!m.locked) return;
+    if (i < size) slots[i] = { ...m, locked: true }; else overflow.push({ ...m, locked: true });
+  });
+  // A kept song whose slot is gone (the mix got smaller): the nearest free slot from the end.
+  for (const m of overflow) {
+    for (let i = size - 1; i >= 0; i--) if (!slots[i]) { slots[i] = m; break; }
+  }
+  const used = new Set(kept.map((m) => m.track.id));
+  const seen = new Set<string>();
+  const cands: { item: PoolItem; bpm: number; score: number; why: string[]; used: boolean }[] = [];
+  for (const item of pool) {
+    if (seen.has(item.track.id)) continue;
+    seen.add(item.track.id);
+    if (!passes(item.track, s) || used.has(item.track.id)) continue;
+    const bpm = bpmOf(item.track);
+    if (bpm === null) continue;
+    const sc = scoreItem(item, s, rand);
+    cands.push({ item, bpm, score: sc.score, why: sc.why, used: false });
+  }
+  const matches = cands.length + kept.length;
+  const cap = artistCap(size);
+  const perArtist = new Map<string, number>();
+  const bump = (name: string) => perArtist.set(name, (perArtist.get(name) ?? 0) + 1);
+  kept.forEach((m) => bump(m.track.artist));
+
+  for (let i = 0; i < size; i++) {
+    if (slots[i]) continue;
+    const target = targetBpm(s, size > 1 ? i / (size - 1) : 0);
+    let best: (typeof cands)[number] | null = null, bestCost = Infinity;
+    let bestRelaxed: (typeof cands)[number] | null = null, bestRelaxedCost = Infinity;
+    for (const c of cands) {
+      if (c.used) continue;
+      const cost = Math.abs(c.bpm - target) - c.score * FLOW_SCORE_BPM;
+      if (cost < bestRelaxedCost) { bestRelaxedCost = cost; bestRelaxed = c; }
+      if ((perArtist.get(c.item.track.artist) ?? 0) >= cap) continue;
+      if (cost < bestCost) { bestCost = cost; best = c; }
+    }
+    const pick = best ?? bestRelaxed; // a small pool: a third song of an artist beats a hole in the curve
+    if (!pick) break;
+    pick.used = true;
+    bump(pick.item.track.artist);
+    slots[i] = { track: pick.item.track, why: pick.why, locked: false };
+  }
+  return { mix: slots.filter((m): m is MixItem => m !== null), matches };
+}
+
+/** The next best song for a swap: passes the filters, not in the mix already. With Flow on, `aroundBpm` is the
+ *  BPM the new song should be near (the old song's, or the curve's at that place): a far-off BPM costs score. */
+export function swapCandidate(
+  pool: PoolItem[], s: MixSettings, mix: MixItem[], rand: Rand = Math.random, aroundBpm?: number | null,
+): MixItem | null {
   const inMix = new Set(mix.map((m) => m.track.id));
+  const flow = !!s.flow && !s.pure && aroundBpm != null;
   let best: { item: PoolItem; score: number; why: string[] } | null = null;
   for (const item of pool) {
     if (inMix.has(item.track.id) || !passes(item.track, s)) continue;
+    let bpm: number | null = null;
+    if (flow) { bpm = bpmOf(item.track); if (bpm === null) continue; }
     const sc = scoreItem(item, s, rand);
-    if (!best || sc.score > best.score) best = { item, score: sc.score, why: sc.why };
+    const score = flow ? sc.score - Math.abs(bpm! - aroundBpm!) / SWAP_BPM_PER_POINT : sc.score;
+    if (!best || score > best.score) best = { item, score, why: sc.why };
   }
   return best ? { track: best.item.track, why: best.why, locked: false } : null;
 }
@@ -337,6 +564,8 @@ export function reasonLine(m: MixItem): string {
   const bits: string[] = [];
   if (m.why[0]) bits.push(m.why[0]);
   if (t.genre) bits.push(t.genre);
+  const bpm = bpmOf(t);
+  if (bpm !== null) bits.push(`${Math.round(bpm)} BPM`);
   if (t.year) bits.push(String(t.year));
   if (t.play_count === 0) bits.push("not played yet");
   else if (t.starred) bits.push("favourite");
@@ -359,6 +588,8 @@ export function autoName(s: MixSettings, now: Date = new Date()): string {
   if (s.title) parts.push(s.title);
   else if (artists.length) parts.push(artists.slice(0, 2).join(" & "));
   if (genres.length) parts.push(genres.slice(0, 2).join(" & "));
+  const bpm = normalizeBpmRange(s.bpm);
+  if (bpm) parts.push(bpmRangeLabel(bpm));
   if (s.years) parts.push(s.years[0] === s.years[1] ? String(s.years[0]) : `${s.years[0]}–${s.years[1]}`);
   if (s.favOnly) parts.push("favourites");
   if (s.unplayedOnly) parts.push("new to me");
@@ -400,8 +631,16 @@ export function matchGenres(words: string[], genres: { name: string; songCount: 
   return out;
 }
 
+/** With BPM the three genre presets also get a BPM range, and Workout a Flow curve (warm-up, peak, cool-down). */
+const PRESET_BPM: Record<"workout" | "focus" | "party", [number, number]> = {
+  workout: [125, 160],
+  focus: [BPM_MIN, 112],
+  party: [112, 130],
+};
+
+/** `hasBpm`: the BPM dial is available (enough of the library has a BPM). Without it the presets are genres only. */
 export function presetSettings(
-  id: PresetId, genres: { name: string; songCount: number }[], thisYear = new Date().getFullYear(),
+  id: PresetId, genres: { name: string; songCount: number }[], thisYear = new Date().getFullYear(), hasBpm = false,
 ): MixSettings {
   const base = defaultSettings();
   switch (id) {
@@ -414,6 +653,10 @@ export function presetSettings(
       const discover = { workout: 40, focus: 55, party: 30 }[id];
       let s: MixSettings = { ...base, size: snapSize(size), discover, title: labels[id] };
       for (const g of names) s = addSeed(s, { kind: "genre", value: g });
+      if (hasBpm) {
+        s = { ...s, bpm: normalizeBpmRange(PRESET_BPM[id]) };
+        if (id === "workout") s = { ...s, flow: true, curve: [...WORKOUT_CURVE] };
+      }
       return s;
     }
     case "throwback":

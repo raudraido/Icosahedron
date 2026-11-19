@@ -2,7 +2,7 @@
 
 The server is the **sync engine and the web app it serves** (one Docker image, `ghcr.io/raudraido/icosahedron-server`). Versions before 0.16.0 shared one number with the other apps (0.15.3 to 0.15.9); the full text of those releases is in the [main changelog](../../CHANGELOG.md). What each version needs and gives: [docs/compatibility.md](../../docs/compatibility.md).
 
-## Unreleased
+## 0.19.0
 - **The jukebox page explains itself and has a name you can change (web app):** `/?player=1` says what to do next and shows its name; **Rename** changes it, the server remembers it, so several screens can be told apart in the devices list. *Settings → Sync Server → Jukebox* shows the address, a QR code and the steps. A guide: [docs/jukebox.md](../../docs/jukebox.md).
 - **Subsonic apps can tell this is a Subsonic server (secure sign-in on):** a call the engine turns away now gets what Navidrome itself answers, HTTP 200 with a Subsonic error (no credentials: 10, a wrong or removed device: 40, a plain password or API key: 42 "use a token"), in the format the call asked for (JSON, JSONP or XML), instead of a bare 401. JellyBox sends a ping with no credentials first to see what kind of server it is, and could not sign in because of the 401; other apps showed a network error instead of "wrong password". Music, cover art and the other paths keep the plain 401, and nothing of this reaches Navidrome.
 

@@ -85,7 +85,7 @@ jobs:
       - name: Release notes
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          test "$VERSION" = "$(node -p "require('./package.json').version")"
+          test "${VERSION%-beta.*}" = "$(node -p "require('./package.json').version")"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           node scripts/release-notes.mjs CHANGELOG.md "$VERSION" > release-notes.md
 
@@ -97,5 +97,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: Desktop app ${{ env.VERSION }}
+          prerelease: ${{ contains(env.VERSION, '-beta.') }}
           body_path: release-notes.md
           files: artifacts/**/*

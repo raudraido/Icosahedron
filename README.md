@@ -1,8 +1,24 @@
-# Icosahedron HUB
+<p align="center">
+  <img src="build/icon.png" alt="Icosahedron" width="112">
+</p>
 
-**Icosahedron HUB** is a family of players for your own [Navidrome](https://www.navidrome.org/) / Subsonic server, with a small sync server that ties them together: a **desktop app**, a **web app**, an **iPhone app**, an **Android phone app** (with Android Auto) and an **Android TV app**. Everything is kept in step: start a song on one device and continue on another, or control one device from another.
+<h1 align="center">Icosahedron HUB</h1>
 
-*HUB* is the name of the project as a whole. The players themselves are called **Icosahedron**.
+<p align="center">
+  <b>Your Navidrome / Subsonic music, on every device, in step.</b><br>
+  Desktop · Web · iPhone · Android · Android Auto · Android TV — with an optional sync server that ties them together.
+</p>
+
+<p align="center">
+  <a href="https://github.com/raudraido/Icosahedron/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/raudraido/Icosahedron?label=desktop&color=f0766e"></a>
+  <a href="https://github.com/raudraido/Icosahedron/pkgs/container/icosahedron-server"><img alt="Docker image" src="https://img.shields.io/badge/docker-icosahedron--server-2496ed?logo=docker&logoColor=white"></a>
+  <a href="https://github.com/raudraido/Icosahedron/actions"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/raudraido/Icosahedron/server.yml?label=CI"></a>
+  <a href="LICENSE"><img alt="License: GPLv3" src="https://img.shields.io/badge/license-GPLv3-blue"></a>
+</p>
+
+---
+
+**Icosahedron HUB** is the project as a whole: a family of players for your own [Navidrome](https://www.navidrome.org/) / Subsonic server and a small sync server (the *web engine*). The players are called **Icosahedron**. Start a song on one device and continue on another, or control one device from another.
 
 ```
   Desktop        Web app       iOS app      Android phone     Android TV
@@ -19,7 +35,21 @@
                     Navidrome / Subsonic
 ```
 
-**You do not need the web engine to use the apps.** They talk to Navidrome directly. The engine is what adds sync between devices, the web app, secure sign-in, a shared BPM store and Last.fm scrobbling across all your devices.
+**You do not need the web engine to use the apps.** They talk to Navidrome directly. The engine adds sync between devices, the web app, secure sign-in, a shared BPM store and Last.fm scrobbling across all your devices.
+
+## Download
+
+Every product has its own version, its own release and its own changelog. Pick yours:
+
+| Product | For | Get it | Install guide | Changelog |
+|---|---|---|---|---|
+| **Desktop app** | Linux (AppImage, `.deb`), Windows | [Releases](https://github.com/raudraido/Icosahedron/releases?q=%22Desktop+app%22) | [desktop.md](docs/desktop.md) | [CHANGELOG.md](CHANGELOG.md) |
+| **Web engine + web app** | Docker (amd64, arm64) | `ghcr.io/raudraido/icosahedron-server` | [deploy-server.md](docs/deploy-server.md) | [apps/server](apps/server/CHANGELOG.md) |
+| **iOS app** | iPhone, iPad | unsigned `.ipa` in [Releases](https://github.com/raudraido/Icosahedron/releases?q=%22iOS+app%22), signed with SideStore / AltStore | [ios.md](docs/ios.md) | [apps/ios](apps/ios/CHANGELOG.md) |
+| **Android phone app** | phones, tablets, Android Auto | `.apk` in [Releases](https://github.com/raudraido/Icosahedron/releases?q=%22Android+phone%22) | [android.md](docs/android.md) | [apps/android](apps/android/CHANGELOG.md) |
+| **Android TV app** | Google TV, Android TV | `.apk` in [Releases](https://github.com/raudraido/Icosahedron/releases?q=%22Android+TV%22) | [android-tv.md](docs/android-tv.md) | [apps/android-tv](apps/android-tv/CHANGELOG.md) |
+
+**Channels.** *Stable* releases are what you want. *Beta* releases (marked **Pre-release**, version `X.Y.Z-beta.N`, Docker tag `:beta`) come first, for people who want to try a change early and report what breaks. *Edge* is every build of `master` (Docker tag `:edge`). Details: [docs/releasing.md](docs/releasing.md). Which versions work together: [docs/compatibility.md](docs/compatibility.md) — rule of thumb, **update the server first**.
 
 ## What it can do
 
@@ -30,19 +60,6 @@
 - **In the car:** Android Auto from the Android phone app; CarPlay is a skeleton that has not been run yet ([docs/carplay.md](docs/carplay.md)). The car's own Now Playing screen works from the iOS app.
 - **On the TV:** Android TV / Google TV, signed in with Quick Connect.
 - **Also:** casting to Chromecast / AirPlay 2 / DLNA (desktop), Last.fm scrobbling, upcoming concerts for the artist (Ticketmaster), a settings page for Navidrome's plugins.
-
-## The parts
-
-| Part | What it is | Where | Read |
-|---|---|---|---|
-| **Desktop app** | Electron + React with a native Rust audio engine: gapless, equalizer, Chromecast / AirPlay / DLNA | repo root (`src/`, `electron/`, `native/`) | [docs/desktop.md](docs/desktop.md) |
-| **Web engine** | Small Docker service: sync hub, secure sign-in, Navidrome proxy, BPM store, Last.fm, serves the web app | [`apps/server`](apps/server) | [docs/deploy-server.md](docs/deploy-server.md) |
-| **Web app** | The desktop UI in a browser, installable as a PWA; served by the engine | built from `src/` | [docs/web.md](docs/web.md) |
-| **iOS app** | Native SwiftUI app for iPhone and iPad (gapless, downloads, lyrics, Siri/Shortcuts, …) | [`apps/ios`](apps/ios) | [docs/ios.md](docs/ios.md) |
-| **Android phone app** | Native Kotlin app for Android phones, tablets and cars, like the iOS app: browse, play, lyrics, downloads, remote control, Android Auto | [`apps/android`](apps/android) | [docs/android.md](docs/android.md) |
-| **Android TV app** | Native Kotlin app for Google TV / Android TV: plays through the TV, browses with the remote, appears as a device in the other apps | [`apps/android-tv`](apps/android-tv) | [docs/android-tv.md](docs/android-tv.md) |
-
-How they fit together: [docs/architecture.md](docs/architecture.md). The sync wire protocol: [docs/sync-protocol.md](docs/sync-protocol.md).
 
 ## Quick start
 
@@ -70,33 +87,23 @@ Open `http://<host>:8080`, sign in with your Navidrome account. Details, environ
 
 **iOS app:** download the unsigned `.ipa` from a release and sign it for your device with AltStore, SideStore, Sideloadly or iloader — see [docs/ios.md](docs/ios.md).
 
-## Development
+## Documentation
 
-```bash
-npm install     # also builds native/audio-engine (needs a Rust toolchain)
-npm run dev     # desktop app, electron-vite dev server
-npm run build:web   # the web app, output in dist-web/
-```
+Start at the [documentation index](docs/README.md). The most useful pages:
 
-```bash
-cd apps/server && npm install && npm test    # web engine tests
-```
+- How the parts fit together: [architecture](docs/architecture.md) · the sync wire protocol: [sync-protocol](docs/sync-protocol.md)
+- Running the server: [deploy-server](docs/deploy-server.md) · signing in safely from the internet: [secure-sign-in](docs/secure-sign-in.md)
+- Releases, beta tags and versions: [releasing](docs/releasing.md) · [compatibility](docs/compatibility.md)
+- Building and contributing: [contributing](docs/contributing.md)
 
-The iOS app is built by CI on a macOS runner (no Mac needed): [docs/ios.md](docs/ios.md#building). The Android apps build with Android Studio or Gradle (JDK 17, Android SDK 35): [docs/android.md](docs/android.md). More: [docs/contributing.md](docs/contributing.md).
+## Project status
 
-## Building the desktop app
+Icosahedron is built and used daily by its author, and released in the open. Expect fast changes: the version numbers are `0.x`, and a *minor* bump can add features that need a newer server. The Android phone app is a pre-release until it is on Google Play; CarPlay is a skeleton that has not been run yet. Found a bug or have an idea? [Open an issue](https://github.com/raudraido/Icosahedron/issues/new/choose) — and say which product and version.
 
-```bash
-npm run build   # typecheck + electron-vite build
-npm run dist    # + electron-builder (AppImage / deb on Linux, NSIS on Windows)
-```
+## Contributing
 
-The native audio engine can be rebuilt on its own with `npm run build:native` — requires a Rust toolchain (`cargo`/`rustc`).
-
-## Releases
-
-Every app has its own version and its own release: a `vX.Y.Z` tag publishes the desktop app, `server-vX.Y.Z` the Docker image (engine and web app), `ios-vX.Y.Z` the iOS `.ipa`, `android-vX.Y.Z` the Android TV APK, `android-phone-vX.Y.Z` the Android phone APK (the Android phone app counts its last number up, 0.1.0, 0.1.1, …). See [docs/releasing.md](docs/releasing.md), [docs/compatibility.md](docs/compatibility.md) and the changelogs ([desktop](CHANGELOG.md), [server](apps/server/CHANGELOG.md), [iOS](apps/ios/CHANGELOG.md), [Android TV](apps/android-tv/CHANGELOG.md), [Android phone](apps/android/CHANGELOG.md)).
+Pull requests are welcome; start with [CONTRIBUTING.md](CONTRIBUTING.md). Security problems: please read [SECURITY.md](SECURITY.md) first and do not open a public issue.
 
 ## License
 
-GPLv3 — see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).
+GPLv3 — see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md). Third-party credits: [CREDITS.md](CREDITS.md).

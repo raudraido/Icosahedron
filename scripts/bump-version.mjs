@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // Each product has its own version (see docs/releasing.md):
-//   node scripts/bump-version.mjs <desktop|server|ios|android|android-phone> <X.Y.Z|patch|minor|major>
+//   node scripts/bump-version.mjs <desktop|server|ios|android|android-phone> <X.Y.Z|patch|minor|major> [stable|beta]
+// A beta (tag vX.Y.Z-beta.N) puts the coming version X.Y.Z in the version files but leaves the changelog's
+// "## Unreleased" alone; the stable release that follows names it. Several betas of one version count N up.
 // Normally run by the Release workflow (.github/workflows/release.yml); also renames "## Unreleased" in the changelog.
 // desktop  -> root package.json and lock file         tag vX.Y.Z          changelog CHANGELOG.md
 // server   -> apps/server package.json and lock file  tag server-vX.Y.Z   changelog apps/server/CHANGELOG.md
@@ -8,6 +10,7 @@
 // ios      -> apps/ios/VERSION                         tag ios-vX.Y.Z      changelog apps/ios/CHANGELOG.md
 // android  -> apps/android-tv/VERSION                  tag android-vX.Y.Z  changelog apps/android-tv/CHANGELOG.md
 // android-phone -> apps/android/VERSION            tag android-phone-vX.Y.Z  changelog apps/android/CHANGELOG.md
+import { execSync } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -20,20 +23,32 @@ const PRODUCTS = {
   "android-phone": { file: "apps/android/VERSION", tag: (v) => `android-phone-v${v}`, changelog: "apps/android/CHANGELOG.md" },
 };
 
-const [product, requested] = process.argv.slice(2);
+const [product, requested, channel = "stable"] = process.argv.slice(2);
 const p = PRODUCTS[product];
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const KEYWORDS = ["patch", "minor", "major"];
-if (!p || !(/^\d+\.\d+\.\d+$/.test(requested ?? "") || KEYWORDS.includes(requested))) {
-  console.error("usage: node scripts/bump-version.mjs <desktop|server|ios|android|android-phone> <X.Y.Z|patch|minor|major>");
+if (!p || !(/^\d+\.\d+\.\d+$/.test(requested ?? "") || KEYWORDS.includes(requested)) || !["stable", "beta"].includes(channel)) {
+  console.error("usage: node scripts/bump-version.mjs <desktop|server|ios|android|android-phone> <X.Y.Z|patch|minor|major> [stable|beta]");
   process.exit(1);
 }
 
 const current = p.file
   ? readFileSync(path.join(root, p.file), "utf8").trim()
   : JSON.parse(readFileSync(path.join(root, p.json[0]), "utf8")).version;
+const tags = (pattern) => {
+  try {
+    return execSync(`git tag -l "${pattern}"`, { cwd: root, encoding: "utf8" }).split("\n").filter(Boolean);
+  } catch {
+    return [];
+  }
+};
+// A beta of the version in the files was cut and the stable release is not out yet: that cycle goes on
+// (next beta, or the stable release), whatever "patch"/"minor" says.
+const pending = tags(`${p.tag(current)}-beta.*`).length > 0 && tags(p.tag(current)).length === 0;
 let version = requested;
-if (KEYWORDS.includes(requested)) {
+if (pending && KEYWORDS.includes(requested)) {
+  version = current;
+} else if (KEYWORDS.includes(requested)) {
   const [a, b, c] = current.split(".").map(Number);
   version = requested === "major" ? `${a + 1}.0.0` : requested === "minor" ? `${a}.${b + 1}.0` : `${a}.${b}.${c + 1}`;
 }
@@ -51,10 +66,20 @@ if (p.file) {
   console.log(`updated ${p.file}`);
 }
 
+const beta = channel === "beta";
+let full = version;
+if (beta) {
+  const taken = tags(`${p.tag(version)}-beta.*`).map((t) => Number(t.split("-beta.")[1])).filter(Number.isFinite);
+  full = `${version}-beta.${Math.max(0, ...taken) + 1}`;
+}
+
 // Changes are written under "## Unreleased" while a PR is open; releasing gives that section its number.
 const changelog = path.join(root, p.changelog);
 let renamed = false;
-if (existsSync(changelog)) {
+if (existsSync(changelog) && beta) {
+  // A beta leaves the changelog alone; it only needs something to say.
+  renamed = /^## Unreleased\s*$/m.test(readFileSync(changelog, "utf8"));
+} else if (existsSync(changelog)) {
   let text = readFileSync(changelog, "utf8");
   // Two PRs can each add an "## Unreleased" heading: join them into the first one, so that nothing is left behind
   // when the first is given its number (the others would stay as a stray section between two releases).
@@ -82,7 +107,7 @@ if (existsSync(changelog)) {
   }
 }
 if (process.env.GITHUB_OUTPUT) {
-  appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\ntag=${p.tag(version)}\nchangelog=${p.changelog}\nhas_notes=${renamed}\n`);
+  appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\nfull=${full}\nprerelease=${beta}\ntag=${p.tag(full)}\nchangelog=${p.changelog}\nhas_notes=${renamed}\n`);
 }
-console.log(`\n${product}: ${current} -> ${version}.` + (renamed ? "" : ` Add "## ${version}" to ${p.changelog} by hand (there was no "Unreleased" section).`));
-console.log(`Tag: ${p.tag(version)} (the Release workflow does all of this; see docs/releasing.md)`);
+console.log(`\n${product}: ${current} -> ${full}.` + (renamed ? "" : ` Add "## ${version}" to ${p.changelog} by hand (there was no "Unreleased" section).`));
+console.log(`Tag: ${p.tag(full)} (the Release workflow does all of this; see docs/releasing.md)`);

@@ -12,6 +12,20 @@ Every product has its own version, tag, changelog and release. Nothing forces th
 
 The web app has no number of its own: it is built into the server image, so it carries the server's version (Settings → System → About shows it). Which versions work together is described by protocol numbers, not version numbers: see [compatibility.md](compatibility.md).
 
+## Channels: edge, beta, stable
+
+| Channel | What it is | Tag | GitHub | Docker | For |
+|---|---|---|---|---|---|
+| **edge** | every merge to `master` | none | build artifacts of the Actions run only | `:edge` | the developer |
+| **beta** | a candidate for the next release | `vX.Y.Z-beta.N` (`server-vX.Y.Z-beta.N`, `ios-v…`, `android-v…`) | **Pre-release** | `:beta` and `X.Y.Z-beta.N` | people who want to try early and report |
+| **stable** | the release | `vX.Y.Z` | **Latest** | `:latest`, `X.Y`, `X.Y.Z` | everyone |
+
+- A beta is named after the version it is a candidate for: the first beta of 0.20.0 is `v0.20.0-beta.1`, the next `v0.20.0-beta.2`, and the release is `v0.20.0`. The number counts itself.
+- A beta puts `X.Y.Z` in the version files (the apps show `X.Y.Z`) but leaves the changelog's `## Unreleased` alone. The beta's release text is that section; the stable release then names it `## X.Y.Z`.
+- A beta never becomes `:latest` and never reaches the desktop updater (it only offers releases that are not pre-releases and are called `vX.Y.Z`), so people on stable are not touched.
+- **Beta → stable:** run the Release workflow again for the same product with channel *stable*. While a beta of the version is pending, `patch` / `minor` / `major` continue that version instead of counting on. The stable release is cut from `master` as it is then; the run's summary lists what was merged after the last beta, so merge only fixes in between.
+- Not every release needs a beta. Use one for a feature that is risky to roll out (sign-in, sync, the audio engine, a new app), skip it for small fixes. The Android phone app is a pre-release until it is on Google Play, whatever its tag.
+
 ## Branches and pull requests
 
 - **One branch per change**, named `<area>/<short-description>`: `desktop/`, `server/`, `ios/`, `android/` (phone), `android-tv/`, `docs/`, `ci/`. Examples: `android/rail-player`, `ios/carplay`, `docs/releasing`.
@@ -21,18 +35,18 @@ The web app has no number of its own: it is built into the server image, so it c
 
 ## Releasing (any product)
 
-One button: **Actions → Release → Run workflow** on `master`. Pick the product and the version (`patch`, `minor`, `major` or an exact `X.Y.Z`).
+One button: **Actions → Release → Run workflow** on `master`. Pick the product, the version (`patch`, `minor`, `major` or an exact `X.Y.Z`) and the **channel** (*stable* or *beta*).
 
 The workflow ([release.yml](../.github/workflows/release.yml)) then:
 
 1. bumps the product's version file(s) (`scripts/bump-version.mjs`),
-2. renames `## Unreleased` in the changelog to `## X.Y.Z` (it stops if there is no such section),
-3. commits that to `master` and pushes the tag,
+2. stable: renames `## Unreleased` in the changelog to `## X.Y.Z` (beta: leaves it; both stop if there is no such section),
+3. commits that to `master` and pushes the tag (`vX.Y.Z`, or `vX.Y.Z-beta.N` for a beta),
 4. starts the product's build workflow on the tag, which builds and publishes the release.
 
 Tick **rebuild** to release with no changes (a new build for a store, say): no `Unreleased` section is needed and the release text is "A new build with no changes in the app."
 
-By hand it is the same: `node scripts/bump-version.mjs <product> patch`, commit, `git tag <tag>`, push both.
+By hand it is the same: `node scripts/bump-version.mjs <product> patch [stable|beta]`, commit, `git tag <tag>`, push both.
 
 **How often:** not for every small change. Every merge to `master` already builds the apps (the artifacts are in the Actions run), so a release is for when there is something worth installing: a finished feature, a fix people wait for, or a set of small changes. Versions: `patch` for fixes and small changes, `minor` for a feature, `major` when something stops working with older parts ([compatibility.md](compatibility.md)). The Android phone app stays `0.1.x` (only the last number grows) and its releases are marked **pre-release** until it is on Google Play.
 
@@ -50,6 +64,8 @@ The Release workflow pushes the tag and starts these itself (a push made with th
 | `android-vX.Y.Z` | `android.yml` | Builds the `.apk` and publishes it as a release |
 | `android-phone-vX.Y.Z` | `android-phone.yml` | Builds the phone `.apk` and publishes it as a **pre-release** |
 
+(A `-beta.N` tag does the same in each row, but the release is a **pre-release**.)
+
 ## Without releasing
 
 Every build workflow can be started by hand (*Actions → pick the workflow → Run workflow*, `workflow_dispatch`) on any branch. This produces the artifacts without creating a release or pushing `latest`.
@@ -65,5 +81,6 @@ Every build workflow can be started by hand (*Actions → pick the workflow → 
 ## After a release
 
 - **Server:** update the deployed engine: `docker compose pull && docker compose up -d`. This also updates the web app.
+- **Beta of the server:** `image: ghcr.io/raudraido/icosahedron-server:beta` follows the newest beta; go back to `:latest` when the stable release is out.
 - **iOS:** re-sign the app on your devices with the new `.ipa` (and every 7 days with a free Apple ID).
 - **Android TV:** install the new APK.

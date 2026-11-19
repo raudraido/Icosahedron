@@ -1,0 +1,37 @@
+name: Bug report
+description: Something does not work as it should
+labels: [bug]
+body:
+  - type: dropdown
+    id: product
+    attributes:
+      label: Which product?
+      options: [Desktop app, Web app, Server (web engine), iOS app, Android phone app, Android TV app, Docs]
+    validations: { required: true }
+  - type: input
+    id: version
+    attributes:
+      label: Version of that product
+      description: Settings → System → About. A beta looks like 0.20.0-beta.1.
+    validations: { required: true }
+  - type: input
+    id: server
+    attributes:
+      label: Server version
+      description: Shown on the web sign-in page, or `/config.json`. Write "none" if the app talks to Navidrome directly.
+  - type: input
+    id: navidrome
+    attributes:
+      label: Navidrome version
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+      description: Steps to reproduce help most. Screenshots are welcome — hide server addresses and names.
+    validations: { required: true }
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Only if you have them. Remove passwords and addresses.
+      render: text

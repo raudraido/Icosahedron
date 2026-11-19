@@ -1,7 +1,7 @@
 {
   "name": "icosahedron-server",
   "private": true,
-  "version": "0.20.3",
+  "version": "0.20.4",
   "license": "GPL-3.0-or-later",
   "description": "Icosahedron HUB: serves the Icosahedron web UI and syncs every player (queue, position, remote control).",
   "type": "module",

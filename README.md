@@ -37,6 +37,23 @@
 
 **You do not need the web engine to use the apps.** They talk to Navidrome directly. The engine adds sync between devices, the web app, secure sign-in, a shared BPM store and Last.fm scrobbling across all your devices.
 
+## Screenshots
+
+The desktop app in three of its themes ([what it does](docs/desktop.md)):
+
+<table>
+<tr>
+<td><img src="docs/images/desktop-artist.jpg" alt="Artist page in the cream theme"></td>
+<td><img src="docs/images/desktop-tracks.jpg" alt="Song list with the right-click menu, in the red theme"></td>
+</tr>
+<tr>
+<td><img src="docs/images/desktop-now-playing.jpg" alt="Now Playing with album, artist and tour dates, in the dark theme"></td>
+<td><img src="docs/images/desktop-downloads.jpg" alt="Downloads: cached songs"></td>
+</tr>
+</table>
+
+<sub>Artist page · songs with the right-click menu · Now Playing · Downloads → Cached songs. The colours are three of the built-in and custom themes.</sub>
+
 ## Download
 
 Every product has its own version, its own release and its own changelog. Pick yours:

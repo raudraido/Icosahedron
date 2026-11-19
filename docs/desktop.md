@@ -2,6 +2,21 @@
 
 Electron + React (the UI in `src/`) with a native Rust audio engine (`native/audio-engine`): gapless playback, 10-band equalizer, BPM analysis, Chromecast / AirPlay 2 / DLNA casting.
 
+## Screenshots
+
+<table>
+<tr>
+<td><img src="images/desktop-artist.jpg" alt="Artist page in the cream theme"></td>
+<td><img src="images/desktop-tracks.jpg" alt="Song list with the right-click menu, in the red theme"></td>
+</tr>
+<tr>
+<td><img src="images/desktop-now-playing.jpg" alt="Now Playing with album, artist and tour dates, in the dark theme"></td>
+<td><img src="images/desktop-downloads.jpg" alt="Downloads: cached songs"></td>
+</tr>
+</table>
+
+<sub>Artist page · songs with the right-click menu · Now Playing · Downloads → Cached songs. The colours are three of the built-in and custom themes.</sub>
+
 ## What it does
 
 - Gapless playback with a native Rust engine, a 10-band equalizer and **playback speed** 0.5×–2× (pitch follows the speed on the desktop; the web app keeps the pitch).

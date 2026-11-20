@@ -78,7 +78,7 @@ Every product has its own version, its own release and its own changelog. Pick y
 - **Offline:** an audio cache and *Download* for songs, albums and playlists (iOS, Android); *Download* on the desktop too, and the desktop app opens without the server when it has downloads. The web app has no offline music.
 - **In the car:** Android Auto from the Android phone app; CarPlay is a skeleton that has not been run yet ([docs/carplay.md](docs/carplay.md)). The car's own Now Playing screen works from the iOS app.
 - **On the TV:** Android TV / Google TV, signed in with Quick Connect.
-- **Also:** casting to Chromecast / AirPlay 2 / DLNA (desktop), Last.fm scrobbling, upcoming concerts for the artist (Ticketmaster), a settings page for Navidrome's plugins.
+- **Also:** casting to Chromecast / AirPlay 2 / DLNA (desktop), Last.fm and ListenBrainz scrobbling, upcoming concerts for the artist (Ticketmaster), a settings page for Navidrome's plugins.
 
 ## Quick start
 

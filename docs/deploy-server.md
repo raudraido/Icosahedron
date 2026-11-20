@@ -1,6 +1,6 @@
 # Deploying Icosahedron HUB
 
-The engine is a single small container (Node 22). It serves the web app, keeps your devices in sync, proxies Navidrome, and stores BPM and Last.fm sessions. It is optional: see [architecture.md](architecture.md).
+The engine is a single small container (Node 22). It serves the web app, keeps your devices in sync, proxies Navidrome, and stores BPM, Last.fm sessions and ListenBrainz tokens. It is optional: see [architecture.md](architecture.md).
 
 ## Quick start
 
@@ -26,6 +26,7 @@ Images are published for `linux/amd64` and `linux/arm64`. `latest` is the newest
 | `DATA_DIR` | `/data` | Where state is kept (mount a volume!) |
 | `WEB_ROOT` | `/app/web` (image) | The web app's static files |
 | `LASTFM_API_KEY`, `LASTFM_API_SECRET` | the Icosahedron app's own Last.fm account | Your own Last.fm API account instead (see below). Normally leave unset |
+| `LISTENBRAINZ_URL` | `https://api.listenbrainz.org` | A self-hosted ListenBrainz instead (see [ListenBrainz](#listenbrainz)) |
 | `QUICK_CONNECT` | unset | Normally unset: a server administrator switches Quick Connect on and off in **Settings → Sync Server** (kept in `settings.json`). Setting `true` / `false` here decides instead and locks that switch. See [quick-connect.md](quick-connect.md) |
 
 ## BPM analysis (optional)
@@ -43,6 +44,7 @@ Everything is in `DATA_DIR`:
 | `bpm-skipped.json` | Songs the library BPM analysis left out before downloading (too short, or an ambient-like genre), with the reason |
 | `bpm-failed.json` | Songs the library BPM analysis could not measure, with the reason (so they are not tried again) |
 | `lastfm.json` | Last.fm session keys, mode `600` — **protect this volume** |
+| `listenbrainz.json` | ListenBrainz user tokens, mode `600` — **protect this volume** |
 | `avatar-<hash>.bin` | A user's profile picture (set in the apps, up to 512 kB). Every signed-in user can look at anyone's (`GET /avatar/<user name>`), only the owner changes it |
 | `settings.json` | Server-wide settings an administrator changes in the apps (Quick Connect on or off) |
 
@@ -89,6 +91,14 @@ Nothing to set up: the engine uses the Icosahedron app's own Last.fm API account
 - Once the engine holds the connection it does all the scrobbling and the desktop stops; only one side scrobbles a play. Disconnecting in the desktop app disconnects the engine too. Without an engine (or if it is unreachable) the desktop scrobbles on its own as before.
 
 If Navidrome is also linked to Last.fm, a play can be counted twice.
+
+## ListenBrainz
+
+ListenBrainz does the same job as Last.fm (scrobbling, and the play history for the desktop's *Recently Played*) and needs **no API key**: each user pastes their own user token (from listenbrainz.org/settings) and the engine keeps it in `listenbrainz.json` (mode `600`, protect this volume), so one connection covers all devices. Last.fm's API keys need Last.fm Pro from 1 December, which stops Last.fm for everyone who uses the app's key; ListenBrainz has no such single point.
+
+- **Connect:** *Settings → Integrations → ListenBrainz* in the desktop and web app, *Settings → ListenBrainz* on Android, the account page on iOS. The engine checks the token with ListenBrainz before keeping it.
+- **Own instance:** set `LISTENBRAINZ_URL` to a self-hosted ListenBrainz instead of listenbrainz.org.
+- It can run next to Last.fm; each has its own *Scrobble* switch. If Navidrome is also linked to either, a play can be counted twice.
 
 ## Security
 

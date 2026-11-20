@@ -81,7 +81,62 @@ final class LastFmModel {
     }
 }
 
-/// Plays that have to reach Navidrome / Last.fm. They are stored on disk first, so a play made
+/// ListenBrainz through the Icosahedron HUB: the user's own token is the whole connection (no developer
+/// key, unlike Last.fm), kept on the server, so one connection covers all of the account's devices.
+@MainActor @Observable
+final class ListenBrainzModel {
+    enum State { case unknown, disconnected, connected(String) }
+
+    var state: State = .unknown
+    var scrobbleEnabled = false
+    var message: String?
+
+    var isConnected: Bool { if case .connected = state { return true } else { return false } }
+
+    func refresh(client: SubsonicClient) async {
+        do {
+            let conn = try await client.engine("GET", "/listenbrainz/connection")
+            guard conn.status == 200 else { state = .unknown; return } // an older server, plain Navidrome or offline
+            if let o = try JSONSerialization.jsonObject(with: conn.data) as? [String: Any], let name = o["username"] as? String {
+                state = .connected(name)
+                scrobbleEnabled = (o["scrobbleEnabled"] as? Bool) ?? false
+            } else {
+                state = .disconnected
+                scrobbleEnabled = false
+            }
+        } catch {
+            state = .unknown
+        }
+    }
+
+    func connect(token: String, client: SubsonicClient) async {
+        message = nil
+        do {
+            let r = try await client.engine("PUT", "/listenbrainz/connection", json: ["token": token.trimmingCharacters(in: .whitespacesAndNewlines)])
+            switch r.status {
+            case 200: await refresh(client: client)
+            case 400: message = String(localized: "That does not look like a ListenBrainz user token")
+            case 401: message = String(localized: "ListenBrainz does not accept that token")
+            default: message = String(localized: "ListenBrainz did not answer")
+            }
+        } catch {
+            message = String(localized: "Could not reach the server")
+        }
+    }
+
+    func setScrobbling(_ on: Bool, client: SubsonicClient) async {
+        scrobbleEnabled = on
+        _ = try? await client.engine("PUT", "/listenbrainz/toggles", json: ["scrobbleEnabled": on])
+    }
+
+    func disconnect(client: SubsonicClient) async {
+        _ = try? await client.engine("DELETE", "/listenbrainz/connection")
+        state = .disconnected
+        scrobbleEnabled = false
+    }
+}
+
+/// Plays that have to reach Navidrome / Last.fm / ListenBrainz. They are stored on disk first, so a play made
 /// offline (cached songs!) is not lost: it is sent, with its real time, when the connection is back.
 final class ScrobbleQueue: @unchecked Sendable {
     static let shared = ScrobbleQueue()
@@ -96,6 +151,9 @@ final class ScrobbleQueue: @unchecked Sendable {
         var navidromeDone = false
         var lastfmDone = false
         var needsLastfm = false
+        // Optional so that a queue file written before ListenBrainz existed still decodes.
+        var needsListenBrainz: Bool?
+        var listenbrainzDone: Bool?
     }
 
     private let lock = NSLock()
@@ -111,10 +169,10 @@ final class ScrobbleQueue: @unchecked Sendable {
         }
     }
 
-    func add(_ t: Track, time: Date, lastfm: Bool) {
+    func add(_ t: Track, time: Date, lastfm: Bool, listenbrainz: Bool = false) {
         lock.lock()
         items.append(Pending(id: t.id, title: t.title, artist: t.artist, album: t.album ?? "", duration: t.duration,
-                             time: time, needsLastfm: lastfm))
+                             time: time, needsLastfm: lastfm, needsListenBrainz: listenbrainz ? true : nil))
         save()
         lock.unlock()
     }
@@ -147,9 +205,19 @@ final class ScrobbleQueue: @unchecked Sendable {
                     item.lastfmDone = true
                 }
             }
+            if item.needsListenBrainz == true, item.listenbrainzDone != true {
+                let body: [String: Any] = [
+                    "track": ["title": item.title, "artist": item.artist, "album": item.album, "duration": item.duration],
+                    "timestamp": Int(item.time.timeIntervalSince1970),
+                ]
+                if let r = try? await client.engine("POST", "/listenbrainz/scrobble", json: body), r.status == 204 || r.status == 200 {
+                    item.listenbrainzDone = true
+                }
+            }
             lock.lock()
             if let idx = items.firstIndex(where: { $0.id == p.id && $0.time == p.time }) {
-                if item.navidromeDone && (!item.needsLastfm || item.lastfmDone) { items.remove(at: idx) } else { items[idx] = item }
+                let done = item.navidromeDone && (!item.needsLastfm || item.lastfmDone) && (item.needsListenBrainz != true || item.listenbrainzDone == true)
+                if done { items.remove(at: idx) } else { items[idx] = item }
             }
             _ = i
             save()

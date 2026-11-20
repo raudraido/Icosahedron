@@ -2480,6 +2480,76 @@
           }
         }
       }
+    },
+    "ListenBrainz": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ListenBrainz"
+          }
+        }
+      }
+    },
+    "User token": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kasutaja token"
+          }
+        }
+      }
+    },
+    "Connect to ListenBrainz": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ühenda ListenBrainziga"
+          }
+        }
+      }
+    },
+    "That does not look like a ListenBrainz user token": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "See ei näe välja nagu ListenBrainzi kasutaja token"
+          }
+        }
+      }
+    },
+    "ListenBrainz does not accept that token": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ListenBrainz ei võta seda tokenit vastu"
+          }
+        }
+      }
+    },
+    "ListenBrainz did not answer": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ListenBrainz ei vastanud"
+          }
+        }
+      }
+    },
+    "Free and open, and it needs no app key. Copy your user token from listenbrainz.org/settings and paste it here. It is kept on your server, so one connection covers all your devices. Plays made offline are sent later.": {
+      "localizations": {
+        "et": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tasuta ja avatud, ega vaja rakenduse võtit. Kopeeri oma kasutaja token aadressilt listenbrainz.org/settings ja kleebi siia. See hoitakse sinu serveris, nii et üks ühendus katab kõik seadmed. Ilma võrguta kuulatud lood saadetakse hiljem."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

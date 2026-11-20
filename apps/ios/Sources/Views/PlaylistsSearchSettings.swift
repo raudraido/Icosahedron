@@ -144,6 +144,13 @@ struct SettingsView: View {
                 } footer: {
                     Text("Scrobbles go through your server, so one connection covers all your devices. If the Icosahedron desktop app is connected to Last.fm, it shares that connection with the server and it shows up here. Plays made offline are sent later. If your Navidrome is also linked to Last.fm, a play may be counted twice.")
                 }
+                Section {
+                    ListenBrainzSection()
+                } header: {
+                    Text("ListenBrainz")
+                } footer: {
+                    Text("Free and open, and it needs no app key. Copy your user token from listenbrainz.org/settings and paste it here. It is kept on your server, so one connection covers all your devices. Plays made offline are sent later.")
+                }
                 Section("Sound") {
                     NavigationLink("Equalizer") { EqualizerContent().navigationTitle("Equalizer").navigationBarTitleDisplayMode(.inline) }
                 }
@@ -183,6 +190,7 @@ struct SettingsView: View {
             .task {
                 guard let c = app.client else { return }
                 await app.lastfm.refresh(client: c) // the desktop may have shared its connection since the last look
+                await app.listenbrainz.refresh(client: c)
                 await app.avatar.refresh(client: c)
             }
         }
@@ -369,5 +377,42 @@ struct LastFmSection: View {
     private func finish() {
         guard let c = app.client else { return }
         Task { await app.lastfm.finishConnect(client: c) }
+    }
+}
+
+struct ListenBrainzSection: View {
+    @Environment(AppModel.self) private var app
+    @State private var token = ""
+
+    var body: some View {
+        let lb = app.listenbrainz
+        switch lb.state {
+        case .unknown:
+            Text("Not available (needs Icosahedron HUB)").foregroundStyle(.secondary)
+        case .disconnected:
+            SecureField("User token", text: $token)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            Button("Connect to ListenBrainz") { connect() }
+                .disabled(token.trimmingCharacters(in: .whitespacesAndNewlines).count < 8)
+        case .connected(let name):
+            LabeledContent("Account", value: name)
+            Toggle("Scrobble", isOn: Binding(get: { lb.scrobbleEnabled }, set: { on in
+                if let c = app.client { Task { await lb.setScrobbling(on, client: c) } }
+            }))
+            Button("Disconnect", role: .destructive) {
+                if let c = app.client { Task { await lb.disconnect(client: c) } }
+            }
+        }
+        if let m = lb.message { Text(m).font(.footnote).foregroundStyle(.orange) }
+    }
+
+    private func connect() {
+        guard let c = app.client else { return }
+        let t = token
+        Task {
+            await app.listenbrainz.connect(token: t, client: c)
+            if app.listenbrainz.isConnected { token = "" }
+        }
     }
 }

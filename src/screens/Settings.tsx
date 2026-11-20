@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 import { useStore, activeLastfmKey } from "../store";
+import { listenBrainz } from "../lib/listenbrainz";
+import { getRecentTracks } from "../lib/lastfm";
 import { api, UpdateInfo, UpdateDownloadProgress, TraySettings } from "../lib/api";
 import { useDownloads, formatBytes as formatSize } from "../lib/downloads";
 import { applyTheme, loadSavedTheme, saveTheme, saveCustomTheme, deleteCustomTheme, isBuiltInThemeName, allThemes, CREAM, AppTheme } from "../lib/theme";
@@ -265,6 +267,18 @@ function LastFmSection() {
   const [status, setStatus] = useState<"idle" | "waiting" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 
+  // Last.fm is ending free API keys (from 1 December an app's key needs its owner to have Last.fm Pro),
+  // so a connection can stop working with nothing else changing. A one-row read tells the user, rather
+  // than the list and scrobbling just going quiet. Its own message is shown as Last.fm worded it.
+  const apiKey = useStore((s) => s.lastfmPublicApiKey);
+  const health = useQuery({
+    queryKey: ["lastfm-health", apiKey, lastfmConnectedUsername],
+    queryFn: () => getRecentTracks(apiKey, lastfmConnectedUsername ?? "", 1, 1),
+    enabled: lastfmConnected && Boolean(apiKey && lastfmConnectedUsername),
+    retry: false,
+    staleTime: 10 * 60_000,
+  });
+
   async function connect() {
     setStatus("waiting");
     setError(null);
@@ -329,6 +343,13 @@ function LastFmSection() {
               Disconnect
             </button>
           </div>
+          {health.isError && (
+            <p style={{ color: "var(--error)", fontSize: "var(--fs-small)", padding: "4px 0 8px" }}>
+              Last.fm is not answering this app ({health.error instanceof Error ? health.error.message : "unknown error"}).
+              Last.fm is moving API keys to Last.fm Pro, so Recently Played and scrobbling here may have stopped.
+              Your Last.fm account and history are not affected. ListenBrainz below works without any key.
+            </p>
+          )}
           <ToggleRow
             label="Recently Played"
             description="Reads your Last.fm play history for the left panel's list. Visibility can be toggled in Settings > Appearance."
@@ -374,6 +395,103 @@ function LastFmSection() {
           {status === "error" && (
             <span style={{ color: "var(--error)", fontSize: "var(--fs-small)" }}>{error}</span>
           )}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// ListenBrainz: the same two jobs as Last.fm (play history for the left panel, scrobbling) without a
+// developer key — the user pastes their own token from listenbrainz.org/settings and the sync server
+// keeps it (src/lib/listenbrainz.ts). Needs the sync server.
+function ListenBrainzSection() {
+  const connected = useStore((s) => s.lbConnected);
+  const username = useStore((s) => s.lbUsername);
+  const setConnection = useStore((s) => s.setListenBrainzConnection);
+  const historyEnabled = useStore((s) => s.lbHistoryEnabled);
+  const setHistoryEnabled = useStore((s) => s.setLbHistoryEnabled);
+  const scrobbleEnabled = useStore((s) => s.lbScrobbleEnabled);
+  const setScrobbleEnabled = useStore((s) => s.setLbScrobbleEnabled);
+  const [token, setToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function connect() {
+    setBusy(true);
+    setError(null);
+    try {
+      await listenBrainz.connect(token);
+      setConnection(await listenBrainz.getConnection());
+      setToken("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not connect to ListenBrainz.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function disconnect() {
+    await listenBrainz.disconnect().catch(() => {});
+    setConnection(null);
+  }
+
+  const button = {
+    background: "transparent", border: "1px solid var(--border)", borderRadius: 4,
+    padding: "6px 14px", color: "var(--text-primary)",
+    fontSize: "var(--fs-secondary)", fontWeight: "var(--fw-emphasis)",
+  } as const;
+
+  return (
+    <Section title="ListenBrainz">
+      {connected ? (
+        <>
+          <div className="flex items-center justify-between" style={{ gap: 12, padding: "8px 0" }}>
+            <span style={{ color: "var(--text-primary)", fontSize: "var(--fs-secondary)" }}>
+              Connected as <strong>@{username}</strong>
+            </span>
+            <button onClick={disconnect} style={{ ...button, cursor: "pointer" }}>Disconnect</button>
+          </div>
+          <ToggleRow
+            label="Recently Played"
+            description="Reads your ListenBrainz listens for the left panel's list. Used before Last.fm when both are on."
+            checked={historyEnabled}
+            onChange={setHistoryEnabled}
+            divider={false}
+          />
+          <ToggleRow
+            label="Scrobble to ListenBrainz"
+            description="Submits each play at the halfway point (or 4 minutes), from every device signed in to your server."
+            checked={scrobbleEnabled}
+            onChange={setScrobbleEnabled}
+            divider={false}
+          />
+          <div style={{ height: 1, background: "var(--border)", marginTop: 8 }} />
+        </>
+      ) : (
+        <div className="flex flex-col" style={{ gap: 10 }}>
+          <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)" }}>
+            Free and open, and it needs no app key. Copy your user token from listenbrainz.org/settings and paste it here. It is kept on your sync server.
+          </p>
+          <input
+            type="password"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            placeholder="User token"
+            autoComplete="off"
+            spellCheck={false}
+            style={{
+              background: "transparent", border: "1px solid var(--border)", borderRadius: 4, padding: "6px 10px",
+              color: "var(--text-primary)", fontSize: "var(--fs-secondary)",
+            }}
+          />
+          <button
+            onClick={connect}
+            disabled={busy || token.trim().length < 8}
+            style={{ ...button, alignSelf: "flex-start", cursor: busy ? "default" : "pointer", opacity: busy || token.trim().length < 8 ? 0.5 : 1 }}
+          >
+            {busy ? "Checking…" : "Connect to ListenBrainz"}
+          </button>
+          {error && <span style={{ color: "var(--error)", fontSize: "var(--fs-small)" }}>{error}</span>}
         </div>
       )}
     </Section>
@@ -443,6 +561,7 @@ function IntegrationsTab() {
         />
       </Section>
       <LastFmSection />
+      <ListenBrainzSection />
       <LyricsSection />
     </div>
   );
@@ -456,7 +575,9 @@ function AppearanceTab() {
   // lastFmEnabled already resets to false on disconnect (see
   // setLastfmConnection in store/index.ts), but check lastfmConnected
   // directly too rather than relying solely on that invariant holding.
-  const historyAvailable = lastfmConnected && lastFmEnabled;
+  const lbHistory = useStore((s) => s.lbConnected && s.lbHistoryEnabled);
+  const lbConnected = useStore((s) => s.lbConnected);
+  const historyAvailable = (lastfmConnected && lastFmEnabled) || lbHistory;
   const leftPanelPlaylistsVisible = useStore((s) => s.leftPanelPlaylistsVisible);
   const setLeftPanelPlaylistsVisible = useStore((s) => s.setLeftPanelPlaylistsVisible);
   const homeDailyMixVisible = useStore((s) => s.homeDailyMixVisible);
@@ -467,7 +588,7 @@ function AppearanceTab() {
       <Section title="Left Panel">
         <ToggleRow
           label="Show Recently Played"
-          description="Hides the list without disconnecting Last.fm."
+          description="Hides the list without disconnecting Last.fm or ListenBrainz."
           checked={lastFmSidebarVisible}
           onChange={setLastFmSidebarVisible}
           disabled={!historyAvailable}
@@ -475,9 +596,9 @@ function AppearanceTab() {
         />
         {!historyAvailable && (
           <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-small)", paddingBottom: 8, borderBottom: "1px solid var(--border)" }}>
-            {lastfmConnected
+            {lastfmConnected || lbConnected
               ? "Enable \"Recently Played\" in Settings > Integrations first."
-              : "Connect to Last.fm and enable \"Recently Played\" in Settings > Integrations first."}
+              : "Connect to ListenBrainz or Last.fm and enable \"Recently Played\" in Settings > Integrations first."}
           </p>
         )}
         <ToggleRow

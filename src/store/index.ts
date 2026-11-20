@@ -3,6 +3,7 @@ import { api, AudioEventPayload, Track, Album, Playlist, ServerProfile, CastDevi
 import { routePlay, routeNext, routeEnd } from "../lib/target";
 import type { QueueTab } from "../components/QueueBottomTabs";
 import { queryClient } from "../lib/queryClient";
+import { listenBrainz } from "../lib/listenbrainz";
 import { measureCastDelay } from "../lib/castCalibration";
 import { platform } from "../platform";
 
@@ -132,6 +133,17 @@ interface AppStore {
   // function further down; also only togglable once connected.
   lastfmScrobbleEnabled: boolean;
   setLastfmScrobbleEnabled: (v: boolean) => void;
+
+  // ListenBrainz (Settings > Integrations) — the key-less alternative to Last.fm, kept on the sync
+  // server per user (src/lib/listenbrainz.ts). Works alongside Last.fm; "Recently Played" reads
+  // ListenBrainz when its history is on, Last.fm otherwise.
+  lbConnected: boolean;
+  lbUsername: string | null;
+  lbHistoryEnabled: boolean;
+  lbScrobbleEnabled: boolean;
+  setListenBrainzConnection: (conn: { username: string; historyEnabled: boolean; scrobbleEnabled: boolean } | null) => void;
+  setLbHistoryEnabled: (v: boolean) => void;
+  setLbScrobbleEnabled: (v: boolean) => void;
 
   // multi-server (Settings > Servers) — `servers` never carries passwords,
   // those stay main-process-side (electron/main/credentials.ts) and are only
@@ -487,6 +499,16 @@ function scrobble(track: Track, submission: boolean) {
     if (useStore.getState().scrobbleEnabled) {
       api.scrobble(track.id, submission).catch(() => {});
     }
+    const { lbScrobbleEnabled, lbConnected } = useStore.getState();
+    if (lbScrobbleEnabled && lbConnected) {
+      const meta = { title: track.title, artist: track.artist, album: track.album ?? "", duration: track.duration_secs };
+      if (submission) {
+        listenBrainz.scrobble(meta, Math.floor(Date.now() / 1000))
+          .then(() => queryClient.invalidateQueries({ queryKey: ["listenbrainz-history"] })).catch(() => {});
+      } else {
+        listenBrainz.nowPlaying(meta).catch(() => {});
+      }
+    }
     const { lastfmScrobbleEnabled, lastfmConnected } = useStore.getState();
     if (lastfmScrobbleEnabled && lastfmConnected) {
       const meta = { title: track.title, artist: track.artist, album: track.album ?? "", duration: track.duration_secs };
@@ -777,6 +799,25 @@ export const useStore = create<AppStore>((set, get) => ({
     set({ lastfmScrobbleEnabled: v });
   },
 
+  lbConnected: false,
+  lbUsername: null,
+  lbHistoryEnabled: false,
+  lbScrobbleEnabled: false,
+  setListenBrainzConnection: (conn) => set({
+    lbConnected: conn != null,
+    lbUsername: conn?.username ?? null,
+    lbHistoryEnabled: conn?.historyEnabled ?? false,
+    lbScrobbleEnabled: conn?.scrobbleEnabled ?? false,
+  }),
+  setLbHistoryEnabled: (v) => {
+    listenBrainz.setHistoryEnabled(v).catch(() => {});
+    set({ lbHistoryEnabled: v });
+  },
+  setLbScrobbleEnabled: (v) => {
+    listenBrainz.setScrobbleEnabled(v).catch(() => {});
+    set({ lbScrobbleEnabled: v });
+  },
+
   bpmCache: {},
   setBpm: (trackId, bpm) => set((s) => ({ bpmCache: { ...s.bpmCache, [trackId]: bpm } })),
   loadBpmCache: async () => {
@@ -830,6 +871,7 @@ export const useStore = create<AppStore>((set, get) => ({
     });
     api.lastfmGetConnection(activeServerId ?? LASTFM_DEFAULT_SERVER_KEY)
       .then((conn) => get().setLastfmConnection(conn)).catch(() => {});
+    listenBrainz.getConnection().then((conn) => useStore.getState().setListenBrainzConnection(conn));
     try {
       await get().restoreSession();
     } catch { /* a failed session restore shouldn't be treated as a bad-credentials error */ }
@@ -879,6 +921,7 @@ export const useStore = create<AppStore>((set, get) => ({
     // previous profile had, exactly like everything else this function
     // already resets on switch.
     api.lastfmGetConnection(id).then((conn) => get().setLastfmConnection(conn)).catch(() => {});
+    listenBrainz.getConnection().then((conn) => useStore.getState().setListenBrainzConnection(conn));
     try {
       await get().restoreSession();
     } catch { /* a failed session restore shouldn't block the switch itself */ }
@@ -1709,6 +1752,7 @@ export async function tryAutoConnect() {
       coverUrl: (coverId, size = 200) => platform.coverUrl(coverId, size),
   });
   api.lastfmGetConnection(lastfmKey).then((conn) => useStore.getState().setLastfmConnection(conn)).catch(() => {});
+  listenBrainz.getConnection().then((conn) => useStore.getState().setListenBrainzConnection(conn));
   try {
     await useStore.getState().restoreSession();
   } catch { /* a failed session restore shouldn't be treated as a bad-credentials error */ }

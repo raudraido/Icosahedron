@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.21.5
 - **ListenBrainz, no developer key:** Last.fm requires Last.fm Pro for API keys from 1 December, which would stop Last.fm for every user of the app at once. *Settings → Integrations → ListenBrainz* connects your own ListenBrainz account by pasting your user token (listenbrainz.org/settings) and gives the same two things: scrobbling and **Recently Played** (used before Last.fm when both are on). Needs the Icosahedron HUB. The Last.fm section now says when Last.fm stops answering the app.
 ## 0.21.4
 - **Several jukeboxes at once:** the jukebox page shared the browser's one device id, so a second jukebox (or the web app in another tab) pushed the first one out. A jukebox now has an id of its own, and `/?player=Kitchen`, `/?player=Garage` are two jukeboxes, even in one browser. *Settings → Sync Server → Jukebox* builds the address and the QR code from a name.

@@ -2,6 +2,9 @@
 
 The server is the **sync engine and the web app it serves** (one Docker image, `ghcr.io/raudraido/icosahedron-server`). Versions before 0.16.0 shared one number with the other apps (0.15.3 to 0.15.9); the full text of those releases is in the [main changelog](../../CHANGELOG.md). What each version needs and gives: [docs/compatibility.md](../../docs/compatibility.md).
 
+## Unreleased
+- **ListenBrainz** (`/listenbrainz/*`): connection (the user's own token, checked with ListenBrainz and kept in `listenbrainz.json`, mode 600), toggles, now playing, scrobble and listening history. No developer key is involved, unlike Last.fm, whose API keys need Last.fm Pro from 1 December. `LISTENBRAINZ_URL` points the HUB at a self-hosted ListenBrainz.
+
 ## 0.20.4
 - **Web app: several jukeboxes at once.** The jukebox page (`/?player=1`) shared the browser's device id with the web app and with other jukeboxes, so only one could be online at a time. A jukebox now has an id of its own and `/?player=<name>` gives each name its own jukebox (docs/jukebox.md).
 ## 0.20.3

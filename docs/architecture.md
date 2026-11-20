@@ -16,7 +16,7 @@
    │ Icosahedron HUB (apps/server, Node 22, Docker)                          │
    │  /sync    WebSocket hub                  /device/*  secure sign-in      │
    │  /rest /api /auth   Navidrome proxy      /share/*   public share pages  │
-   │  /bpm  BPM store    /lastfm/*  Last.fm   /avatar /tour /quickconnect/*  │
+   │  /bpm  BPM store    /lastfm/*  Last.fm  /listenbrainz/*   /avatar /tour /quickconnect/*  │
    │  /     web app (static)   /healthz /config.json                         │
    └──────────────────────────────────┬──────────────────────────────────────┘
                                       ▼
@@ -48,6 +48,7 @@ There is no account system of its own: **your Navidrome account is your account.
 | BPM values | Engine `bpm.json` (shared by all users: BPM belongs to the track) |
 | Last.fm API secret | Engine environment (never on a device) |
 | Last.fm session key | Engine `lastfm.json` (mode 600) |
+| ListenBrainz user token | Engine `listenbrainz.json` (mode 600) |
 | Trusted devices and their secrets, one-use invites, the sign-in history | Engine `devices.json` (mode 600), `invites.json`, `signins.json` |
 | Saved logins | Desktop: OS secret store; web: browser storage; iOS: Keychain; Android: app storage |
 | Cached and downloaded audio | Web: none. Desktop: downloads in `<userData>/downloads` (with `index.json`), played through a server on 127.0.0.1. iOS and Android: on the phone (the cache, and downloaded songs, albums and playlists) |

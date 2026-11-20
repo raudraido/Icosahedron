@@ -15,6 +15,7 @@ final class AppModel {
     let router = Router()
     let net = NetworkMonitor()
     let lastfm = LastFmModel()
+    let listenbrainz = ListenBrainzModel()
     let avatar = AvatarModel()
     /// BPM by track id, from the Icosahedron HUB's store (it only stores; the desktop app detects).
     var bpm: [String: Double] = [:]
@@ -97,6 +98,7 @@ final class AppModel {
         Task { await refreshPlaylists() }
         Task { await AudioCache.shared.fillMissingMetadata(client: c) }
         Task { await lastfm.refresh(client: c) }
+        Task { await listenbrainz.refresh(client: c) }
         Task { await avatar.refresh(client: c) }
         Task { await loadBPM() }
         flushScrobbles()
@@ -206,11 +208,16 @@ final class AppModel {
             let body: [String: Any] = ["track": ["title": t.title, "artist": t.artist, "album": t.album ?? "", "duration": t.duration]]
             Task { _ = try? await c.engine("POST", "/lastfm/nowplaying", json: body) }
         }
+        if listenbrainz.isConnected && listenbrainz.scrobbleEnabled {
+            let body: [String: Any] = ["track": ["title": t.title, "artist": t.artist, "album": t.album ?? "", "duration": t.duration]]
+            Task { _ = try? await c.engine("POST", "/listenbrainz/nowplaying", json: body) }
+        }
     }
 
     /// A play that counts: stored first, then sent (immediately, or when the connection is back).
     private func scrobble(_ t: Track, _ time: Date) {
-        ScrobbleQueue.shared.add(t, time: time, lastfm: lastfm.isConnected && lastfm.scrobbleEnabled)
+        ScrobbleQueue.shared.add(t, time: time, lastfm: lastfm.isConnected && lastfm.scrobbleEnabled,
+                                 listenbrainz: listenbrainz.isConnected && listenbrainz.scrobbleEnabled)
         flushScrobbles()
     }
 

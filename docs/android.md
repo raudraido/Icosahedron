@@ -13,7 +13,7 @@ Needs Android 8.0 (API 26) or newer.
 - **Devices:** every device of your account and what it plays; tap one to control it (everything you play then starts there), *Send* and *Play here*. **Add to Device Queue** puts songs on another device, for example a [jukebox](jukebox.md).
 - **Downloads and cache:** see below. **Remembers the queue.** **Plays in the background.**
 - **Wide screens** (a tablet, a phone on its side, a car): the tabs are a big rail at the left with the round cover and a progress ring at its bottom (tap: Now Playing, long press: play / pause), album and playlist pages keep the cover and buttons at the left, Now Playing splits in two.
-- **Android Auto**: see below. Settings: Sync Server, Last.fm, Equalizer, lyrics, playback quality for Wi-Fi and mobile data, Downloads and cache, the profile picture.
+- **Android Auto**: see below. Settings: Sync Server, Last.fm, ListenBrainz, Equalizer, lyrics, playback quality for Wi-Fi and mobile data, Downloads and cache, the profile picture.
 
 ## Install
 

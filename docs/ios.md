@@ -31,7 +31,7 @@ If the iloader AppImage opens an empty window with `EGL_BAD_PARAMETER` in the te
 - **Secure sign-in:** a sign-in request from another device appears in its own window above everything (also above Now Playing); the app signs in with a number to be approved on another device ([secure-sign-in.md](secure-sign-in.md)).
 - **Remembers what played:** the queue, the song and the position come back at the next launch, and a "play" from a car or a headset with the app closed starts the last queue.
 - **Quality per connection:** separate Wi-Fi and Cellular profiles — direct play, or MP3/AAC 96–320 kbps transcoded by Navidrome. iOS Low Data Mode counts as cellular. Nothing is downloaded in the background on cellular unless allowed.
-- **Plays:** counted after half the track or 4 minutes, stored on disk first and sent when online with their real time (Navidrome, and Last.fm through the engine).
+- **Plays:** counted after half the track or 4 minutes, stored on disk first and sent when online with their real time (Navidrome, and Last.fm or ListenBrainz through the engine).
 - **Playlists:** create, rename, delete, reorder, remove tracks, save the queue as a playlist.
 - **Siri and Shortcuts** (no extension needed): play/pause, next, previous, shuffle my music, play my favorites, favorite the current song, play a search result.
 - **Sync:** see your other devices, control the playing one, *Play here*. Shared settings: lyrics lookup and equalizer.
@@ -70,7 +70,7 @@ The version is in `apps/ios/VERSION` (the iOS app has its own version and releas
 | `PlayerModel.swift`, `AudioCache.swift`, `Quality.swift` | Playback (AVQueuePlayer, gapless), the cache, quality profiles and connection monitor |
 | `EQ.swift` | Equalizer (audio processing tap, biquad filters) |
 | `SyncModel.swift` | Sync WebSocket client and shared settings |
-| `LastFm.swift` | Last.fm through the engine and the offline scrobble queue |
+| `LastFm.swift` | Last.fm and ListenBrainz through the engine and the offline scrobble queue |
 | `Lyrics.swift`, `Intents.swift`, `Router.swift`, `Presenter.swift` | Lyrics lookup, Siri/Shortcuts, navigation, UIKit alerts |
 | `Views/` | SwiftUI screens |
 | `Localizable.xcstrings` | Estonian (and English source) strings |

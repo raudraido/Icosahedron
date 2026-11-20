@@ -5,6 +5,7 @@ import { fileStore } from "./store.mjs";
 import { createAvatarStore } from "./avatar.mjs";
 import { createBpmStore } from "./bpm.mjs";
 import { createBpmAnalyzer } from "./bpm-analyzer.mjs";
+import { createListenBrainz } from "./listenbrainz.mjs";
 import { createLastFm, DEFAULT_API_KEY, DEFAULT_API_SECRET } from "./lastfm.mjs";
 import { createQuickConnect } from "./quickconnect.mjs";
 import { fileSettings } from "./settings.mjs";
@@ -36,6 +37,7 @@ const app = createApp({
     locked: qcEnv !== null,
     onChange: (on) => settings.set("quickConnect", on),
   }),
+  listenbrainz: createListenBrainz({ baseUrl: process.env.LISTENBRAINZ_URL || undefined, dir: process.env.DATA_DIR ?? "/data" }),
   lastfm: createLastFm({ apiKey: process.env.LASTFM_API_KEY || DEFAULT_API_KEY, apiSecret: process.env.LASTFM_API_SECRET || DEFAULT_API_SECRET, dir: process.env.DATA_DIR ?? "/data" }),
 });
 app.http.listen(port, () => console.log(`icosahedron-server on :${port} → ${navidromeUrl}`));

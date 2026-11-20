@@ -13,6 +13,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import cloud.icosahedron.phone.data.ListenBrainz
 import cloud.icosahedron.phone.data.SubsonicClient
 import cloud.icosahedron.phone.data.Track
 import kotlinx.coroutines.CoroutineScope
@@ -31,6 +32,11 @@ object Playback {
     lateinit var player: ExoPlayer
         private set
     var client: SubsonicClient? = null
+        set(v) {
+            field = v
+            // a ListenBrainz connection made earlier, or on another device, counts from the first play
+            if (v != null) scope.launch(Dispatchers.IO) { try { ListenBrainz.load(v) } catch (_: Exception) { } }
+        }
 
     var queue by mutableStateOf<List<Track>>(emptyList())
         private set
@@ -397,7 +403,7 @@ object Playback {
         if (!player.playWhenReady) return // a restored queue is not a play
         val t = current ?: return
         val c = client ?: return
-        scope.launch(Dispatchers.IO) { try { c.scrobble(t.id, false) } catch (_: Exception) { } }
+        scope.launch(Dispatchers.IO) { try { c.scrobble(t.id, false) } catch (_: Exception) { }; try { ListenBrainz.nowPlaying(t, c) } catch (_: Exception) { } }
     }
 
     private fun scrobbleWhenDue() {
@@ -407,7 +413,7 @@ object Playback {
         if (dur > 0 && positionMs >= minOf(dur / 2, 4 * 60_000L)) {
             scrobbledId = t.id
             val c = client ?: return
-            scope.launch(Dispatchers.IO) { try { c.scrobble(t.id, true) } catch (_: Exception) { } }
+            scope.launch(Dispatchers.IO) { try { c.scrobble(t.id, true) } catch (_: Exception) { }; try { ListenBrainz.played(t, c) } catch (_: Exception) { } }
         }
     }
 }

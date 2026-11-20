@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import cloud.icosahedron.phone.App
 import cloud.icosahedron.phone.BuildConfig
 import cloud.icosahedron.phone.data.LastFm
+import cloud.icosahedron.phone.data.ListenBrainz
 import cloud.icosahedron.phone.data.Prefs
 import cloud.icosahedron.phone.data.Quality
 import cloud.icosahedron.phone.data.SecureSignIn
@@ -45,7 +46,7 @@ import kotlinx.coroutines.launch
 import java.text.DateFormat
 import java.util.Date
 
-private enum class Page { Main, Sync, LastFm, Equalizer, Devices, Offline }
+private enum class Page { Main, Sync, LastFm, ListenBrainz, Equalizer, Devices, Offline }
 
 @Composable
 fun SettingsScreen() {
@@ -55,6 +56,7 @@ fun SettingsScreen() {
         Page.Main -> MainSettings(open = { page = it })
         Page.Sync -> Sub("Sync Server", { page = Page.Main }) { SyncPage() }
         Page.LastFm -> Sub("Last.fm", { page = Page.Main }) { LastFmPage() }
+        Page.ListenBrainz -> Sub("ListenBrainz", { page = Page.Main }) { ListenBrainzPage() }
         Page.Equalizer -> Sub("Equalizer", { page = Page.Main }) { EqualizerPage() }
         Page.Devices -> Sub("Secure sign-in", { page = Page.Main }) { DevicesPage() }
         Page.Offline -> Sub("Downloads", { page = Page.Main }) { OfflinePage() }
@@ -131,6 +133,7 @@ private fun MainSettings(open: (Page) -> Unit) {
             Header("Connections")
             LinkRow("Sync Server", when (sync?.status) { "online" -> "Connected"; "connecting" -> "Connecting…"; else -> "Not reachable" }) { open(Page.Sync) }
             LinkRow("Last.fm") { open(Page.LastFm) }
+            LinkRow("ListenBrainz") { open(Page.ListenBrainz) }
             LinkRow("Secure sign-in", when (secure) { true -> "On"; false -> "Off"; null -> "" }) { open(Page.Devices) }
             Header("Sound")
             LinkRow("Equalizer", if (Eq.enabled) "On" else "Off") { open(Page.Equalizer) }
@@ -217,6 +220,32 @@ private fun LastFmPage() {
     }
     fm.message?.let { Text(it, color = Accent, fontSize = 13.sp) }
     Note("Scrobbles go through your server, so one connection covers all your devices.")
+}
+
+// ── ListenBrainz ──
+@Composable
+private fun ListenBrainzPage() {
+    val client = LocalClient.current
+    val lb = remember { ListenBrainz() }
+    val scope = rememberCoroutineScope()
+    var token by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) { lb.refresh(client) }
+    when (lb.state) {
+        ListenBrainz.State.UNKNOWN -> Note("Not available (needs the sync server).")
+        ListenBrainz.State.DISCONNECTED -> {
+            Note("Free and open, and it needs no app key. Copy your user token from listenbrainz.org/settings and paste it here. It is kept on your server.")
+            androidx.compose.material3.OutlinedTextField(token, { token = it }, singleLine = true, modifier = Modifier.fillMaxWidth(), label = { Text("User token") })
+            OutlinedButton(onClick = { scope.launch { lb.connect(token, client); if (lb.state == ListenBrainz.State.CONNECTED) token = "" } }, enabled = token.trim().length >= 8, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("Connect to ListenBrainz") }
+        }
+        ListenBrainz.State.CONNECTED -> {
+            Header("Account")
+            Text(lb.username)
+            ToggleRow("Scrobble", lb.scrobble) { on -> scope.launch { lb.setScrobbling(on, client) } }
+            TextButton(onClick = { scope.launch { lb.disconnect(client) } }) { Text("Disconnect", color = Accent) }
+        }
+    }
+    lb.message?.let { Text(it, color = Accent, fontSize = 13.sp) }
+    Note("Plays are sent through your server, so one connection covers all your devices.")
 }
 
 // ── Equalizer ──

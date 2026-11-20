@@ -2,6 +2,9 @@
 
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
+## Unreleased
+- **ListenBrainz:** *Settings → ListenBrainz* connects your own account by pasting your user token (no app key needed) and scrobbles every play through your server, with now playing. Last.fm's API keys need Last.fm Pro from 1 December.
+
 ## 0.1.39
 - **Winding starts at 8 times the speed and after five seconds goes to 16 times** (it was 4 and, after two seconds, 8): holding the wheel / headset button gets through a long song faster.
 

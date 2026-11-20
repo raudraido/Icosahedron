@@ -4,6 +4,7 @@ import { useStore } from "../store";
 import { api, Playlist } from "../lib/api";
 import { useDownloads } from "../lib/downloads";
 import { getRecentTracks, formatRelativeTime, LastFmTrack } from "../lib/lastfm";
+import { listenBrainz } from "../lib/listenbrainz";
 import { NewPlaylistDialog } from "../screens/Playlists";
 import { ArtistTokens, matchesArtistCredit } from "./ArtistTokens";
 import { CoverArt } from "./CoverArt";
@@ -59,7 +60,13 @@ function RecentlyPlayed() {
   const lastfmConnected = useStore((s) => s.lastfmConnected);
   const lastFmEnabled = useStore((s) => s.lastFmEnabled);
   const sidebarVisible = useStore((s) => s.lastFmSidebarVisible);
-  const enabled = lastfmConnected && lastFmEnabled && sidebarVisible;
+  // ListenBrainz wins when both are on: it needs no developer key, so it keeps working when Last.fm's
+  // API does not (see src/lib/listenbrainz.ts).
+  const lbHistory = useStore((s) => s.lbConnected && s.lbHistoryEnabled);
+  const lbUsername = useStore((s) => s.lbUsername);
+  const lastfmOn = lastfmConnected && lastFmEnabled;
+  const source: "listenbrainz" | "lastfm" | null = lbHistory ? "listenbrainz" : lastfmOn ? "lastfm" : null;
+  const enabled = source !== null && sidebarVisible;
   // Local playback state, used only to derive the "now playing" row below —
   // see its comment for why.
   const lastfmScrobbleEnabled = useStore((s) => s.lastfmScrobbleEnabled);
@@ -128,17 +135,23 @@ function RecentlyPlayed() {
     window.addEventListener("mouseup", onUp);
   }
 
+  // One page shape for both sources: `next` is what to ask for after this page (Last.fm: the next
+  // page number, ListenBrainz: the timestamp to go back from), undefined at the end.
   const {
     data, fetchNextPage, hasNextPage, isFetchingNextPage,
   } = useInfiniteQuery({
-    queryKey: ["lastfm-recent-tracks", apiKey, username],
-    queryFn: ({ pageParam }) => getRecentTracks(apiKey, username ?? "", pageParam, 50),
-    initialPageParam: 1,
-    getNextPageParam: (lastPage) => (lastPage.page < lastPage.totalPages ? lastPage.page + 1 : undefined),
+    queryKey: source === "listenbrainz" ? ["listenbrainz-history", lbUsername] : ["lastfm-recent-tracks", apiKey, username],
+    queryFn: async ({ pageParam }): Promise<{ tracks: LastFmTrack[]; next: number | undefined }> => {
+      if (source === "listenbrainz") return listenBrainz.history(pageParam);
+      const p = await getRecentTracks(apiKey, username ?? "", pageParam ?? 1, 50);
+      return { tracks: p.tracks, next: p.page < p.totalPages ? p.page + 1 : undefined };
+    },
+    initialPageParam: undefined as number | undefined,
+    getNextPageParam: (lastPage) => lastPage.next,
     // Gated on the Settings > Playback toggle too, not just "are
-    // credentials present" — no point polling Last.fm every 30s for a list
+    // credentials present" — no point polling every 30s for a list
     // the user has deliberately turned off.
-    enabled: Boolean(apiKey && username && enabled),
+    enabled: enabled && (source === "listenbrainz" ? Boolean(lbUsername) : Boolean(apiKey && username)),
     // Auto-refresh only while just the first page is loaded — an
     // infinite-query refetch re-requests every already-fetched page in
     // sequence, so once the user's scrolled several pages deep, a 30s
@@ -156,7 +169,9 @@ function RecentlyPlayed() {
   // both slower and race-prone. Falls back to whatever Last.fm itself
   // reports whenever we can't make that claim locally (playing on a
   // different device, or this app is paused/stopped).
-  const liveNowPlaying: LastFmTrack | null = lastfmScrobbleEnabled && lastfmConnected && playing && currentTrack
+  const lbScrobbleEnabled = useStore((s) => s.lbConnected && s.lbScrobbleEnabled);
+  const reportingFromHere = source === "listenbrainz" ? lbScrobbleEnabled : lastfmScrobbleEnabled && lastfmConnected;
+  const liveNowPlaying: LastFmTrack | null = reportingFromHere && playing && currentTrack
     ? { name: currentTrack.title, artist: currentTrack.artist, album: currentTrack.album ?? "", nowPlaying: true, playedAt: null }
     : null;
   const displayTracks = liveNowPlaying ? [liveNowPlaying, ...(tracks ?? []).filter((t) => !t.nowPlaying)] : tracks;
@@ -214,7 +229,7 @@ function RecentlyPlayed() {
   // Not configured, toggled off, or nothing to show yet — renders nothing;
   // LeftPanel's own trailing flex-1 spacer (shared with PlaylistsPanel)
   // still anchors the art section/games below to the bottom either way.
-  if (!apiKey || !username || !enabled || !displayTracks?.length) return null;
+  if (!enabled || !displayTracks?.length) return null;
 
   function toggleCollapsed() {
     setCollapsed((prev: boolean) => {

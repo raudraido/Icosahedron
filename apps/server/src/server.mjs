@@ -10,6 +10,7 @@ import { wantsSubsonicError, subsonicErrorResponse } from "./subsonic-error.mjs"
 import { createBpmStore } from "./bpm.mjs";
 import { createBpmAnalyzer } from "./bpm-analyzer.mjs";
 import { createLastFm } from "./lastfm.mjs";
+import { createListenBrainz } from "./listenbrainz.mjs";
 import { createTour } from "./tour.mjs";
 import { createQuickConnect } from "./quickconnect.mjs";
 import { createAvatarStore, imageType, AVATAR_MAX_BYTES } from "./avatar.mjs";
@@ -37,7 +38,7 @@ export function createSecureSwitch({ enabled = false, onChange } = {}) {
   return { get on() { return on; }, set(v) { on = !!v; onChange?.(on); } };
 }
 
-export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmStore(), bpmAnalyzer = createBpmAnalyzer({ navidromeUrl, bpmStore }), lastfm = createLastFm({}), verify = verifySubsonic, isAdmin = isNavidromeAdmin, quickConnect = createQuickConnect(), avatars = createAvatarStore(), tour = createTour(), secureSwitch = createSecureSwitch(), devices = createDevices({}), approvals = createApprovals(), invites = createInvites({}), checkPassword = verifyPassword, checkTrusted = navidromeTrustsEngine }) {
+export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmStore(), bpmAnalyzer = createBpmAnalyzer({ navidromeUrl, bpmStore }), lastfm = createLastFm({}), listenbrainz = createListenBrainz({}), verify = verifySubsonic, isAdmin = isNavidromeAdmin, quickConnect = createQuickConnect(), avatars = createAvatarStore(), tour = createTour(), secureSwitch = createSecureSwitch(), devices = createDevices({}), approvals = createApprovals(), invites = createInvites({}), checkPassword = verifyPassword, checkTrusted = navidromeTrustsEngine }) {
   const hub = new Hub(store);
   const authCache = new Map(); // "u|t|s" -> expiry; tokens stay valid, so re-verifying each call is wasted
 
@@ -133,6 +134,43 @@ export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmSt
     } catch (e) {
       if (e.code === 413 || e.code === 400) { res.writeHead(e.code).end(); return; }
       json(502, { error: String(e.message ?? e) });
+    }
+  }
+
+  // ListenBrainz (src/listenbrainz.mjs): the same job as Last.fm without a developer key. The user's own
+  // token is the whole connection; PUT /connection checks it and stores it.
+  async function handleListenBrainz(req, res, url) {
+    const user = await authed(req);
+    if (!user) { res.writeHead(401).end(); return; }
+    const json = (code, body) => { res.writeHead(code, { "content-type": "application/json" }); res.end(JSON.stringify(body)); };
+    const route = url.pathname.slice("/listenbrainz".length);
+    const m = req.method;
+    try {
+      if (route === "/config" && m === "GET") return json(200, { configured: true });
+      if (route === "/connection" && m === "GET") return json(200, listenbrainz.connection(user));
+      if (route === "/connection" && m === "PUT") {
+        const b = await readJson(req);
+        if (typeof b.token !== "string" || !/^[\w-]{8,64}$/.test(b.token)) { res.writeHead(400).end(); return; }
+        return json(200, await listenbrainz.connect(user, b.token));
+      }
+      if (route === "/connection" && m === "DELETE") { listenbrainz.disconnect(user); res.writeHead(204).end(); return; }
+      if (route === "/toggles" && m === "PUT") { listenbrainz.setToggles(user, await readJson(req)); res.writeHead(204).end(); return; }
+      if (route === "/nowplaying" && m === "POST") { await listenbrainz.nowPlaying(user, (await readJson(req)).track ?? {}); res.writeHead(204).end(); return; }
+      if (route === "/scrobble" && m === "POST") {
+        const b = await readJson(req);
+        await listenbrainz.scrobble(user, b.track ?? {}, b.timestamp);
+        res.writeHead(204).end(); return;
+      }
+      if (route === "/history" && m === "GET") {
+        const h = await listenbrainz.history(user, { before: url.searchParams.get("before"), count: url.searchParams.get("count") });
+        if (!h) { res.writeHead(404).end(); return; }
+        return json(200, h);
+      }
+      res.writeHead(404).end();
+    } catch (e) {
+      if (e.code === 413 || e.code === 400) { res.writeHead(e.code).end(); return; }
+      // 401 from ListenBrainz means the stored token no longer works: say so, so the app can ask for a new one
+      json(e.status === 401 ? 401 : 502, { error: String(e.message ?? e) });
     }
   }
 
@@ -428,6 +466,7 @@ export function createApp({ navidromeUrl, webRoot, store, bpmStore = createBpmSt
     if (url.pathname.startsWith("/device/")) { handleDevice(req, res, url).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); }); return; }
     if (url.pathname === "/bpm" || url.pathname.startsWith("/bpm/")) { handleBpm(req, res, url).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); }); return; }
     if (url.pathname.startsWith("/quickconnect/")) { handleQuickConnect(req, res, url).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); }); return; }
+    if (url.pathname.startsWith("/listenbrainz/")) { handleListenBrainz(req, res, url).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); }); return; }
     if (url.pathname.startsWith("/lastfm/")) { handleLastfm(req, res, url).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); }); return; }
     if (url.pathname === "/avatar" || url.pathname.startsWith("/avatar/")) { handleAvatar(req, res, url).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); }); return; }
     if (url.pathname === "/tour") {

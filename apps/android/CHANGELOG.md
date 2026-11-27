@@ -3,6 +3,7 @@
 A native app (Kotlin, Jetpack Compose, Media3) for Android phones and tablets, built to match the iOS app: [docs/android.md](../../docs/android.md).
 
 ## Unreleased
+- **A cover that is missing shows a music note** instead of an empty grey square: songs and albums without artwork (or whose picture the server cannot give) now look finished in every list, the player and the mini player.
 - **ListenBrainz:** *Settings → ListenBrainz* connects your own account by pasting your user token (no app key needed) and scrobbles every play through your server, with now playing. Last.fm's API keys need Last.fm Pro from 1 December.
 
 ## 0.1.39

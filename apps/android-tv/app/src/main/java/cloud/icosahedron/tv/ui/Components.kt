@@ -69,13 +69,21 @@ fun <T> load(key: Any?, block: suspend () -> T): State<Result<T>?> =
 @Composable
 fun Cover(coverId: String?, size: Dp, modifier: Modifier = Modifier, px: Int = 400, round: Boolean = false, colorFilter: androidx.compose.ui.graphics.ColorFilter? = null) {
     val url = LocalClient.current.coverUrl(coverId, px)
-    AsyncImage(
-        model = url,
-        contentDescription = null,
-        contentScale = ContentScale.Crop,
-        colorFilter = colorFilter,
-        modifier = modifier.size(size).clip(if (round) CircleShape else RoundedCornerShape(8.dp)).background(PanelHi),
-    )
+    // A song or an album without a cover (or one the server cannot give) shows a music note, not an empty grey square
+    Box(modifier.size(size).clip(if (round) CircleShape else RoundedCornerShape(8.dp)).background(PanelHi), contentAlignment = Alignment.Center) {
+        var failed by remember(url) { mutableStateOf(false) }
+        if (url == null || failed) {
+            androidx.compose.foundation.Image(
+                androidx.compose.ui.res.painterResource(cloud.icosahedron.tv.R.drawable.ic_cover_note), null,
+                Modifier.size(size * 0.45f), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Dim),
+            )
+        } else {
+            AsyncImage(
+                model = url, contentDescription = null, contentScale = ContentScale.Crop, colorFilter = colorFilter,
+                modifier = Modifier.size(size), onError = { failed = true },
+            )
+        }
+    }
 }
 
 @Composable

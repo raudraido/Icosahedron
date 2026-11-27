@@ -57,8 +57,14 @@ fun Cover(coverId: String?, size: Dp, round: Boolean = false, modifier: Modifier
     val client = LocalClient.current
     val shape = if (round) CircleShape else RoundedCornerShape(8.dp)
     val url = remember(coverId) { client.coverUrl(coverId, 400) }
-    Box(modifier.size(size).clip(shape).background(PanelHi)) {
-        if (url != null) AsyncImage(url, null, Modifier.size(size), contentScale = ContentScale.Crop)
+    // A song or an album without a cover (or one the server cannot give) shows a music note, not an empty grey square
+    Box(modifier.size(size).clip(shape).background(PanelHi), contentAlignment = Alignment.Center) {
+        var failed by remember(url) { mutableStateOf(false) }
+        if (url == null || failed) {
+            Icon(androidx.compose.ui.res.painterResource(cloud.icosahedron.phone.R.drawable.ic_cover_note), null, Modifier.size(size * 0.45f), tint = Dim)
+        } else {
+            AsyncImage(url, null, Modifier.size(size), contentScale = ContentScale.Crop, onError = { failed = true })
+        }
     }
 }
 

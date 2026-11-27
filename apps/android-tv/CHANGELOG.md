@@ -2,6 +2,9 @@
 
 A native app (Kotlin, Jetpack Compose for TV, Media3) for Google TV and Android TV: [docs/android-tv.md](../../docs/android-tv.md).
 
+## Unreleased
+- **A cover that is missing shows a music note** instead of an empty grey square: songs and albums without artwork (or whose picture the server cannot give) now look finished everywhere (lists, albums, the player).
+
 ## 0.2.12
 - **Screensaver colour boost** (Settings, Off / Low / High, Low by default): puts some saturation and contrast back into the logo and the covers, which the TV shows washed out in its HDR mode.
 

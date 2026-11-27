@@ -2,7 +2,7 @@
 
 A native app (Kotlin, Jetpack Compose for TV, Media3) for Google TV and Android TV: [docs/android-tv.md](../../docs/android-tv.md).
 
-## Unreleased
+## 0.2.13
 - **A cover that is missing shows a music note** instead of an empty grey square: songs and albums without artwork (or whose picture the server cannot give) now look finished everywhere (lists, albums, the player).
 
 ## 0.2.12
